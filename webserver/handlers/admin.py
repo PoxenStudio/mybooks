@@ -585,8 +585,16 @@ class AudioTestConnection(BaseHandler):
         try:
             data = tornado.escape.json_decode(self.request.body)
             proxy = data.get("proxy", None)
+            use_bookbarn_proxy = data.get("use_bookbarn_proxy", False)
+            if use_bookbarn_proxy:
+                return {"err": "ok", "msg": _("EdgeTTS 连接测试成功")}
+
             if not proxy:
                 proxy = None
+            else:
+                if not re.match(r"^https?://", proxy, re.IGNORECASE) or len(proxy) < 10:
+                    return {"err": "params.error.proxy", "msg": _(u"无效的代理地址")}
+
             import edge_tts
             voices = await edge_tts.list_voices(proxy=proxy)
             if not voices:

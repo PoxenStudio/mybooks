@@ -279,7 +279,12 @@
         "bookbarn_token": "Token",
         "bookbarn_apply_token": "Apply Token",
         "bookbarn_collection_hour": "Request to book barn at hour",
-        "enable_receiving_books": "Enable receiving books from Book Barn"
+        "enable_receiving_books": "Enable receiving books from Book Barn",
+        "book2audio_proxy": "Book to Audio Proxy Settings",
+        "book2audio_proxy_comment": "Able to access EdgeTTS proxy configuration, can be confirmed by visiting https://edge-tts.com. If no proxy service is available, you can use Book Barn's proxy service, which requires payment due to bandwidth costs.",
+        "book2audio_proxy_address": "Audio Proxy Server Address",
+        "use_bookbarn_proxy": "Use Book Barn Proxy Service (enabled after authorization via WeChat official account)",
+        "book2audio_proxy_test": "Test Connection"
     },
     "book": {
         "edit": {

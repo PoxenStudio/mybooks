@@ -11,14 +11,13 @@
                             outlined
                             dense
                             v-model="voice_name"
-                            label="Proxy Address"
+                            label="Voices"
                             auto-select-first
                             required
                         ></v-combobox>
-                        <small>{{ $t('book.kindleSenderNote') }}<br/>{{ kindle_sender }}</small>
                     </v-card-text>
                     <v-card-actions>
-                        <v-btn color="" text @click="dialog_kindle = false">{{ $t('common.cancel') }}</v-btn>
+                        <v-btn color="" text @click="dialog_epub2audio = false">{{ $t('common.cancel') }}</v-btn>
                         <v-spacer></v-spacer>
                         <v-btn color="primary" text @click="sendto_kindle">{{ $t('common.start') }}</v-btn>
                     </v-card-actions>
@@ -134,10 +133,10 @@
 
                     <v-spacer></v-spacer>
                     <v-btn :small="tiny" dark color="primary" class="mx-2 d-flex d-sm-flex"
-                           @click="dialog_kindle = !dialog_kindle"
+                           @click="dialog_epub2audio = !dialog_epub2audio"
                     >
-                        <v-icon left v-if="!tiny">email</v-icon>
-                        {{ $t('book.push') }}
+                        <v-icon left v-if="!tiny">audio</v-icon>
+                        {{ $t('book.convertToAudio') }}
                     </v-btn
                     >
                     <v-btn :small="tiny" dark color="primary" class="mx-2 d-flex d-sm-flex" :href="'/read/' + book.id"
@@ -170,7 +169,7 @@
                                     {{ $t('book.resetInfo') }}
                                 </v-list-item>
                                 <v-list-item @click="convert_book">
-                                    <v-icon>apps</v-icon>
+                                    <v-icon>mdi-swap-horizontal</v-icon>
                                     {{ $t('book.convert') }}
                                 </v-list-item>
                                 <v-divider></v-divider>
@@ -332,12 +331,12 @@
         <v-col cols="12" :sm="is_txt?6:5" :md="is_txt?3:4">
             <v-card outlined>
                 <v-list>
-                    <v-list-item @click="dialog_kindle = !dialog_kindle">
+                    <v-list-item @click="dialog_epub2audio = !dialog_epub2audio">
                         <v-list-item-avatar large color="primary">
-                            <v-icon dark>email</v-icon>
+                            <v-icon dark>audiotrack</v-icon>
                         </v-list-item-avatar>
                         <v-list-item-content>
-                            <v-list-item-title>{{ $t('book.pushToKindle') }}</v-list-item-title>
+                            <v-list-item-title>{{ $t('book.convertToAudio') }}</v-list-item-title>
                         </v-list-item-content>
                         <v-list-item-action>
                             <v-icon>mdi-arrow-right</v-icon>
@@ -381,7 +380,7 @@ export default {
         kindle_sender: "",
         txt_parse_inited: false,
         dialog_download: false,
-        dialog_kindle: false,
+        dialog_epub2audio: false,
         dialog_refer: false,
         dialog_msg: false,
         refer_books_loading: false,
@@ -434,7 +433,7 @@ export default {
                     "Content-Type": "application/x-www-form-urlencoded",
                 },
             }).then((rsp) => {
-                this.dialog_kindle = false;
+                this.dialog_epub2audio = false;
                 if (rsp.err === "ok") {
                     this.$alert("success", rsp.msg, "#");
                 } else {
