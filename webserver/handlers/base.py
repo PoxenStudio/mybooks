@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 
-
+import asyncio
 import base64
 import datetime
 import logging
@@ -44,13 +44,15 @@ def website_format(value):
 
 
 def js(func):
-    def do(self, *args, **kwargs):
+    async def do(self, *args, **kwargs):
         try:
             rsp = func(self, *args, **kwargs)
-            rsp["msg"] = rsp.get("msg", "")
+            if asyncio.iscoroutine(rsp):
+                rsp = await rsp
+            result = rsp.get("msg", "")
+            rsp["msg"] = result
         except Exception as e:
             import traceback
-
             logging.error(traceback.format_exc())
             msg = (
                 'Exception:<br><pre style="white-space:pre-wrap;word-break:keep-all">%s</pre>' % traceback.format_exc()

@@ -368,7 +368,7 @@
         "bookbarn_collection_hour": "获取书栈图书列表的时间 (设置为整点时间)",
         "enable_receiving_books": "允许接收书栈推送的图书",
         "book2audio_proxy": "书籍转语音代理设置",
-        "book2audio_proxy_comment": "能够访问EdgeTTS使用的代理配置。没有代理服务的情况, 可以公众号后台私信授权, 因为有带宽成本, 需要付费使用。",
+        "book2audio_proxy_comment": "能够访问EdgeTTS使用的代理配置, 可以通过访问https://edge-tts.com确认。没有代理服务可用时, 可以公众号后台私信授权, 因为有带宽成本, 需要付费使用。",
         "book2audio_proxy_address": "语音代理服务器地址",
         "book2audio_proxy_test": "测试是否连通"
     },

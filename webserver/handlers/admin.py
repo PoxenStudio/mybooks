@@ -581,15 +581,14 @@ class AdminDeleteBooks(BaseHandler):
 class AudioTestConnection(BaseHandler):
     @js
     @auth
-    def post(self):
+    async def post(self):
         try:
             data = tornado.escape.json_decode(self.request.body)
             proxy = data.get("proxy", None)
             if not proxy:
                 proxy = None
             import edge_tts
-            import asyncio
-            voices = asyncio.run(edge_tts.list_voices(proxy=proxy))
+            voices = await edge_tts.list_voices(proxy=proxy)
             if not voices:
                 return {"err": "error", "msg": _("无法获得可用的语音选项")}
             return {"err": "ok", "msg": _("EdgeTTS 连接测试成功")}
