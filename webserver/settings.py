@@ -56,7 +56,10 @@ settings = {
 
     "ENABLE_BOOKBARN": False,
     "BOOKBARN_TOKEN": "",
+    "ENABLE_RECEIVING_BOOKS": False,
     "BOOKBARN_COLLECTION_HOUR": 3,
+    "USE_BOOKBARN_PROXY": False,
+    "BOOK2AUDIO_PROXY": "",
 
     "EPUB_VIEWER": "epubjs.html",
     "PDF_VIEWER": "/static/pdfjs/web/viewer.html?file=%(pdf_url)s",

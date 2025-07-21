@@ -83,8 +83,18 @@
               <v-btn color="primary" :disabled="!settings['ENABLE_BOOKBARN'] || appliedToken" style="margin-bottom:24px" @click="apply_bookbarn_token">
                 <v-icon>key</v-icon>{{ $t('settings.bookbarn_apply_token') }}
               </v-btn>
-              <v-select small :prepend-icon="clock" v-model="settings['BOOKBARN_COLLECTION_HOUR']" :disabled="!settings['ENABLE_BOOKBARN']"
+              <v-checkbox small hide-details v-model="settings['ENABLE_RECEIVING_BOOKS']" :key="ENABLE_RECEIVING_BOOKS"
+                :label="$t('settings.enable_receiving_books')" :disabled="!settings['ENABLE_BOOKBARN']">
+              </v-checkbox>
+              <v-select small :prepend-icon="clock" v-model="settings['BOOKBARN_COLLECTION_HOUR']" :disabled="!settings['ENABLE_BOOKBARN']||!settings['ENABLE_RECEIVING_BOOKS']"
                 :items=card.hours :key="BOOKBARN_COLLECTION_HOUR" :label="$t('settings.bookbarn_collection_hour')"> </v-select>
+              <p><strong>{{ $t('settings.book2audio_proxy') }}</strong></p>
+              <p>{{ $t('settings.book2audio_proxy_comment') }}</p>
+              <v-text-field flat hide-details v-model="settings['BOOK2AUDIO_PROXY']" :disabled="!settings['ENABLE_BOOKBARN']" :label="$t('settings.book2audio_proxy_address')"
+                type="text" @focus="ensureHttpPrefix('BOOK2AUDIO_PROXY')"></v-text-field>
+              <v-btn color="primary" :disabled="!settings['ENABLE_BOOKBARN']" style="margin-bottom:24px" @click="test_audio_connection">
+                <v-icon>link</v-icon>{{ $t('settings.book2audio_proxy_test') }}
+              </v-btn>
             </template>
 
             <template v-if="card.show_socials">
@@ -377,6 +387,20 @@ export default {
         }
       });
     },
+    test_audio_connection: function () {
+      this.$backend("/admin/audio/test", {
+        method: 'POST',
+        body: JSON.stringify({
+          proxy: this.settings['BOOK2AUDIO_PROXY'] || '',
+        }),
+      }).then(rsp => {
+        if (rsp.err != 'ok') {
+          this.$alert('error', rsp.msg);
+        } else {
+          this.$alert('success', rsp.msg);
+        }
+      });
+    },
     test_email: function () {
       var data = new URLSearchParams();
       data.append('smtp_server', this.settings['smtp_server']);
@@ -396,6 +420,13 @@ export default {
     },
     run: function (func) {
       this[func]();
+    },
+    ensureHttpPrefix: function (fieldKey) {
+      if (!this.settings[fieldKey] || this.settings[fieldKey].trim() === '') {
+        this.settings[fieldKey] = 'http://';
+      } else if (!this.settings[fieldKey].startsWith('http://') && !this.settings[fieldKey].startsWith('https://')) {
+        this.settings[fieldKey] = 'http://' + this.settings[fieldKey];
+      }
     },
   },
 }

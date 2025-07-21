@@ -1,18 +1,17 @@
 <template>
     <v-row align="start">
         <v-col cols="12">
-            <v-dialog v-model="dialog_kindle" persistent width="300">
+            <v-dialog v-model="dialog_epub2audio" persistent width="300">
                 <v-card>
-                    <v-card-title class="">{{ $t('book.pushToKindle') }}</v-card-title>
+                    <v-card-title class="">{{ $t('book.convertToAudio') }}</v-card-title>
                     <v-card-text>
-                        <p>{{ $t('book.enterKindleEmail') }}</p>
+                        <p>{{ $t('book.convertToAudioNote') }}</p>
                         <v-combobox
-                            :items="email_items"
-                            :rules="[check_email]"
+                            :items="voice_names"
                             outlined
                             dense
-                            v-model="mail_to"
-                            label="Email*"
+                            v-model="voice_name"
+                            label="Proxy Address"
                             auto-select-first
                             required
                         ></v-combobox>
@@ -21,7 +20,7 @@
                     <v-card-actions>
                         <v-btn color="" text @click="dialog_kindle = false">{{ $t('common.cancel') }}</v-btn>
                         <v-spacer></v-spacer>
-                        <v-btn color="primary" text @click="sendto_kindle">{{ $t('common.send') }}</v-btn>
+                        <v-btn color="primary" text @click="sendto_kindle">{{ $t('common.start') }}</v-btn>
                     </v-card-actions>
                 </v-card>
             </v-dialog>
@@ -371,16 +370,7 @@ export default {
         },
         tiny: function () {
             return this.$vuetify.breakpoint.xsOnly;
-        },
-        email_items: function () {
-            var emails = [this.$store.state.user.kindle_email];
-            if (process.client) {
-                emails.push(this.$cookies.get("last_mailto"));
-            }
-            return emails.filter((value, index, self) => {
-                return value !== "" && value !== undefined && value !== null && self.indexOf(value) === index;
-            });
-        },
+        }
     },
     data: () => ({
         err: "",
@@ -554,13 +544,60 @@ export default {
                 }
             });
         },
-        check_email(email) {
-            if (email === this.kindle_sender) {
-                return "发件邮件不可作为收件人";
+        check_proxy_address(address) {
+            // address should be valid ip(v4/v6) address or host uri, the port is optional. Ex: <ip>:<port>, <host>:<port>, <ip>, <host>
+            if (!address || address.trim() === '') {
+                return "代理地址不能为空";
             }
-            var re = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
-            return re.test(email) || "Email格式错误";
-        },
+
+            // Split address and port
+            let host, port;
+            if (address.includes('[') && address.includes(']')) {
+                // IPv6 with port: [::1]:8080
+                const match = address.match(/^\[(.+)\]:(\d+)$/) || address.match(/^\[(.+)\]$/);
+                if (match) {
+                    host = match[1];
+                    port = match[2];
+                } else {
+                    return "IPv6地址格式错误";
+                }
+            } else if (address.includes(':')) {
+                // IPv4:port or host:port
+                const parts = address.split(':');
+                if (parts.length === 2) {
+                    host = parts[0];
+                    port = parts[1];
+                } else {
+                    return "地址格式错误";
+                }
+            } else {
+                // Just host or IP
+                host = address;
+            }
+
+            // Validate port if present
+            if (port !== undefined) {
+                const portNum = parseInt(port);
+                if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+                    return "端口号必须在1-65535之间";
+                }
+            }
+
+            // IPv4 regex
+            const ipv4Regex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+
+            // IPv6 regex (simplified)
+            const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^::1$|^::$|^([0-9a-fA-F]{1,4}:){1,7}:$|^([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}$|^([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}$|^([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}$|^([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}$|^([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}$|^[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})$|^:((:[0-9a-fA-F]{1,4}){1,7}|:)$/;
+
+            // Hostname regex (allows domain names and localhost)
+            const hostnameRegex = /^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$|^localhost$/;
+
+            if (ipv4Regex.test(host) || ipv6Regex.test(host) || hostnameRegex.test(host)) {
+                return true;
+            }
+
+            return "请输入有效的IP地址或主机名";
+        }
     },
 };
 </script>

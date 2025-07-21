@@ -237,6 +237,8 @@
         "enterKindleEmail": "填写Kindle收件人邮箱地址：",
         "emailLabel": "Email*",
         "kindleSenderNote": "* 请先将本站邮箱加入到Kindle发件人中:",
+        "convertToAudio": "有声书转换",
+        "convertToAudioNote": "转换为有声书需要花费一段时间，请耐心等待。如果无法访问外网音频服务，可以在系统设置中设置为委托书栈处理。",
         "downloadBook": "下载书籍",
         "noDownloadableFiles": "本书暂无可供下载的文件格式",
         "push": "推送",
@@ -291,7 +293,8 @@
         "cancel": "取消",
         "send": "发送",
         "close": "关闭",
-        "set": "设置"
+        "set": "设置",
+        "start": "开始"
     },
     "settings": {
         "basic_info": "基础信息",
@@ -358,11 +361,16 @@
         "add": "添加",
         "description": "说明",
         "book_barn_service": "书栈服务",
-        "book_barn_description": "书栈所提供的均为网上公开信息, 开启后每日自动导入3~5本图书。保存设置后才会生效。",
+        "book_barn_description": "书栈所提供的均为网上公开信息, 开启后支持图书转音频, 或者每日自动导入2~5本图书。保存设置后才会生效。",
         "bookbarn_enable": "启用书栈服务",
         "bookbarn_token": "授权Token",
         "bookbarn_apply_token": "获取Token",
-        "bookbarn_collection_hour": "获取书栈图书列表的时间 (设置为整点时间)"
+        "bookbarn_collection_hour": "获取书栈图书列表的时间 (设置为整点时间)",
+        "enable_receiving_books": "允许接收书栈推送的图书",
+        "book2audio_proxy": "书籍转语音代理设置",
+        "book2audio_proxy_comment": "能够访问EdgeTTS使用的代理配置。没有代理服务的情况, 可以公众号后台私信授权, 因为有带宽成本, 需要付费使用。",
+        "book2audio_proxy_address": "语音代理服务器地址",
+        "book2audio_proxy_test": "测试是否连通"
     },
     "user": {
         "avatar": "头像",

@@ -17,7 +17,7 @@ pytest==7.4.4
 flake8
 opencc
 psutil
-beautifulsoup4==4.13.4
+beautifulsoup4==4.12.3
 EbookLib==0.19
 mutagen==1.47.0
 openai==1.85.0

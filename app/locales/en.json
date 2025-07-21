@@ -278,7 +278,8 @@
         "bookbarn_enable": "Enable Book Barn Service",
         "bookbarn_token": "Token",
         "bookbarn_apply_token": "Apply Token",
-        "bookbarn_collection_hour": "Request to book barn at hour"
+        "bookbarn_collection_hour": "Request to book barn at hour",
+        "enable_receiving_books": "Enable receiving books from Book Barn"
     },
     "book": {
         "edit": {
@@ -308,6 +309,8 @@
         "enterKindleEmail": "Enter Kindle recipient email address:",
         "emailLabel": "Email*",
         "kindleSenderNote": "* Please add this site's email to Kindle sender list:",
+        "convertToAudio": "Convert to Audiobook",
+        "convertToAudioNote": "Converting to audiobook may take some time, please be patient. If you cannot access the external audio service, you can set it to delegate to the book stack processing in the system settings.",
         "downloadBook": "Download Book",
         "noDownloadableFiles": "No downloadable file formats available for this book",
         "push": "Push",
@@ -362,7 +365,8 @@
         "cancel": "Cancel",
         "send": "Send",
         "close": "Close",
-        "set": "Use"
+        "set": "Use",
+        "start": "Start"
     },
     "user": {
         "avatar": "Avatar",

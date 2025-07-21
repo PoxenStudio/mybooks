@@ -204,8 +204,11 @@ class AdminSettings(BaseHandler):
         if not self.admin_user:
             return {"err": "permission", "msg": _(u"无权访问此接口")}
 
-        if int(CONF.get("BOOKBARN_COLLECTION_HOUR", 25)) >= 25:
+        hour_ = int(CONF.get("BOOKBARN_COLLECTION_HOUR", 24))
+        if hour_ >= 24 or hour_ < 0:
             CONF["BOOKBARN_COLLECTION_HOUR"] = 3
+        if CONF.get("ENABLE_RECEIVING_BOOKS", None) is None:
+            CONF["ENABLE_RECEIVING_BOOKS"] = CONF.get("ENABLE_BOOKBARN", False)
 
         CONF["site_icon"] = "favicon_0"  # default icon, means use current favicon.ico
 
@@ -281,7 +284,10 @@ class AdminSettings(BaseHandler):
             "site_icon",
             "ENABLE_BOOKBARN",
             "BOOKBARN_COLLECTION_HOUR",
-            "BOOKBARN_TOKEN"
+            "BOOKBARN_TOKEN",
+            "ENABLE_RECEIVING_BOOKS",
+            "USE_BOOKBARN_PROXY",
+            "BOOK2AUDIO_PROXY",
         ]
 
         current_icon = CONF.get("site_icon", "favicon_0")  # favicon_0 means use current icon
@@ -572,6 +578,24 @@ class AdminDeleteBooks(BaseHandler):
                 logging.error(_("执行异常: %s"), err)
         return {"err": "ok", "msg": _(u"删除成功")}
 
+class AudioTestConnection(BaseHandler):
+    @js
+    @auth
+    def post(self):
+        try:
+            data = tornado.escape.json_decode(self.request.body)
+            proxy = data.get("proxy", None)
+            if not proxy:
+                proxy = None
+            import edge_tts
+            import asyncio
+            voices = asyncio.run(edge_tts.list_voices(proxy=proxy))
+            if not voices:
+                return {"err": "error", "msg": _("无法获得可用的语音选项")}
+            return {"err": "ok", "msg": _("EdgeTTS 连接测试成功")}
+        except Exception as e:
+            logging.error(f"EdgeTTS 连接测试失败: {e}")
+            return {"err": "error", "msg": _("EdgeTTS 连接测试失败: %s") % str(e)}
 
 def routes():
     return [
@@ -583,5 +607,6 @@ def routes():
         (r"/api/admin/book/list", AdminBookList),
         (r"/api/admin/book/fill", AdminBookFill),
         (r"/api/admin/bookbarn/token/apply", AdminBookbarnTokenApply),
-        (r"/api/admin/books/delete", AdminDeleteBooks)
+        (r"/api/admin/books/delete", AdminDeleteBooks),
+        (r"/api/admin/audio/test", AudioTestConnection),
     ]

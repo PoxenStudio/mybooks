@@ -201,7 +201,7 @@ class BookBarnService(AsyncService):
         output_hour = 0
         while True:
             logging.info("[BARN]Daily books checking")
-            if not CONF.get("ENABLE_BOOKBARN", False):
+            if not CONF.get("ENABLE_BOOKBARN", False) or not CONF.get("ENABLE_RECEIVING_BOOKS", False):
                 time.sleep(10 * 60)
                 logging.info("[BARN]Daily books checking, not enabled")
                 continue
