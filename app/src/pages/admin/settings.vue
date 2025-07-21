@@ -92,7 +92,7 @@
               <p>{{ $t('settings.book2audio_proxy_comment') }}</p>
               <v-text-field flat hide-details v-model="settings['BOOK2AUDIO_PROXY']" :disabled="!settings['ENABLE_BOOKBARN']" :label="$t('settings.book2audio_proxy_address')"
                 type="text" @focus="ensureHttpPrefix('BOOK2AUDIO_PROXY')"></v-text-field>
-              <v-btn color="primary" :disabled="!settings['ENABLE_BOOKBARN']" style="margin-bottom:24px" @click="test_audio_connection">
+              <v-btn color="primary" :disabled="!settings['ENABLE_BOOKBARN'] || testingConnection" style="margin-bottom:24px" @click="test_audio_connection">
                 <v-icon>link</v-icon>{{ $t('settings.book2audio_proxy_test') }}
               </v-btn>
             </template>
@@ -388,6 +388,7 @@ export default {
       });
     },
     test_audio_connection: function () {
+      testingConnection = true;
       this.$backend("/admin/audio/test", {
         method: 'POST',
         body: JSON.stringify({
@@ -400,6 +401,7 @@ export default {
           this.$alert('success', rsp.msg);
         }
       });
+      testingConnection = false;
     },
     test_email: function () {
       var data = new URLSearchParams();
