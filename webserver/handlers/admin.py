@@ -578,6 +578,7 @@ class AdminDeleteBooks(BaseHandler):
                 logging.error(_("执行异常: %s"), err)
         return {"err": "ok", "msg": _(u"删除成功")}
 
+
 class AudioTestConnection(BaseHandler):
     @js
     @auth
@@ -603,6 +604,7 @@ class AudioTestConnection(BaseHandler):
         except Exception as e:
             logging.error(f"EdgeTTS 连接测试失败: {e}")
             return {"err": "error", "msg": _("EdgeTTS 连接测试失败: %s") % str(e)}
+
 
 def routes():
     return [

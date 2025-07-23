@@ -115,13 +115,15 @@ COPY --from=builder /app-static/dist/avatar/ /data/books/avatar/
 
 RUN rm -f /etc/nginx/sites-enabled/default /var/www/html -rf && \
     cd /var/www/talebook/ && \
+    ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && \
+    echo ${TZ} > /etc/timezone && \
     echo "VERSION = \"$GIT_VERSION\"" > webserver/version.py && \
     echo 'settings = {}' > /data/books/settings/auto.py && \
     chmod a+w /data/books/settings/auto.py && \
     calibredb add --library-path=/data/books/library/ -r docker/book/ && \
     python3 server.py --syncdb  && \
     python3 server.py --update-config  && \
-    rm -f webserver/*.pyc && \
+    find webserver -name "*.pyc" -type f -delete && \
     rm -rf app/src && \
     rm -rf app/dist/logo && \
     ln -s /data/books/logo app/dist/logo && \

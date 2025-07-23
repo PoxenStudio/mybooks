@@ -11,11 +11,13 @@ import signal
 import sys
 import json
 import re
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Dict, Any
 
 """
-python3 main.py --tts edge --language zh-CN --worker_count 2 --voice_name zh-CN-YunyangNeural --no_prompt /home/horky/workspace/epub_to_audio/test.epub /home/horky/workspace/epub_to_audio/
+python3 main.py --tts edge --language zh-CN --worker_count 2 --voice_name zh-CN-YunyangNeural --no_prompt
+ test.epub ./epub_to_audio/
 """
+
 
 def remove_null_values(obj):
     if isinstance(obj, dict):
@@ -25,9 +27,11 @@ def remove_null_values(obj):
     else:
         return obj
 
+
 def json_dumps_clean(obj, **kwargs):
     cleaned_obj = remove_null_values(obj)
     return json.dumps(cleaned_obj, **kwargs)
+
 
 class EpubToAudioWorker:
     """
@@ -176,9 +180,9 @@ class EpubToAudioWorker:
             stream.close()
 
     def convert_epub_to_audio(self, epub_path: str, output_dir: str,
-                            tts: str = "edge", language: str = "zh-CN",
-                            worker_count: int = 2, voice_name: str = "zh-CN-YunyangNeural",
-                            no_prompt: bool = True, show_output: bool = True, **kwargs) -> Dict[str, Any]:
+                              tts: str = "edge", language: str = "zh-CN",
+                              worker_count: int = 2, voice_name: str = "zh-CN-YunyangNeural",
+                              no_prompt: bool = True, show_output: bool = True, **kwargs) -> Dict[str, Any]:
         """
         Convert EPUB to audio using epub_to_audio
 
@@ -271,7 +275,7 @@ class EpubToAudioWorker:
                 self.progress_data["status"] = self.STATUS_FAILED
                 self.progress_data["error_message"] = f"Conversion timed out after {self.timeout} seconds"
             except KeyboardInterrupt:
-                print(f"\n[INFO] Conversion interrupted by user (Ctrl+C)")
+                print("\n[INFO] Conversion interrupted by user (Ctrl+C)")
                 self._kill_process()
                 return_code = -2  # Interrupted
                 self.progress_data["status"] = self.STATUS_FAILED
@@ -302,12 +306,12 @@ class EpubToAudioWorker:
                 'stderr': stderr_data,
                 'return_code': return_code,
                 'progress': self.progress_data,
-                'error': None if success else (self.progress_data["error_message"] or f"Process exited with code {return_code}")
+                'error': None if success else (self.progress_data["error_message"] or f"Exited code {return_code}")
             }
 
         except KeyboardInterrupt:
             # Handle Ctrl+C interruption
-            print(f"\n[INFO] Conversion process interrupted by user")
+            print("\n[INFO] Conversion process interrupted by user")
             if self.progress_data["end_time"] is None:
                 self.progress_data["end_time"] = int(time.time())
             self.progress_data["execution_time"] = self.progress_data["end_time"] - self.progress_data["start_time"]
@@ -466,7 +470,7 @@ def main():
     # Create EPUB to Audio worker
     worker = EpubToAudioWorker(main_py_path=main_py_path, timeout=timeout)
 
-    print(f"[INFO] Starting EPUB to Audio conversion")
+    print("[INFO] Starting EPUB to Audio conversion")
     print(f"[INFO] EPUB: {epub_path}")
     print(f"[INFO] Output: {output_dir}")
     print(f"[INFO] Progress only mode: {progress_only}")
@@ -517,9 +521,9 @@ def main():
             result = worker.convert_epub_to_audio(epub_path, output_dir, **options)
 
             # Print results
-            print("\n" + "="*50)
+            print("\n" + "=" * 50)
             print("CONVERSION RESULTS")
-            print("="*50)
+            print("=" * 50)
             print(f"Success: {result['success']}")
             print(f"Return Code: {result['return_code']}")
 
