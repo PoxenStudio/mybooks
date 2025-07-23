@@ -734,18 +734,22 @@ class TestJsonResponse(TestApp):
             },
         )
 
-    def test_err(self):
+    @testing.gen_test
+    async def test_err(self):
         f = FakeHandler()
         with mock.patch("traceback.format_exc", return_value=""):
-            webserver.handlers.base.js(lambda x: self.raise_(RuntimeError()))(f)
+            handler = webserver.handlers.base.js(lambda x: self.raise_(RuntimeError()))
+            await handler(f)
         self.assertTrue(isinstance(f.rsp["msg"], str))
         self.assertEqual(f.rsp["err"], "exception")
         self.assertHeaders(f.rsp_headers)
 
-    def test_finish(self):
+    @testing.gen_test
+    async def test_finish(self):
         f = FakeHandler()
         with mock.patch("traceback.format_exc", return_value=""):
-            webserver.handlers.base.js(lambda x: self.raise_(web.Finish()))(f)
+            handler = webserver.handlers.base.js(lambda x: self.raise_(web.Finish()))
+            await handler(f)
         self.assertEqual(f.rsp, "")
         self.assertHeaders(f.rsp_headers)
 
