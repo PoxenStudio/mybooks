@@ -115,12 +115,11 @@ class AudioDetail(BaseHandler):
 
 class AudioConversion(BaseHandler):
     @js
-    @auth
-    def get(self, book_id):
+    def get(self, bid):
         # get the conversion status, check it in the worker map,
         # return the status json if found it in the map, otherwise, return not found status.
         try:
-            book_id = int(book_id)
+            book_id = int(bid)
             worker = ConversionWorkerMap.get(book_id)
             if worker:
                 progress = worker.get_progress()
@@ -141,13 +140,14 @@ class AudioConversion(BaseHandler):
             return {"err": "server.error", "msg": str(e)}
 
     @js
-    @auth
-    def post(self, book_id):
+    def post(self, bid):
         try:
-            book_id = int(book_id)
+            book_id = int(bid)
             req = tornado.escape.json_decode(self.request.body)
             voice_name = req.get("voice", "zh-CN-YunjianNeural")
             language = req.get("language", "zh-CN")
+
+            logging.info(f"Starting audio conversion for book {book_id} with voice {voice_name} and language {language}")
 
             # Check if book exists
             book = self.get_book(book_id)

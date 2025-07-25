@@ -19,6 +19,6 @@ def routes():
     routes += book.routes()
     routes += user.routes()
     routes += meta.routes()
-    routes += files.routes()
     routes += audio.routes()
+    routes += files.routes()
     return routes

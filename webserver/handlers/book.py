@@ -22,7 +22,7 @@ from webserver.handlers.base import BaseHandler, ListHandler, auth, js
 from webserver.models import Item
 from webserver.plugins.meta import baike, douban, youshu
 from webserver.plugins.parser.txt import get_content_encoding
-from webserver.handlers.audio import get_audios
+from webserver.handlers.audio import AudioUtils
 
 CONF = loader.get_settings()
 ZLIBRARY_SUFFIX = "(Z-Library)"
@@ -67,7 +67,7 @@ class BookDetail(BaseHandler):
             "err": "ok",
             "kindle_sender": CONF["smtp_username"],
             "book": utils.BookFormatter(self, book).format(with_files=True, with_perms=True),
-            "audios": get_audios(id),
+            "audios": AudioUtils.get_audios(id),
         }
 
 

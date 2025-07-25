@@ -27,7 +27,7 @@
                                     <v-btn
                                         icon
                                         small
-                                        @click.stop="playVoiceSample(item)"
+                                        @click.stop="play_sample_voice(item)"
                                         :loading="playing_sample === item.voice_name"
                                     >
                                         <v-icon>play_arrow</v-icon>
@@ -39,7 +39,7 @@
                     <v-card-actions>
                         <v-btn color="" text @click="dialog_epub2audio = false">{{ $t('common.cancel') }}</v-btn>
                         <v-spacer></v-spacer>
-                        <v-btn color="primary" text @click="sendto_kindle">{{ $t('common.start') }}</v-btn>
+                        <v-btn color="primary" text @click="generate_audio">{{ $t('common.start') }}</v-btn>
                     </v-card-actions>
                 </v-card>
             </v-dialog>
@@ -415,49 +415,49 @@ export default {
                 voice_name: "zh-CN-liaoning-XiaobeiNeural",
                 display_name: "女声 | 晓北（辽宁）",
                 gender: "female",
-                sample_file: "female/xiaobei.mp3"
+                sample_file: "female/zh-CN-liaoning-XiaobeiNeural.mp3"
             },
             {
                 voice_name: "zh-CN-XiaoxiaoNeural",
                 display_name: "女声 | 晓晓",
                 gender: "female",
-                sample_file: "female/xiaoxiao.mp3"
+                sample_file: "female/zh-CN-XiaoxiaoNeural.mp3"
             },
             {
                 voice_name: "zh-CN-XiaoyiNeural",
                 display_name: "女声 | 晓伊",
                 gender: "female",
-                sample_file: "female/xiaoyi.mp3"
+                sample_file: "female/zh-CN-XiaoyiNeural.mp3"
             },
             {
                 voice_name: "zh-HK-HiuGaaiNeural",
                 display_name: "女声 | 晓佳（香港）",
                 gender: "female",
-                sample_file: "female/hiugaai.mp3"
+                sample_file: "female/zh-HK-HiuGaaiNeural.mp3"
             },
             {
                 voice_name: "zh-CN-YunjianNeural",
                 display_name: "男声 | 云健",
                 gender: "male",
-                sample_file: "male/yunjian.mp3"
+                sample_file: "male/zh-CN-YunjianNeural.mp3"
             },
             {
                 voice_name: "zh-CN-YunxiNeural",
                 display_name: "男声 | 云希",
                 gender: "male",
-                sample_file: "male/yunxi.mp3"
+                sample_file: "male/zh-CN-YunxiNeural.mp3"
             },
             {
                 voice_name: "zh-CN-YunyangNeural",
                 display_name: "男声 | 云扬",
                 gender: "male",
-                sample_file: "male/yunyang.mp3"
+                sample_file: "male/zh-CN-YunyangNeural.mp3"
             },
             {
                 voice_name: "zh-HK-WanLungNeural",
                 display_name: "男声 | 云龙（香港）",
                 gender: "male",
-                sample_file: "male/wanlung.mp3"
+                sample_file: "male/zh-HK-WanLungNeural.mp3"
             }
         ],
         email_rules: function (email) {
@@ -489,7 +489,7 @@ export default {
     },
     beforeDestroy() {
         // 清理音频资源
-        this.stopCurrentAudio();
+        this.stop_current_audio();
     },
     methods: {
         init(route, next) {
@@ -516,6 +516,18 @@ export default {
                     this.$alert("success", rsp.msg, "#");
                 } else {
                     this.$alert("error", rsp.msg, "#");
+                }
+            });
+        },
+        generate_audio() {
+            this.$backend(`/audio/${this.book.id}/conversion`, {
+                method: "POST",
+                body: JSON.stringify({voice: this.voice_name}),
+            }).then((rsp) => {
+                if (rsp.err === "ok") {
+                    this.$alert("success", this.$t('book.audioGenerated'));
+                } else {
+                    this.$alert("error", rsp.msg);
                 }
             });
         },
@@ -621,15 +633,15 @@ export default {
                 }
             });
         },
-        playVoiceSample(voice_option) {
+        play_sample_voice(voice_option) {
             if (this.playing_sample === voice_option.voice_name) {
                 // 如果正在播放相同的样本，则停止播放
-                this.stopCurrentAudio();
+                this.stop_current_audio();
                 return;
             }
 
             // 停止当前播放的音频
-            this.stopCurrentAudio();
+            this.stop_current_audio();
 
             // 设置正在播放状态
             this.playing_sample = voice_option.voice_name;
@@ -655,66 +667,12 @@ export default {
                 this.$alert("error", "音频播放失败");
             });
         },
-        stopCurrentAudio() {
+        stop_current_audio() {
             if (this.currentAudio) {
                 this.currentAudio.pause();
                 this.currentAudio = null;
             }
             this.playing_sample = null;
-        },
-        check_proxy_address(address) {
-            // address should be valid ip(v4/v6) address or host uri, the port is optional. Ex: <ip>:<port>, <host>:<port>, <ip>, <host>
-            if (!address || address.trim() === '') {
-                return "代理地址不能为空";
-            }
-
-            // Split address and port
-            let host, port;
-            if (address.includes('[') && address.includes(']')) {
-                // IPv6 with port: [::1]:8080
-                const match = address.match(/^\[(.+)\]:(\d+)$/) || address.match(/^\[(.+)\]$/);
-                if (match) {
-                    host = match[1];
-                    port = match[2];
-                } else {
-                    return "IPv6地址格式错误";
-                }
-            } else if (address.includes(':')) {
-                // IPv4:port or host:port
-                const parts = address.split(':');
-                if (parts.length === 2) {
-                    host = parts[0];
-                    port = parts[1];
-                } else {
-                    return "地址格式错误";
-                }
-            } else {
-                // Just host or IP
-                host = address;
-            }
-
-            // Validate port if present
-            if (port !== undefined) {
-                const portNum = parseInt(port);
-                if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
-                    return "端口号必须在1-65535之间";
-                }
-            }
-
-            // IPv4 regex
-            const ipv4Regex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-
-            // IPv6 regex (simplified)
-            const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^::1$|^::$|^([0-9a-fA-F]{1,4}:){1,7}:$|^([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}$|^([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}$|^([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}$|^([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}$|^([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}$|^[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})$|^:((:[0-9a-fA-F]{1,4}){1,7}|:)$/;
-
-            // Hostname regex (allows domain names and localhost)
-            const hostnameRegex = /^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$|^localhost$/;
-
-            if (ipv4Regex.test(host) || ipv6Regex.test(host) || hostnameRegex.test(host)) {
-                return true;
-            }
-
-            return "请输入有效的IP地址或主机名";
         }
     },
 };
