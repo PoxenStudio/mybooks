@@ -23,9 +23,14 @@ AUDIO_OUTPUT_FOLDER = CONF.get("audio_output_folder", "/data/books/audios/")
 
 
 class AudioUtils:
+    site_url = ""
+
     @staticmethod
     def get_audios(bid):
         """Get audio files for a book."""
+        if not AudioUtils.site_url:
+            AudioUtils.site_url = BaseHandler.get_site_url()
+
         book_id = int(bid)
         audio_dir = os.path.join(AUDIO_OUTPUT_FOLDER, str(book_id))
         if not os.path.exists(audio_dir):
@@ -47,10 +52,13 @@ class AudioUtils:
         file_urls = []
         for file in sorted(audio_files):
             file_path = os.path.join(audio_dir, file)
+            file_size = os.path.getsize(file_path)
+            if file_size <= 1024:  # Ignore files smaller than 1K
+                continue
             file_urls.append({
                 "filename": os.path.splitext(file)[0],
-                "url": f"/api/audio/{book_id}/{file}",
-                "size": os.path.getsize(file_path)
+                "url": f"{AudioUtils.site_url}/audios/{book_id}/{file}",
+                "size": file_size
             })
 
         if worker and not worker.is_completed():
@@ -91,7 +99,7 @@ class AudioDetail(BaseHandler):
                     for file in sorted(audio_files):
                         file_urls.append({
                             "filename": os.path.splitext(file)[0],
-                            "url": f"/api/audio/{book_id}/{file}",
+                            "url": f"{self.site_url}/audios/{book_id}/{file}",
                             "size": os.path.getsize(os.path.join(audio_dir, file))
                         })
                     return {

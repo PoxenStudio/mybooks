@@ -54,11 +54,18 @@
                     <v-card-title class="">{{ $t('book.audioList') }}</v-card-title>
                     <v-card-text>
                         <p>{{ $t('book.convertToAudioNote') }}</p>
-                        <v-row v-for="(audio_item, idx) in this.audioList"
-                               :key="'audio-' + idx"
-                               class="mb-2">
-                            <v-col class='py-0' cols=3>
-                                <v-text-field flat small v-model="audio_item.name" type="text"></v-text-field>
+                        <v-row v-for="(audio_item, idx) in this.audios.audios" :key="'audio-' + idx" class="mb-2">
+                            <v-col class='py-0' cols=9>
+                                <v-btn
+                                    icon
+                                    small
+                                    @click="play_audio_file(audio_item, idx)"
+                                    :loading="playing_audio_index === idx && audio_loading"
+                                    :color="playing_audio_index === idx ? 'primary' : 'default'"
+                                >
+                                    <v-icon>{{ playing_audio_index === idx && !audio_paused ? 'pause' : 'play_arrow' }}</v-icon>
+                                </v-btn>
+                                <span class="ml-2">{{ audio_item.filename }}</span>
                             </v-col>
                         </v-row>
                     </v-card-text>
@@ -445,6 +452,11 @@ export default {
         voice_name: "zh-CN-XiaoxiaoNeural", // 默认选择小晓
         playing_sample: null,
         currentAudio: null,
+        // Audio file playback state
+        playing_audio_index: null,
+        audio_loading: false,
+        audio_paused: false,
+        currentAudioFile: null,
         voice_options: [
             {
                 voice_name: "zh-CN-liaoning-XiaobeiNeural",
@@ -525,6 +537,7 @@ export default {
     beforeDestroy() {
         // 清理音频资源
         this.stop_current_audio();
+        this.stop_audio_file_playback();
     },
     methods: {
         init(route, next) {
@@ -717,6 +730,69 @@ export default {
                 this.currentAudio = null;
             }
             this.playing_sample = null;
+        },
+        play_audio_file(audio_item, index) {
+            // If clicking on the same audio that's currently playing
+            if (this.playing_audio_index === index && this.currentAudioFile) {
+                if (this.audio_paused) {
+                    // Resume playback
+                    this.currentAudioFile.play();
+                    this.audio_paused = false;
+                } else {
+                    // Pause playback
+                    this.currentAudioFile.pause();
+                    this.audio_paused = true;
+                }
+                return;
+            }
+
+            // Stop any currently playing audio
+            this.stop_audio_file_playback();
+
+            // Stop sample voice if playing
+            this.stop_current_audio();
+
+            // Set loading state
+            this.audio_loading = true;
+            this.playing_audio_index = index;
+
+            // Create new audio object
+            this.currentAudioFile = new Audio(audio_item.url);
+
+            this.currentAudioFile.addEventListener('loadstart', () => {
+                this.audio_loading = true;
+            });
+
+            this.currentAudioFile.addEventListener('canplay', () => {
+                this.audio_loading = false;
+            });
+
+            this.currentAudioFile.addEventListener('ended', () => {
+                this.stop_audio_file_playback();
+            });
+
+            this.currentAudioFile.addEventListener('error', () => {
+                this.stop_audio_file_playback();
+                this.$alert("error", "音频文件加载失败");
+            });
+
+            // Start playback
+            this.currentAudioFile.play().then(() => {
+                this.audio_loading = false;
+                this.audio_paused = false;
+            }).catch(() => {
+                this.stop_audio_file_playback();
+                this.$alert("error", "音频播放失败");
+            });
+        },
+        stop_audio_file_playback() {
+            if (this.currentAudioFile) {
+                this.currentAudioFile.pause();
+                this.currentAudioFile = null;
+            }
+            this.playing_audio_index = null;
+            this.audio_loading = false;
+            this.audio_paused = false;
         }
     },
 };

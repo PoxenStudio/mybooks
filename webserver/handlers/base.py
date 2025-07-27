@@ -93,6 +93,11 @@ def is_admin(func):
 
 class BaseHandler(web.RequestHandler):
     _path_to_env = {}
+    site_url = ""
+
+    @staticmethod
+    def get_site_url():
+        return BaseHandler.site_url
 
     def _request_summary(self) -> str:
         userid = 0
