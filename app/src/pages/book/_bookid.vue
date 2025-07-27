@@ -99,7 +99,7 @@
                             text
                             @click="clear_conversion"
                         >
-                            {{ $t('common.cancel') }}
+                            {{ $t('book.cancelConversion') }}
                         </v-btn>
                         <v-btn
                             v-else-if="audios.status === AUDIO_STATUS.CONVERTED"
@@ -607,7 +607,6 @@ export default {
                 if (this.loaded) return;
                 this.loaded = true;
                 if (newValue && newValue.status === this.AUDIO_STATUS.PROCESSING) {
-                    console.log("Audio processing started, starting progress polling...");
                     // 如果音频状态是正在处理中，启动进度轮询
                     this.start_audio_progress_polling();
                 }
