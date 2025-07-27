@@ -3,7 +3,6 @@
 
 import logging
 import os
-import re
 import shutil
 import threading
 import time
@@ -11,8 +10,8 @@ from gettext import gettext as _
 
 import tornado
 
-from webserver import constants, loader
-from webserver.handlers.base import BaseHandler, auth, js, is_admin
+from webserver import loader
+from webserver.handlers.base import BaseHandler, auth, js
 from webserver.worker.epub2audio_worker import EpubToAudioWorker
 
 CONF = loader.get_settings()
@@ -51,7 +50,7 @@ class AudioUtils:
                         "audio_dir": audio_dir,
                         "audios": [],
                         "count": 0
-                    }
+                        }
             else:
                 return {"status": "unavailable", "msg": _(u"没有发现音频文件"), "count": 0}
 
@@ -74,14 +73,13 @@ class AudioUtils:
                     "audio_dir": audio_dir,
                     "audios": file_urls,
                     "count": len(file_urls)
-                }
+                    }
         else:
-            return {
-                    "status": EpubToAudioWorker.STATUS_CONVERTED,
+            return {"status": EpubToAudioWorker.STATUS_CONVERTED,
                     "audio_dir": audio_dir,
                     "audios": file_urls,
                     "count": len(file_urls)
-                }
+                    }
 
 
 class AudioDetail(BaseHandler):
@@ -109,7 +107,6 @@ class AudioDetail(BaseHandler):
                             "size": os.path.getsize(os.path.join(audio_dir, file))
                         })
                     return {
-                        "status": "available",
                         "audio_dir": audio_dir,
                         "audios": file_urls,
                         "status": EpubToAudioWorker.STATUS_COMPLETED,
@@ -141,7 +138,7 @@ class AudioConversion(BaseHandler):
             worker = ConversionWorkerMap.get(book_id)
             if worker:
                 progress = worker.get_progress()
-                if progress and progress["status"] in [EpubToAudioWorker.STATUS_CONVERTED, EpubToAudioWorker.STATUS_COMPLETED]:
+                if progress and progress["status"] == EpubToAudioWorker.STATUS_CONVERTED:
                     # remove the book id from ConversionWorkerMap
                     ConversionWorkerMap.pop(book_id, None)
                     return {"err": "ok", "msg": _(u"转换完成"), "data": progress}
