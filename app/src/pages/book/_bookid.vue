@@ -60,12 +60,12 @@
                     </v-card-title>
                     <v-card-text v-if="audios.status === AUDIO_STATUS.PROCESSING">
                         <p style="color: orange; font-weight: bold;">{{ $t('book.conversionInProgress') }}</p>
-                        <v-progress-linear
+                        <v-progress-circular
                             v-if="audios.progress && audios.progress.total_chapters > 0"
                             :value="(audios.progress.converted_chapters / audios.progress.total_chapters) * 100"
                             color="primary"
                             height="6"
-                        ></v-progress-linear>
+                        ></v-progress-circular>
                     </v-card-text>
                     <v-card-text v-if="audios.status === AUDIO_STATUS.FAILED">
                         <p style="color: red; font-weight: bold;">{{ $t('book.conversionFailed') }}</p>
@@ -75,9 +75,9 @@
                     </v-card-text>
                     <v-card-text>
                         <p>{{ $t('book.convertToAudioNote') }}</p>
-                        <div style="max-height: 200px; overflow-y: auto; overflow-x: hidden; padding: 12px 12px 0 12px;">
+                        <div class="audio-scroll-container" style="max-height: 200px; overflow-y: auto; overflow-x: hidden; padding: 12px 12px 0 12px;">
                             <v-row v-for="(audio_item, idx) in this.audios.audios" :key="'audio-' + idx" class="mb-2">
-                                <v-col class='py-0' cols=9>
+                                <v-col class='py-0'>
                                     <v-btn
                                         icon
                                         small
@@ -888,11 +888,11 @@ export default {
 
                 if (this.audios.status === this.AUDIO_STATUS.PROCESSING) {
                     // Cancel the conversion
-                    endpoint = `/api/audio/${this.book.id}/cancel`;
+                    endpoint = `/audio/${this.book.id}/cancel`;
                     successMessage = this.$t('book.conversionCancelled');
                 } else if (this.audios.status === this.AUDIO_STATUS.CONVERTED) {
                     // Delete the audio files
-                    endpoint = `/api/audio/${this.book.id}/delete`;
+                    endpoint = `/audio/${this.book.id}/delete`;
                     successMessage = this.$t('book.audioFilesDeleted');
                 } else {
                     return; // No action needed for other statuses
@@ -923,6 +923,35 @@ export default {
 </script>
 
 <style>
+/* Flat style scrollbar for audio list */
+.audio-scroll-container {
+    scrollbar-width: thin;
+    scrollbar-color: #cccccc #f1f1f1;
+}
+
+.audio-scroll-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.audio-scroll-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 0;
+}
+
+.audio-scroll-container::-webkit-scrollbar-thumb {
+    background: #cccccc;
+    border-radius: 0;
+    border: none;
+}
+
+.audio-scroll-container::-webkit-scrollbar-thumb:hover {
+    background: #999999;
+}
+
+.audio-scroll-container::-webkit-scrollbar-corner {
+    background: #f1f1f1;
+}
+
 .book-img {
     /*
     margin-left: 16px;
@@ -963,4 +992,32 @@ export default {
 h1.book-detail-title {
     line-height: inherit;
 }
-</style>
+
+/* Flat style scrollbar for audio list */
+.audio-scroll-container {
+    scrollbar-width: thin;
+    scrollbar-color: #cccccc #f1f1f1;
+}
+
+.audio-scroll-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.audio-scroll-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 0;
+}
+
+.audio-scroll-container::-webkit-scrollbar-thumb {
+    background: #cccccc;
+    border-radius: 0;
+    border: none;
+}
+
+.audio-scroll-container::-webkit-scrollbar-thumb:hover {
+    background: #999999;
+}
+
+.audio-scroll-container::-webkit-scrollbar-corner {
+    background: #f1f1f1;
+}

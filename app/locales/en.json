@@ -319,6 +319,8 @@
         "audioGenerated": "Audiobook generated successfully, please refresh the page to view",
         "audioList": "Audio List",
         "conversionFailed": "Conversion Failed:",
+        "audioFilesDeleted": "Audio files deleted",
+        "conversionCancelled": "Conversion cancelled",
         "defaultFailedReason": "Internal error, please check the logs",
         "downloadBook": "Download Book",
         "noDownloadableFiles": "No downloadable file formats available for this book",

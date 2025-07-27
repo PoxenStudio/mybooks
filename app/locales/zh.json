@@ -242,6 +242,8 @@
         "audioGenerated": "开始转换，请稍后刷新页面查看",
         "audioList": "有声书音频列表",
         "conversionFailed": "前一次转换失败:",
+        "audioFilesDeleted": "音频文件已删除",
+        "conversionCancelled": "当前转换已取消",
         "defaultFailedReason": "内部错误，请检查日志",
         "downloadBook": "下载书籍",
         "noDownloadableFiles": "本书暂无可供下载的文件格式",
