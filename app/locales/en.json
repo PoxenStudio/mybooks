@@ -375,7 +375,8 @@
         "send": "Send",
         "close": "Close",
         "set": "Use",
-        "start": "Start"
+        "start": "Start",
+        "clear": "Clear"
     },
     "user": {
         "avatar": "Avatar",

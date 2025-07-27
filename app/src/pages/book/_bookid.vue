@@ -49,28 +49,69 @@
                 </v-card>
             </v-dialog>
 
-            <v-dialog v-model="dialog_audiolist" persistent width="380">
+            <v-dialog v-model="dialog_audiolist" persistent width="480">
                 <v-card>
-                    <v-card-title class="">{{ $t('book.audioList') }}</v-card-title>
+                    <v-card-title class="">
+                        {{ $t('book.audioList') }}
+                        <span v-if="audios.status === AUDIO_STATUS.PROCESSING && audios.progress && audios.progress.converted_chapters !== undefined"
+                              class="ml-2 text-caption">
+                            ({{ audios.progress.converted_chapters }}/{{ audios.progress.total_chapters }})
+                        </span>
+                    </v-card-title>
+                    <v-card-text v-if="audios.status === AUDIO_STATUS.PROCESSING">
+                        <p style="color: orange; font-weight: bold;">{{ $t('book.conversionInProgress') }}</p>
+                        <v-progress-linear
+                            v-if="audios.progress && audios.progress.total_chapters > 0"
+                            :value="(audios.progress.converted_chapters / audios.progress.total_chapters) * 100"
+                            color="primary"
+                            height="6"
+                            rounded
+                        ></v-progress-linear>
+                    </v-card-text>
+                    <v-card-text v-if="audios.status === AUDIO_STATUS.FAILED">
+                        <p style="color: red; font-weight: bold;">{{ $t('book.conversionFailed') }}</p>
+                        <p style="color: red; font-weight: bold;">
+                            {{ audios.progress && audios.progress.error_message ? audios.progress.error_message : $t('book.defaultFailedReason') }}
+                        </p>
+                    </v-card-text>
                     <v-card-text>
                         <p>{{ $t('book.convertToAudioNote') }}</p>
-                        <v-row v-for="(audio_item, idx) in this.audios.audios" :key="'audio-' + idx" class="mb-2">
-                            <v-col class='py-0' cols=9>
-                                <v-btn
-                                    icon
-                                    small
-                                    @click="play_audio_file(audio_item, idx)"
-                                    :loading="playing_audio_index === idx && audio_loading"
-                                    :color="playing_audio_index === idx ? 'primary' : 'default'"
-                                >
-                                    <v-icon>{{ playing_audio_index === idx && !audio_paused ? 'pause' : 'play_arrow' }}</v-icon>
-                                </v-btn>
-                                <span class="ml-2">{{ audio_item.filename }}</span>
-                            </v-col>
-                        </v-row>
+                        <div style="max-height: 200px; overflow-y: auto; overflow-x: hidden; padding: 12px 12px 0 12px;">
+                            <v-row v-for="(audio_item, idx) in this.audios.audios" :key="'audio-' + idx" class="mb-2">
+                                <v-col class='py-0' cols=9>
+                                    <v-btn
+                                        icon
+                                        small
+                                        @click="play_audio_file(audio_item, idx)"
+                                        :loading="playing_audio_index === idx && audio_loading"
+                                        :color="playing_audio_index === idx ? 'primary' : 'default'"
+                                    >
+                                        <v-icon>{{ playing_audio_index === idx && !audio_paused ? 'pause' : 'play_arrow' }}</v-icon>
+                                    </v-btn>
+                                    <span class="ml-2">{{ audio_item.filename }}</span>
+                                </v-col>
+                            </v-row>
+                        </div>
                     </v-card-text>
                     <v-card-actions>
-                        <v-btn color="" text @click="dialog_epub2audio = false">{{ $t('common.close') }}</v-btn>
+                        <v-btn
+                            v-if="audios.status === AUDIO_STATUS.PROCESSING"
+                            color="warning"
+                            text
+                            @click="clear_conversion"
+                        >
+                            {{ $t('common.cancel') }}
+                        </v-btn>
+                        <v-btn
+                            v-else-if="audios.status === AUDIO_STATUS.CONVERTED"
+                            color="error"
+                            text
+                            @click="clear_conversion"
+                        >
+                            {{ $t('common.clear') }}
+                        </v-btn>
+                        <v-spacer></v-spacer>
+                        <v-btn color="" text @click="dialog_audiolist = false">{{ $t('common.close') }}</v-btn>
                     </v-card-actions>
                 </v-card>
             </v-dialog>
@@ -188,6 +229,10 @@
                     >
                         <v-icon left v-if="!tiny">audio</v-icon>
                         {{ $t('book.convertToAudio') }}
+                        <span v-if="audios.status === AUDIO_STATUS.PROCESSING && audios.progress && audios.progress.converted_chapters !== undefined"
+                              class="ml-1">
+                            ({{ audios.progress.converted_chapters }}/{{ audios.progress.total_chapters }})
+                        </span>
                     </v-btn
                     >
                     <v-btn :small="tiny" dark color="primary" class="mx-2 d-flex d-sm-flex" :href="'/read/' + book.id"
@@ -387,7 +432,13 @@
                             <v-icon dark>{{ audios.status === AUDIO_STATUS.FAILED ? 'error' : 'audiotrack' }}</v-icon>
                         </v-list-item-avatar>
                         <v-list-item-content>
-                            <v-list-item-title>{{ $t('book.convertToAudio') }}</v-list-item-title>
+                            <v-list-item-title>
+                                {{ $t('book.convertToAudio') }}
+                                <span v-if="audios.status === AUDIO_STATUS.PROCESSING && audios.progress && audios.progress.converted_chapters !== undefined"
+                                      class="ml-1 text-caption">
+                                    ({{ audios.progress.converted_chapters }}/{{ audios.progress.total_chapters }})
+                                </span>
+                            </v-list-item-title>
                         </v-list-item-content>
                         <v-list-item-action>
                             <v-icon>mdi-arrow-right</v-icon>
@@ -457,6 +508,8 @@ export default {
         audio_loading: false,
         audio_paused: false,
         currentAudioFile: null,
+        // Progress polling timer
+        progressTimer: null,
         voice_options: [
             {
                 voice_name: "zh-CN-liaoning-XiaobeiNeural",
@@ -538,6 +591,7 @@ export default {
         // 清理音频资源
         this.stop_current_audio();
         this.stop_audio_file_playback();
+        this.stopProgressPolling();
     },
     methods: {
         init(route, next) {
@@ -553,6 +607,12 @@ export default {
                 this.dialog_epub2audio = !this.dialog_epub2audio
             } else {
                 this.dialog_audiolist = !this.dialog_audiolist
+                // Start progress polling when opening audio list dialog
+                if (this.dialog_audiolist && this.audios.status === this.AUDIO_STATUS.PROCESSING) {
+                    this.startProgressPolling()
+                } else {
+                    this.stopProgressPolling()
+                }
             }
         },
         sendto_kindle() {
@@ -793,6 +853,71 @@ export default {
             this.playing_audio_index = null;
             this.audio_loading = false;
             this.audio_paused = false;
+        },
+        startProgressPolling() {
+            this.stopProgressPolling(); // Clear any existing timer
+            this.progressTimer = setInterval(() => {
+                this.updateAudioProgress();
+            }, 10000); // Poll every 10 seconds
+        },
+        stopProgressPolling() {
+            if (this.progressTimer) {
+                clearInterval(this.progressTimer);
+                this.progressTimer = null;
+            }
+        },
+        async updateAudioProgress() {
+            try {
+                const response = await this.$backend(`/book/${this.book.id}`);
+                if (response.audios) {
+                    this.audios = response.audios;
+
+                    // Stop polling if conversion is complete or failed
+                    if (this.audios.status !== this.AUDIO_STATUS.PROCESSING) {
+                        this.stopProgressPolling();
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to update audio progress:', error);
+                // Continue polling even if one request fails
+            }
+        },
+        async clear_conversion() {
+            try {
+                let endpoint;
+                let successMessage;
+
+                if (this.audios.status === this.AUDIO_STATUS.PROCESSING) {
+                    // Cancel the conversion
+                    endpoint = `/api/audio/${this.book.id}/cancel`;
+                    successMessage = this.$t('book.conversionCancelled');
+                } else if (this.audios.status === this.AUDIO_STATUS.CONVERTED) {
+                    // Delete the audio files
+                    endpoint = `/api/audio/${this.book.id}/delete`;
+                    successMessage = this.$t('book.audioFilesDeleted');
+                } else {
+                    return; // No action needed for other statuses
+                }
+
+                const response = await this.$backend(endpoint, {
+                    method: "POST"
+                });
+
+                if (response.err === "ok") {
+                    this.$alert("success", successMessage);
+                    // Stop any ongoing polling
+                    this.stopProgressPolling();
+                    // Close the dialog
+                    this.dialog_audiolist = false;
+                    // Reset audio status
+                    this.audios = {count: 0, files: [], status: "unavailable"};
+                } else {
+                    this.$alert("error", response.msg || "操作失败");
+                }
+            } catch (error) {
+                console.error('Failed to clear conversion:', error);
+                this.$alert("error", "操作失败，请稍后重试");
+            }
         }
     },
 };
