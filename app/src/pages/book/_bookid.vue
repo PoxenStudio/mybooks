@@ -2,7 +2,7 @@
     <v-row align="start">
         <v-col cols="12">
             <v-dialog v-model="dialog_epub2audio" persistent width="380">
-                <v-card>
+                <v-card class="dialog-border">
                     <v-card-title class="">{{ $t('book.convertToAudio') }}</v-card-title>
                     <v-card-text v-if="audios.status === AUDIO_STATUS.FAILED">
                         <p style="color: red; font-weight: bold;">{{ $t('book.conversionFailed') }} <br/>
@@ -26,7 +26,7 @@
                             </template>
                             <template v-slot:item="{ item }">
                                 <v-list-item-content>
-                                    <v-list-item-title>{{ item.display_name }}</v-list-item-title>
+                                    <v-list-item-title style="font-size: 15px;">{{ item.display_name }}</v-list-item-title>
                                 </v-list-item-content>
                                 <v-list-item-action>
                                     <v-btn
@@ -50,7 +50,7 @@
             </v-dialog>
 
             <v-dialog v-model="dialog_audiolist" persistent width="480">
-                <v-card>
+                <v-card class="dialog-border">
                     <v-card-title class="">
                         {{ $t('book.audioList') }}
                         <span v-if="audios.status === AUDIO_STATUS.PROCESSING && audios.progress && audios.progress.converted_chapters !== undefined"
@@ -590,7 +590,7 @@ export default {
         // 清理音频资源
         this.stop_current_audio();
         this.stop_audio_file_playback();
-        this.stopProgressPolling();
+        this.stop_audio_progress_polling();
     },
     methods: {
         init(route, next) {
@@ -608,9 +608,9 @@ export default {
                 this.dialog_audiolist = !this.dialog_audiolist
                 // Start progress polling when opening audio list dialog
                 if (this.dialog_audiolist && this.audios.status === this.AUDIO_STATUS.PROCESSING) {
-                    this.startProgressPolling()
+                    this.start_audio_progress_polling();
                 } else {
-                    this.stopProgressPolling()
+                    this.stop_audio_progress_polling();
                 }
             }
         },
@@ -641,8 +641,10 @@ export default {
                 if (rsp.err === "ok") {
                     this.epub2audio_processing = true;
                     this.dialog_epub2audio = false;
+                    this.start_audio_progress_polling();
                     this.$alert("success", this.$t('book.audioGenerated'));
                 } else {
+                    this.stop_audio_progress_polling();
                     this.$alert("error", rsp.msg);
                 }
             });
@@ -712,6 +714,7 @@ export default {
             });
         },
         convert_book() {
+            // 转换书籍格式
             this.$backend("/book/" + this.book.id + "/convert", {
                 method: "POST",
                 body: new URLSearchParams({reset: "yes"}),
@@ -725,6 +728,7 @@ export default {
             });
         },
         set_sole() {
+            // 设置为私藏
             this.$backend("/book/" + this.book.id + "/setsole", {
                 method: "POST",
             }).then((rsp) => {
@@ -853,19 +857,19 @@ export default {
             this.audio_loading = false;
             this.audio_paused = false;
         },
-        startProgressPolling() {
-            this.stopProgressPolling(); // Clear any existing timer
+        start_audio_progress_polling() {
+            this.stop_audio_progress_polling(); // Clear any existing timer
             this.progressTimer = setInterval(() => {
-                this.updateAudioProgress();
+                this.update_audio_progress();
             }, 10000); // Poll every 10 seconds
         },
-        stopProgressPolling() {
+        stop_audio_progress_polling() {
             if (this.progressTimer) {
                 clearInterval(this.progressTimer);
                 this.progressTimer = null;
             }
         },
-        async updateAudioProgress() {
+        async update_audio_progress() {
             try {
                 const response = await this.$backend(`/book/${this.book.id}`);
                 if (response.audios) {
@@ -873,7 +877,7 @@ export default {
 
                     // Stop polling if conversion is complete or failed
                     if (this.audios.status !== this.AUDIO_STATUS.PROCESSING) {
-                        this.stopProgressPolling();
+                        this.stop_audio_progress_polling();
                     }
                 }
             } catch (error) {
@@ -905,7 +909,7 @@ export default {
                 if (response.err === "ok") {
                     this.$alert("success", successMessage);
                     // Stop any ongoing polling
-                    this.stopProgressPolling();
+                    this.stop_audio_progress_polling();
                     // Close the dialog
                     this.dialog_audiolist = false;
                     // Reset audio status
@@ -1021,3 +1025,15 @@ h1.book-detail-title {
 .audio-scroll-container::-webkit-scrollbar-corner {
     background: #f1f1f1;
 }
+
+/* Dialog border styles */
+.dialog-border {
+    border: 2px solid #e0e0e0 !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    border-radius: 8px !important;
+}
+
+.dialog-border .v-card__title {
+    border-bottom: 1px solid #e0e0e0;
+}
+</style>
