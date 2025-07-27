@@ -24,6 +24,14 @@ class Scanner:
         self.user_id = user_id
         self.session = ScopedSession()
 
+    def __del__(self):
+        # 确保在对象销毁时关闭数据库会话
+        if hasattr(self, 'session') and self.session:
+            try:
+                self.session.close()
+            except Exception:
+                pass
+
     def save_or_rollback(self, row):
         try:
             row.save()
@@ -117,6 +125,15 @@ class Scanner:
             count[row.status] += 1
         return count
 
+    def close(self):
+        """主动关闭数据库会话"""
+        if hasattr(self, 'session') and self.session:
+            try:
+                self.session.close()
+                self.session = None
+            except Exception as e:
+                logging.error(f"Error closing session: {e}")
+
 
 class ScanList(BaseHandler):
     @js
@@ -125,65 +142,75 @@ class ScanList(BaseHandler):
         if not self.admin_user:
             return {"err": "permission.not_admin", "msg": _("当前用户非管理员")}
 
-        num = max(10, int(self.get_argument("num", 20)))
-        page = max(0, int(self.get_argument("page", 1)) - 1)
-        sort = self.get_argument("sort", "create_time")
-        desc = self.get_argument("desc", "true")
-        filter = self.get_argument("filter", "all")
-        logging.debug("num=%d, page=%d, sort=%s, desc=%s" % (num, page, sort, desc))
+        scanner = None
+        try:
+            num = max(10, int(self.get_argument("num", 20)))
+            page = max(0, int(self.get_argument("page", 1)) - 1)
+            sort = self.get_argument("sort", "create_time")
+            desc = self.get_argument("desc", "true")
+            filter = self.get_argument("filter", "all")
+            logging.debug("num=%d, page=%d, sort=%s, desc=%s" % (num, page, sort, desc))
 
-        # get order by query args
-        order = {
-            "id": ScanFile.id,
-            "path": ScanFile.path,
-            "name": ScanFile.name,
-            "create_time": ScanFile.create_time,
-            "update_time": ScanFile.update_time,
-        }.get(sort, ScanFile.create_time)
-        order = order.asc() if desc == "false" else order.desc()
-        query = self.session.query(ScanFile).order_by(order)
+            # get order by query args
+            order = {
+                "id": ScanFile.id,
+                "path": ScanFile.path,
+                "name": ScanFile.name,
+                "create_time": ScanFile.create_time,
+                "update_time": ScanFile.update_time,
+            }.get(sort, ScanFile.create_time)
+            order = order.asc() if desc == "false" else order.desc()
+            query = self.session.query(ScanFile).order_by(order)
 
-        done_status = [ScanFile.EXIST, ScanFile.IMPORTED]
-        if filter == "todo":
-            query = query.filter(ScanFile.status.not_in(done_status))
-        elif filter == "done":
-            query = query.filter(ScanFile.status.in_(done_status))
-        total = query.count()
+            done_status = [ScanFile.EXIST, ScanFile.IMPORTED]
+            if filter == "todo":
+                query = query.filter(ScanFile.status.not_in(done_status))
+            elif filter == "done":
+                query = query.filter(ScanFile.status.in_(done_status))
+            total = query.count()
 
-        start = page * num
-        response = []
-        for s in query.limit(num).offset(start).all():
-            d = {
-                "id": s.id,
-                "path": s.path,
-                "hash": s.hash,
-                "title": s.title,
-                "author": s.author,
-                "publisher": s.publisher,
-                "tags": s.tags,
-                "status": s.status,
-                "book_id": s.book_id,
-                "create_time": (
-                    s.create_time.strftime("%Y-%m-%d %H:%M:%S")
-                    if s.create_time
-                    else "N/A"
-                ),
-                "update_time": (
-                    s.update_time.strftime("%Y-%m-%d %H:%M:%S")
-                    if s.update_time
-                    else "N/A"
-                ),
+            start = page * num
+            response = []
+            for s in query.limit(num).offset(start).all():
+                d = {
+                    "id": s.id,
+                    "path": s.path,
+                    "hash": s.hash,
+                    "title": s.title,
+                    "author": s.author,
+                    "publisher": s.publisher,
+                    "tags": s.tags,
+                    "status": s.status,
+                    "book_id": s.book_id,
+                    "create_time": (
+                        s.create_time.strftime("%Y-%m-%d %H:%M:%S")
+                        if s.create_time
+                        else "N/A"
+                    ),
+                    "update_time": (
+                        s.update_time.strftime("%Y-%m-%d %H:%M:%S")
+                        if s.update_time
+                        else "N/A"
+                    ),
+                }
+                response.append(d)
+
+            scanner = Scanner(self.db, self.settings["ScopedSession"])
+            summary = scanner.summary()
+
+            return {
+                "err": "ok",
+                "items": response,
+                "total": total,
+                "summary": summary,
+                "scan_dir": CONF["scan_upload_path"],
             }
-            response.append(d)
-
-        m = Scanner(self.db, self.settings["ScopedSession"])
-        return {
-            "err": "ok",
-            "items": response,
-            "total": total,
-            "summary": m.summary(),
-            "scan_dir": CONF["scan_upload_path"],
-        }
+        finally:
+            if scanner:
+                try:
+                    scanner.close()
+                except Exception as e:
+                    logging.error(f"Error closing scanner: {e}")
 
 
 class ScanMark(BaseHandler):
@@ -203,11 +230,20 @@ class ScanRun(BaseHandler):
                 "err": "params.error",
                 "msg": _("书籍导入目录必须是%s的子目录") % SCAN_DIR_PREFIX,
             }
-        m = Scanner(self.db, self.settings["ScopedSession"])
-        total = m.run_scan(path)
-        if total == 0:
-            return {"err": "empty", "msg": _("目录中没有找到符合要求的书籍文件！")}
-        return {"err": "ok", "msg": _("开始扫描了"), "total": total}
+
+        scanner = None
+        try:
+            scanner = Scanner(self.db, self.settings["ScopedSession"])
+            total = scanner.run_scan(path)
+            if total == 0:
+                return {"err": "empty", "msg": _("目录中没有找到符合要求的书籍文件！")}
+            return {"err": "ok", "msg": _("开始扫描了"), "total": total}
+        finally:
+            if scanner:
+                try:
+                    scanner.close()
+                except Exception as e:
+                    logging.error(f"Error closing scanner: {e}")
 
 
 class ScanDelete(BaseHandler):
@@ -221,45 +257,83 @@ class ScanDelete(BaseHandler):
         if hashlist == "all":
             hashlist = None
 
-        m = Scanner(self.db, self.settings["ScopedSession"])
-        count = m.delete(hashlist)
-        return {"err": "ok", "msg": _("删除成功"), "count": count}
+        scanner = None
+        try:
+            scanner = Scanner(self.db, self.settings["ScopedSession"])
+            count = scanner.delete(hashlist)
+            return {"err": "ok", "msg": _("删除成功"), "count": count}
+        finally:
+            if scanner:
+                try:
+                    scanner.close()
+                except Exception as e:
+                    logging.error(f"Error closing scanner: {e}")
 
 
 class ScanStatus(BaseHandler):
     @js
     @is_admin
     def get(self):
-        m = Scanner(self.db, self.settings["ScopedSession"])
-        status = m.scan_status()[1]
-        return {"err": "ok", "msg": _("成功"), "status": status, "summary": m.summary()}
+        scanner = None
+        try:
+            scanner = Scanner(self.db, self.settings["ScopedSession"])
+            status = scanner.scan_status()[1]
+            summary = scanner.summary()
+            return {"err": "ok", "msg": _("成功"), "status": status, "summary": summary}
+        finally:
+            if scanner:
+                try:
+                    scanner.close()
+                except Exception as e:
+                    logging.error(f"Error closing scanner: {e}")
 
 
 class ImportRun(BaseHandler):
     @js
     @is_admin
     def post(self):
-        req = tornado.escape.json_decode(self.request.body)
-        hashlist = req["hashlist"]
-        if not hashlist:
-            return {"err": "params.error", "msg": _("参数错误")}
-        if hashlist == "all":
-            hashlist = None
+        scanner = None
+        try:
+            req = tornado.escape.json_decode(self.request.body)
+            hashlist = req["hashlist"]
+            if not hashlist:
+                return {"err": "params.error", "msg": _("参数错误")}
+            if hashlist == "all":
+                hashlist = None
 
-        m = Scanner(self.db, self.settings["ScopedSession"], self.user_id())
-        total = m.run_import(hashlist)
-        if total == 0:
-            return {"err": "empty", "msg": _("没有等待导入书库的书籍！")}
-        return {"err": "ok", "msg": _("扫描成功")}
+            scanner = Scanner(self.db, self.settings["ScopedSession"], self.user_id())
+            total = scanner.run_import(hashlist)
+            if total == 0:
+                return {"err": "empty", "msg": _("没有等待导入书库的书籍！")}
+            return {"err": "ok", "msg": _("扫描成功")}
+        except Exception as e:
+            logging.error(f"ImportRun error: {e}")
+            return {"err": "server.error", "msg": str(e)}
+        finally:
+            # 确保 Scanner 对象被正确清理
+            if scanner:
+                try:
+                    scanner.close()
+                except Exception as e:
+                    logging.error(f"Error closing scanner: {e}")
 
 
 class ImportStatus(BaseHandler):
     @js
     @is_admin
     def get(self):
-        m = Scanner(self.db, self.settings["ScopedSession"])
-        status = m.import_status()[1]
-        return {"err": "ok", "msg": _("成功"), "status": status, "summary": m.summary()}
+        scanner = None
+        try:
+            scanner = Scanner(self.db, self.settings["ScopedSession"])
+            status = scanner.import_status()[1]
+            summary = scanner.summary()
+            return {"err": "ok", "msg": _("成功"), "status": status, "summary": summary}
+        finally:
+            if scanner:
+                try:
+                    scanner.close()
+                except Exception as e:
+                    logging.error(f"Error closing scanner: {e}")
 
 
 def routes():
