@@ -264,6 +264,18 @@ class AudioConversionCancel(BaseHandler):
             if worker:
                 worker.stop()
                 ConversionWorkerMap.pop(book_id, None)
+
+                time.sleep(1)  # Give some time for the worker to stop
+
+                audio_dir = os.path.join(AUDIO_OUTPUT_FOLDER, str(book_id))
+                if os.path.exists(audio_dir):
+                    try:
+                        shutil.rmtree(audio_dir)
+                        return {"err": "ok", "msg": _(u"转换已取消, 生成的音频文件已删除成功")}
+                    except OSError as e:
+                        logging.error(f"Error deleting audio directory {audio_dir}: {e}")
+                        return {"err": "server.error", "msg": f"转换已取消，清理音频文件遇到错误: {e}"}
+
                 return {"err": "ok", "msg": _(u"转换已取消")}
             else:
                 return {"err": "audio.no_conversion", "msg": _(u"没有发现转换任务"), "data": None}
@@ -298,7 +310,7 @@ class AudioDelete(BaseHandler):
                     return {"err": "ok", "msg": _(u"音频文件删除成功")}
                 except OSError as e:
                     logging.error(f"Error deleting audio directory {audio_dir}: {e}")
-                    return {"err": "server.error", "msg": f"Failed to delete audio files: {e}"}
+                    return {"err": "server.error", "msg": f"清理音频文件遇到错误: {e}"}
             else:
                 return {"err": "audio.not_found", "msg": _(u"未找到要删除的音频文件")}
 
