@@ -16,10 +16,12 @@ A enhanced personal books management webserver built on Calibre + Vue, beautiful
 * 待开发
     1. 支持信息共享及AI协助的功能。是一个大的修改，会分成几步完成。
     2. 增加文件的加密处理。可以帮助解决私有化部署场景下平台扫描导致的文件无法使用的问题。
-    3. EPUB转语音
+    3. 提供MCP Server，可以集成到AI工具中使用。
     4. 带水印导出epub (待定)
     5. 切换不同图标
     6. 增加统计信息显示
+* v3.14.0 (完成)
+    1. EPUB转语音
 * v3.13.* (完成)
     1. 阅读器支持颜色样式切换，字体切换(提供4个内置字体)，精简语言
 * v3.12.* (完成)
@@ -50,6 +52,7 @@ A enhanced personal books management webserver built on Calibre + Vue, beautiful
 
 ## 项目介绍
 poxenstudio/talebook增加的特性包括:
+* 集成epub2audio将epub转换有声书
 * 更新Calibre 7.6，系统使用Ubuntu 24.04
 * 支持中文搜索时，使用简繁体同时搜索
 * 支持epub与azw3互转
