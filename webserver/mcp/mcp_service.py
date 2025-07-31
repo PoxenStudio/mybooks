@@ -12,8 +12,6 @@ from typing import Any, Sequence, Dict, Optional
 from mcp.server import Server
 from mcp.types import Tool, TextContent
 
-# Configure logging
-logger = logging.getLogger(__name__)
 
 class MCPService:
     """MCP协议处理服务类"""
@@ -53,11 +51,11 @@ class MCPService:
         try:
             books_count = 1
             result = f"Current books count: {books_count}"
-            logger.info(f"Books count requested, returning: {books_count}")
+            logging.info(f"Books count requested, returning: {books_count}")
             return [TextContent(type="text", text=result)]
         except Exception as e:
             error_msg = f"Error getting books count: {str(e)}"
-            logger.error(error_msg)
+            logging.error(error_msg)
             return [TextContent(type="text", text=error_msg)]
 
     async def list_tools(self) -> list[Tool]:
@@ -65,7 +63,7 @@ class MCPService:
         return [
             Tool(
                 name="get_books_count",
-                description="Get the current count of books in the collection",
+                description="Get the current count of books in the talebook collection",
                 inputSchema={
                     "type": "object",
                     "properties": {},
@@ -77,7 +75,7 @@ class MCPService:
     def create_initialization_options(self) -> Dict[str, Any]:
         """创建初始化选项，包含会话ID"""
         session_id = str(uuid.uuid4())
-        logger.info(f"Creating MCP server with session ID: {session_id}")
+        logging.info(f"Creating MCP server with session ID: {session_id}")
 
         return {
             "protocolVersion": "2024-11-05",
@@ -152,7 +150,7 @@ class MCPService:
                 }
 
         except Exception as e:
-            logger.error(f"Error handling MCP request: {e}")
+            logging.error(f"Error handling MCP request: {e}")
             return {
                 "jsonrpc": "2.0",
                 "id": request_id,

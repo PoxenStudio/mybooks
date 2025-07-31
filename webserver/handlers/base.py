@@ -49,8 +49,11 @@ def js(func):
             rsp = func(self, *args, **kwargs)
             if asyncio.iscoroutine(rsp):
                 rsp = await rsp
-            result = rsp.get("msg", "")
-            rsp["msg"] = result
+            if rsp is None:
+                rsp = {}
+            result = rsp.get("msg", None)
+            if result is not None:
+                rsp["msg"] = result
         except Exception as e:
             import traceback
             logging.error(traceback.format_exc())

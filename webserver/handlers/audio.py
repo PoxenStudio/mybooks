@@ -130,6 +130,7 @@ class AudioDetail(BaseHandler):
 
 class AudioConversion(BaseHandler):
     @js
+    @auth
     def get(self, bid):
         # get the conversion status, check it in the worker map,
         # return the status json if found it in the map, otherwise, return not found status.
@@ -155,6 +156,7 @@ class AudioConversion(BaseHandler):
             return {"err": "server.error", "msg": str(e)}
 
     @js
+    @auth
     def post(self, bid):
         try:
             if AudioUtils.get_running_worker_count() >= ALLOW_MAX_RUNNING_WORKERS:
