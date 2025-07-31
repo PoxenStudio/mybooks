@@ -11,14 +11,16 @@ from typing import Any, Sequence, Dict, Optional
 
 from mcp.server import Server
 from mcp.types import Tool, TextContent
+from webserver.handlers.base import BaseHandler
 
 
 class MCPService:
     """MCP协议处理服务类"""
 
-    def __init__(self):
+    def __init__(self, base_handler: BaseHandler = None):
         """初始化MCP服务"""
         self.server = Server("talebook-mcp")
+        self.base_handler = base_handler
         self._setup_tools()
 
     def _setup_tools(self):
@@ -48,9 +50,16 @@ class MCPService:
 
     async def get_books_count(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
         """Get the current count of books in the collection."""
+        from sqlalchemy import func
         try:
-            books_count = 1
-            result = f"Current books count: {books_count}"
+            if self.base_handler is None:
+                books_count = 0
+                author_count = 0
+            else:
+                db = self.base_handler.db
+                books_count = db.count()
+                author_count = len(db.all_authors())
+            result = f"Total {books_count} books, and {author_count} authors."
             logging.info(f"Books count requested, returning: {books_count}")
             return [TextContent(type="text", text=result)]
         except Exception as e:
@@ -156,6 +165,3 @@ class MCPService:
                 "id": request_id,
                 "error": {"code": -32603, "message": f"Internal error: {str(e)}"}
             }
-
-# 创建全局MCP服务实例
-mcp_service = MCPService()
