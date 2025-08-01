@@ -256,8 +256,6 @@ class MCPService:
                 ids = sorted(ids, key=lambda x: self.base_handler.cache.get_book(x).get("updated", 0), reverse=True)
 
             book_list = self.base_handler.get_book_list([], ids=ids, title=title)
-
-            logging.info(f"Search books with name: {book_list}")
             return [TextContent(type="text", text=json.dumps({"status": "success", "data": book_list}))]
         except Exception as e:
             logging.error(f"Error processing book: {e}")
@@ -351,42 +349,6 @@ class MCPService:
             logging.error(traceback.format_exc())
             return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
 
-    async def verify_token(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
-        """验证token是否有效"""
-        try:
-            token = arguments.get("token")
-            if not token:
-                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Missing token parameter"}))]
-
-            token_info = self._validate_token(token)
-            if not token_info:
-                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Invalid or expired token"}))]
-
-            # 计算剩余时间
-            remaining_seconds = token_info["expires_at"] - time.time()
-            remaining_hours = remaining_seconds / 3600
-
-            result = {
-                "status": "success",
-                "valid": True,
-                "user": {
-                    "id": token_info["user_id"],
-                    "username": token_info["username"],
-                    "name": token_info.get("name", ""),
-                    "is_admin": token_info.get("is_admin", False),
-                    "is_active": token_info.get("is_active", True)
-                },
-                "expires_in_hours": round(remaining_hours, 2),
-                "created_at": token_info["created_at"]
-            }
-
-            return [TextContent(type="text", text=json.dumps(result))]
-
-        except Exception as e:
-            error_msg = f"Token verification failed: {str(e)}"
-            logging.error(error_msg)
-            return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
-
     async def logout(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
         """用户登出，删除token"""
         try:
@@ -461,20 +423,6 @@ class MCPService:
                 }
             ),
             Tool(
-                name="verify_token",
-                description="Verify if an authentication token obtained from login is still valid",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "token": {
-                            "type": "string",
-                            "description": "Authentication token to verify"
-                        }
-                    },
-                    "required": ["token"]
-                }
-            ),
-            Tool(
                 name="logout",
                 description="Logout and invalidate the authentication token obtained from login",
                 inputSchema={
@@ -490,7 +438,7 @@ class MCPService:
             ),
             Tool(
                 name="get_books_count",
-                description="Get the current count of books in the talebook collection (requires the token obtained from the login tool)",
+                description="Get the current count of books in the talebook collection. Requires authentication token from login. If authentication fails, call login tool again.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -504,7 +452,7 @@ class MCPService:
             ),
             Tool(
                 name="search_books",
-                description="Search for books in the collection (requires the token obtained from the login tool)",
+                description="Search for books in the collection. Requires authentication token from login. If authentication fails, call login tool again.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -522,7 +470,7 @@ class MCPService:
             ),
             Tool(
                 name="update_book_info",
-                description="Update book information including title, authors, ISBN, and comments (requires the token obtained from the login tool)",
+                description="Update book information including title, authors, ISBN, and comments. Requires authentication token from login and appropriate permissions. If authentication fails, call login tool again.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -616,13 +564,6 @@ class MCPService:
 
                 if tool_name == "login":
                     result = await self.login(arguments)
-                    return {
-                        "jsonrpc": "2.0",
-                        "id": request_id,
-                        "result": {"content": [{"type": "text", "text": result[0].text}]}
-                    }
-                elif tool_name == "verify_token":
-                    result = await self.verify_token(arguments)
                     return {
                         "jsonrpc": "2.0",
                         "id": request_id,
