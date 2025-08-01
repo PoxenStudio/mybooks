@@ -36,7 +36,11 @@ class MCPService:
         pass
 
     def _generate_token(self, user_id: int, username: str) -> str:
-        """生成访问令牌"""
+        """生成访问令牌（基础版本）"""
+        return self._generate_token_with_user_info_basic(user_id, username)
+
+    def _generate_token_with_user_info_basic(self, user_id: int, username: str) -> str:
+        """生成访问令牌（基础版本）"""
         # 使用安全的随机数生成器
         token_data = {
             "user_id": user_id,
@@ -57,6 +61,43 @@ class MCPService:
         }
 
         return token
+
+    def _generate_token_with_user_info(self, user) -> str:
+        """生成访问令牌（包含完整用户信息）"""
+        # 使用安全的随机数生成器
+        token_data = {
+            "user_id": user.id,
+            "username": user.username,
+            "timestamp": time.time(),
+            "random": secrets.token_hex(16)
+        }
+
+        # 生成token
+        token = secrets.token_urlsafe(32)
+
+        # 存储token信息（包含更多用户信息便于复用）
+        self.authenticated_tokens[token] = {
+            "user_id": user.id,
+            "username": user.username,
+            "name": user.name,
+            "is_admin": user.is_admin(),
+            "is_active": user.is_active(),
+            "created_at": time.time(),
+            "expires_at": time.time() + (self.TOKEN_EXPIRE_HOURS * 3600)
+        }
+
+        return token
+
+    def _find_existing_token(self, username: str) -> Optional[str]:
+        """查找用户的现有有效token"""
+        current_time = time.time()
+
+        for token, token_info in self.authenticated_tokens.items():
+            if (token_info["username"] == username and
+                current_time < token_info["expires_at"]):
+                return token
+
+        return None
 
     def _validate_token(self, token: str) -> Optional[Dict[str, Any]]:
         """验证token是否有效"""
@@ -96,7 +137,7 @@ class MCPService:
         """获取当前已认证的用户列表（用于调试/管理）"""
         self._cleanup_expired_tokens()
         return {
-            "active_sessions": len(self.authenticated_tokens),
+            "active_tokens": len(self.authenticated_tokens),
             "users": [
                 {
                     "username": info["username"],
@@ -116,26 +157,49 @@ class MCPService:
             password = arguments.get("password", "").strip()
 
             if not username or not password:
-                return [TextContent(type="text", text="Missing username or password")]
+                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Missing username or password"}))]
 
             if not self.base_handler:
-                return [TextContent(type="text", text="Service not available")]
+                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Service not available"}))]
+
+            # 检查是否已经有该用户的有效token（支持token复用）
+            existing_token = self._find_existing_token(username)
+            if existing_token:
+                logging.info(f"Reusing existing token for user: {username}")
+                token_info = self.authenticated_tokens[existing_token]
+
+                result = {
+                    "status": "success",
+                    "token": existing_token,
+                    "user": {
+                        "id": token_info["user_id"],
+                        "username": token_info["username"],
+                        "name": token_info.get("name", ""),
+                        "is_admin": token_info.get("is_admin", False),
+                        "is_active": token_info.get("is_active", True)
+                    },
+                    "expires_in_hours": self.TOKEN_EXPIRE_HOURS,
+                    "reused": True
+                }
+                return [TextContent(type="text", text=json.dumps(result))]
 
             # 查找用户
             user = self.base_handler.session.query(Reader).filter(Reader.username == username).first()
             if not user:
-                return [TextContent(type="text", text="Invalid username or password")]
+                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Invalid username or password"}))]
 
             # 验证密码
             if user.get_secure_password(password) != user.password:
-                return [TextContent(type="text", text="Invalid username or password")]
+                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Invalid username or password"}))]
 
             # 检查用户权限
             if not user.can_login():
-                return [TextContent(type="text", text="Access denied")]
+                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Access denied"}))]
 
-            # 生成token
-            token = self._generate_token(user.id, user.username)
+            # 生成新token
+            token = self._generate_token_with_user_info(user)
+
+            logging.info(f"Generated new token for user {username}: {token}, total tokens: {len(self.authenticated_tokens)}")
 
             result = {
                 "status": "success",
@@ -147,7 +211,8 @@ class MCPService:
                     "is_admin": user.is_admin(),
                     "is_active": user.is_active()
                 },
-                "expires_in_hours": self.TOKEN_EXPIRE_HOURS
+                "expires_in_hours": self.TOKEN_EXPIRE_HOURS,
+                "reused": False
             }
 
             logging.info(f"MCP login successful for user: {username}")
@@ -286,6 +351,62 @@ class MCPService:
             logging.error(traceback.format_exc())
             return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
 
+    async def verify_token(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
+        """验证token是否有效"""
+        try:
+            token = arguments.get("token")
+            if not token:
+                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Missing token parameter"}))]
+
+            token_info = self._validate_token(token)
+            if not token_info:
+                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Invalid or expired token"}))]
+
+            # 计算剩余时间
+            remaining_seconds = token_info["expires_at"] - time.time()
+            remaining_hours = remaining_seconds / 3600
+
+            result = {
+                "status": "success",
+                "valid": True,
+                "user": {
+                    "id": token_info["user_id"],
+                    "username": token_info["username"],
+                    "name": token_info.get("name", ""),
+                    "is_admin": token_info.get("is_admin", False),
+                    "is_active": token_info.get("is_active", True)
+                },
+                "expires_in_hours": round(remaining_hours, 2),
+                "created_at": token_info["created_at"]
+            }
+
+            return [TextContent(type="text", text=json.dumps(result))]
+
+        except Exception as e:
+            error_msg = f"Token verification failed: {str(e)}"
+            logging.error(error_msg)
+            return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
+
+    async def logout(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
+        """用户登出，删除token"""
+        try:
+            token = arguments.get("token")
+            if not token:
+                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Missing token parameter"}))]
+
+            if token in self.authenticated_tokens:
+                username = self.authenticated_tokens[token]["username"]
+                del self.authenticated_tokens[token]
+                logging.info(f"User {username} logged out, token removed")
+                return [TextContent(type="text", text=json.dumps({"status": "success", "message": "Logged out successfully"}))]
+            else:
+                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Token not found or already expired"}))]
+
+        except Exception as e:
+            error_msg = f"Logout failed: {str(e)}"
+            logging.error(error_msg)
+            return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
+
     async def get_books_count(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
         """Get the current count of books in the collection."""
         # 验证token
@@ -337,6 +458,34 @@ class MCPService:
                         }
                     },
                     "required": ["username", "password"]
+                }
+            ),
+            Tool(
+                name="verify_token",
+                description="Verify if an authentication token is still valid",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "token": {
+                            "type": "string",
+                            "description": "Authentication token to verify"
+                        }
+                    },
+                    "required": ["token"]
+                }
+            ),
+            Tool(
+                name="logout",
+                description="Logout and invalidate the authentication token",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "token": {
+                            "type": "string",
+                            "description": "Authentication token to invalidate"
+                        }
+                    },
+                    "required": ["token"]
                 }
             ),
             Tool(
@@ -467,6 +616,20 @@ class MCPService:
 
                 if tool_name == "login":
                     result = await self.login(arguments)
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": request_id,
+                        "result": {"content": [{"type": "text", "text": result[0].text}]}
+                    }
+                elif tool_name == "verify_token":
+                    result = await self.verify_token(arguments)
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": request_id,
+                        "result": {"content": [{"type": "text", "text": result[0].text}]}
+                    }
+                elif tool_name == "logout":
+                    result = await self.logout(arguments)
                     return {
                         "jsonrpc": "2.0",
                         "id": request_id,
