@@ -9,9 +9,9 @@ import logging
 import json
 import traceback
 import uuid
-import hashlib
 import time
 import secrets
+from gettext import gettext as _
 from typing import Any, Sequence, Dict, Optional
 
 from mcp.server import Server
@@ -41,14 +41,6 @@ class MCPService:
 
     def _generate_token_with_user_info_basic(self, user_id: int, username: str) -> str:
         """生成访问令牌（基础版本）"""
-        # 使用安全的随机数生成器
-        token_data = {
-            "user_id": user_id,
-            "username": username,
-            "timestamp": time.time(),
-            "random": secrets.token_hex(16)
-        }
-
         # 生成token
         token = secrets.token_urlsafe(32)
 
@@ -64,14 +56,6 @@ class MCPService:
 
     def _generate_token_with_user_info(self, user) -> str:
         """生成访问令牌（包含完整用户信息）"""
-        # 使用安全的随机数生成器
-        token_data = {
-            "user_id": user.id,
-            "username": user.username,
-            "timestamp": time.time(),
-            "random": secrets.token_hex(16)
-        }
-
         # 生成token
         token = secrets.token_urlsafe(32)
 
@@ -93,8 +77,7 @@ class MCPService:
         current_time = time.time()
 
         for token, token_info in self.authenticated_tokens.items():
-            if (token_info["username"] == username and
-                current_time < token_info["expires_at"]):
+            if (token_info["username"] == username and current_time < token_info["expires_at"]):
                 return token
 
         return None
@@ -125,7 +108,7 @@ class MCPService:
         """清理过期的token"""
         current_time = time.time()
         expired_tokens = [token for token, info in self.authenticated_tokens.items()
-                         if current_time > info["expires_at"]]
+                          if current_time > info["expires_at"]]
 
         for token in expired_tokens:
             del self.authenticated_tokens[token]
@@ -157,10 +140,12 @@ class MCPService:
             password = arguments.get("password", "").strip()
 
             if not username or not password:
-                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Missing username or password"}))]
+                return [TextContent(type="text",
+                                    text=json.dumps({"status": "error", "message": "Missing username or password"}))]
 
             if not self.base_handler:
-                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Service not available"}))]
+                return [TextContent(type="text",
+                                    text=json.dumps({"status": "error", "message": "Service not available"}))]
 
             # 检查是否已经有该用户的有效token（支持token复用）
             existing_token = self._find_existing_token(username)
@@ -186,11 +171,13 @@ class MCPService:
             # 查找用户
             user = self.base_handler.session.query(Reader).filter(Reader.username == username).first()
             if not user:
-                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Invalid username or password"}))]
+                return [TextContent(type="text",
+                                    text=json.dumps({"status": "error", "message": "Invalid username or password"}))]
 
             # 验证密码
             if user.get_secure_password(password) != user.password:
-                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Invalid username or password"}))]
+                return [TextContent(type="text",
+                                    text=json.dumps({"status": "error", "message": "Invalid username or password"}))]
 
             # 检查用户权限
             if not user.can_login():
@@ -250,7 +237,8 @@ class MCPService:
                     break
 
             if not ids:
-                return [TextContent(type="text", text=json.dumps({"status": "success", "message": _(u"没有找到相关书籍"), "books": []}))]
+                return [TextContent(type="text", text=json.dumps({"status": "success",
+                                                                  "message": _(u"没有找到相关书籍"), "books": []}))]
 
             if len(ids) > self.MAX_BOOKS_COUNT_IN_RESULT:
                 ids = sorted(ids, key=lambda x: self.base_handler.cache.get_book(x).get("updated", 0), reverse=True)
@@ -270,11 +258,10 @@ class MCPService:
             return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Authentication required"}))]
 
         try:
-            from webserver.plugins.meta import douban
-
             book_id = arguments.get("book_id")
             if not book_id:
-                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Missing required parameter: book_id"}))]
+                return [TextContent(type="text", text=json.dumps({"status": "error",
+                                                                  "message": "Missing required parameter: book_id"}))]
 
             # 支持的字段
             supported_keys = ["title", "authors", "isbn", "comments"]
@@ -294,21 +281,18 @@ class MCPService:
 
             # 检查是否有编辑权限
             if not user.can_edit():
-                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Permission denied: cannot edit books"}))]
-
-            # 检查是否是管理员或书籍拥有者
-            if isinstance(book["collector"], dict):
-                cid = book["collector"]["id"]
-            else:
-                cid = book["collector"].id
+                return [TextContent(type="text", text=json.dumps({"status": "error",
+                                                                  "message": "Permission denied: cannot edit books"}))]
 
             if not (user.is_admin() or self.base_handler.is_book_owner(bid, user_info["user_id"])):
-                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Permission denied: not book owner or admin"}))]
+                return [TextContent(type="text", text=json.dumps({"status": "error",
+                                                                  "message": "Permission denied: not book owner or admin"}))]
 
             # 获取当前书籍元数据
             mi = self.base_handler.db.get_metadata(bid, index_is_id=True)
             if not mi:
-                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Failed to get book metadata"}))]
+                return [TextContent(type="text", text=json.dumps({"status": "error",
+                                                                  "message": "Failed to get book metadata"}))]
 
             # 记录更新的字段
             updated_fields = []
@@ -328,7 +312,8 @@ class MCPService:
                     updated_fields.append(f"{key}: {val}")
 
             if not updated_fields:
-                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "No valid fields to update"}))]
+                return [TextContent(type="text", text=json.dumps({"status": "error",
+                                                                  "message": "No valid fields to update"}))]
 
             # 保存元数据
             self.base_handler.db.set_metadata(bid, mi)
@@ -362,7 +347,8 @@ class MCPService:
                 logging.info(f"User {username} logged out, token removed")
                 return [TextContent(type="text", text=json.dumps({"status": "success", "message": "Logged out successfully"}))]
             else:
-                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Token not found or already expired"}))]
+                return [TextContent(type="text", text=json.dumps({"status": "error",
+                                                                  "message": "Token not found or already expired"}))]
 
         except Exception as e:
             error_msg = f"Logout failed: {str(e)}"
@@ -376,7 +362,6 @@ class MCPService:
         if not user_info:
             return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Authentication required"}))]
 
-        from sqlalchemy import func
         try:
             if self.base_handler is None:
                 books_count = 0
@@ -438,7 +423,9 @@ class MCPService:
             ),
             Tool(
                 name="get_books_count",
-                description="Get the current count of books in the talebook collection. Requires authentication token from login. If authentication fails, call login tool again.",
+                description="Get the current count of books in the talebook collection."
+                            "Requires authentication token from login."
+                            "If authentication fails, call login tool again.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -452,7 +439,8 @@ class MCPService:
             ),
             Tool(
                 name="search_books",
-                description="Search for books in the collection. Requires authentication token from login. If authentication fails, call login tool again.",
+                description="Search for books in the collection. Requires authentication token from login. "
+                            "If authentication fails, call login tool again.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -470,7 +458,9 @@ class MCPService:
             ),
             Tool(
                 name="update_book_info",
-                description="Update book information including title, authors, ISBN, and comments. Requires authentication token from login and appropriate permissions. If authentication fails, call login tool again.",
+                description="Update book information including title, authors, ISBN, and comments."
+                            "Requires authentication token from login and appropriate permissions."
+                            "If authentication fails, call login tool again.",
                 inputSchema={
                     "type": "object",
                     "properties": {

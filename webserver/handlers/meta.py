@@ -8,6 +8,7 @@ from gettext import gettext as _
 from webserver import utils
 from webserver.handlers.base import ListHandler, js
 
+
 class LanguageNameUtil:
     """工具类，用于转换calibre language code to name and vice versa"""
     @staticmethod
@@ -110,6 +111,7 @@ class LanguageNameUtil:
             if lang_name == name:
                 return code
         return name
+
 
 class AuthorBooksUpdate(ListHandler):
     def post(self, name):

@@ -6,17 +6,10 @@ Talebook MCP Multi-Transport Server
 """
 import datetime
 import logging
-import re
-import os
 import json
-from gettext import gettext as _
 
-import tornado.escape
-from tornado import web
 from webserver import loader
-from webserver.services.mail import MailService
 from webserver.handlers.base import BaseHandler, ListHandler, js
-from webserver.models import Message, Reader
 from webserver.version import VERSION
 
 from webserver.mcp.mcp_service import MCPService
@@ -24,6 +17,7 @@ from webserver.mcp.mcp_service import MCPService
 CONF = loader.get_settings()
 
 mcp_service = None
+
 
 def create_mcp_service(base_handler: BaseHandler = None):
     """Create and return a new MCP service instance."""
