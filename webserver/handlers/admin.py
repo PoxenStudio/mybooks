@@ -455,7 +455,7 @@ class SSLHandlerLogic:
         except subprocess.CalledProcessError as err:
             return {"err": "internal.nginx_reload_error", "msg": _(u"NGINX重新加载配置异常: %s") % err}
 
-        return {"err": "ok"}
+        return {"err": "ok", "msg": "Succeed"}
 
 
 class AdminSSL(BaseHandler):
