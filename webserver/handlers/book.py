@@ -533,12 +533,11 @@ class SearchBook(ListHandler):
 class HotBook(ListHandler):
     def get(self):
         title = _(u"热度榜单")
-        db_items = self.session.query(Item).filter(Item.count_download > 1).order_by(Item.count_download.desc())
+        db_items = self.session.query(Item).filter(Item.count_visit > 1).order_by(Item.count_visit.desc())
         start = self.get_argument_start()
         delta = 60
         items = db_items.limit(delta).offset(start).all()
         ids = [item.book_id for item in items]
-        logging.info("hot book ids = %s (count:%d)" % (repr(ids), len(ids)))
         return self.render_book_list([], ids=ids, title=title, sort_by_id=False)
 
 

@@ -11,59 +11,7 @@ from webserver.handlers.base import ListHandler, js
 
 class LanguageNameUtil:
     """工具类，用于转换calibre language code to name and vice versa"""
-    @staticmethod
-    def get_language_name(code):
-        """根据语言代码获取语言名称（中文）"""
-        languages = {
-            "eng": "英语",
-            "zho": "中文",
-            "fra": "法语",
-            "deu": "德语",
-            "spa": "西班牙语",
-            "rus": "俄语",
-            "jpn": "日语",
-            "ita": "意大利语",
-            "por": "葡萄牙语",
-            "kor": "韩语",
-            "nld": "荷兰语",
-            "ara": "阿拉伯语",
-            "hin": "印地语",
-            "tur": "土耳其语",
-            "vie": "越南语",
-            "tha": "泰语",
-            "ell": "希腊语",
-            "pol": "波兰语",
-            "ces": "捷克语",
-            "ron": "罗马尼亚语",
-            "swe": "瑞典语",
-            "fin": "芬兰语",
-            "dan": "丹麦语",
-            "hun": "匈牙利语",
-            "ukr": "乌克兰语",
-            "heb": "希伯来语",
-            "slk": "斯洛伐克语",
-            "srp": "塞尔维亚语",
-            "hrv": "克罗地亚语",
-            "bul": "保加利亚语",
-            "cat": "加泰罗尼亚语",
-            "ind": "印尼语",
-            "msi": "马来语",
-            "fil": "菲律宾语",
-            "nor": "挪威语",
-            "tam": "泰米尔语",
-            "ben": "孟加拉语",
-            "lit": "立陶宛语",
-            "est": "爱沙尼亚语",
-            "slv": "斯洛文尼亚语",
-            "glg": "加利西亚语",
-            "eus": "巴斯克语",
-        }
-        return languages.get(code, code)
-
-    @staticmethod
-    def get_language_code(name):
-        """根据中文语言名称获取语言代码"""
-        languages = {
+    languages = {
             "英语": "eng",
             "中文": "zho",
             "法语": "fra",
@@ -107,10 +55,22 @@ class LanguageNameUtil:
             "加利西亚语": "glg",
             "巴斯克语": "eus"
         }
-        for lang_name, code in languages.items():
-            if lang_name == name:
-                return code
-        return name
+    language_codes = {v: k for k, v in languages.items()}
+
+    @staticmethod
+    def get_language_name(code):
+        """根据语言代码获取语言名称（中文）"""
+        return LanguageNameUtil.language_codes.get(code, code)
+
+    @staticmethod
+    def get_language_code(name):
+        """根据中文语言名称获取语言代码"""
+        return LanguageNameUtil.languages.get(name, name)
+
+    @staticmethod
+    def get_language_list():
+        """获取所有语言名称列表"""
+        return list(LanguageNameUtil.languages.keys())
 
 
 class AuthorBooksUpdate(ListHandler):

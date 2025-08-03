@@ -32,7 +32,6 @@ class SimpleBookFormatter:
 
     def format(self):
         b = self.book
-        logging.info(f"formatting book {b}")
         b["ts"] = b["timestamp"].strftime("%s")
         return {
             "id": b["id"],
