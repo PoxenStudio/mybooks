@@ -513,7 +513,8 @@ class MCPService:
             },
             "serverInfo": {
                 "name": "talebook-mcp",
-                "version": "1.0.0"
+                "version": "0.1.0",
+                "description": "Local ebooks management system developed by Talebook(PoxenStudio)"
             },
             "sessionId": session_id
         }
