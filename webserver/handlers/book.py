@@ -63,6 +63,7 @@ class BookDetail(BaseHandler):
     @js
     def get(self, id):
         book = self.get_book(id)
+        self.count_increase(id, count_visit=1)
         return {
             "err": "ok",
             "kindle_sender": CONF["smtp_username"],
@@ -382,7 +383,7 @@ class BookEdit(BaseHandler):
             "isbn",
             "series",
             "rating",
-            "language",
+            "languages",
         ]
         for key, val in data.items():
             if key in KEYS:
@@ -532,21 +533,12 @@ class SearchBook(ListHandler):
 class HotBook(ListHandler):
     def get(self):
         title = _(u"热度榜单")
-        db_items = self.session.query(Item).filter(Item.count_visit > 1).order_by(Item.count_download.desc())
-        count = db_items.count()
+        db_items = self.session.query(Item).filter(Item.count_visit > 1).order_by(Item.count_visit.desc())
         start = self.get_argument_start()
         delta = 60
-        page_max = int(count / delta)
-        page_now = int(start / delta)
-        pages = []
-        for p in range(page_now - 3, page_now + 3):
-            if 0 <= p and p <= page_max:
-                pages.append(p)
         items = db_items.limit(delta).offset(start).all()
         ids = [item.book_id for item in items]
-        books = self.get_books(ids=ids)
-        self.do_sort(books, "count_download", False)
-        return self.render_book_list(books, title=title)
+        return self.render_book_list([], ids=ids, title=title, sort_by_id=False)
 
 
 class BookUpload(BaseHandler):
@@ -768,7 +760,7 @@ class BookPush(BaseHandler):
         book_id = book["id"]
 
         self.user_history("push_history", book)
-        self.count_increase(book_id, count_download=1)
+        self.count_increase(book_id, count_download=1, count_visit=1)
 
         # https://www.amazon.cn/gp/help/customer/display.html?ref_=hp_left_v4_sib&nodeId=G5WYD9SAF7PGXRNA
         for fmt in ["epub", "pdf"]:

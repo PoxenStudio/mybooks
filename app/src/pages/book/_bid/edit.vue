@@ -59,7 +59,17 @@
                                     <v-text-field :label="$t('book.edit.fields.isbn')" v-model="book.isbn">{{ book.isbn }}</v-text-field>
                                 </v-col>
                                 <v-col class='py-0' cols=12 sm=6>
-                                    <v-text-field :label="$t('book.edit.fields.language')" v-model="book.language">{{ book.language }}</v-text-field>
+                                    <v-select
+                                        :label="$t('book.edit.fields.language')"
+                                        v-model="book.languages"
+                                        :items="languageOptions"
+                                        item-text="name"
+                                        item-value="code"
+                                        :return-object="false"
+                                        :menu-props="{ maxHeight: '300px' }"
+                                        clearable
+                                    >
+                                    </v-select>
                                 </v-col>
                                 <v-col class='py-0' cols=12>
                                     <!-- TAGS -->
@@ -106,6 +116,51 @@
 </template>
 
 <script>
+const languageCodes = {
+    "zho": "中文",
+    "eng": "英语",
+    "fra": "法语",
+    "deu": "德语",
+    "spa": "西班牙语",
+    "rus": "俄语",
+    "jpn": "日语",
+    "ita": "意大利语",
+    "por": "葡萄牙语",
+    "kor": "韩语",
+    "nld": "荷兰语",
+    "ara": "阿拉伯语",
+    "hin": "印地语",
+    "tur": "土耳其语",
+    "vie": "越南语",
+    "tha": "泰语",
+    "ell": "希腊语",
+    "pol": "波兰语",
+    "ces": "捷克语",
+    "ron": "罗马尼亚语",
+    "swe": "瑞典语",
+    "fin": "芬兰语",
+    "dan": "丹麦语",
+    "hun": "匈牙利语",
+    "ukr": "乌克兰语",
+    "heb": "希伯来语",
+    "slk": "斯洛伐克语",
+    "srp": "塞尔维亚语",
+    "hrv": "克罗地亚语",
+    "bul": "保加利亚语",
+    "cat": "加泰罗尼亚语",
+    "ind": "印尼语",
+    "msi": "马来语",
+    "fil": "菲律宾语",
+    "nor": "挪威语",
+    "tam": "泰米尔语",
+    "ben": "孟加拉语",
+    "lit": "立陶宛语",
+    "est": "爱沙尼亚语",
+    "slv": "斯洛文尼亚语",
+    "glg": "加利西亚语",
+    "eus": "巴斯克语"
+};
+
 export default {
     components: {},
     computed: {
@@ -127,6 +182,7 @@ export default {
         dialog_msg: false,
         alert_msg: "please login",
         alert_type: "error",
+        languageOptions: Object.entries(languageCodes).map(([code, name]) => ({ code, name })),
     }),
     async asyncData({params, app, res}) {
         if (res !== undefined) {
@@ -170,7 +226,11 @@ export default {
                         this.$alert("error", rsp.msg);
                     }
                 });
-        }
+        },
+        languageName(code) {
+            const found = this.languageOptions.find(opt => opt.code === code);
+            return found ? found.name : code;
+        },
     },
 }
 </script>

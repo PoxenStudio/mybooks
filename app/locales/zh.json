@@ -51,7 +51,8 @@
         "allSeries": "全部丛书",
         "allRatings": "全部评分",
         "allAuthors": "全部作者",
-        "allPublishers": "全部出版社"
+        "allPublishers": "全部出版社",
+        "allLanguages": "所有语言"
     },
     "login": {
         "welcome": "欢迎访问",
@@ -429,6 +430,7 @@
         "categoryNavigation": "分类导览",
         "publishers": "出版社",
         "authors": "作者",
+        "languages": "语言",
         "tags": "标签",
         "series": "丛书",
         "rating": "评分",

@@ -26,3 +26,4 @@ edge-tts==7.0.2
 pydub==0.25.1
 wyoming==1.6.0
 sentencex==0.6.1
+mcp>=1.0.0

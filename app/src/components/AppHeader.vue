@@ -258,9 +258,10 @@ export default {
                         { icon: "mdi-library-shelves", href: "/series", text: "appHeader.series", count: this.sys.series },
                         { icon: "mdi-star-half", href: "/rating", text: "appHeader.rating" },
                         { icon: "mdi-trending-up", href: "/hot", text: "appHeader.hotRanking" },
-                        { icon: "mdi-history", href: "/recent", text: "appHeader.allBooks" },
+                        { icon: "mdi-translate", href: "/language", text: "appHeader.languages" },
                     ],
                 },
+                { icon: "mdi-history", href: "/recent", text: "appHeader.allBooks" },
             ];
             var friend_links = [
                 // links

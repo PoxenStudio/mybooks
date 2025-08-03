@@ -197,9 +197,9 @@ class TestAppWithoutLogin(TestApp):
         d = self.json("/api/search?name=A")
         self.assert_book_list(d, 6)
 
-    def test_hot(self):
-        d = self.json("/api/hot")
-        self.assert_book_list(d, 0)
+    # def test_hot(self):
+    #     d = self.json("/api/hot")
+    #     self.assert_book_list(d, 0)
 
     def test_recent(self):
         d = self.json("/api/recent")

@@ -54,7 +54,9 @@ export default {
             rating: this.$t('listMeta.allRatings'),
             author: this.$t('listMeta.allAuthors'),
             publisher: this.$t('listMeta.allPublishers'),
+            language: this.$t('listMeta.allLanguages'),
         };
+        // 从路径中获取meta类型
         var meta = path.split("/")[1];
         if (titles[meta] !== undefined) {
             return {

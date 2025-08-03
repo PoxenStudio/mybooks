@@ -100,6 +100,20 @@ docker-compose -f docker-compose.yml  up -d
 `docker run -d --name talebook -p 8080:80 -v /tmp/demo:/data poxenstudio/talebook`
 
 
+## 使用MCP Service
+从v3.15.0开始，支持MCP服务，可以集成到AI工具中使用。现在使用流程会提示提供账号信息进行登录，然后才能正常使用。
+```
+{
+  "mcpServers": {
+    "talebook": {
+      "type": "streamableHttp",
+      "url": "http://192.168.31.227:8082/api/mcp/stream",
+      "description": "Local ebooks management system"
+    }
+  }
+}
+```
+
 
 ## 常见问题
 

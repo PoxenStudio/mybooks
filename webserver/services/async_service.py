@@ -63,7 +63,7 @@ class AsyncService(metaclass=SingletonType):
         if name in self.running:
             return self.running[name][1]
 
-        logging.info("** Start Thread Service <%s> ** from %s", name, self)
+        logging.info("** Start Thread Service <%s> ** from %s", name, self.__class__.__name__)
         q = Queue()
         t = threading.Thread(target=self.loop, args=(service_func, q))
         t.name = self.__class__.__name__ + "." + service_func.__name__

@@ -11,8 +11,10 @@ def routes():
     from . import admin
     from . import scan
     from . import audio
+    from . import mcp
 
     routes = []
+    routes += mcp.routes()
     routes += admin.routes()
     routes += scan.routes()
     routes += opds.routes()

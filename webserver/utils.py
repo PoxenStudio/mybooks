@@ -46,7 +46,7 @@ class SimpleBookFormatter:
             "publisher": self.val("publisher"),
             "comments": self.val("comments", _(u"暂无简介")),
             "series": self.val("series", None),
-            "language": self.val("language", None),
+            "languages": self.val("languages", None),
             "isbn": self.val("isbn", None),
             "img": self.cdn_url + "/get/cover/%(id)s.jpg?t=%(ts)s" % b,
             "thumb": self.cdn_url + "/get/thumb_60x80/%(id)s.jpg?t=%(ts)s" % b,

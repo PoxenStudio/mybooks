@@ -49,8 +49,11 @@ def js(func):
             rsp = func(self, *args, **kwargs)
             if asyncio.iscoroutine(rsp):
                 rsp = await rsp
-            result = rsp.get("msg", "")
-            rsp["msg"] = result
+            if rsp is None:
+                rsp = {}
+            result = rsp.get("msg", None)
+            if result is not None:
+                rsp["msg"] = result
         except Exception as e:
             import traceback
             logging.error(traceback.format_exc())
@@ -502,7 +505,13 @@ class BaseHandler(web.RequestHandler):
 
     def get_category_with_count(self, field):
         table = field if field in ["series"] else field + "s"
-        name_column = "A.rating as name" if field in ["rating"] else "A.name"
+        name_column = "A.name"
+        if field == "rating":
+            name_column = "A.rating as name"
+        elif field == "language":
+            name_column = "A.lang_code as name"
+            field = "lang_code"
+
         args = {"table": table, "field": field, "name_column": name_column}
         sql = (
             """SELECT A.id, %(name_column)s, count(distinct book) as count
@@ -583,8 +592,8 @@ class ListHandler(BaseHandler):
             self.do_sort(items, "id", False)
         return None
 
-    @js
-    def render_book_list(self, all_books, ids=None, title=None, sort_by_id=False):
+    def get_book_list(self, all_books, ids=None, title=None, sort_by_id=False):
+        """Get a list of books."""
         start = self.get_argument_start()
         try:
             size = int(self.get_argument("size"))
@@ -599,6 +608,9 @@ class ListHandler(BaseHandler):
             if sort_by_id:
                 # 归一化，按照id从大到小排列。
                 self.do_sort(books, "id", False)
+            else:
+                # 按照输入的ids顺序排序
+                books = sorted(books, key=lambda x: ids.index(x["id"]) if x["id"] in ids else -1)
         else:
             count = len(all_books)
             books = all_books[start : start + delta]
@@ -608,6 +620,10 @@ class ListHandler(BaseHandler):
             "total": count,
             "books": [self.fmt(b) for b in books],
         }
+
+    @js
+    def render_book_list(self, all_books, ids=None, title=None, sort_by_id=False):
+        return self.get_book_list(all_books, ids, title, sort_by_id)
 
     def fmt(self, b):
         return utils.BookFormatter(self, b).format()

@@ -51,7 +51,8 @@
         "allSeries": "All Series",
         "allRatings": "All Ratings",
         "allAuthors": "All Authors",
-        "allPublishers": "All Publishers"
+        "allPublishers": "All Publishers",
+        "allLanguages": "All Languages"
     },
     "login": {
         "welcome": "Welcome",
@@ -429,6 +430,7 @@
         "categoryNavigation": "Category Navigation",
         "publishers": "Publishers",
         "authors": "Authors",
+        "languages": "Languages",
         "tags": "Tags",
         "series": "Series",
         "rating": "Rating",
