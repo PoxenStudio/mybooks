@@ -217,29 +217,29 @@ class MCPService:
         # 验证token
         user_info = self._require_auth(arguments)
         if not user_info:
-            return [TextContent(type="text", text=json.dumps({"status":"error", "message":"Authentication required"}))]
+            return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Authentication required"}))]
 
         try:
             page = max(0, arguments.get("page", 1) - 1)
             page_size = arguments.get("page_size", 20)
             page_size = max(min(page_size, 20), 10)
-            include_comments = arguments.get("include_comments", False)
+            cmts = arguments.get("include_comments", False)
             desc = arguments.get("desc", True)
 
             self.base_handler.db.sort(field="id", ascending=(not desc))
             start = page * page_size
             end = start + page_size
             all_ids = list(self.base_handler.cache.search(""))
-            total = len(all_ids)
             all_ids.sort(reverse=desc)
 
             books = []
             page_ids = all_ids[start:end]
             if page_ids:
-                books = [SimpleBookFormatter(b, self.base_handler.cdn_url).format(include_comments) for b in self.base_handler.get_books(ids=page_ids)]
+                cdn_url = self.base_handler.cdn_url
+                books = [SimpleBookFormatter(b, cdn_url).format(cmts) for b in self.base_handler.get_books(ids=page_ids)]
 
             if not books:
-                return [TextContent(type="text", text=json.dumps({"status":"success", "message":_(u"没有找到书籍"), "books":[]}))]
+                return [TextContent(type="text", text=json.dumps({"status": "success", "message": _(u"没有找到书籍"), "books": []}))]
             return [TextContent(type="text", text=json.dumps(books))]
         except Exception as e:
             logging.error(f"Error listing books: {e}")
@@ -254,7 +254,7 @@ class MCPService:
 
         name = arguments.get("name", "")
         if not name:
-            return [TextContent(type="text", text=json.dumps({"status":"error", "message":"Invalid parameter 'name'"}))]
+            return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Invalid parameter 'name'"}))]
 
         include_comments = arguments.get("include_comments", False)
 
@@ -503,7 +503,8 @@ class MCPService:
                         },
                         "include_comments": {
                             "type": "boolean",
-                            "description": "Whether to include book comments in the response. It could save tokens if not include comments.",
+                            "description": "Whether to include book comments in the response."
+                                           "It could save tokens if not include comments.",
                             "default": False
                         }
                     },
@@ -527,7 +528,8 @@ class MCPService:
                         },
                         "include_comments": {
                             "type": "boolean",
-                            "description": "Whether to include book comments in the response. It could save tokens if not include comments.",
+                            "description": "Whether to include book comments in the response."
+                                           "It could save tokens if not include comments.",
                             "default": False
                         }
                     },
