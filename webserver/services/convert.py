@@ -14,6 +14,7 @@ from webserver.services import AsyncService
 from webserver.services.mail import MailService
 
 EBOOK_CONVERT_CMD = "ebook-convert"
+DEFAULT_CONVERT_TIMEOUT = 3000
 
 CONF = loader.get_settings()
 
@@ -53,10 +54,11 @@ class ConvertService(AsyncService):
             args += ["--embed-font-family", "Lato"]
             args += ["--enable-heuristics", "--output-profile", "kindle"]
 
-        timeout = 300
+        timeout = DEFAULT_CONVERT_TIMEOUT
         try:
             timeout = int(CONF["convert_timeout"])
         except:
+            timeout = DEFAULT_CONVERT_TIMEOUT
             pass
 
         with open(log_path, "w") as log:

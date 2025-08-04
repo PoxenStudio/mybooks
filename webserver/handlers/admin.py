@@ -263,6 +263,7 @@ class AdminSettings(BaseHandler):
             "autoreload",
             "cookie_secret",
             "scan_upload_path",
+            "convert_timeout",
             "douban_apikey",
             "douban_baseurl",
             "douban_max_count",
