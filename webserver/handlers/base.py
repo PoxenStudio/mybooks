@@ -592,7 +592,7 @@ class ListHandler(BaseHandler):
             self.do_sort(items, "id", False)
         return None
 
-    def get_book_list(self, all_books, ids=None, title=None, sort_by_id=False):
+    def get_book_list(self, all_books, ids=None, title=None, sort_by_id=False, include_comments=True):
         """Get a list of books."""
         start = self.get_argument_start()
         try:
@@ -618,12 +618,12 @@ class ListHandler(BaseHandler):
             "err": "ok",
             "title": title,
             "total": count,
-            "books": [self.fmt(b) for b in books],
+            "books": [self.fmt(b, include_comments=include_comments) for b in books],
         }
 
     @js
     def render_book_list(self, all_books, ids=None, title=None, sort_by_id=False):
         return self.get_book_list(all_books, ids, title, sort_by_id)
 
-    def fmt(self, b):
-        return utils.BookFormatter(self, b).format()
+    def fmt(self, b, include_comments=True):
+        return utils.BookFormatter(self, b).format(include_comments=include_comments)

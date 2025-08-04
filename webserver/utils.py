@@ -29,7 +29,7 @@ class SimpleBookFormatter:
             return f'{v.year:04}-{v.month:02}-{v.day:02}'
         return v
 
-    def format(self):
+    def format(self, include_comments=True):
         b = self.book
         b["ts"] = b["timestamp"].strftime("%s")
         return {
@@ -44,7 +44,7 @@ class SimpleBookFormatter:
             "tag": " / ".join(b["tags"]),
             "tags": b["tags"],
             "publisher": self.val("publisher"),
-            "comments": self.val("comments", _(u"暂无简介")),
+            "comments": self.val("comments", _(u"暂无简介")) if include_comments else "",
             "series": self.val("series", None),
             "languages": self.val("languages", None),
             "isbn": self.val("isbn", None),
@@ -90,9 +90,9 @@ class BookFormatter:
             "is_owner": h.is_admin() or h.is_book_owner(self.book["id"], h.user_id()),
         }
 
-    def format(self, with_files=False, with_perms=False):
+    def format(self, with_files=False, with_perms=False, include_comments=True):
         f = SimpleBookFormatter(self.book, self.cdn_url)
-        data = f.format()
+        data = f.format(include_comments=include_comments)
         data.update(
             {
                 "author_url": self.api_url + "/author/" + f.val("author_sort"),

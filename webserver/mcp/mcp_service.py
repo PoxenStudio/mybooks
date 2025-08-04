@@ -17,6 +17,7 @@ from typing import Any, Sequence, Dict, Optional
 from mcp.server import Server
 from mcp.types import Tool, TextContent
 from webserver.handlers.base import BaseHandler
+from webserver.utils import SimpleBookFormatter
 
 
 class MCPService:
@@ -211,6 +212,40 @@ class MCPService:
             logging.error(traceback.format_exc())
             return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
 
+    async def get_books(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
+        """获取书籍列表"""
+        # 验证token
+        user_info = self._require_auth(arguments)
+        if not user_info:
+            return [TextContent(type="text", text=json.dumps({"status":"error", "message":"Authentication required"}))]
+
+        try:
+            page = max(0, arguments.get("page", 1) - 1)
+            page_size = arguments.get("page_size", 20)
+            page_size = max(min(page_size, 20), 10)
+            include_comments = arguments.get("include_comments", False)
+            desc = arguments.get("desc", True)
+
+            self.base_handler.db.sort(field="id", ascending=(not desc))
+            start = page * page_size
+            end = start + page_size
+            all_ids = list(self.base_handler.cache.search(""))
+            total = len(all_ids)
+            all_ids.sort(reverse=desc)
+
+            books = []
+            page_ids = all_ids[start:end]
+            if page_ids:
+                books = [SimpleBookFormatter(b, self.base_handler.cdn_url).format(include_comments) for b in self.base_handler.get_books(ids=page_ids)]
+
+            if not books:
+                return [TextContent(type="text", text=json.dumps({"status":"success", "message":_(u"没有找到书籍"), "books":[]}))]
+            return [TextContent(type="text", text=json.dumps(books))]
+        except Exception as e:
+            logging.error(f"Error listing books: {e}")
+            logging.error(traceback.format_exc())
+            return [TextContent(type="text", text=json.dumps({"status": "error", "message": _(u"列举书籍时发生错误: %s") % str(e)}))]
+
     async def search_books(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
         # 验证token
         user_info = self._require_auth(arguments)
@@ -219,7 +254,9 @@ class MCPService:
 
         name = arguments.get("name", "")
         if not name:
-            return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Invalid parameter 'name'"}))]
+            return [TextContent(type="text", text=json.dumps({"status":"error", "message":"Invalid parameter 'name'"}))]
+
+        include_comments = arguments.get("include_comments", False)
 
         title = _(u"搜索：%(name)s") % {"name": name}
         try:
@@ -246,7 +283,7 @@ class MCPService:
                 ids_list = sorted(list(ids), reverse=True)
                 ids = ids_list[:self.MAX_BOOKS_COUNT_IN_RESULT]
 
-            book_list = self.base_handler.get_book_list([], ids=ids, title=title)
+            book_list = self.base_handler.get_book_list([], ids=ids, title=title, include_comments=include_comments)
             book_list["total"] = total_books_count
             return [TextContent(type="text", text=json.dumps({"status": "success", "data": book_list}))]
         except Exception as e:
@@ -442,6 +479,38 @@ class MCPService:
                 }
             ),
             Tool(
+                name="get_books",
+                description="Get a list of books in the collection by page. Requires authentication token from login.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "token": {
+                            "type": "string",
+                            "description": "Authentication token obtained from login"
+                        },
+                        "page": {
+                            "type": "number",
+                            "description": "Page number to retrieve books from, starting from 1"
+                        },
+                        "page_size": {
+                            "type": "number",
+                            "description": "Number of books per page, default and maximum is 10",
+                            "default": 10
+                        },
+                        "desc": {
+                            "type": "boolean",
+                            "description": "Whether to sort the books id in descending order."
+                        },
+                        "include_comments": {
+                            "type": "boolean",
+                            "description": "Whether to include book comments in the response. It could save tokens if not include comments.",
+                            "default": False
+                        }
+                    },
+                    "required": ["token", "page"]
+                }
+            ),
+            Tool(
                 name="search_books",
                 description="Search for books in the collection. Requires authentication token from login. "
                             "If authentication fails, call login tool again.",
@@ -455,6 +524,11 @@ class MCPService:
                         "name": {
                             "type": "string",
                             "description": "Name of the book, author to search for"
+                        },
+                        "include_comments": {
+                            "type": "boolean",
+                            "description": "Whether to include book comments in the response. It could save tokens if not include comments.",
+                            "default": False
                         }
                     },
                     "required": ["token", "name"]
@@ -580,6 +654,13 @@ class MCPService:
                     }
                 elif tool_name == "get_books_count":
                     result = await self.get_books_count(arguments)
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": request_id,
+                        "result": {"content": [{"type": "text", "text": result[0].text}]}
+                    }
+                elif tool_name == "get_books":
+                    result = await self.get_books(arguments)
                     return {
                         "jsonrpc": "2.0",
                         "id": request_id,
