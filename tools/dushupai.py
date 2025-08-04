@@ -124,7 +124,7 @@ if __name__ == "__main__":
     CTF_SUFFIX = ".ctfile.com"
 
     current_date = datetime.datetime.now().strftime("%m%d")
-    SAVE_DIR = f"/home/horky/Downloads/dushupai_books/{current_date}/"
+    SAVE_DIR = f"/home/user/Downloads/dushupai_books/{current_date}/"
     downloader = CTFileDownloader()
 
     if SAVE_DIR and not os.path.exists(SAVE_DIR):

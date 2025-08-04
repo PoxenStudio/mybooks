@@ -17,7 +17,7 @@ def get_book_info(page, last_finished_book_ids, ignore_books):
     }
 
     book_data = []
-    should_break = False # 如果找到了已完成的书籍，则中止
+    should_break = False  # 如果找到了已完成的书籍，则中止
 
     try:
         book_url = home_url if page == 1 else f"{home_url}/page/{page}/"
@@ -156,7 +156,7 @@ if __name__ == "__main__":
     CTF_SUFFIX = ".ctfile.com"
 
     current_date = datetime.datetime.now().strftime("%m%d")
-    SAVE_DIR = f"/home/horky/Downloads/iyd_wang_books/{current_date}/"
+    SAVE_DIR = f"/home/user/Downloads/iyd_wang_books/{current_date}/"
     downloader = CTFileDownloader()
 
     if SAVE_DIR and not os.path.exists(SAVE_DIR):
