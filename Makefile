@@ -5,13 +5,14 @@ IMAGE := poxenstudio/talebook:$(VER)
 REPO1 := poxenstudio/talebook:latest
 TAG1 := poxenstudio/talebook:server-side-render
 TAG2 := poxenstudio/talebook:server-side-render-$(VER)
+PLATFORM ?= linux/amd64
 
 all: build up
 
 build: test
-	docker build --no-cache=false --build-arg BUILD_COUNTRY=CN --build-arg GIT_VERSION=$(VER) \
+	docker build --platform=$(PLATFORM) --no-cache=false --build-arg BUILD_COUNTRY=CN --build-arg GIT_VERSION=$(VER) \
 		-f Dockerfile -t $(IMAGE) -t $(REPO1) --target production .
-	docker build --no-cache=false --build-arg BUILD_COUNTRY=CN --build-arg GIT_VERSION=$(VER) \
+	docker build --platform=$(PLATFORM) --no-cache=false --build-arg BUILD_COUNTRY=CN --build-arg GIT_VERSION=$(VER) \
 		-f Dockerfile -t $(TAG1) -t $(TAG2) --target production-ssr .
 
 push:
@@ -20,7 +21,7 @@ push:
 
 test: lint
 	rm -f unittest.log
-	docker build --build-arg BUILD_COUNTRY=CN -t talebook/test --target test -f Dockerfile .
+	docker build --platform=$(PLATFORM) --build-arg BUILD_COUNTRY=CN -t talebook/test --target test -f Dockerfile .
 	docker run --rm --name=talebook-docker-test -v "$$PWD":"$$PWD" -w "$$PWD" talebook/test pytest --log-file=unittest.log --log-level=INFO tests
 
 lint:

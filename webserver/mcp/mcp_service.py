@@ -569,7 +569,7 @@ class MCPService:
                         },
                         "comments": {
                             "type": "string",
-                            "description": "Book description or comments. For HTML contents, do not convert <> to &lt; and &gt;"
+                            "description": "Book description or comments.For HTML contents, do not convert <> to &lt; and &gt;"
                         },
                         "tags": {
                             "type": ["string", "array"],
