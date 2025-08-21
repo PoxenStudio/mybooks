@@ -244,6 +244,12 @@
         "audioList": "有声书音频列表",
         "conversionFailed": "前一次转换失败:",
         "audioFilesDeleted": "音频文件已删除",
+        "setCover": "设置封面",
+        "selectCover": "选择封面图片",
+        "noCoverSelected": "未选择封面",
+        "coverTooLarge": "封面大小不能超过 256 KB",
+        "coverTypeInvalid": "仅允许 JPEG 或 PNG 格式的图片",
+        "coverUploadFailed": "封面上传失败",
         "conversionCancelled": "当前转换已取消",
         "conversionInProgress": "转换正在处理中",
         "cancelConversion": "停止处理",
@@ -304,7 +310,8 @@
         "close": "关闭",
         "set": "设置",
         "start": "开始",
-        "clear": "清除音频"
+        "clear": "清除音频",
+        "ok": "确定"
     },
     "settings": {
         "basic_info": "基础信息",

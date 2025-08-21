@@ -321,6 +321,12 @@
         "audioList": "Audio List",
         "conversionFailed": "Conversion Failed:",
         "audioFilesDeleted": "Audio files deleted",
+        "setCover": "Set Cover",
+        "selectCover": "Select cover image",
+        "noCoverSelected": "No cover selected",
+        "coverTooLarge": "Cover image must be smaller than 256 KB",
+        "coverTypeInvalid": "Only JPEG or PNG images are allowed",
+        "coverUploadFailed": "Cover upload failed",
         "conversionCancelled": "Conversion cancelled",
         "conversionInProgress": "Conversion in progress",
         "cancelConversion": "Stop Processing",
@@ -381,7 +387,8 @@
         "close": "Close",
         "set": "Use",
         "start": "Start",
-        "clear": "Clear"
+        "clear": "Clear",
+        "ok": "OK"
     },
     "user": {
         "avatar": "Avatar",

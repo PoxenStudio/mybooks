@@ -1,4 +1,5 @@
 <template>
+  <div>
     <v-row align="start">
         <v-col cols="12">
             <v-dialog v-model="dialog_epub2audio" persistent width="380">
@@ -267,6 +268,10 @@
                                     <v-icon>apps</v-icon>
                                     {{ $t('book.resetInfo') }}
                                 </v-list-item>
+                                <v-list-item @click="dialog_set_cover = true">
+                                    <v-icon>photo</v-icon>
+                                    {{ $t('book.setCover') }}
+                                </v-list-item>
                                 <v-list-item @click="convert_book">
                                     <v-icon>mdi-swap-horizontal</v-icon>
                                     {{ $t('book.convert') }}
@@ -316,15 +321,14 @@
                                       small></v-rating>
                             <br/>
                             <div class="tag-chips">
-                                <template v-for="author in book.authors">
-                                    <v-chip
-                                        rounded
-                                        small
-                                        dark
-                                        color="indigo"
-                                        :to="'/author/' + encodeURIComponent(author)"
-                                        :key="'author-' + author"
-                                    >
+                                    <template v-for="author in book.authors" :key="'author-' + author">
+                                        <v-chip
+                                            rounded
+                                            small
+                                            dark
+                                            color="indigo"
+                                            :to="'/author/' + encodeURIComponent(author)"
+                                        >
                                         <v-icon>face</v-icon>
                                         {{ author }}
                                     </v-chip>
@@ -349,16 +353,15 @@
                                     <v-icon>explore</v-icon>
                                     ISBN：{{ book.isbn }}
                                 </v-chip>
-                                <template v-for="tag in book.tags">
-                                    <v-chip
-                                        rounded
-                                        small
-                                        dark
-                                        color="grey"
-                                        :key="'tag-' + tag"
-                                        v-if="tag"
-                                        :to="'/tag/' + encodeURIComponent(tag)"
-                                    >
+                                    <template v-for="tag in book.tags" :key="'tag-' + tag">
+                                        <v-chip
+                                            rounded
+                                            small
+                                            dark
+                                            color="grey"
+                                            v-if="tag"
+                                            :to="'/tag/' + encodeURIComponent(tag)"
+                                        >
                                         <v-icon>loyalty</v-icon>
                                         {{ tag }}
                                     </v-chip>
@@ -455,6 +458,28 @@
             </v-card>
         </v-col>
     </v-row>
+
+    <v-dialog v-model="dialog_set_cover" persistent max-width="400">
+      <v-card>
+        <v-card-title>{{ $t('book.setCover') }}</v-card-title>
+        <v-card-text>
+          <v-file-input
+            accept="image/png,image/jpeg"
+            :label="$t('book.selectCover')"
+            v-model="cover_file"
+            show-size
+            :error-messages="cover_error"
+            filled
+          ></v-file-input>
+        </v-card-text>
+        <v-card-actions>
+          <v-btn text @click="dialog_set_cover = false">{{ $t('common.cancel') }}</v-btn>
+          <v-spacer></v-spacer>
+          <v-btn text color="primary" @click="uploadCover">{{ $t('common.ok') }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+  </div>
 </template>
 
 <script>
@@ -504,6 +529,9 @@ export default {
         dialog_audiolist: false,
         dialog_refer: false,
         dialog_msg: false,
+        dialog_set_cover: false,
+        cover_file: null,
+        cover_error: '',
         refer_books_loading: false,
         refer_books_setting_btn_loading:false,
         refer_books: [],
@@ -943,8 +971,8 @@ export default {
                     method: "POST"
                 });
 
-                if (response.err === "ok") {
-                    this.$alert("success", successMessage);
+                if (response.err === 'ok') {
+                    this.$alert('success', successMessage);
                     // Stop any ongoing polling
                     this.stop_audio_progress_polling();
                     // Close the dialog
@@ -958,7 +986,37 @@ export default {
                 console.error('Failed to clear conversion:', error);
                 this.$alert("error", "操作失败，请稍后重试");
             }
-        }
+        },
+        uploadCover() {
+          this.cover_error = '';
+          if (!this.cover_file) {
+            this.cover_error = this.$t('book.noCoverSelected');
+            return;
+          }
+          const file = this.cover_file;
+          if (file.size > 256 * 1024) {
+            this.cover_error = this.$t('book.coverTooLarge');
+            return;
+          }
+          const type = file.type;
+          if (type !== 'image/jpeg' && type !== 'image/png') {
+            this.cover_error = this.$t('book.coverTypeInvalid');
+            return;
+          }
+          const form = new FormData();
+          form.append('cover_data', file);
+          this.$backend(`/book/${this.book.id}/cover`, {
+            method: 'POST',
+            body: form,
+          }).then(resp => {
+            if (resp.err === 'ok') {
+              this.dialog_set_cover = false;
+              location.reload();
+            } else {
+              this.cover_error = resp.msg || this.$t('book.coverUploadFailed');
+            }
+          });
+        },
     },
 };
 </script>
@@ -993,13 +1051,6 @@ export default {
     background: #f1f1f1;
 }
 
-.book-img {
-    /*
-    margin-left: 16px;
-    box-shadow: 1px 1px 1px rgba(0,0,0,0.12);
-    box-shadow: 0px 3px 1px -2px rgba(0,0,0,0.2), 0px 2px 2px 0px rgba(0,0,0,0.14), 0px 1px 5px 0px rgba(0,0,0,0.12);
-    */
-}
 
 .align-right {
     text-align: right;
@@ -1018,6 +1069,7 @@ export default {
     /*text-indent: 2em;*/
     overflow: hidden;
     display: -webkit-box;
+    line-clamp: 3;
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     text-overflow: clip;

@@ -359,6 +359,30 @@ class BookRefer(BaseHandler):
         return {"err": "ok"}
 
 
+class BookCover(BaseHandler):
+    @js
+    @auth
+    def post(self, id):
+        book_id = int(id)
+        mi = self.db.get_metadata(book_id, index_is_id=True)
+        if not mi:
+            return {"err": "params.book.invalid", "msg": _(u"书籍不存在")}
+
+        fileinfo = self.request.files.get('cover_data')
+        if not fileinfo:
+            return {"err": "params.invalid", "msg": _(u"未上传封面文件")}
+        fileinfo = fileinfo[0]
+        # Prepare cover data as (format, bytes) tuple for Calibre API
+        img_data = fileinfo['body']
+        # Determine image format from filename or content_type
+        ext = os.path.splitext(fileinfo['filename'])[1].lower().lstrip('.')
+        if not ext and 'content_type' in fileinfo:
+            ext = fileinfo['content_type'].split('/')[-1]
+        mi.cover_data = (ext or None, img_data)
+        self.db.set_metadata(book_id, mi)
+        return {"err": "ok"}
+
+
 class BookEdit(BaseHandler):
     @js
     @auth
@@ -806,4 +830,5 @@ def routes():
         (r"/api/book/txt/init", BookTxtInit),
         (r"/api/book/([0-9]+)/convert", BookConverter),
         (r"/api/book/([0-9]+)/setsole", BookSetSole),
+        (r"/api/book/([0-9]+)/cover", BookCover),
     ]
