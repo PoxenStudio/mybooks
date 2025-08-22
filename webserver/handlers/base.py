@@ -6,7 +6,6 @@ import base64
 import datetime
 import logging
 import time
-import re
 from collections import defaultdict
 from gettext import gettext as _
 
