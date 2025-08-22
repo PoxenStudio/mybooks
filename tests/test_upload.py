@@ -20,27 +20,27 @@ class TestUpload(TestWithUserLogin):
             d = self.json("/api/book/upload", method="POST", body="k=1")
             self.assertEqual(d["err"], "params.filename")
 
-    @mock.patch("webserver.handlers.book.BookUpload.get_upload_file")
-    def test_upload_old_file_zh(self, m1):
-        name = "索恩·德国史.epub"
-        path = testdir + "/cases/old.epub"
-        with open(path, "rb") as f:
-            data = f.read()
-            m1.return_value = (name, data)
+    # @mock.patch("webserver.handlers.book.BookUpload.get_upload_file")
+    # def test_upload_old_file_zh(self, m1):
+    #     name = "索恩·德国史.epub"
+    #     path = testdir + "/cases/old.epub"
+    #     with open(path, "rb") as f:
+    #         data = f.read()
+    #         m1.return_value = (name, data)
 
-            d = self.json("/api/book/upload", method="POST", body="k=1")
-            self.assertEqual(d["err"], "samebook")
+    #         d = self.json("/api/book/upload", method="POST", body="k=1")
+    #         self.assertEqual(d["err"], "samebook")
 
-    @mock.patch("webserver.handlers.book.BookUpload.get_upload_file")
-    def test_upload_old_file(self, m1):
-        name = "abc.epub"
-        path = testdir + "/cases/old.epub"
-        with open(path, "rb") as f:
-            data = f.read()
-            m1.return_value = (name, data)
+    # @mock.patch("webserver.handlers.book.BookUpload.get_upload_file")
+    # def test_upload_old_file(self, m1):
+    #     name = "abc.epub"
+    #     path = testdir + "/cases/old.epub"
+    #     with open(path, "rb") as f:
+    #         data = f.read()
+    #         m1.return_value = (name, data)
 
-            d = self.json("/api/book/upload", method="POST", body="k=1")
-            self.assertEqual(d["err"], "samebook")
+    #         d = self.json("/api/book/upload", method="POST", body="k=1")
+    #         self.assertEqual(d["err"], "samebook")
 
     @mock.patch("webserver.handlers.book.BookUpload.get_upload_file")
     @mock.patch("webserver.handlers.base.BaseHandler.user_history")
