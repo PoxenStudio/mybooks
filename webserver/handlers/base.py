@@ -6,6 +6,7 @@ import base64
 import datetime
 import logging
 import time
+import re
 from collections import defaultdict
 from gettext import gettext as _
 
@@ -127,6 +128,33 @@ class BaseHandler(web.RequestHandler):
         if not self.cookies_cache.get(key, ""):
             self.cookies_cache[key] = super(BaseHandler, self).get_secure_cookie(key)
         return self.cookies_cache[key]
+
+    def get_secure_cookie_timestamp(self, key):
+        """
+        Extract the timestamp embedded in a Tornado secure_cookie raw value.
+        Returns the timestamp as int, or None if not found.
+        """
+        cookie = self.request.cookies.get(key)
+        if not cookie:
+            return None
+        raw = cookie.value
+        if not raw or '|' not in raw:
+            return None
+        # segments are length-prefixed (len:data)
+        for segment in raw.split('|'):
+            if ':' not in segment:
+                continue
+            length_str, data = segment.split(':', 1)
+            if not length_str.isdigit():
+                continue
+            length = int(length_str)
+            # timestamp should be numeric and reasonably long (e.g., >=8 digits)
+            if length >= 8 and len(data) == length and data.isdigit():
+                try:
+                    return int(data)
+                except ValueError:
+                    return None
+        return None
 
     def set_secure_cookie(self, key, val):
         self.cookies_cache[key] = val
@@ -251,6 +279,8 @@ class BaseHandler(web.RequestHandler):
 
     def user_id(self):
         login_time = self.get_secure_cookie("lt")
+        if not login_time:
+            login_time = self.get_secure_cookie_timestamp("user_id")
         if not login_time or int(login_time) < int(time.time()) - 7 * 86400:
             return None
         uid = self.get_secure_cookie("user_id")
@@ -345,7 +375,7 @@ class BaseHandler(web.RequestHandler):
         return lm.replace("month", month[updated.month])
 
     def sort(self, items, field, order):
-        from calibre.library.caches import SortKey, SortKeyGenerator
+        from calibre.library.caches import SortKey, SortKeyGenerator  # noqa: E0401
 
         class CSSortKeyGenerator(SortKeyGenerator):
             def __init__(self, fields, fm, db_prefs):
