@@ -31,7 +31,8 @@
         "booksCount": "Books Count",
         "authorsCount": "Authors Count",
         "publishersCount": "Publishers Count",
-        "tagsCount": "Tags Count"
+        "tagsCount": "Tags Count",
+        "languages": "Languages"
     },
     "listBook": {
         "title": "Book List",

@@ -31,7 +31,8 @@
         "booksCount": "书籍数量",
         "authorsCount": "作者数量",
         "publishersCount": "出版社数量",
-        "tagsCount": "标签数量"
+        "tagsCount": "标签数量",
+        "languages": "语言"
     },
     "listBook": {
         "title": "书籍列表",

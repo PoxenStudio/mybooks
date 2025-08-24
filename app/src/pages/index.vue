@@ -32,8 +32,7 @@
                             <v-icon dark >{{nav.icon}}</v-icon>
                         </v-list-item-avatar>
                         <v-list-item-content>
-                            <v-list-item-title>{{nav.textKey}} </v-list-item-title>
-                            <v-list-item-subtitle>{{nav.subtitleKey}}</v-list-item-subtitle>
+                            <v-list-item-title>{{nav.text}} </v-list-item-title>
                         </v-list-item-content>
                         <v-list-item-action>
                             <v-icon >mdi-arrow-right</v-icon>
