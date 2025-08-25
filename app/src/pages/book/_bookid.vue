@@ -305,15 +305,27 @@
                                     {{ book.author }}{{ $t('book.author') }}，{{ pub_year }}{{ $t('book.year') }}
                                 </span>
                                 <span
-                                    v-if='book.files.length>0 && book.files[0].format==="PDF" && book.files[0].size >= 1048576'
-                                    color="grey--text" style="font-weight: bold">&nbsp;&nbsp;&nbsp;[{{ $t('book.fileFormat') }}: PDF - {{
+                                    v-if='book.files.length>0 && book.files[0].size >= 1048576'
+                                    color="grey--text" style="font-weight: bold">&nbsp;&nbsp;&nbsp;[{{book.files[0].format}} - {{
                                         parseInt(book.files[0].size / 1048576)
                                     }}MB]
                                 </span>
                                 <span
-                                    v-else-if='book.files.length>0 && book.files[0].format==="PDF" && book.files[0].size < 1048576'
-                                    color="grey--text" style="font-weight: bold">&nbsp;&nbsp;&nbsp;[{{ $t('book.fileFormat') }}: PDF - {{
+                                    v-else-if='book.files.length>0 && book.files[0].size < 1048576'
+                                    color="grey--text" style="font-weight: bold">&nbsp;&nbsp;&nbsp;[{{book.files[0].format}} - {{
                                         parseInt(book.files[0].size / 1024)
+                                    }}KB]
+                                </span>
+                                <span
+                                    v-if='book.files.length>1 && book.files[1].size >= 1048576'
+                                    color="grey--text" style="font-weight: bold">&nbsp;[{{book.files[1].format}} - {{
+                                        parseInt(book.files[1].size / 1048576)
+                                    }}MB]
+                                </span>
+                                <span
+                                    v-else-if='book.files.length>1 && book.files[1].size < 1048576'
+                                    color="grey--text" style="font-weight: bold">&nbsp;[{{book.files[1].format}} - {{
+                                        parseInt(book.files[1].size / 1024)
                                     }}KB]
                                 </span>
                             </div>

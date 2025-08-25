@@ -25,7 +25,7 @@
             <p class="ma-0 title">{{ $t('index.categoryBrowse') }}</p>
         </v-col>
         <v-col cols=12 sm=6 md=4 v-for="nav in navs" :key="nav.text">
-            <v-card outlined>
+            <v-card outlined style="border-radius: 12px;">
                 <v-list>
                     <v-list-item :to="nav.href" >
                         <v-list-item-avatar large color='primary' >
