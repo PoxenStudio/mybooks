@@ -76,13 +76,21 @@ class ScanService(AsyncService):
             samefiles = self.session.query(ScanFile).filter(ScanFile.path == fpath)
             if samefiles.count() > 0:
                 # 如果已经有相同的文件记录，则跳过
-                row = samefiles.first()
-                if row.status == ScanFile.NEW:
-                    logging.warning("Got same file path: %s, id:%d, path:%s", fpath, row.id, row.path)
+                found_book = False
+                for row in samefiles:
+                    if row.status == ScanFile.NEW:
+                        logging.warning("Got same file path: %s, id:%d, path:%s", fpath, row.id, row.path)
+                        found_book = False
+                        break
+                    elif row.status == ScanFile.IMPORTED and self.db.get_data_as_dict(ids=[row.book_id]):
+                        logging.warning("File already exists in Scan & Book DB: %s, status=%s", fpath, row.status)
+                        found_book = True
+                if not found_book:
+                    row.status = ScanFile.NEW
                     rows.append(row)
                 else:
-                    logging.warning("File already exists in DB: %s, status=%s", fpath, row.status)
-                continue  # skip the existed file
+                    logging.warning("File already exists in Scan & Book DB: %s, status=%s", fpath, row.status)
+                continue
 
             stat = os.stat(fpath)
             md5 = hashlib.md5(fname.encode("UTF-8")).hexdigest()
@@ -120,7 +128,18 @@ class ScanService(AsyncService):
                     sha256.update(byte_block)
 
             hash = "sha256:" + sha256.hexdigest()
-            if self.session.query(ScanFile).filter(ScanFile.hash == hash).count() > 0 or hash in inserted_hash:
+            should_drop = hash in inserted_hash
+            if not should_drop:
+                hash_rows = self.session.query(ScanFile).filter(ScanFile.hash == hash)
+                should_drop = False
+                for hash_row in hash_rows:
+                    if hash_row.status == ScanFile.IMPORTED and self.db.get_data_as_dict(ids=[row.book_id]):
+                        should_drop = True
+                        break
+                if hash_rows.count() > 0 and not should_drop:
+                    # 删除旧数据
+                    self.session.query(ScanFile).filter(ScanFile.hash == hash).delete()
+            if should_drop:
                 # 如果已经有相同的哈希值，则删掉本任务
                 row.status = ScanFile.DROP
                 logging.warning("Duplicate detected: %s, drop it.", hash)
