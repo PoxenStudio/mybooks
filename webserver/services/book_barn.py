@@ -15,12 +15,14 @@ from webserver.models import Reader, Item
 from gettext import gettext as _
 import platform
 
+
 def get_os():
     """Return the operating system name in lowercase."""
     try:
         return platform.system().lower()
     except Exception:
         return ""
+
 
 def get_arch():
     """Return the machine architecture in lowercase."""
@@ -262,7 +264,8 @@ class BookBarnService(AsyncService):
                     if self.admin_uids is None or len(self.admin_uids) == 0:
                         admin_uids = self.get_admin_uids()
                     if len(admin_uids) > 0:
-                        message = f"有新版本发布: {latest_release['rev']}，发布日期: {latest_release['date']}，更新内容: {latest_release['notes']}，请重新构建容器以获取更新。"
+                        message = f"有新版本发布: {latest_release['rev']}，发布日期: {latest_release['date']}，\
+                                    更新内容: {latest_release['notes']}，请重新构建容器以获取更新。"
                         for uid in admin_uids:
                             self.add_msg(uid, "info", message)
 
