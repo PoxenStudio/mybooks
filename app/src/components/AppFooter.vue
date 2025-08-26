@@ -42,13 +42,13 @@ export default {
     left: 50%;
     transform: translate(-50%, -50%);
     font-family: 'Times New Roman', serif;
-    font-size: 4rem;
+    font-size: clamp(2rem, 5vw, 4rem);    /* 在 2rem–4rem 之间，按屏幕宽度自适应 */
     font-weight: bold;
-    color: rgba(135, 206, 235, 0.3); /* 天蓝色，半透明 */
-    pointer-events: none; /* 不影响点击事件 */
+    color: rgba(200, 200, 200, 0.2); /* 浅灰色，半透明 */
+    pointer-events: none;
     z-index: 0;
     white-space: nowrap;
-    user-select: none; /* 不可选中 */
+    user-select: none;
 }
 
 </style>
