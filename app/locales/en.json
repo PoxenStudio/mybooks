@@ -326,7 +326,7 @@
         "setCover": "Set Cover",
         "selectCover": "Select cover image",
         "noCoverSelected": "No cover selected",
-        "coverTooLarge": "Cover image must be smaller than 256 KB",
+        "coverTooLarge": "Cover image must be smaller than 1MB",
         "coverTypeInvalid": "Only JPEG or PNG images are allowed",
         "coverUploadFailed": "Cover upload failed",
         "conversionCancelled": "Conversion cancelled",

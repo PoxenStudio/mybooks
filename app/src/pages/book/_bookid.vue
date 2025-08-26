@@ -1006,7 +1006,7 @@ export default {
             return;
           }
           const file = this.cover_file;
-          if (file.size > 256 * 1024) {
+          if (file.size > 1024 * 1024) {
             this.cover_error = this.$t('book.coverTooLarge');
             return;
           }
