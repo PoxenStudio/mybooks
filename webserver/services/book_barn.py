@@ -7,6 +7,7 @@ import time
 import re
 
 from urllib.parse import urlparse, unquote
+
 from webserver.services import AsyncService
 from webserver.services.autofill import AutoFillService
 from webserver import loader, utils
@@ -14,6 +15,11 @@ from webserver.version import VERSION
 from webserver.models import Reader, Item
 from gettext import gettext as _
 import platform
+
+
+# 设置 requests 库的日志级别为 ERROR，减少冗余日志
+logging.getLogger("requests").setLevel(logging.ERROR)
+logging.getLogger("urllib3").setLevel(logging.ERROR)
 
 
 def get_os():

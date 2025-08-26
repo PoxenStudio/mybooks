@@ -1,6 +1,6 @@
 <template>
     <div>
-        <v-btn bottom color="pink" dark fab fixed right @click="dialog = !dialog">
+        <v-btn bottom color="pink" dark fab fixed right @click="dialog = !dialog" style="z-index: 10;">
             <v-icon>mdi-upload</v-icon>
         </v-btn>
         <v-dialog v-model="dialog" persistent transition="dialog-bottom-transition" width="300">

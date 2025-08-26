@@ -52,6 +52,7 @@
 
             <v-dialog v-model="dialog_audiolist" persistent width="480">
                 <v-card class="dialog-border">
+                    <p> </p>
                     <v-card-title class="">
                         {{ $t('book.audioList') }}
                         <span v-if="audios.status === AUDIO_STATUS.PROCESSING && audios.progress && audios.progress.converted_chapters !== undefined"
