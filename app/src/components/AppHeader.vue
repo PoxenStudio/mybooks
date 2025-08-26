@@ -114,7 +114,7 @@
                 <template v-if="user.is_login">
                     <v-menu offset-y right :close-on-content-click="false" v-if="messages.length > 0">
                         <template v-slot:activator="{ on }">
-                            <v-btn v-on="on" icon> <v-icon>notifications</v-icon> </v-btn>
+                            <v-btn v-on="on" icon color="yellow"> <v-icon class="blink">notifications</v-icon> </v-btn>
                         </template>
                         <v-list three-line dense width="400">
                             <v-list-item v-for="(msg, idx) in messages" :key="msg.id">
@@ -359,3 +359,13 @@ export default {
 };
 
 </script>
+
+<style scoped>
+@keyframes blink {
+  0%, 50%, 100% { opacity: 1; }
+  25%, 75% { opacity: 0; }
+}
+.blink {
+  animation: blink 3s infinite;
+}
+</style>

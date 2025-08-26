@@ -613,7 +613,7 @@ class ReleaseNotes(BaseHandler):
     def get(self):
         last_revsion = CONF.get("LAST_REVISION", "")
         logging.error("Current version: %s, Last revision: %s", VERSION, last_revsion)
-        if True: # last_revsion == VERSION
+        if last_revsion == VERSION:
             args = loader.SettingsLoader()
             args.clear()
             args["LAST_REVISION"] = VERSION

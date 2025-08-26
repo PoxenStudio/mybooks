@@ -243,6 +243,7 @@ class UserMessages(BaseHandler):
         }
 
         if user:
+            user.messages.sort(key=lambda x: x.create_time, reverse=True)
             for msg in user.messages:
                 if not msg.unread:
                     continue
