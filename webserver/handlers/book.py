@@ -242,6 +242,7 @@ class BookRefer(BaseHandler):
         logging.info("[RESET]reset book meta for %d, path=%s" % (book_id, book_path))
 
         from calibre.ebooks.metadata.meta import get_metadata
+        from calibre.utils.date import now as nowf
         book_name = os.path.basename(book_path)
         logging.error("[RESET]book name = " + repr(book_name))
         fmt = os.path.splitext(book_name)[1]
@@ -266,6 +267,7 @@ class BookRefer(BaseHandler):
         org_mi.set("comments", _(u""))
         if org_mi.get("comments", "") == "":
             org_mi.set("comments", _(u"无详细介绍"))
+        org_mi.timestamp = nowf()
         self.db.set_metadata(book_id, org_mi, force_changes=True)
         logging.info("[RESET]reset meta data for %d" % book_id)
         return {"err": "ok", "book_id": book_id}
