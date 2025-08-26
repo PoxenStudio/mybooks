@@ -128,7 +128,7 @@ export default {
         this.$store.commit('navbar', true);
         this.navs = [
             { icon: 'widgets',            href:'/nav',       text: this.$t('index.categoryNavigation'),  count: this.$store.state.sys.books      },
-            { icon: 'mdi-human-greeting', href:'/author',    text: this.$t('index.authors'),     count: this.$store.state.sys.authors    },
+            { icon: 'account-group', href:'/author',    text: this.$t('index.authors'),     count: this.$store.state.sys.authors    },
             { icon: 'mdi-home-group',     href:'/publisher', text: this.$t('index.publishers'),   count: this.$store.state.sys.publishers },
             { icon: 'mdi-tag-heart',      href:'/tag',       text: this.$t('index.tags'),     count: this.$store.state.sys.tags       },
             { icon: 'mdi-translate',      href:'/language',       text: this.$t('index.languages'),     count: this.$store.state.sys.languages       },

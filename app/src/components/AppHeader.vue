@@ -240,7 +240,7 @@ export default {
                     expand: this.$route.path.indexOf("/admin/") == 0,
                     groups: [
                         { icon: "mdi-cog", href: "/admin/settings", text: "appHeader.systemSettings" },
-                        { icon: "mdi-human-greeting", href: "/admin/users", text: "appHeader.userManagement" },
+                        { icon: "account", href: "/admin/users", text: "appHeader.userManagement" },
                         { icon: "mdi-library-shelves", href: "/admin/books", text: "appHeader.bookManagement" },
                         { icon: "mdi-import", href: "/admin/imports", text: "appHeader.importBooks" },
                     ],
@@ -250,7 +250,7 @@ export default {
                 { heading: "appHeader.categoryBrowse" },
                 { icon: "widgets", href: "/nav", text: "appHeader.categoryNavigation", count: this.sys.books },
                 { icon: "mdi-home-group", href: "/publisher", text: "appHeader.publishers", count: this.sys.publishers },
-                { icon: "mdi-human-greeting", href: "/author", text: "appHeader.authors", count: this.sys.authors },
+                { icon: "account-group", href: "/author", text: "appHeader.authors", count: this.sys.authors },
                 { icon: "mdi-tag-heart", href: "/tag", text: "appHeader.tags", count: this.sys.tags },
                 {
                     target: "",
