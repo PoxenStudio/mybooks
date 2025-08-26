@@ -13,6 +13,27 @@ from webserver import loader, utils
 from webserver.version import VERSION
 from webserver.models import Reader, Item
 from gettext import gettext as _
+import platform
+
+def get_os():
+    """Return the operating system name in lowercase."""
+    try:
+        return platform.system().lower()
+    except Exception:
+        return ""
+
+def get_arch():
+    """Return the machine architecture in lowercase."""
+    try:
+        arch = platform.machine().lower()
+        # Map common architecture names to desired values
+        if arch in ("x86_64", "amd64"):
+            return "amd64"
+        if arch in ("aarch64", "arm64"):
+            return "arm64"
+        return arch
+    except Exception:
+        return ""
 
 
 CONF = loader.get_settings()
@@ -23,6 +44,7 @@ class BookBarnClient:
     # HOST_BASE = "http://127.0.0.1:8088/"
     CHECK_TOKEN_API = "bookbarn/check"
     APPLY_TOKEN_API = "bookbarn/token"
+    CHECK_LATEST_RELEASE_API = "bookbarn/release/check"
     UPDATE_ACTION_API = "bookbarn/token/action"
     GET_BOOKS_API = "bookbarn/pubbooks"
     DOWNLOAD_API = "getfile"
@@ -77,6 +99,37 @@ class BookBarnClient:
             return self.token
         else:
             raise Exception(f"[BARN]Failed to apply token: {response.status_code} - {response.text}")
+
+    def checkLatestRelease(self, token):
+        params = {
+            "version": VERSION,
+            "token": token,
+            "platform": get_os() + "-" + get_arch()
+        }
+
+        result = None
+        try:
+            response = requests.get(self.HOST_BASE + self.CHECK_LATEST_RELEASE_API, params=params, verify=False)
+            if response.status_code == 200:
+                data = response.json().get("data")
+                if data is not None:
+                    latest_version = data.get("rev")
+                    if latest_version is not None and latest_version != VERSION:
+                        logging.info("New release found: %s", latest_version)
+                        result = {
+                            "rev": latest_version,
+                            "notes": data.get("notes", ""),
+                            "date": data.get("releaseDate", "")
+                        }
+                    else:
+                        logging.info("Current version is up-to-date.")
+                else:
+                    logging.info(f"Current version is up-to-date, no release found for the platform {get_os()}-{get_arch()}")
+            else:
+                logging.error(f"Failed to get latest release, status code {response.status_code}")
+        except Exception as e:
+            logging.error(f"Exception occurred while checking latest release: {str(e)}")
+        return result
 
     def _updateAction(self, token, action):
         data = {
@@ -192,6 +245,7 @@ class BookBarnService(AsyncService):
         self.os = "Linux"
         self.token = ""
         self.checked_day = None
+        self.checked_release_time = None
         self.admin_uids = None
 
     @AsyncService.register_service
@@ -200,6 +254,18 @@ class BookBarnService(AsyncService):
         token_invalid_message = False
         output_hour = 0
         while True:
+            if self.checked_release_time is None or self.checked_release_time < time.time():
+                self.checked_release_time = time.time() + 8 * 60 * 60
+                latest_release = self.client.checkLatestRelease(self.token)
+                if latest_release is not None:
+                    logging.info(f"[BARN]New version available: {latest_release['rev']}, released on {latest_release['date']}")
+                    if self.admin_uids is None or len(self.admin_uids) == 0:
+                        admin_uids = self.get_admin_uids()
+                    if len(admin_uids) > 0:
+                        message = f"有新版本发布: {latest_release['rev']}，发布日期: {latest_release['date']}，更新内容: {latest_release['notes']}，请重新构建容器以获取更新。"
+                        for uid in admin_uids:
+                            self.add_msg(uid, "info", message)
+
             if not CONF.get("ENABLE_BOOKBARN", False) or not CONF.get("ENABLE_RECEIVING_BOOKS", False):
                 time.sleep(15 * 60)
                 logging.info("[BARN]Daily books checking, not enabled")
@@ -237,7 +303,8 @@ class BookBarnService(AsyncService):
                     if self.admin_uids is None or len(self.admin_uids) == 0:
                         admin_uids = self.get_admin_uids()
                     if len(admin_uids) > 0:
-                        self.add_msg(admin_uids[0], "error", _(f"[书栈]书栈Token无效, 加入taleboook公众号私信管理员或者更新Token! 错误信息: {err}"))
+                        for uid in admin_uids:
+                            self.add_msg(uid, "error", _(f"[书栈]书栈Token无效, 加入taleboook公众号私信管理员或者更新Token! 错误信息: {err}"))
                 time.sleep(10 * 60)
                 continue
             else:
