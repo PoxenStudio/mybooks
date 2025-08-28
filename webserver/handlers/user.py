@@ -276,6 +276,20 @@ class UserMessages(BaseHandler):
         return {"err": "ok"}
 
 
+class UserMessagesClear(BaseHandler):
+    @js
+    @auth
+    def post(self):
+        user = self.current_user
+        if not user or not user.messages:
+            return {"err": "ok"}
+        for msg in user.messages:
+            msg.unread = False
+            msg.update_time = datetime.datetime.now()
+            msg.save()
+        return {"err": "ok"}
+
+
 class UserInfo(BaseHandler):
     def get_sys_info(self):
         from sqlalchemy import func
@@ -435,6 +449,7 @@ def routes():
         (r"/api/welcome", Welcome),
         (r"/api/user/info", UserInfo),
         (r"/api/user/messages", UserMessages),
+        (r"/api/user/messages/clear", UserMessagesClear),
         (r"/api/user/sign_in", SignIn),
         (r"/api/user/sign_up", SignUp),
         (r"/api/user/sign_out", SignOut),

@@ -457,6 +457,8 @@
         "admin_entry": "管理员入口",
         "logout": "退出",
         "please_login": "请登录",
+        "message_notification": "消息通知",
+        "clear_messages": "全部清空",
         "defaultFooter": "本站基于Calibre构建，感谢开源界的力量。所有资源搜集于互联网，如有侵权请邮件联系。",
         "defaultHeader": "欢迎访问！如果你喜欢此项目，请前往 Github <a target=\"_blank\" href=\"https://github.com/HorkyChen/talebook\"> 给 talebook 点击一个Star！</a>"
 

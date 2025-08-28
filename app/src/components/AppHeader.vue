@@ -116,26 +116,36 @@
                         <template v-slot:activator="{ on }">
                             <v-btn v-on="on" icon color="yellow"> <v-icon class="blink">notifications</v-icon> </v-btn>
                         </template>
-                        <v-list three-line dense width="400">
-                            <v-list-item v-for="(msg, idx) in messages" :key="msg.id">
-                                <v-list-item-avatar>
-                                    <v-icon large color="green" v-if="msg.status == 'success'">mdi-information</v-icon>
-                                    <v-icon large color="red" v-else>mdi-alert</v-icon>
-                                </v-list-item-avatar>
+                        <v-card width="400">
+                            <v-card-title class="py-2">
+                                <span>{{ $t('appHeader.message_notification') }}</span>
+                                <v-spacer></v-spacer>
+                                <v-btn rounded color='error' @click="clearAllMessages" style="color: white;" v-if = "messages.length > 3">
+                                    <v-icon left>mdi-delete-sweep</v-icon>
+                                    {{ $t('appHeader.clear_messages') }}
+                                </v-btn>
+                            </v-card-title>
+                            <v-list three-line dense width="400">
+                                <v-list-item v-for="(msg, idx) in messages" :key="msg.id">
+                                    <v-list-item-avatar>
+                                        <v-icon large color="green" v-if="msg.status == 'success'">mdi-information</v-icon>
+                                        <v-icon large color="red" v-else>mdi-alert</v-icon>
+                                    </v-list-item-avatar>
 
-                                <v-list-item-content>
-                                    <p class="body-2">
-                                        {{ msg.data.message }}
-                                        <br />
-                                        <span>{{ msg.create_time }}</span>
-                                    </p>
-                                </v-list-item-content>
+                                    <v-list-item-content>
+                                        <p class="body-2">
+                                            {{ msg.data.message }}
+                                            <br />
+                                            <span>{{ msg.create_time }}</span>
+                                        </p>
+                                    </v-list-item-content>
 
-                                <v-list-item-action>
-                                    <v-btn @click.prevent="hidemsg(idx, msg.id)">{{ $t('appHeader.ok') }}</v-btn>
-                                </v-list-item-action>
-                            </v-list-item>
-                        </v-list>
+                                    <v-list-item-action>
+                                        <v-btn rounded color='primary' @click.prevent="hidemsg(idx, msg.id)">{{ $t('appHeader.ok') }}</v-btn>
+                                    </v-list-item-action>
+                                </v-list-item>
+                            </v-list>
+                        </v-card>
                     </v-menu>
 
                     <v-menu offset-y right>
@@ -352,6 +362,15 @@ export default {
             }).then((rsp) => {
                 if (rsp.err == "ok") {
                     this.messages.splice(idx, 1);
+                }
+            });
+        },
+        clearAllMessages() {
+            this.$backend("/user/messages/clear", {
+                method: "POST",
+            }).then((rsp) => {
+                if (rsp.err == "ok") {
+                    this.messages = [];
                 }
             });
         },
