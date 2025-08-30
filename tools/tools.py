@@ -70,7 +70,6 @@ class App:
 
         title = mi.title
         mi.title = title.split("(")[0].split("（")[0].strip()
-        #douban_mi = douban.select_douban_metadata(mi)
         douban_mi = douban.get_douban_metadata(mi)
         if not douban_mi:
             try:
