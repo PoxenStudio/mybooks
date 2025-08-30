@@ -35,7 +35,7 @@ class ImageHandler(BaseHandler):
             if not match:
                 raise web.HTTPError(404, "id:%s not an integer" % id)
             id = int(match.group())
-        if not self.db.has_id(id):
+        if not self.calibre_db.has_id(id):
             raise web.HTTPError(404, "id:%d does not exist in database" % id)
         if fmt == "thumb" or fmt.startswith("thumb_"):
             try:
@@ -57,12 +57,12 @@ class ImageHandler(BaseHandler):
 
         try:
             self.set_header("Content-Type", "image/jpeg")
-            cover = self.db.cover(id, index_is_id=True)
+            cover = self.calibre_db.cover(id, index_is_id=True)
             if cover is None:
                 cover = self.default_cover
                 updated = self.build_time
             else:
-                updated = self.db.cover_last_modified(id, index_is_id=True)
+                updated = self.calibre_db.cover_last_modified(id, index_is_id=True)
             self.set_header("Last-Modified", self.last_modified(updated))
 
             if thumbnail:
@@ -82,7 +82,7 @@ class ImageHandler(BaseHandler):
         from calibre.ebooks.metadata.opf2 import metadata_to_opf
 
         self.set_header("Content-Type", "application/oebps-package+xml; charset=UTF-8")
-        mi = self.db.get_metadata(id_, index_is_id=True)
+        mi = self.calibre_db.get_metadata(id_, index_is_id=True)
         data = metadata_to_opf(mi)
         self.set_header("Last-Modified", self.last_modified(mi.last_modified))
         return data

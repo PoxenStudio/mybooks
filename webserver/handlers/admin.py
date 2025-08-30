@@ -53,7 +53,7 @@ class AdminUsers(BaseHandler):
         else:
             f = f.desc()
 
-        query = self.session.query(Reader).order_by(f)
+        query = self.sqlite_session.query(Reader).order_by(f)
         total = query.count()
         start = page * num
         items = []
@@ -68,8 +68,7 @@ class AdminUsers(BaseHandler):
                 "is_admin": user.is_admin(),
                 "extra": dict(user.extra),
                 "provider": user.social_auth[0].provider
-                if hasattr(user, "social_auth") and user.social_auth.count()
-                else "register",
+                    if hasattr(user, "social_auth") and user.social_auth.count() > 0 else "register",
                 "create_time": user.create_time.strftime("%Y-%m-%d %H:%M:%S") if user.create_time else "N/A",
                 "update_time": user.update_time.strftime("%Y-%m-%d %H:%M:%S") if user.update_time else "N/A",
                 "access_time": user.access_time.strftime("%Y-%m-%d %H:%M:%S") if user.access_time else "N/A",
@@ -77,6 +76,11 @@ class AdminUsers(BaseHandler):
             for attr in dir(user):
                 if attr.startswith("can_"):
                     d[attr] = getattr(user, attr)()
+
+            # Update the user statistic count
+            if "upload_history_count" not in d["extra"]:
+                d["extra"]["upload_history_count"] = self.get_user_upload_cnt(user.id)
+
             items.append(d)
         return {"err": "ok", "users": {"items": items, "total": total}}
 
@@ -92,7 +96,7 @@ class AdminUsers(BaseHandler):
         del data["id"]
         if not data:
             return {"err": "params.fields.invalid", "msg": _(u"用户配置项参数错误")}
-        user = self.session.query(Reader).filter(Reader.id == uid).first()
+        user = self.sqlite_session.query(Reader).filter(Reader.id == uid).first()
         if not user:
             return {"err": "params.user.not_exist", "msg": _(u"用户ID错误")}
         if "active" in data:
@@ -108,8 +112,8 @@ class AdminUsers(BaseHandler):
             if self.user_id() == user.id:
                 return {"err": "params.user.invalid", "msg": _("不允许删除自己")}
 
-            self.session.query(Reader).filter(Reader.id == user.id).delete()
-            self.session.commit()
+            self.sqlite_session.query(Reader).filter(Reader.id == user.id).delete()
+            self.sqlite_session.commit()
             return {"err": "ok", "msg": _("删除成功")}
 
         p = data.get("permission", "")
@@ -356,7 +360,7 @@ class AdminInstall(BaseHandler):
             return {"err": "params.password.invalid", "msg": _(u"密码无效")}
 
         # 避免重复创建
-        user = self.session.query(Reader).filter(Reader.username == username).first()
+        user = self.sqlite_session.query(Reader).filter(Reader.username == username).first()
         if not user:
             user = Reader()
             user.username = username
@@ -498,10 +502,10 @@ class AdminBookList(BaseHandler):
         search = self.get_argument("search", "")
         logging.debug("num=%d, page=%d, sort=%s, desc=%s" % (num, page, sort, desc))
 
-        self.db.sort(field=sort, ascending=(not desc))
+        self.calibre_db.sort(field=sort, ascending=(not desc))
         start = page * num
         end = start + num
-        all_ids = list(self.cache.search(search))
+        all_ids = list(self.calibre_db_cache.search(search))
         total = len(all_ids)
 
         # sort by id
@@ -538,7 +542,7 @@ class AdminBookFill(BaseHandler):
             return {"err": "params.error", "msg": _(u"参数错误")}
 
         if idlist == "all":
-            idlist = list(self.cache.search(""))
+            idlist = list(self.calibre_db_cache.search(""))
         elif isinstance(idlist, list):
             for bid in idlist:
                 if not isinstance(bid, int):
@@ -576,7 +580,7 @@ class AdminDeleteBooks(BaseHandler):
             try:
                 book = self.get_book(book_id)
                 book_id = book["id"]
-                self.db.delete_book(book_id)
+                self.calibre_db.delete_book(book_id)
             except Exception as err:
                 logging.error(_("执行异常: %s"), err)
         return {"err": "ok", "msg": _(u"删除成功")}

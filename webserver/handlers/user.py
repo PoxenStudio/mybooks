@@ -25,7 +25,7 @@ class Done(BaseHandler):
             return
 
         user_id = self.get_secure_cookie("user_id")
-        user = self.session.query(Reader).get(int(user_id)) if user_id else None
+        user = self.sqlite_session.query(Reader).get(int(user_id)) if user_id else None
         if not user:
             return
         socials = user.social_auth.all()
@@ -91,7 +91,7 @@ class UserUpdate(BaseHandler):
 
 class SignUp(BaseHandler):
     def check_active_code(self, username, code):
-        user = self.session.query(Reader).filter(Reader.username == username).first()
+        user = self.sqlite_session.query(Reader).filter(Reader.username == username).first()
         if not user or code != user.get_active_code():
             raise web.HTTPError(403, log_message=_(u"激活码无效"))
         user.active = True
@@ -128,7 +128,7 @@ class SignUp(BaseHandler):
         if len(password) < 8 or len(password) > 20 or not re.match(Reader.RE_PASSWORD, password):
             return {"err": "params.password.invalid", "msg": _(u"密码无效")}
 
-        user = self.session.query(Reader).filter(Reader.username == username).first()
+        user = self.sqlite_session.query(Reader).filter(Reader.username == username).first()
         if user:
             return {"err": "params.username.exist", "msg": _(u"用户名已被使用")}
         user = Reader()
@@ -178,7 +178,7 @@ class SignIn(BaseHandler):
         password = self.get_argument("password", "").strip()
         if not username or not password:
             return {"err": "params.invalid", "msg": _(u"用户名或密码错误")}
-        user = self.session.query(Reader).filter(Reader.username == username).first()
+        user = self.sqlite_session.query(Reader).filter(Reader.username == username).first()
         if not user:
             return {"err": "params.no_user", "msg": _(u"无此用户")}
         if user.get_secure_password(password) != user.password:
@@ -198,7 +198,7 @@ class UserReset(BaseHandler):
         username = self.get_argument("username", "").strip().lower()
         if not username or not email:
             return {"err": "params.invalid", "msg": _(u"用户名或邮箱错误")}
-        user = self.session.query(Reader).filter(Reader.username == username, Reader.email == email).first()
+        user = self.sqlite_session.query(Reader).filter(Reader.username == username, Reader.email == email).first()
         if not user:
             return {"err": "params.no_user", "msg": _(u"无此用户")}
         p = user.reset_password()
@@ -266,7 +266,7 @@ class UserMessages(BaseHandler):
         data = tornado.escape.json_decode(self.request.body)
         if "id" not in data:
             return {"err": "params.invalid", "msg": _(u"ID错误")}
-        msg = self.session.query(Message).filter(Message.id == data["id"]).first()
+        msg = self.sqlite_session.query(Message).filter(Message.id == data["id"]).first()
         if not msg:
             return {"err": "params.not_found", "msg": _(u"查无此ID")}
 
@@ -294,10 +294,10 @@ class UserInfo(BaseHandler):
     def get_sys_info(self):
         from sqlalchemy import func
 
-        db = self.db
+        db = self.calibre_db
         last_week = datetime.datetime.now() - datetime.timedelta(days=7)
-        count_all_users = self.session.query(func.count(Reader.id)).scalar()
-        count_hot_users = self.session.query(func.count(Reader.id)).filter(Reader.access_time > last_week).scalar()
+        count_all_users = self.sqlite_session.query(func.count(Reader.id)).scalar()
+        count_hot_users = self.sqlite_session.query(func.count(Reader.id)).filter(Reader.access_time > last_week).scalar()
         return {
             "books": db.count(),
             "tags": len(db.all_tags()),
@@ -364,7 +364,7 @@ class UserInfo(BaseHandler):
                 for k, v in user.extra.items():
                     if k.endswith("_history"):
                         ids = [b["id"] for b in v][:24]
-                        books = self.db.get_data_as_dict(ids=ids)
+                        books = self.calibre_db.get_data_as_dict(ids=ids)
                         show = set([b["id"] for b in books])
                         n = []
                         for b in v:

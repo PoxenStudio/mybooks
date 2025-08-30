@@ -60,7 +60,7 @@ class SimpleBookFormatter:
 
 class BookFormatter:
     def __init__(self, tornado_handler, calibre_book_item):
-        self.db = tornado_handler.db
+        self.db = tornado_handler.calibre_db
         self.book = calibre_book_item
         self.cdn_url = tornado_handler.cdn_url
         self.api_url = tornado_handler.api_url

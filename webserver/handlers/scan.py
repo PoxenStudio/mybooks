@@ -160,7 +160,7 @@ class ScanList(BaseHandler):
                 "update_time": ScanFile.update_time,
             }.get(sort, ScanFile.create_time)
             order = order.asc() if desc == "false" else order.desc()
-            query = self.session.query(ScanFile).order_by(order)
+            query = self.sqlite_session.query(ScanFile).order_by(order)
 
             done_status = [ScanFile.EXIST, ScanFile.IMPORTED]
             if filter == "todo":
@@ -195,7 +195,7 @@ class ScanList(BaseHandler):
                 }
                 response.append(d)
 
-            scanner = Scanner(self.db, self.settings["ScopedSession"])
+            scanner = Scanner(self.calibre_db, self.settings["ScopedSession"])
             summary = scanner.summary()
 
             return {
@@ -233,7 +233,7 @@ class ScanRun(BaseHandler):
 
         scanner = None
         try:
-            scanner = Scanner(self.db, self.settings["ScopedSession"])
+            scanner = Scanner(self.calibre_db, self.settings["ScopedSession"])
             total = scanner.run_scan(path)
             if total == 0:
                 return {"err": "empty", "msg": _("目录中没有找到符合要求的书籍文件！")}
@@ -259,7 +259,7 @@ class ScanDelete(BaseHandler):
 
         scanner = None
         try:
-            scanner = Scanner(self.db, self.settings["ScopedSession"])
+            scanner = Scanner(self.calibre_db, self.settings["ScopedSession"])
             count = scanner.delete(hashlist)
             return {"err": "ok", "msg": _("删除成功"), "count": count}
         finally:
@@ -276,7 +276,7 @@ class ScanStatus(BaseHandler):
     def get(self):
         scanner = None
         try:
-            scanner = Scanner(self.db, self.settings["ScopedSession"])
+            scanner = Scanner(self.calibre_db, self.settings["ScopedSession"])
             status = scanner.scan_status()[1]
             summary = scanner.summary()
             return {"err": "ok", "msg": _("成功"), "status": status, "summary": summary}
@@ -301,7 +301,7 @@ class ImportRun(BaseHandler):
             if hashlist == "all":
                 hashlist = None
 
-            scanner = Scanner(self.db, self.settings["ScopedSession"], self.user_id())
+            scanner = Scanner(self.calibre_db, self.settings["ScopedSession"], self.user_id())
             total = scanner.run_import(hashlist)
             if total == 0:
                 return {"err": "empty", "msg": _("没有等待导入书库的书籍！")}
@@ -324,7 +324,7 @@ class ImportStatus(BaseHandler):
     def get(self):
         scanner = None
         try:
-            scanner = Scanner(self.db, self.settings["ScopedSession"])
+            scanner = Scanner(self.calibre_db, self.settings["ScopedSession"])
             status = scanner.import_status()[1]
             summary = scanner.summary()
             return {"err": "ok", "msg": _("成功"), "status": status, "summary": summary}

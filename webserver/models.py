@@ -109,6 +109,8 @@ class Reader(Base, SQLAlchemyMixin):
         return "<id=%d, username=%s, email=%s>" % (self.id, self.username, self.email)
 
     def shrink_column_extra(self):
+        # Clear the unused item in the extra
+        self.extra["upload_history"] = []
         # check whether the length of `extra` column is out of limit 32KB
         text = json.dumps(self.extra)
         shrink = min(self.OVERSIZE_SHRINK_RATE, self.SQLITE_MAX_LENGTH / len(text))

@@ -39,7 +39,7 @@ class Index(BaseHandler):
 
         # nav = "index"
         # title = _(u"全部书籍")
-        ids = list(self.cache.search(""))
+        ids = list(self.calibre_db_cache.search(""))
         if not ids:
             raise web.HTTPError(404, reason=_(u"本书库暂无藏书"))
         random_ids = random.sample(ids, min(cnt_random, len(ids)))
@@ -129,11 +129,11 @@ class BookSetSole(BaseHandler):
 
         succeed = False
         try:
-            self.session.query(Item).filter(Item.book_id == bid).update({"sole": not book["sole"]})
-            self.session.commit()
+            self.sqlite_session.query(Item).filter(Item.book_id == bid).update({"sole": not book["sole"]})
+            self.sqlite_session.commit()
             succeed = True
         except Exception as e:
-            self.session.rollback()
+            self.sqlite_session.rollback()
             logging.error("set book %d sole failed: %s" % (bid, e))
 
         if succeed:
@@ -268,7 +268,7 @@ class BookRefer(BaseHandler):
         if org_mi.get("comments", "") == "":
             org_mi.set("comments", _(u"无详细介绍"))
         org_mi.timestamp = nowf()
-        self.db.set_metadata(book_id, org_mi, force_changes=True)
+        self.calibre_db.set_metadata(book_id, org_mi, force_changes=True)
         logging.info("[RESET]reset meta data for %d" % book_id)
         return {"err": "ok", "book_id": book_id}
 
@@ -276,7 +276,7 @@ class BookRefer(BaseHandler):
     @auth
     def get(self, id):
         book_id = int(id)
-        mi = self.db.get_metadata(book_id, index_is_id=True)
+        mi = self.calibre_db.get_metadata(book_id, index_is_id=True)
         books = self.plugin_search_books(mi)
         keys = [
             "cover_url",
@@ -315,7 +315,7 @@ class BookRefer(BaseHandler):
         only_meta = self.get_argument("only_meta", "")
         only_cover = self.get_argument("only_cover", "")
         book_id = int(id)
-        mi = self.db.get_metadata(book_id, index_is_id=True)
+        mi = self.calibre_db.get_metadata(book_id, index_is_id=True)
         if not mi:
             return {"err": "params.book.invalid", "msg": _(u"书籍不存在")}
         if not self.is_admin() and not self.is_book_owner(book_id, self.user_id()):
@@ -355,11 +355,11 @@ class BookRefer(BaseHandler):
                 if len(ts) > 0:
                     mi.tags += ts[:8]
                     logging.info("tags are %s" % ','.join(mi.tags))
-                    self.db.set_tags(book_id, mi.tags)
+                    self.calibre_db.set_tags(book_id, mi.tags)
             mi.smart_update(refer_mi, replace_metadata=True)
 
         mi.timestamp = nowf()
-        self.db.set_metadata(book_id, mi)
+        self.calibre_db.set_metadata(book_id, mi)
         return {"err": "ok"}
 
 
@@ -369,7 +369,7 @@ class BookCover(BaseHandler):
     def post(self, id):
         from calibre.utils.date import now as nowf
         book_id = int(id)
-        mi = self.db.get_metadata(book_id, index_is_id=True)
+        mi = self.calibre_db.get_metadata(book_id, index_is_id=True)
         if not mi:
             return {"err": "params.book.invalid", "msg": _(u"书籍不存在")}
 
@@ -385,7 +385,7 @@ class BookCover(BaseHandler):
             ext = fileinfo['content_type'].split('/')[-1]
         mi.cover_data = (ext or None, img_data)
         mi.timestamp = nowf()
-        self.db.set_metadata(book_id, mi)
+        self.calibre_db.set_metadata(book_id, mi)
         return {"err": "ok"}
 
 
@@ -403,7 +403,10 @@ class BookEdit(BaseHandler):
             return {"err": "permission", "msg": _(u"无权操作")}
 
         data = tornado.escape.json_decode(self.request.body)
-        mi = self.db.get_metadata(bid, index_is_id=True)
+        #output data
+        logging.info(f"Book edit data: {data}")
+
+        mi = self.calibre_db.get_metadata(bid, index_is_id=True)
         KEYS = [
             "authors",
             "title",
@@ -426,9 +429,9 @@ class BookEdit(BaseHandler):
             mi.set("pubdate", content)
 
         if "tags" in data and not data["tags"]:
-            self.db.set_tags(bid, [])
+            self.calibre_db.set_tags(bid, [])
 
-        self.db.set_metadata(bid, mi)
+        self.calibre_db.set_metadata(bid, mi)
         return {"err": "ok", "msg": _(u"更新成功")}
 
 
@@ -448,7 +451,7 @@ class BookDelete(BaseHandler):
         if not self.current_user.can_delete() or not (self.is_admin() or self.is_book_owner(bid, cid)):
             return {"err": "permission", "msg": _(u"无权操作")}
 
-        self.db.delete_book(bid)
+        self.calibre_db.delete_book(bid)
         self.add_msg("success", _(u"删除书籍《%s》") % book["title"])
         return {"err": "ok", "msg": _(u"删除成功")}
 
@@ -547,12 +550,12 @@ class SearchBook(ListHandler):
             return self.write({"err": "params.invalid", "msg": _(u"请输入搜索关键字")})
 
         title = _(u"搜索：%(name)s") % {"name": name}
-        ids = self.cache.search(name)
+        ids = self.calibre_db_cache.search(name)
         for profile in {'s2t', "t2s"}:
             converted_name = opencc.OpenCC(profile).convert(name)
             if converted_name == name:
                 continue
-            ids2 = self.cache.search(converted_name)
+            ids2 = self.calibre_db_cache.search(converted_name)
             if len(ids2) > 0:
                 ids = ids.union(ids, ids2)
                 break
@@ -563,7 +566,7 @@ class SearchBook(ListHandler):
 class HotBook(ListHandler):
     def get(self):
         title = _(u"热度榜单")
-        db_items = self.session.query(Item).filter(Item.count_visit > 1).order_by(Item.count_visit.desc())
+        db_items = self.sqlite_session.query(Item).filter(Item.count_visit > 1).order_by(Item.count_visit.desc())
         start = self.get_argument_start()
         delta = 60
         items = db_items.limit(delta).offset(start).all()
@@ -626,10 +629,10 @@ class BookUpload(BaseHandler):
 
         logging.info("upload mi.title = " + repr(mi.title))
         logging.info(f"upload mi.authors = {mi.authors}")
-        books = self.db.books_with_same_title(mi)
+        books = self.calibre_db.books_with_same_title(mi)
         if books:
             book_id = None
-            for b in self.db.get_data_as_dict(ids=books):
+            for b in self.calibre_db.get_data_as_dict(ids=books):
                 if book_id is None:
                     book_id = b.get("id")
                 if b.get("authors", "") != mi.authors:
@@ -642,11 +645,11 @@ class BookUpload(BaseHandler):
                     }
             logging.info(
                 "import [%s] from %s with format %s", repr(mi.title), fpath, fmt)
-            self.db.add_format(book_id, fmt.upper(), fpath, True)
+            self.calibre_db.add_format(book_id, fmt.upper(), fpath, True)
         else:
             fpaths = [fpath]
-            book_id = self.db.import_book(mi, fpaths)
-            self.user_history("upload_history", {"id": book_id, "title": mi.title})
+            book_id = self.calibre_db.import_book(mi, fpaths)
+            self.increase_history_count("upload_history")
             item = Item()
             item.book_id = book_id
             item.collector_id = self.user_id()

@@ -170,7 +170,7 @@ class MCPService:
                 return [TextContent(type="text", text=json.dumps(result))]
 
             # 查找用户
-            user = self.base_handler.session.query(Reader).filter(Reader.username == username).first()
+            user = self.base_handler.sqlite_session.query(Reader).filter(Reader.username == username).first()
             if not user:
                 return [TextContent(type="text",
                                     text=json.dumps({"status": "error", "message": "Invalid username or password"}))]
@@ -226,10 +226,10 @@ class MCPService:
             cmts = arguments.get("include_comments", False)
             desc = arguments.get("desc", True)
 
-            self.base_handler.db.sort(field="id", ascending=(not desc))
+            self.base_handler.calibre_db.sort(field="id", ascending=(not desc))
             start = page * page_size
             end = start + page_size
-            all_ids = list(self.base_handler.cache.search(""))
+            all_ids = list(self.base_handler.calibre_db_cache.search(""))
             all_ids.sort(reverse=desc)
 
             books = []
@@ -261,14 +261,14 @@ class MCPService:
         title = _(u"搜索：%(name)s") % {"name": name}
         try:
             import opencc
-            ids = self.base_handler.cache.search(name)
+            ids = self.base_handler.calibre_db_cache.search(name)
             for profile in {'s2t', "t2s"}:
                 if len(ids) >= self.MAX_BOOKS_COUNT_IN_RESULT:
                     break
                 converted_name = opencc.OpenCC(profile).convert(name)
                 if converted_name == name:
                     continue
-                ids2 = self.base_handler.cache.search(converted_name)
+                ids2 = self.base_handler.calibre_db_cache.search(converted_name)
                 if len(ids2) > 0:
                     ids = ids.union(ids, ids2)
                     break
@@ -316,7 +316,7 @@ class MCPService:
 
             # 检查权限 - 需要管理员权限或者是书籍拥有者
             from webserver.models import Reader
-            user = self.base_handler.session.query(Reader).get(user_info["user_id"])
+            user = self.base_handler.sqlite_session.query(Reader).get(user_info["user_id"])
             if not user:
                 return [TextContent(type="text", text=json.dumps({"status": "error", "message": "User not found"}))]
 
@@ -330,7 +330,7 @@ class MCPService:
                                                                   "message": "Permission denied: not book owner or admin"}))]
 
             # 获取当前书籍元数据
-            mi = self.base_handler.db.get_metadata(bid, index_is_id=True)
+            mi = self.base_handler.calibre_db.get_metadata(bid, index_is_id=True)
             if not mi:
                 return [TextContent(type="text", text=json.dumps({"status": "error",
                                                                   "message": "Failed to get book metadata"}))]
@@ -357,7 +357,7 @@ class MCPService:
                                                                   "message": "No valid fields to update"}))]
 
             # 保存元数据
-            self.base_handler.db.set_metadata(bid, mi)
+            self.base_handler.calibre_db.set_metadata(bid, mi)
 
             result = {
                 "status": "success",
@@ -408,7 +408,7 @@ class MCPService:
                 books_count = 0
                 author_count = 0
             else:
-                db = self.base_handler.db
+                db = self.base_handler.calibre_db
                 books_count = db.count()
                 author_count = len(db.all_authors())
 

@@ -197,7 +197,7 @@ class BaseHandler(web.RequestHandler):
             return False
         auth_decoded = base64.decodebytes(auth_header[6:].encode("ascii")).decode("UTF-8")
         username, password = auth_decoded.split(":", 2)
-        user = self.session.query(Reader).filter(Reader.username == username).first()
+        user = self.sqlite_session.query(Reader).filter(Reader.username == username).first()
         if not user:
             return False
         if user.get_secure_password(password) != str(user.password):
@@ -255,10 +255,11 @@ class BaseHandler(web.RequestHandler):
         # lang.install(unicode=True)
 
     def initialize(self):
+        # 初始化数据库及calibre backends连接, 在main.py中构建
         ScopedSession = self.settings["ScopedSession"]
-        self.session = ScopedSession()  # new sql session
-        self.db = self.settings["legacy"]
-        self.cache = self.db.new_api
+        self.sqlite_session = ScopedSession()  # new sql session
+        self.calibre_db = self.settings["legacy"]  # calibre db backend
+        self.calibre_db_cache = self.calibre_db.new_api  # calibre db cache backend
         self.build_time = self.settings["build_time"]
         self.default_cover = self.settings["default_cover"]
         self.admin_user = None
@@ -266,7 +267,7 @@ class BaseHandler(web.RequestHandler):
 
     def on_finish(self):
         ScopedSession = self.settings["ScopedSession"]
-        self.session.close()
+        self.sqlite_session.close()
         ScopedSession.remove()
 
     def static_url(self, path, **kwargs):
@@ -289,11 +290,11 @@ class BaseHandler(web.RequestHandler):
         user_id = self.user_id()
         if user_id:
             user_id = int(user_id)
-        user = self.session.get(Reader, user_id) if user_id else None
+        user = self.sqlite_session.get(Reader, user_id) if user_id else None
 
         admin_id = self.get_secure_cookie("admin_id")
         if admin_id:
-            self.admin_user = self.session.get(Reader, int(admin_id))
+            self.admin_user = self.sqlite_session.get(Reader, int(admin_id))
         elif user and user.is_admin():
             self.admin_user = user
         return user
@@ -324,8 +325,8 @@ class BaseHandler(web.RequestHandler):
             return []
         messages = self.current_user.messages
         for m in messages:
-            self.session.delete(m)
-        self.session.commit()
+            self.sqlite_session.delete(m)
+        self.sqlite_session.commit()
         return messages
 
     def user_history(self, action, book):
@@ -346,6 +347,18 @@ class BaseHandler(web.RequestHandler):
         # we have five type of history, so make a average limit of max history
         ITEM_COUNT_LIMIT = 60  # = 32KB/100B/5
         extra[action] = history[:ITEM_COUNT_LIMIT]
+        user = self.current_user
+        user.extra.update(extra)
+        user.save()
+
+    def increase_history_count(self, key):
+        if not self.user_id():
+            return
+        if not key.endswith("_count"):
+            key = key + "_count"
+        extra = self.current_user.extra
+        count= extra.get(key, 0) + 1
+        extra[key] = count
         user = self.current_user
         user.extra.update(extra)
         user.save()
@@ -385,11 +398,11 @@ class BaseHandler(web.RequestHandler):
                 values = tuple(self.itervals(record))
                 return SortKey(self.orders, values)
 
-        field = self.db.data.sanitize_sort_field_name(field)
-        if field not in self.db.field_metadata.sortable_field_keys():
+        field = self.calibre_db.data.sanitize_sort_field_name(field)
+        if field not in self.calibre_db.field_metadata.sortable_field_keys():
             raise web.HTTPError(400, "%s is not a valid sort field" % field)
 
-        keyg = CSSortKeyGenerator([(field, order)], self.db.field_metadata, self.db.prefs)
+        keyg = CSSortKeyGenerator([(field, order)], self.calibre_db.field_metadata, self.calibre_db.prefs)
         items.sort(key=keyg)
 
     def get_template_path(self):
@@ -436,10 +449,10 @@ class BaseHandler(web.RequestHandler):
 
         last_week = datetime.datetime.now() - datetime.timedelta(days=7)
         page_vars = {
-            "db": self.db,
+            "db": self.calibre_db,
             "messages": self.pop_messages(),
-            "count_all_users": self.session.query(sql_func.count(Reader.id)).scalar(),
-            "count_hot_users": self.session.query(sql_func.count(Reader.id))
+            "count_all_users": self.sqlite_session.query(sql_func.count(Reader.id)).scalar(),
+            "count_hot_users": self.sqlite_session.query(sql_func.count(Reader.id))
             .filter(Reader.access_time > last_week)
             .scalar(),
             "IMG": self.cdn_url,
@@ -464,23 +477,23 @@ class BaseHandler(web.RequestHandler):
         if auto:
             return True
 
-        query = self.session.query(Item)
+        query = self.sqlite_session.query(Item)
         query = query.filter(Item.book_id == book_id)
         query = query.filter(Item.collector_id == user_id)
         return query.count() > 0
 
     def get_books(self, *args, **kwargs):
         _ts = time.time()
-        books = self.db.get_data_as_dict(*args, **kwargs)
+        books = self.calibre_db.get_data_as_dict(*args, **kwargs)
         logging.debug(
             "[%5d ms] select books from library (count = %d)" % (int(1000 * (time.time() - _ts)), len(books))
         )
 
         item = Item()
         empty_item = item.to_dict()
-        empty_item["collector"] = self.session.query(Reader).order_by(Reader.id).first()
+        empty_item["collector"] = self.sqlite_session.query(Reader).order_by(Reader.id).first()
         ids = [book["id"] for book in books]
-        items = self.session.query(Item).filter(Item.book_id.in_(ids)).all() if ids else []
+        items = self.sqlite_session.query(Item).filter(Item.book_id.in_(ids)).all() if ids else []
         maps = {}
         for b in items:
             d = b.to_dict()
@@ -507,7 +520,7 @@ class BaseHandler(web.RequestHandler):
 
     def count_increase(self, book_id, **kwargs):
         try:
-            item = self.session.query(Item).filter(Item.book_id == book_id).one()
+            item = self.sqlite_session.query(Item).filter(Item.book_id == book_id).one()
         except:
             item = Item()
             item.book_id = book_id
@@ -519,7 +532,7 @@ class BaseHandler(web.RequestHandler):
 
     def search_for_books(self, query):
         self.search_restriction = ""
-        return self.db.search_getting_ids(
+        return self.calibre_db.search_getting_ids(
             (query or "").strip(),
             self.search_restriction,
             sort_results=False,
@@ -530,7 +543,7 @@ class BaseHandler(web.RequestHandler):
         sql = """SELECT tags.name, count(distinct book) as count
         FROM tags left join books_tags_link on tags.id = books_tags_link.tag
         group by tags.id"""
-        tags = dict((i[0], i[1]) for i in self.cache.backend.conn.get(sql))
+        tags = dict((i[0], i[1]) for i in self.calibre_db_cache.backend.conn.get(sql))
         return tags
 
     def get_category_with_count(self, field):
@@ -550,13 +563,13 @@ class BaseHandler(web.RequestHandler):
             % args
         )
         logging.debug(sql)
-        rows = self.cache.backend.conn.get(sql)
+        rows = self.calibre_db_cache.backend.conn.get(sql)
         items = [{"id": a, "name": b, "count": c} for a, b, c in rows]
         return items
 
     def books_by_id(self):
         sql = "SELECT id FROM books order by id desc"
-        ids = [v[0] for v in self.cache.backend.conn.get(sql)]
+        ids = [v[0] for v in self.calibre_db_cache.backend.conn.get(sql)]
         return ids
 
     def get_argument_start(self):
@@ -567,22 +580,25 @@ class BaseHandler(web.RequestHandler):
             start = 0
         return max(0, start)
 
+    def get_user_upload_cnt(self, user_id):
+        return self.sqlite_session.query(sql_func.count(Item.collector_id)).filter(Item.collector_id == user_id).scalar()
+
 
 class ListHandler(BaseHandler):
     def get_item_books(self, category, name):
         books = []
-        item_id = self.cache.get_item_id(category, name)
+        item_id = self.calibre_db_cache.get_item_id(category, name)
         if not item_id:
             return books
 
-        ids = self.db.get_books_for_category(category, item_id)
-        books = self.db.get_data_as_dict(ids=ids)
+        ids = self.calibre_db.get_books_for_category(category, item_id)
+        books = self.calibre_db.get_data_as_dict(ids=ids)
 
         item = Item()
         empty_item = item.to_dict()
-        empty_item["collector"] = self.session.query(Reader).order_by(Reader.id).first()
+        empty_item["collector"] = self.sqlite_session.query(Reader).order_by(Reader.id).first()
         ids = [book["id"] for book in books]
-        items = self.session.query(Item).filter(Item.book_id.in_(ids)).all() if ids else []
+        items = self.sqlite_session.query(Item).filter(Item.book_id.in_(ids)).all() if ids else []
         maps = {}
         for b in items:
             d = b.to_dict()
@@ -608,7 +624,7 @@ class ListHandler(BaseHandler):
         items.sort(key=lambda x: x[field], reverse=not ascending)
 
     def sort_books(self, items, field):
-        fm = self.db.field_metadata
+        fm = self.calibre_db.field_metadata
         keys = frozenset(fm.sortable_field_keys())
         if field in keys:
             ascending = fm[field]["datatype"] not in (

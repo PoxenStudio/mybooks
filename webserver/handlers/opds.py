@@ -444,15 +444,15 @@ class OpdsHandler(BaseHandler):
         ascending=True,
         feed_title=None,
     ):
-        idx = self.db.FIELD_MAP["id"]
+        idx = self.calibre_db.FIELD_MAP["id"]
         if not ids:
             raise web.HTTPError(404, reason="No books found")
-        items = [x for x in self.db.data.iterall() if x[idx] in ids]
+        items = [x for x in self.calibre_db.data.iterall() if x[idx] in ids]
         self.sort(items, sort_by, ascending)
         max_items = CONF["opds_max_items"]
         offsets = Offsets(offset, max_items, len(items))
         items = items[offsets.offset : offsets.offset + max_items]
-        updated = self.db.last_modified()
+        updated = self.calibre_db.last_modified()
         self.set_header("Last-Modified", self.last_modified(updated))
         self.set_header("Content-Type", "application/atom+xml; profile=opds-catalog; charset=UTF-8")
         return bytes(
@@ -463,7 +463,7 @@ class OpdsHandler(BaseHandler):
                 offsets,
                 page_url,
                 up_url,
-                self.db,
+                self.calibre_db,
                 CONF["opds_url_prefix"],
                 title=feed_title,
             )
@@ -494,7 +494,7 @@ class OpdsHandler(BaseHandler):
         ascending = which == "title"
         feed_title = {"newest": _("Newest"), "title": _("Title")}.get(which, which)
         feed_title = default_feed_title + " :: " + _("By {0}").format(feed_title)
-        ids = list(self.cache.search(""))
+        ids = list(self.calibre_db_cache.search(""))
         return self.get_opds_acquisition_feed(
             ids,
             offset,
@@ -515,13 +515,13 @@ class OpdsHandler(BaseHandler):
         if not which or not category:
             raise web.HTTPError(404, reason="Not found")
 
-        categories = self.db.get_categories()
+        categories = self.calibre_db.get_categories()
         page_url = url_for("opdscategorygroup", category=category, which=which)
 
         category = unhexlify(category)
         if category not in categories:
             raise web.HTTPError(404, reason="Category %r not found" % which)
-        category_meta = self.db.field_metadata
+        category_meta = self.calibre_db.field_metadata
         meta = category_meta.get(category, {})
         category_name = meta.get("name", which)
         which = unhexlify(which)
@@ -536,7 +536,7 @@ class OpdsHandler(BaseHandler):
         items = [x for x in items if belongs(x, which)]
         if not items:
             raise web.HTTPError(404, reason="No items in group %r:%r" % (category, which))
-        updated = self.db.last_modified()
+        updated = self.calibre_db.last_modified()
 
         id_ = "calibre-category-group-feed:" + category + ":" + which
         max_items = CONF["opds_max_items"]
@@ -555,7 +555,7 @@ class OpdsHandler(BaseHandler):
                 offsets,
                 page_url,
                 up_url,
-                self.db,
+                self.calibre_db,
                 title=feed_title,
             )
         )
@@ -581,13 +581,13 @@ class OpdsHandler(BaseHandler):
         raise web.HTTPError(404, reason="Not found")
 
     def get_opds_navcatalog(self, which, page_url, up_url, offset=0):
-        categories = self.db.get_categories()
+        categories = self.calibre_db.get_categories()
         if which not in categories:
             raise web.HTTPError(404, reason="Category %r not found" % which)
 
         items = categories[which]
-        updated = self.db.last_modified()
-        category_meta = self.db.field_metadata
+        updated = self.calibre_db.last_modified()
+        category_meta = self.calibre_db.field_metadata
         meta = category_meta.get(which, {})
         category_name = meta.get("name", which)
         feed_title = default_feed_title + " :: " + _("By {0}").format(category_name)
@@ -608,7 +608,7 @@ class OpdsHandler(BaseHandler):
                 offsets,
                 page_url,
                 up_url,
-                self.db,
+                self.calibre_db,
                 title=feed_title,
             )
         else:
@@ -661,11 +661,11 @@ class OpdsHandler(BaseHandler):
             except:
                 # Might be a composite column, where we have the lookup key
                 if not (
-                    category in self.db.field_metadata and self.db.field_metadata[category]["datatype"] == "composite"
+                    category in self.calibre_db.field_metadata and self.calibre_db.field_metadata[category]["datatype"] == "composite"
                 ):
                     raise web.HTTPError(404, reason="Tag %r not found" % which)
 
-        categories = self.db.get_categories()
+        categories = self.calibre_db.get_categories()
         if category not in categories:
             raise web.HTTPError(404, reason="Category %r not found" % which)
 
@@ -682,7 +682,7 @@ class OpdsHandler(BaseHandler):
         q = category
         if q == "news":
             q = "tags"
-        ids = self.db.get_books_for_category(q, which)
+        ids = self.calibre_db.get_books_for_category(q, which)
         sort_by = "series" if category == "series" else "title"
 
         return self.get_opds_acquisition_feed(
@@ -695,8 +695,8 @@ class OpdsHandler(BaseHandler):
         )
 
     def opds(self):
-        categories = self.db.get_categories()
-        category_meta = self.db.field_metadata
+        categories = self.calibre_db.get_categories()
+        category_meta = self.calibre_db.field_metadata
         cats = [
             (_("Newest"), _("Date"), "Onewest"),
             (_("Title"), _("Title"), "Otitle"),
@@ -716,12 +716,12 @@ class OpdsHandler(BaseHandler):
             meta = category_meta.get(category, None)
             if meta is None:
                 continue
-            if category_meta.is_ignorable_field(category) and category not in custom_fields_to_display(self.db):
+            if category_meta.is_ignorable_field(category) and category not in custom_fields_to_display(self.calibre_db):
                 continue
             name = _(meta["name"])
             cats.append((name, name, "N" + category))
 
-        updated = self.db.last_modified()
+        updated = self.calibre_db.last_modified()
         self.set_header("Last-Modified", self.last_modified(updated))
         self.set_header("Content-Type", "application/atom+xml; charset=UTF-8")
 

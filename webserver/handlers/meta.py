@@ -74,8 +74,8 @@ class LanguageNameUtil:
 class AuthorBooksUpdate(ListHandler):
     def post(self, name):
         category = "authors"
-        author_id = self.cache.get_item_id(category, name)
-        ids = self.db.get_books_for_category(category, author_id)
+        author_id = self.calibre_db_cache.get_item_id(category, name)
+        ids = self.calibre_db.get_books_for_category(category, author_id)
         for book_id in list(ids)[:40]:
             self.do_book_update(book_id)
         self.redirect("/author/%s" % name, 302)
@@ -84,12 +84,12 @@ class AuthorBooksUpdate(ListHandler):
 class PubBooksUpdate(ListHandler):
     def post(self, name):
         category = "publisher"
-        publisher_id = self.cache.get_item_id(category, name)
+        publisher_id = self.calibre_db_cache.get_item_id(category, name)
         if publisher_id:
-            ids = self.db.get_books_for_category(category, publisher_id)
+            ids = self.calibre_db.get_books_for_category(category, publisher_id)
         else:
-            ids = self.cache.search_for_books("")
-            books = self.db.get_data_as_dict(ids=ids)
+            ids = self.calibre_db_cache.search_for_books("")
+            books = self.calibre_db.get_data_as_dict(ids=ids)
             ids = [b["id"] for b in books if not b["publisher"]]
         for book_id in list(ids)[:40]:
             self.do_book_update(book_id)
