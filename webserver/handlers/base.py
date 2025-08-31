@@ -16,7 +16,7 @@ from tornado import web
 from webserver import loader, utils
 
 # import social_tornado.handlers
-from webserver.models import Item, Message, Reader
+from webserver.models import Item, Message, Reader, ReadingState
 
 messages = defaultdict(list)
 CONF = loader.get_settings()
@@ -513,6 +513,42 @@ class BaseHandler(web.RequestHandler):
         if len(soled_books) > 0 and len(books) > 0:
             books = [b for b in books if b["id"] not in soled_books]
 
+        # 添加当前用户的阅读状态信息
+        if self.user_id() and books:
+            book_ids = [book["id"] for book in books]
+            reading_states = self.sqlite_session.query(ReadingState).filter(
+                ReadingState.book_id.in_(book_ids),
+                ReadingState.reader_id == self.user_id()
+            ).all()
+
+            # 创建阅读状态映射
+            state_maps = {}
+            for state in reading_states:
+                state_data = {
+                    "favorite": state.favorite,
+                    "favorite_date": state.favorite_date.isoformat() if state.favorite_date else None,
+                    "wants": state.wants,
+                    "wants_date": state.wants_date.isoformat() if state.wants_date else None,
+                    "read_state": state.read_state,
+                    "read_date": state.read_date.isoformat() if state.read_date else None,
+                    "online_read": state.online_read or 0,
+                    "download": state.download or 0
+                }
+                state_maps[state.book_id] = state_data
+
+            # 为每本书添加阅读状态
+            for book in books:
+                book["state"] = state_maps.get(book["id"], {
+                    "favorite": 0,
+                    "favorite_date": None,
+                    "wants": 0,
+                    "wants_date": None,
+                    "read_state": 0,
+                    "read_date": None,
+                    "online_read": 0,
+                    "download": 0
+                })
+
         logging.debug(
             "[%5d ms] select books from database (count = %d)" % (int(1000 * (time.time() - _ts)), len(books))
         )
@@ -651,6 +687,42 @@ class ListHandler(BaseHandler):
 
         if len(soled_books) > 0 and len(books) > 0:
             books = [b for b in books if b["id"] not in soled_books]
+
+        # 添加当前用户的阅读状态信息
+        if self.user_id() and books:
+            book_ids = [book["id"] for book in books]
+            reading_states = self.sqlite_session.query(ReadingState).filter(
+                ReadingState.book_id.in_(book_ids),
+                ReadingState.reader_id == self.user_id()
+            ).all()
+
+            # 创建阅读状态映射
+            state_maps = {}
+            for state in reading_states:
+                state_data = {
+                    "favorite": state.favorite,
+                    "favorite_date": state.favorite_date.isoformat() if state.favorite_date else None,
+                    "wants": state.wants,
+                    "wants_date": state.wants_date.isoformat() if state.wants_date else None,
+                    "read_state": state.read_state,
+                    "read_date": state.read_date.isoformat() if state.read_date else None,
+                    "online_read": state.online_read or 0,
+                    "download": state.download or 0
+                }
+                state_maps[state.book_id] = state_data
+
+            # 为每本书添加阅读状态
+            for book in books:
+                book["state"] = state_maps.get(book["id"], {
+                    "favorite": 0,
+                    "favorite_date": None,
+                    "wants": 0,
+                    "wants_date": None,
+                    "read_state": 0,
+                    "read_date": None,
+                    "online_read": 0,
+                    "download": 0
+                })
 
         return books
 

@@ -364,5 +364,68 @@ class ScanFile(Base, SQLAlchemyMixin):
         self.update_time = datetime.datetime.now()
 
 
+# 用户对某本书的阅读状态
+class ReadingState(Base, SQLAlchemyMixin):
+    __tablename__ = "reading_state"
+
+    book_id = Column(Integer, primary_key=True)
+    reader_id = Column(Integer, ForeignKey("readers.id"), primary_key=True)
+    favorite = Column(Integer, default=0)  # 0:为未收藏,1:已收藏
+    favorite_date = Column(DateTime)
+    wants = Column(Integer, default=0)  # 0:未标记为想读,1:标记为想读
+    wants_date = Column(DateTime)
+    read_state = Column(Integer, default=0, nullable=False)  # 0:None, 1:已申请, 2:在读, 3:已读完
+    read_date = Column(DateTime)
+    online_read = Column(Integer, default=0)  # 0:未在线阅读, 1:已在线阅读
+    download = Column(Integer, default=0)  # 0:未下载,1:已下载
+
+    # 建立关系
+    reader = relationship(Reader, backref="reading_states")
+
+    def __init__(self, book_id, reader_id):
+        super(ReadingState, self).__init__()
+        self.book_id = book_id
+        self.reader_id = reader_id
+        self.favorite = 0
+        self.wants = 0
+        self.read_state = 0
+
+    def set_favorite(self, favorite_status):
+        """设置收藏状态"""
+        self.favorite = 1 if favorite_status else 0
+        self.favorite_date = datetime.datetime.now()
+
+    def is_favorite(self):
+        """检查是否已收藏"""
+        return self.favorite == 1
+
+    def set_wants(self, wants_status):
+        """设置想读状态"""
+        self.wants = 1 if wants_status else 0
+        self.wants_date = datetime.datetime.now()
+
+    def is_wants(self):
+        """检查是否标记为想读"""
+        return self.wants == 1
+
+    def set_read_state(self, read_state):
+        """设置阅读状态 0:None, 1:已申请, 2:在读, 3:已读完"""
+        if read_state in [0, 1, 2, 3]:
+            self.read_state = read_state
+            self.read_date = datetime.datetime.now()
+
+    def get_read_state(self):
+        """获取当前阅读状态"""
+        return self.read_state
+
+    def set_online_read(self, online_read_status):
+        """设置在线阅读状态"""
+        self.online_read = 1 if online_read_status else 0
+
+    def set_download(self, download_status):
+        """设置下载状态"""
+        self.download = 1 if download_status else 0
+
+
 def user_syncdb(engine):
     Base.metadata.create_all(engine)

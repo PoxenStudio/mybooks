@@ -19,7 +19,7 @@ from webserver.services.convert import ConvertService
 from webserver.services.extract import ExtractService
 from webserver.services.mail import MailService
 from webserver.handlers.base import BaseHandler, ListHandler, auth, js
-from webserver.models import Item, BOOK_TYPE_PHYSICAL
+from webserver.models import Item, BOOK_TYPE_PHYSICAL, ReadingState
 from webserver.plugins.meta import baike, douban, youshu
 from webserver.plugins.parser.txt import get_content_encoding
 from webserver.handlers.audio import AudioUtils
@@ -387,6 +387,180 @@ class BookCover(BaseHandler):
         mi.timestamp = nowf()
         self.calibre_db.set_metadata(book_id, mi)
         return {"err": "ok"}
+
+
+class BookFavorite(BaseHandler):
+    @js
+    @auth
+    def post(self, id):
+        """设置或取消收藏某本书"""
+        book_id = int(id)
+        book = self.get_book(book_id)
+        if not book:
+            return {"err": "params.book.invalid", "msg": _(u"书籍不存在")}
+
+        user_id = self.user_id()
+        data = tornado.escape.json_decode(self.request.body)
+        favorite_status = data.get("favorite", False)
+
+        # 查找或创建阅读状态记录
+        reading_state = self.sqlite_session.query(ReadingState).filter(
+            ReadingState.book_id == book_id,
+            ReadingState.reader_id == user_id
+        ).first()
+
+        if not reading_state:
+            reading_state = ReadingState(book_id, user_id)
+            self.sqlite_session.add(reading_state)
+
+        # 设置收藏状态
+        reading_state.set_favorite(favorite_status)
+        reading_state.save()
+
+        action = "收藏" if favorite_status else "取消收藏"
+        return {"err": "ok", "msg": _(u"%s成功") % action}
+
+    @js
+    @auth
+    def get(self, id):
+        """获取当前用户对某本书的收藏状态"""
+        book_id = int(id)
+        user_id = self.user_id()
+
+        reading_state = self.sqlite_session.query(ReadingState).filter(
+            ReadingState.book_id == book_id,
+            ReadingState.reader_id == user_id
+        ).first()
+
+        is_favorite = reading_state.is_favorite() if reading_state else False
+        return {"err": "ok", "favorite": is_favorite}
+
+
+class BookWantToRead(BaseHandler):
+    @js
+    @auth
+    def post(self, id):
+        """设置或取消想读某本书"""
+        book_id = int(id)
+        book = self.get_book(book_id)
+        if not book:
+            return {"err": "params.book.invalid", "msg": _(u"书籍不存在")}
+
+        user_id = self.user_id()
+        data = tornado.escape.json_decode(self.request.body)
+        wants_status = data.get("wants", False)
+
+        # 查找或创建阅读状态记录
+        reading_state = self.sqlite_session.query(ReadingState).filter(
+            ReadingState.book_id == book_id,
+            ReadingState.reader_id == user_id
+        ).first()
+
+        if not reading_state:
+            reading_state = ReadingState(book_id, user_id)
+            self.sqlite_session.add(reading_state)
+
+        # 设置想读状态
+        reading_state.set_wants(wants_status)
+        reading_state.save()
+
+        action = "标记为想读" if wants_status else "取消想读"
+        return {"err": "ok", "msg": _(u"%s成功") % action}
+
+    @js
+    @auth
+    def get(self, id):
+        """获取当前用户对某本书的想读状态"""
+        book_id = int(id)
+        user_id = self.user_id()
+
+        reading_state = self.sqlite_session.query(ReadingState).filter(
+            ReadingState.book_id == book_id,
+            ReadingState.reader_id == user_id
+        ).first()
+
+        is_wants = reading_state.is_wants() if reading_state else False
+        return {"err": "ok", "wants": is_wants}
+
+
+class BookReadingState(BaseHandler):
+    @js
+    @auth
+    def post(self, id):
+        """设置某本书的阅读状态"""
+        book_id = int(id)
+        book = self.get_book(book_id)
+        if not book:
+            return {"err": "params.book.invalid", "msg": _(u"书籍不存在")}
+
+        user_id = self.user_id()
+        data = tornado.escape.json_decode(self.request.body)
+        read_state = data.get("read_state", 0)
+
+        # 验证阅读状态值
+        if read_state not in [0, 1, 2, 3]:
+            return {"err": "params.invalid", "msg": _(u"阅读状态参数错误")}
+
+        # 查找或创建阅读状态记录
+        reading_state = self.sqlite_session.query(ReadingState).filter(
+            ReadingState.book_id == book_id,
+            ReadingState.reader_id == user_id
+        ).first()
+
+        if not reading_state:
+            reading_state = ReadingState(book_id, user_id)
+            self.sqlite_session.add(reading_state)
+
+        # 设置阅读状态
+        reading_state.set_read_state(read_state)
+
+        # 如果是在线阅读或下载操作，同时更新相应状态
+        if data.get("online_read") is not None:
+            reading_state.set_online_read(data["online_read"])
+        if data.get("download") is not None:
+            reading_state.set_download(data["download"])
+
+        reading_state.save()
+
+        state_names = {0: "未设置", 1: "已申请", 2: "在读", 3: "已读完"}
+        return {"err": "ok", "msg": _(u"阅读状态已设置为：%s") % state_names[read_state]}
+
+    @js
+    @auth
+    def get(self, id):
+        """获取当前用户对某本书的阅读状态"""
+        book_id = int(id)
+        user_id = self.user_id()
+
+        reading_state = self.sqlite_session.query(ReadingState).filter(
+            ReadingState.book_id == book_id,
+            ReadingState.reader_id == user_id
+        ).first()
+
+        if reading_state:
+            return {
+                "err": "ok",
+                "read_state": reading_state.get_read_state(),
+                "favorite": reading_state.is_favorite(),
+                "wants": reading_state.is_wants(),
+                "online_read": reading_state.online_read or 0,
+                "download": reading_state.download or 0,
+                "read_date": reading_state.read_date.isoformat() if reading_state.read_date else None,
+                "favorite_date": reading_state.favorite_date.isoformat() if reading_state.favorite_date else None,
+                "wants_date": reading_state.wants_date.isoformat() if reading_state.wants_date else None
+            }
+        else:
+            return {
+                "err": "ok",
+                "read_state": 0,
+                "favorite": False,
+                "wants": False,
+                "online_read": 0,
+                "download": 0,
+                "read_date": None,
+                "favorite_date": None,
+                "wants_date": None
+            }
 
 
 class BookEdit(BaseHandler):
@@ -925,4 +1099,7 @@ def routes():
         (r"/api/book/([0-9]+)/convert", BookConverter),
         (r"/api/book/([0-9]+)/setsole", BookSetSole),
         (r"/api/book/([0-9]+)/cover", BookCover),
+        (r"/api/book/([0-9]+)/favorite", BookFavorite),
+        (r"/api/book/([0-9]+)/wants", BookWantToRead),
+        (r"/api/book/([0-9]+)/readstate", BookReadingState),
     ]

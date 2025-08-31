@@ -295,7 +295,21 @@
                     <v-col cols="12" sm="8">
                         <v-card-text>
                             <div>
-                                <p class='title mb-0'>{{ book.title }}</p>
+                                <p class='title mb-0'>
+                                    {{ book.title }}
+                                    <v-btn
+                                        icon
+                                        small
+                                        class="ml-2"
+                                        @click="toggleFavorite"
+                                        :loading="favoriteLoading"
+                                        :color="isFavorite ? 'red' : 'grey'"
+                                    >
+                                        <v-icon>
+                                            {{ isFavorite ? 'mdi-heart' : 'mdi-heart-outline' }}
+                                        </v-icon>
+                                    </v-btn>
+                                </p>
                                 <span color="grey--text">
                                     <v-icon :color="book.sole ? 'red' : 'green'" class="mr-2">
                                         {{ book.sole ? 'public_off' : 'public' }}
@@ -520,12 +534,15 @@ export default {
         },
         tiny: function () {
             return this.$vuetify.breakpoint.xsOnly;
+        },
+        isFavorite: function () {
+            return this.book.state && this.book.state.favorite === 1;
         }
     },
     data: () => ({
         err: "",
         msg: "",
-        book: {id: 0, title: "", files: [], tags: [], pubdate: ""},
+        book: {id: 0, title: "", files: [], tags: [], pubdate: "", state: {favorite: 0}},
         audios: {count: 0, files: [], status: "ok"},
         // Audio status constants
         AUDIO_STATUS: {
@@ -541,6 +558,7 @@ export default {
         mail_to: "",
         kindle_sender: "",
         txt_parse_inited: false,
+        favoriteLoading: false,
         dialog_download: false,
         dialog_epub2audio: false,
         dialog_audiolist: false,
@@ -670,6 +688,38 @@ export default {
         this.stop_audio_progress_polling();
     },
     methods: {
+        async toggleFavorite() {
+            if (this.favoriteLoading) return;
+
+            this.favoriteLoading = true;
+            try {
+                const newFavoriteStatus = !this.isFavorite;
+                const response = await this.$backend(`/book/${this.book.id}/favorite`, {
+                    method: 'POST',
+                    body: JSON.stringify({ favorite: newFavoriteStatus }),
+                });
+
+                if (response.err === 'ok') {
+                    // 更新本地状态
+                    if (!this.book.state) {
+                        this.book.state = {};
+                    }
+                    this.book.state.favorite = newFavoriteStatus ? 1 : 0;
+                    this.book.state.favorite_date = newFavoriteStatus ? new Date().toISOString() : null;
+
+                    // 显示成功提示
+                    const message = newFavoriteStatus ? '已收藏' : '已取消收藏';
+                    this.$alert('success', message);
+                } else {
+                    this.$alert('error', response.msg || '操作失败');
+                }
+            } catch (error) {
+                console.error('收藏操作失败:', error);
+                this.$alert('error', '网络错误，请稍后重试');
+            } finally {
+                this.favoriteLoading = false;
+            }
+        },
         init(route, next) {
             this.$store.commit("navbar", true);
             var rsp = this;
