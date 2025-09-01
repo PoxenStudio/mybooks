@@ -61,14 +61,59 @@ class Index(BaseHandler):
 
 class BookDetail(BaseHandler):
     @js
-    def get(self, id):
-        book = self.get_book(id)
-        self.count_increase(id, count_visit=1)
+    def get(self, bid):
+        logging.info("get book detail %s" % bid)
+        book = None
+        try:
+            book_id = int(bid)
+            book = self.get_book(book_id)
+        except Exception as e:
+            logging.error("get book %s failed: %s" % (bid, e))
+
+        if not book:
+            return {"err": "params.book.invalid", "msg": _(u"书籍不存在")}
+
+        # 添加当前用户的阅读状态信息
+        if self.current_user:
+            reading_state = self.sqlite_session.query(ReadingState).filter(
+                ReadingState.book_id == book_id,
+                ReadingState.reader_id == self.current_user.id
+            ).first()
+
+            # 创建阅读状态映射
+            if reading_state:
+                state_data = {
+                    "favorite": reading_state.favorite,
+                    "favorite_date": reading_state.favorite_date.isoformat() if reading_state.favorite_date else None,
+                    "wants": reading_state.wants,
+                    "wants_date": reading_state.wants_date.isoformat() if reading_state.wants_date else None,
+                    "read_state": reading_state.read_state,
+                    "read_date": reading_state.read_date.isoformat() if reading_state.read_date else None,
+                    "online_read": reading_state.online_read or 0,
+                    "download": reading_state.download or 0
+                }
+                book["state"] = state_data
+        else:
+            logging.info("User not logged in, skipping reading state.")
+
+        if "state" not in book:
+            book["state"] = {
+                    "favorite": 0,
+                    "favorite_date": None,
+                    "wants": 0,
+                    "wants_date": None,
+                    "read_state": 0,
+                    "read_date": None,
+                    "online_read": 0,
+                    "download": 0
+                }
+
+        self.count_increase(bid, count_visit=1)
         return {
             "err": "ok",
             "kindle_sender": CONF["smtp_username"],
             "book": utils.BookFormatter(self, book).format(with_files=True, with_perms=True),
-            "audios": AudioUtils.get_audios(id),
+            "audios": AudioUtils.get_audios(bid),
         }
 
 
