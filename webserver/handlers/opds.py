@@ -661,7 +661,8 @@ class OpdsHandler(BaseHandler):
             except:
                 # Might be a composite column, where we have the lookup key
                 if not (
-                    category in self.calibre_db.field_metadata and self.calibre_db.field_metadata[category]["datatype"] == "composite"
+                    category in self.calibre_db.field_metadata
+                    and self.calibre_db.field_metadata[category]["datatype"] == "composite"
                 ):
                     raise web.HTTPError(404, reason="Tag %r not found" % which)
 

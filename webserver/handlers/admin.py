@@ -58,6 +58,8 @@ class AdminUsers(BaseHandler):
         start = page * num
         items = []
         for user in query.limit(num).offset(start).all():
+            has_social_account = hasattr(user, "social_auth") and user.social_auth.count() > 0
+            user_provider = user.social_auth[0].provider if has_social_account else "register"
             d = {
                 "id": user.id,
                 "username": user.username,
@@ -67,8 +69,7 @@ class AdminUsers(BaseHandler):
                 "is_active": user.is_active(),
                 "is_admin": user.is_admin(),
                 "extra": dict(user.extra),
-                "provider": user.social_auth[0].provider
-                    if hasattr(user, "social_auth") and user.social_auth.count() > 0 else "register",
+                "provider": user_provider,
                 "create_time": user.create_time.strftime("%Y-%m-%d %H:%M:%S") if user.create_time else "N/A",
                 "update_time": user.update_time.strftime("%Y-%m-%d %H:%M:%S") if user.update_time else "N/A",
                 "access_time": user.access_time.strftime("%Y-%m-%d %H:%M:%S") if user.access_time else "N/A",

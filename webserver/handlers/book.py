@@ -98,15 +98,15 @@ class BookDetail(BaseHandler):
 
         if "state" not in book:
             book["state"] = {
-                    "favorite": 0,
-                    "favorite_date": None,
-                    "wants": 0,
-                    "wants_date": None,
-                    "read_state": 0,
-                    "read_date": None,
-                    "online_read": 0,
-                    "download": 0
-                }
+                "favorite": 0,
+                "favorite_date": None,
+                "wants": 0,
+                "wants_date": None,
+                "read_state": 0,
+                "read_date": None,
+                "online_read": 0,
+                "download": 0
+            }
 
         self.count_increase(bid, count_visit=1)
         return {
@@ -655,7 +655,7 @@ class BookEdit(BaseHandler):
             return {"err": "permission", "msg": _(u"无权操作")}
 
         data = tornado.escape.json_decode(self.request.body)
-        #output data
+        # output data
         logging.info(f"Book edit data: {data}")
 
         mi = self.calibre_db.get_metadata(bid, index_is_id=True)
@@ -688,6 +688,13 @@ class BookEdit(BaseHandler):
             if existing_item:
                 existing_item.book_count = book_cnt
                 existing_item.save()
+            else:
+                item = Item()
+                item.book_id = bid
+                item.collector_id = self.user_id()
+                item.book_type = BOOK_TYPE_PHYSICAL
+                item.book_count = book_cnt
+                item.save()
 
         if "tags" in data and not data["tags"]:
             self.calibre_db.set_tags(bid, [])

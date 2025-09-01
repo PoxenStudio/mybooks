@@ -357,7 +357,7 @@ class BaseHandler(web.RequestHandler):
         if not key.endswith("_count"):
             key = key + "_count"
         extra = self.current_user.extra
-        count= extra.get(key, 0) + 1
+        count = extra.get(key, 0) + 1
         extra[key] = count
         user = self.current_user
         user.extra.update(extra)
