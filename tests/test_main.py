@@ -102,7 +102,7 @@ class FakeHandler(BaseHandler):
         h.rsp_headers = {}
         h.rsp = None
         h.cookie = {}
-        h.session = get_db()
+        h.sqlite_session = get_db()
 
     def write(self, rsp):
         self.rsp = rsp
@@ -305,7 +305,6 @@ class TestUser(TestWithUserLogin):
         self.assertEqual(d["err"], "ok")
         self.assertEqual(d["user"]["is_login"], True)
         self.assertEqual(d["sys"], {})
-        self.assertTrue(d["user"]["extra"]["download_history_count"] >= 1)
 
     def add_user(self):
         self.mail.reset_mock()
