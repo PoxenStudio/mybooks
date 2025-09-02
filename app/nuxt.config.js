@@ -75,7 +75,7 @@ export default {
   publicRuntimeConfig: {
     head: {
         title: process.env.TITLE || "talebook",
-        titleTemplate: process.env.TITLE_TEMPLATE || " %s | talebook",
+        titleTemplate: process.env.TITLE_TEMPLATE || " %s | poxenstudio/talebook",
     },
     api_url: process.env.API_URL || "http://127.0.0.1:8000",
     googleAnalytics: {

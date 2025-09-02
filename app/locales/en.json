@@ -495,7 +495,8 @@
         "favorites": "My Favorites",
         "wants": "Want to Read",
         "reading": "Reading",
-        "readDone": "Read"
+        "readDone": "Read",
+        "gongzhonghao": "WeiChat"
     },
     "bookCards": {
         "browseDetails": "Click to browse details"

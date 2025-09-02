@@ -103,6 +103,10 @@ export default {
         this.$store.commit("navbar", false);
         this.$backend("/user/info").then((rsp) => {
             this.$store.commit("login", rsp);
+            // 更新页面标题模板
+            if (rsp.sys && rsp.sys.title) {
+                this.$store.state.site_title_template = "%s | " + rsp.sys.title;
+            }
         });
     },
     computed: {

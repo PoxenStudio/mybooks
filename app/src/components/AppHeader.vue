@@ -292,9 +292,7 @@ export default {
                 { links: this.sys.friends, target: "_blank" },
             ];
             var sys_links = [
-                { heading: "appHeader.system" },
-                { icon: "mdi-information-outline", href: "", count: this.sys.version, text: this.$t('appHeader.systemVersion'), color: "primary" },
-                { icon: "mdi-cellphone", href: "/opds-readme", count: "OPDS", target: "_blank", text: this.$t('appHeader.opdsIntroduction'), color: "primary"},
+                { heading: "appHeader.gongzhonghao" }
             ];
 
             return home_links

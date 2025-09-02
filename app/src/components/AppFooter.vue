@@ -10,6 +10,10 @@
                 | <v-btn small text target="_blank" href="https://hub.docker.com/r/poxenstudio/talebook">Docker</v-btn>
                 | <v-btn small text target="_blank" href="http://talebook.org">DEMO</v-btn>
             </p>
+            <!-- 系统版本信息 -->
+            <p v-if="version" class="version-info">
+                {{ $t('appHeader.systemVersion') }}: {{ version }}
+            </p>
         </v-col>
     </v-row>
 </template>
@@ -23,6 +27,9 @@ export default {
                 return this.$store.state.sys.footer;
             }
             return this.footer;
+        },
+        version: function () {
+            return this.$store.state.sys.version || '';
         },
     },
     footer: function () {
@@ -49,6 +56,13 @@ export default {
     z-index: 0;
     white-space: nowrap;
     user-select: none;
+}
+
+.version-info {
+    color: #666;
+    font-size: 12px;
+    margin-top: 8px;
+    margin-bottom: 8px;
 }
 
 </style>
