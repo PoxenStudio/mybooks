@@ -32,7 +32,7 @@
         </v-dialog>
 
         <!-- 添加实体书对话框 -->
-        <v-dialog v-model="isbn_dialog" persistent transition="dialog-bottom-transition" width="400">
+        <v-dialog v-model="isbn_dialog" persistent transition="dialog-bottom-transition" width="410">
             <v-card>
                 <v-toolbar flat dense dark color="green">
                     <v-icon>mdi-book-plus</v-icon>
@@ -44,17 +44,19 @@
                 <v-card-text>
                     <p class="body-1">{{ $t('upload.addPhysicalBookDesc') }}</p>
                     <v-text-field
+                        ref="isbnField"
                         v-model="isbn"
                         :label="$t('upload.isbnLabel')"
                         :placeholder="$t('upload.isbnPlaceholder')"
                         outlined
-                        :rules="isbnRules"
+                        :rules="debouncedIsbnRules"
                         counter
                         maxlength="17"
                         :hint="$t('upload.isbnHint')"
                         persistent-hint
                         autofocus
                         @keyup.enter="confirmAddBook"
+                        @input="clearValidationCache"
                     >
                         <template v-slot:prepend-inner>
                             <v-icon>mdi-barcode</v-icon>
@@ -97,11 +99,12 @@ export default {
         adding_book: false,
         isbn: "",
         continueAdding: false,
-        isbnRules: [
-            v => !!v || 'ISBN号不能为空',
-            v => (v && v.length >= 10) || 'ISBN号至少需要10位',
-            v => (v && /^[0-9\-X]+$/.test(v)) || 'ISBN号只能包含数字、连字符和X',
-        ],
+        // 缓存ISBN验证结果以提高性能
+        _cachedIsbn: "",
+        _cachedIsValidResult: false,
+        // 防抖相关变量
+        _shouldValidate: false,
+        _debouncedRules: null,
     }),
     computed: {
         maxSizeStr() {
@@ -111,11 +114,86 @@ export default {
             return '100MB';
         },
         isValidIsbn() {
-            if (!this.isbn) return false;
+            // 使用缓存避免重复计算
+            if (this.isbn === this._cachedIsbn) {
+                return this._cachedIsValidResult;
+            }
+
+            // 更新缓存
+            this._cachedIsbn = this.isbn;
+
+            if (!this.isbn) {
+                this._cachedIsValidResult = false;
+                return false;
+            }
+
             // 移除连字符和空格
             const cleanIsbn = this.isbn.replace(/[-\s]/g, '');
             // 检查是否为10位或13位数字（可能包含X）
-            return /^[0-9]{9}[0-9X]$/.test(cleanIsbn) || /^[0-9]{13}$/.test(cleanIsbn);
+            this._cachedIsValidResult = /^[0-9]{9}[0-9X]$/.test(cleanIsbn) || /^[0-9]{13}$/.test(cleanIsbn);
+            return this._cachedIsValidResult;
+        },
+
+        // 基础验证规则
+        isbnRules() {
+            return [
+                v => !!v || this.$t('upload.isbnRequired'),
+                v => (v && v.length >= 10) || this.$t('upload.isbnMinLength'),
+                v => (v && /^[0-9\-X]+$/.test(v)) || this.$t('upload.isbnInvalidFormat'),
+            ];
+        },
+
+        // 防抖验证规则，减少频繁验证
+        debouncedIsbnRules() {
+            if (!this._debouncedRules) {
+                const debounce = (func, wait) => {
+                    let timeout;
+                    return function executedFunction(...args) {
+                        const later = () => {
+                            clearTimeout(timeout);
+                            func.apply(this, args);
+                        };
+                        clearTimeout(timeout);
+                        timeout = setTimeout(later, wait);
+                    };
+                };
+
+                const validateWithDebounce = debounce(() => {
+                    this._shouldValidate = true;
+                    this.$nextTick(() => {
+                        this.$refs.isbnField && this.$refs.isbnField.validate();
+                    });
+                }, 300);
+
+                this._debouncedRules = [
+                    v => {
+                        if (!this._shouldValidate && v) {
+                            validateWithDebounce();
+                            return true; // 暂时通过验证，等待防抖完成
+                        }
+                        return !!v || this.$t('upload.isbnRequired');
+                    },
+                    v => {
+                        if (!this._shouldValidate && v) {
+                            return true; // 暂时通过验证，等待防抖完成
+                        }
+                        return (v && v.length >= 10) || this.$t('upload.isbnMinLength');
+                    },
+                    v => {
+                        if (!this._shouldValidate && v) {
+                            return true; // 暂时通过验证，等待防抖完成
+                        }
+                        return (v && /^[0-9\-X]+$/.test(v)) || this.$t('upload.isbnInvalidFormat');
+                    },
+                    v => {
+                        if (!this._shouldValidate && v) {
+                            return true; // 暂时通过验证，等待防抖完成
+                        }
+                        return this.isValidIsbn || this.$t('upload.invalidIsbn');
+                    }
+                ];
+            }
+            return this._debouncedRules;
         }
     },
     methods: {
@@ -192,6 +270,13 @@ export default {
                     this.continueAdding = false;
                 }
             });
+        },
+
+        // 清除验证缓存，重置防抖状态
+        clearValidationCache() {
+            this._shouldValidate = false;
+            this._cachedIsbn = null;
+            this._cachedIsValidResult = false;
         },
     },
 

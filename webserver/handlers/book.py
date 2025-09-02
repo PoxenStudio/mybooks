@@ -1061,7 +1061,7 @@ class BookAddByISBN(BaseHandler):
             item.book_type = BOOK_TYPE_PHYSICAL
             item.book_count = 1
             item.save()
-            return {"err": "ok", "msg": _(u"图书添加成功")}
+            return {"err": "ok", "msg": _(u"图书添加成功"), "book_id": book_id}
         except Exception as e:
             logging.error("Failed to add book by ISBN: %s", e)
             return {"err": "internal", "msg": _(u"查询ISBN失败，请在系统设置中配置互联网信息源中插件地址。如http://douban-rs-api:80/。")}

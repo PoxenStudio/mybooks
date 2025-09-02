@@ -522,9 +522,13 @@
         "addPhysicalBookDesc": "Please enter the ISBN number of the book to add. The system will automatically fetch book information from Douban:",
         "isbnLabel": "ISBN Number",
         "isbnPlaceholder": "Please enter a 13 or 10 digit ISBN number",
+        "isbnRequired": "ISBN number is required",
+        "invalidIsbn": "Invalid ISBN number",
         "isbnHint": "Example: 9787570220601 or 978-7-5702-2060-1",
         "continueAdding": "Continue adding more physical books",
-        "confirmAdd": "Confirm Add"
+        "confirmAdd": "Confirm Add",
+        "isbnMinLength": "ISBN number must be at least 10 digits",
+        "isbnInvalidFormat": "ISBN number can only contain digits, hyphens, and X"
     },
     "readingState": {
         "reading": "Reading",

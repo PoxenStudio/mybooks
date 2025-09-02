@@ -522,9 +522,13 @@
         "addPhysicalBookDesc": "请输入要添加的图书ISBN号，系统将自动从豆瓣获取图书信息：",
         "isbnLabel": "ISBN号",
         "isbnPlaceholder": "请输入13位或10位ISBN号",
+        "isbnRequired": "ISBN号不能为空",
+        "invalidIsbn": "无效的ISBN号",
         "isbnHint": "例如: 9787570220601 或 978-7-5702-2060-1",
         "continueAdding": "继续添加更多实体书",
-        "confirmAdd": "确定添加"
+        "confirmAdd": "确定添加",
+        "isbnMinLength": "ISBN号至少需要10位",
+        "isbnInvalidFormat": "ISBN号只能包含数字、连字符和X"
     },
     "readingState": {
         "reading": "在读",
