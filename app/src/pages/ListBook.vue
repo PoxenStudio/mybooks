@@ -62,6 +62,12 @@ export default {
       case "/wants":
         return {title: this.$t('listBook.wants')};
 
+      case "/reading":
+        return {title: this.$t('listBook.reading')};
+
+      case "/read-done":
+        return {title: this.$t('listBook.readDone')};
+
       default:
         break
     }

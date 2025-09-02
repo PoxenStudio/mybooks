@@ -127,3 +127,78 @@ def super_strip(s):
     # 删除掉所有不可见的字符
     # issue: https://github.com/talebook/talebook/issues/304
     return ''.join(c for c in s.strip() if c.isprintable())
+
+
+class ReadingStateFormatter:
+    """处理阅读状态数据格式化的工具类"""
+
+    @staticmethod
+    def format_reading_state(reading_state):
+        """
+        将ReadingState对象转换为字典格式
+
+        Args:
+            reading_state: ReadingState对象
+
+        Returns:
+            dict: 格式化的状态数据
+        """
+        if not reading_state:
+            return {
+                "favorite": 0,
+                "favorite_date": None,
+                "wants": 0,
+                "wants_date": None,
+                "read_state": 0,
+                "read_date": None,
+                "online_read": 0,
+                "download": 0
+            }
+
+        return {
+            "favorite": reading_state.favorite,
+            "favorite_date": reading_state.favorite_date.isoformat() if reading_state.favorite_date else None,
+            "wants": reading_state.wants,
+            "wants_date": reading_state.wants_date.isoformat() if reading_state.wants_date else None,
+            "read_state": reading_state.read_state,
+            "read_date": reading_state.read_date.isoformat() if reading_state.read_date else None,
+            "online_read": reading_state.online_read or 0,
+            "download": reading_state.download or 0
+        }
+
+    @staticmethod
+    def format_reading_state_with_api_format(reading_state):
+        """
+        将ReadingState对象转换为API返回格式的字典
+        用于单个书籍状态查询的场景
+
+        Args:
+            reading_state: ReadingState对象
+
+        Returns:
+            dict: 格式化的状态数据（包含err字段）
+        """
+        if reading_state:
+            return {
+                "err": "ok",
+                "read_state": reading_state.get_read_state(),
+                "favorite": reading_state.is_favorite(),
+                "wants": reading_state.is_wants(),
+                "online_read": reading_state.online_read or 0,
+                "download": reading_state.download or 0,
+                "read_date": reading_state.read_date.isoformat() if reading_state.read_date else None,
+                "favorite_date": reading_state.favorite_date.isoformat() if reading_state.favorite_date else None,
+                "wants_date": reading_state.wants_date.isoformat() if reading_state.wants_date else None
+            }
+        else:
+            return {
+                "err": "ok",
+                "read_state": 0,
+                "favorite": False,
+                "wants": False,
+                "online_read": 0,
+                "download": 0,
+                "read_date": None,
+                "favorite_date": None,
+                "wants_date": None
+            }

@@ -415,8 +415,8 @@ class ReadingState(Base, SQLAlchemyMixin):
         return self.wants == 1
 
     def set_read_state(self, read_state):
-        """设置阅读状态 0:None, 1:已申请, 2:在读, 3:已读完"""
-        if read_state in [0, 1, 2, 3]:
+        """设置阅读状态 0:未读, 1:在读, 2:已读完"""
+        if read_state in [0, 1, 2]:
             self.read_state = read_state
             self.read_date = datetime.datetime.now()
 

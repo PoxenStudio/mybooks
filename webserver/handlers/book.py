@@ -82,17 +82,9 @@ class BookDetail(BaseHandler):
 
             # 创建阅读状态映射
             if reading_state:
-                state_data = {
-                    "favorite": reading_state.favorite,
-                    "favorite_date": reading_state.favorite_date.isoformat() if reading_state.favorite_date else None,
-                    "wants": reading_state.wants,
-                    "wants_date": reading_state.wants_date.isoformat() if reading_state.wants_date else None,
-                    "read_state": reading_state.read_state,
-                    "read_date": reading_state.read_date.isoformat() if reading_state.read_date else None,
-                    "online_read": reading_state.online_read or 0,
-                    "download": reading_state.download or 0
-                }
-                book["state"] = state_data
+                book["state"] = utils.ReadingStateFormatter.format_reading_state(reading_state)
+            else:
+                book["state"] = utils.ReadingStateFormatter.format_reading_state(None)
         else:
             logging.info("User not logged in, skipping reading state.")
 
@@ -480,16 +472,7 @@ class BookFavorite(BaseHandler):
         for state in reading_states:
             book = self.get_book(state.book_id)
             book_data = utils.BookFormatter(self, book).format()
-            book_data["state"] = {
-                "favorite": state.favorite,
-                "favorite_date": state.favorite_date.isoformat() if state.favorite_date else None,
-                "wants": state.wants,
-                "wants_date": state.wants_date.isoformat() if state.wants_date else None,
-                "read_state": state.read_state,
-                "read_date": state.read_date.isoformat() if state.read_date else None,
-                "online_read": state.online_read or 0,
-                "download": state.download or 0
-            }
+            book_data["state"] = utils.ReadingStateFormatter.format_reading_state(state)
             favorite_books.append(book_data)
 
         return {"err": "ok",
@@ -543,22 +526,61 @@ class BookWantToRead(BaseHandler):
         for state in reading_states:
             book = self.get_book(state.book_id)
             book_data = utils.BookFormatter(self, book).format()
-            book_data["state"] = {
-                "favorite": state.favorite,
-                "favorite_date": state.favorite_date.isoformat() if state.favorite_date else None,
-                "wants": state.wants,
-                "wants_date": state.wants_date.isoformat() if state.wants_date else None,
-                "read_state": state.read_state,
-                "read_date": state.read_date.isoformat() if state.read_date else None,
-                "online_read": state.online_read or 0,
-                "download": state.download or 0
-            }
+            book_data["state"] = utils.ReadingStateFormatter.format_reading_state(state)
             favorite_books.append(book_data)
 
         return {"err": "ok",
                 "title": _(u"待读清单"),
                 "total": len(favorite_books),
                 "books": favorite_books}
+
+
+class BookReading(BaseHandler):
+    @js
+    @auth
+    def get(self):
+        """获取当前用户的在读书籍"""
+        user_id = self.user_id()
+        logging.info("User %d is fetching reading books." % user_id)
+        reading_states = self.sqlite_session.query(ReadingState).filter(
+            ReadingState.reader_id == user_id,
+            ReadingState.read_state == 1  # 在读状态
+        ).order_by(ReadingState.read_date.desc()).all()
+        reading_books = []
+        for state in reading_states:
+            book = self.get_book(state.book_id)
+            book_data = utils.BookFormatter(self, book).format()
+            book_data["state"] = utils.ReadingStateFormatter.format_reading_state(state)
+            reading_books.append(book_data)
+
+        return {"err": "ok",
+                "title": _(u"在读书籍"),
+                "total": len(reading_books),
+                "books": reading_books}
+
+
+class BookReadDone(BaseHandler):
+    @js
+    @auth
+    def get(self):
+        """获取当前用户的已读完书籍"""
+        user_id = self.user_id()
+        logging.info("User %d is fetching read done books." % user_id)
+        reading_states = self.sqlite_session.query(ReadingState).filter(
+            ReadingState.reader_id == user_id,
+            ReadingState.read_state == 2  # 已读完状态
+        ).order_by(ReadingState.read_date.desc()).all()
+        read_done_books = []
+        for state in reading_states:
+            book = self.get_book(state.book_id)
+            book_data = utils.BookFormatter(self, book).format()
+            book_data["state"] = utils.ReadingStateFormatter.format_reading_state(state)
+            read_done_books.append(book_data)
+
+        return {"err": "ok",
+                "title": _(u"已读完书籍"),
+                "total": len(read_done_books),
+                "books": read_done_books}
 
 
 class BookReadingState(BaseHandler):
@@ -576,7 +598,7 @@ class BookReadingState(BaseHandler):
         read_state = data.get("read_state", 0)
 
         # 验证阅读状态值
-        if read_state not in [0, 1, 2, 3]:
+        if read_state not in [0, 1, 2]:
             return {"err": "params.invalid", "msg": _(u"阅读状态参数错误")}
 
         # 查找或创建阅读状态记录
@@ -600,7 +622,7 @@ class BookReadingState(BaseHandler):
 
         reading_state.save()
 
-        state_names = {0: "未设置", 1: "已申请", 2: "在读", 3: "已读完"}
+        state_names = {0: "未读", 1: "在读", 2: "已读完"}
         return {"err": "ok", "msg": _(u"阅读状态已设置为：%s") % state_names[read_state]}
 
     @js
@@ -615,30 +637,7 @@ class BookReadingState(BaseHandler):
             ReadingState.reader_id == user_id
         ).first()
 
-        if reading_state:
-            return {
-                "err": "ok",
-                "read_state": reading_state.get_read_state(),
-                "favorite": reading_state.is_favorite(),
-                "wants": reading_state.is_wants(),
-                "online_read": reading_state.online_read or 0,
-                "download": reading_state.download or 0,
-                "read_date": reading_state.read_date.isoformat() if reading_state.read_date else None,
-                "favorite_date": reading_state.favorite_date.isoformat() if reading_state.favorite_date else None,
-                "wants_date": reading_state.wants_date.isoformat() if reading_state.wants_date else None
-            }
-        else:
-            return {
-                "err": "ok",
-                "read_state": 0,
-                "favorite": False,
-                "wants": False,
-                "online_read": 0,
-                "download": 0,
-                "read_date": None,
-                "favorite_date": None,
-                "wants_date": None
-            }
+        return utils.ReadingStateFormatter.format_reading_state_with_api_format(reading_state)
 
 
 class BookEdit(BaseHandler):
@@ -1189,4 +1188,6 @@ def routes():
         (r"/api/book/([0-9]+)/readstate", BookReadingState),
         (r"/api/favorites", BookFavorite),
         (r"/api/wants", BookWantToRead),
+        (r"/api/reading", BookReading),
+        (r"/api/read-done", BookReadDone),
     ]

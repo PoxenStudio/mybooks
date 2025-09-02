@@ -263,7 +263,9 @@ export default {
                     target: "",
                     links: [
                         { icon: "mdi-heart", href: "/favorites", text: "appHeader.favorites", color: "red" },
-                        { icon: "mdi-bookmark-plus", href: "/wants", text: "appHeader.wants", color: "orange" }
+                        { icon: "mdi-bookmark-plus", href: "/wants", text: "appHeader.wants", color: "orange" },
+                        { icon: "mdi-book-open-page-variant", href: "/reading", text: "appHeader.reading", color: "blue" },
+                        { icon: "mdi-check-circle", href: "/read-done", text: "appHeader.readDone", color: "green" }
                     ],
                 },
                 { icon: "widgets", href: "/nav", text: "appHeader.categoryNavigation", count: this.sys.books, color: "primary" },

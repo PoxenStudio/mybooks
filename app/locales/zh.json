@@ -46,7 +46,9 @@
         "authorBooks": "{name}的著作",
         "publisherBooks": "{name}出版的书籍",
         "favorites": "收藏",
-        "wants": "待读"
+        "wants": "待读",
+        "reading": "在读",
+        "readDone": "已读"
     },
     "listMeta": {
         "ratingSuffix": "星",
@@ -470,7 +472,9 @@
         "defaultFooter": "本站基于Calibre构建，感谢开源界的力量。所有资源搜集于互联网，如有侵权请邮件联系。",
         "defaultHeader": "欢迎访问！如果你喜欢此项目，请前往 Github <a target=\"_blank\" href=\"https://github.com/HorkyChen/talebook\"> 给 talebook 点击一个Star！</a>",
         "favorites": "收藏",
-        "wants": "待读"
+        "wants": "待读",
+        "reading": "在读",
+        "readDone": "已读"
     },
     "bookCards": {
         "browseDetails": "点击浏览详情"

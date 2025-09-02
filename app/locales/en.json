@@ -46,7 +46,9 @@
         "authorBooks": "Books by {name}",
         "publisherBooks": "Books published by {name}",
         "favorites": "My Favorites",
-        "wants": "Want to Read"
+        "wants": "Want to Read",
+        "reading": "Reading",
+        "readDone": "Read"
     },
     "listMeta": {
         "ratingSuffix": " stars",
@@ -470,7 +472,9 @@
         "defaultFooter": "This site is built on Calibre, thanks to the power of open source. All resources are collected from the internet. If there is any infringement, please contact us via email.",
         "defaultHeader": "Welcome! If you like this project, please visit Github <a target=\"_blank\" href=\"https://github.com/HorkyChen/talebook\"> and give talebook a Star!</a>",
         "favorites": "My Favorites",
-        "wants": "Want to Read"
+        "wants": "Want to Read",
+        "reading": "Reading",
+        "readDone": "Read"
     },
     "bookCards": {
         "browseDetails": "Click to browse details"
