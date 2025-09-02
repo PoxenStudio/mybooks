@@ -37,48 +37,49 @@
                 <v-toolbar flat dense dark color="green">
                     <v-icon>mdi-book-plus</v-icon>
                     <v-toolbar-title class="ml-2">{{ $t('upload.addPhysicalBook') }}</v-toolbar-title>
+                    <v-spacer></v-spacer>
+                    <v-btn color="" text @click="cancelAddBook">{{ $t('upload.close') }}</v-btn>
                 </v-toolbar>
+                <v-card-title></v-card-title>
                 <v-card-text>
-                    <div class="mt-4">
-                        <p class="body-1">{{ $t('upload.addPhysicalBookDesc') }}</p>
-                        <v-text-field
-                            v-model="isbn"
-                            :label="$t('upload.isbnLabel')"
-                            :placeholder="$t('upload.isbnPlaceholder')"
-                            outlined
-                            :rules="isbnRules"
-                            counter
-                            maxlength="17"
-                            :hint="$t('upload.isbnHint')"
-                            persistent-hint
-                            autofocus
-                            @keyup.enter="confirmAddBook"
-                        >
-                            <template v-slot:prepend-inner>
-                                <v-icon>mdi-barcode</v-icon>
-                            </template>
-                        </v-text-field>
+                    <p class="body-1">{{ $t('upload.addPhysicalBookDesc') }}</p>
+                    <v-text-field
+                        v-model="isbn"
+                        :label="$t('upload.isbnLabel')"
+                        :placeholder="$t('upload.isbnPlaceholder')"
+                        outlined
+                        :rules="isbnRules"
+                        counter
+                        maxlength="17"
+                        :hint="$t('upload.isbnHint')"
+                        persistent-hint
+                        autofocus
+                        @keyup.enter="confirmAddBook"
+                    >
+                        <template v-slot:prepend-inner>
+                            <v-icon>mdi-barcode</v-icon>
+                        </template>
+                    </v-text-field>
 
-                        <!-- 继续添加checkbox -->
-                        <v-checkbox
-                            v-model="continueAdding"
-                            :label="$t('upload.continueAdding')"
-                            color="green"
-                            class="mt-4"
-                        ></v-checkbox>
-                    </div>
+                    <!-- 继续添加checkbox -->
+                    <v-checkbox
+                        v-model="continueAdding"
+                        :label="$t('upload.continueAdding')"
+                        color="green"
+                        class="mt-4"
+                    ></v-checkbox>
                 </v-card-text>
                 <v-card-actions>
-                    <v-btn @click="cancelAddBook" :disabled="adding_book">{{ $t('common.cancel') }}</v-btn>
                     <v-spacer></v-spacer>
                     <v-btn
+                        :loading="adding_book"
                         color="green"
                         @click="confirmAddBook"
-                        :loading="adding_book"
                         :disabled="!isValidIsbn"
                     >
                         {{ $t('upload.confirmAdd') }}
                     </v-btn>
+                    <v-spacer></v-spacer>
                 </v-card-actions>
             </v-card>
         </v-dialog>

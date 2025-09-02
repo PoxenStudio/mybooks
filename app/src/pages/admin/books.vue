@@ -312,43 +312,44 @@
         <!-- 添加实体书对话框 -->
         <v-dialog v-model="isbn_dialog" persistent transition="dialog-bottom-transition" width="400">
             <v-card>
-                <v-toolbar flat dense dark color="primary">
+                <v-toolbar flat dense dark color="green">
                     <v-icon>mdi-book-plus</v-icon>
                     <v-toolbar-title class="ml-2">添加实体书</v-toolbar-title>
+                    <v-spacer></v-spacer>
+                    <v-btn color="" text @click="cancelAddBook">关闭</v-btn>
                 </v-toolbar>
+                <v-card-title></v-card-title>
                 <v-card-text>
-                    <div class="mt-4">
-                        <p class="body-1">请输入要添加的图书ISBN号，系统将自动从豆瓣获取图书信息：</p>
-                        <v-text-field
-                            v-model="isbn"
-                            label="ISBN号"
-                            placeholder="请输入13位或10位ISBN号"
-                            outlined
-                            :rules="isbnRules"
-                            counter
-                            maxlength="17"
-                            hint="例如: 9787570220601 或 978-7-5702-2060-1"
-                            persistent-hint
-                            autofocus
-                            @keyup.enter="confirmAddBook"
-                        >
-                            <template v-slot:prepend-inner>
-                                <v-icon>mdi-barcode</v-icon>
-                            </template>
-                        </v-text-field>
-                    </div>
+                    <p class="body-1">请输入要添加的图书ISBN号，系统将自动从豆瓣获取图书信息：</p>
+                    <v-text-field
+                        v-model="isbn"
+                        label="ISBN号"
+                        placeholder="请输入13位或10位ISBN号"
+                        outlined
+                        :rules="isbnRules"
+                        counter
+                        maxlength="17"
+                        hint="例如: 9787570220601 或 978-7-5702-2060-1"
+                        persistent-hint
+                        autofocus
+                        @keyup.enter="confirmAddBook"
+                    >
+                        <template v-slot:prepend-inner>
+                            <v-icon>mdi-barcode</v-icon>
+                        </template>
+                    </v-text-field>
                 </v-card-text>
                 <v-card-actions>
-                    <v-btn @click="cancelAddBook" :disabled="adding_book">取消</v-btn>
                     <v-spacer></v-spacer>
                     <v-btn
-                        color="primary"
-                        @click="confirmAddBook"
                         :loading="adding_book"
+                        color="green"
+                        @click="confirmAddBook"
                         :disabled="!isValidIsbn"
                     >
                         确定添加
                     </v-btn>
+                    <v-spacer></v-spacer>
                 </v-card-actions>
             </v-card>
         </v-dialog>
