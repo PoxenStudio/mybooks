@@ -165,6 +165,7 @@ export default {
 <style scoped>
 .stats-card {
     transition: transform 0.2s;
+    font-weight: bold;
 }
 
 .stats-card:hover {

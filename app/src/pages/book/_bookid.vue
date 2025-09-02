@@ -622,6 +622,7 @@
                     persistent-hint
                     autofocus
                     @keyup.enter="confirmAddBook"
+                    @input="clearValidationErrors"
                 >
                     <template v-slot:prepend-inner>
                         <v-icon>mdi-barcode</v-icon>
@@ -722,9 +723,27 @@ export default {
         // ISBN验证规则
         isbnRules() {
             return [
-                v => !!v || this.$t('upload.isbnRequired'),
-                v => (v && v.length >= 10) || this.$t('upload.isbnMinLength'),
-                v => (v && /^[0-9\-X]+$/.test(v)) || this.$t('upload.isbnInvalidFormat'),
+                v => {
+                    // 如果没有输入内容且没有手动触发验证，不显示错误
+                    if (!v && !this.showValidationErrors) {
+                        return true;
+                    }
+                    return !!v || this.$t('upload.isbnRequired');
+                },
+                v => {
+                    // 如果没有输入内容且没有手动触发验证，不显示错误
+                    if (!v && !this.showValidationErrors) {
+                        return true;
+                    }
+                    return (v && v.length >= 10) || this.$t('upload.isbnMinLength');
+                },
+                v => {
+                    // 如果没有输入内容且没有手动触发验证，不显示错误
+                    if (!v && !this.showValidationErrors) {
+                        return true;
+                    }
+                    return (v && /^[0-9\-X]+$/.test(v)) || this.$t('upload.isbnInvalidFormat');
+                }
             ];
         }
     },
@@ -761,6 +780,8 @@ export default {
         adding_book: false,
         isbn: "",
         continueAdding: false,
+        // 控制是否显示验证错误（仅在点击添加按钮时显示）
+        showValidationErrors: false,
         cover_file: null,
         cover_error: '',
         refer_books_loading: false,
@@ -1370,49 +1391,71 @@ export default {
             this.isbn_dialog = false;
             this.isbn = "";
             this.continueAdding = false; // 重置checkbox状态
+            // 重置验证状态
+            this.showValidationErrors = false;
         },
 
         confirmAddBook() {
-            if (!this.isValidIsbn) {
-                this.$alert("error", "请输入有效的ISBN号");
-                return;
-            }
+            // 触发验证显示
+            this.showValidationErrors = true;
 
-            this.adding_book = true;
-            // 清理ISBN号（移除连字符和空格）
-            const cleanIsbn = this.isbn.replace(/[-\s]/g, '');
+            // 等待下一个tick让验证生效，然后检查表单有效性
+            this.$nextTick(() => {
+                // 检查ISBN是否有效
+                if (!this.isbn) {
+                    this.$alert("error", this.$t('upload.isbnRequired'));
+                    return;
+                }
 
-            this.$backend("/book/add", {
-                method: "POST",
-                body: JSON.stringify({
-                    isbn: cleanIsbn,
-                }),
-            })
-            .then((rsp) => {
-                this.isbn_dialog = false;
-                if (rsp.err != "ok") {
-                    this.$alert("error", rsp.msg);
-                } else {
-                    // 如果勾选了继续添加，则跳转时携带参数，否则直接跳转
-                    if (this.continueAdding) {
-                        this.$router.push(`/book/${rsp.book_id}?continue_adding=true`);
+                if (!this.isValidIsbn) {
+                    this.$alert("error", this.$t('upload.invalidIsbn'));
+                    return;
+                }
+
+                this.adding_book = true;
+                // 清理ISBN号（移除连字符和空格）
+                const cleanIsbn = this.isbn.replace(/[-\s]/g, '');
+
+                this.$backend("/book/add", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        isbn: cleanIsbn,
+                    }),
+                })
+                .then((rsp) => {
+                    this.isbn_dialog = false;
+                    if (rsp.err != "ok") {
+                        this.$alert("error", rsp.msg);
                     } else {
-                        this.$alert("success", rsp.msg || this.$t('upload.bookAdded'));
-                        this.$router.push(`/book/${rsp.book_id}`);
+                        // 如果勾选了继续添加，则跳转时携带参数，否则直接跳转
+                        if (this.continueAdding) {
+                            this.$router.push(`/book/${rsp.book_id}?continue_adding=true`);
+                        } else {
+                            this.$alert("success", rsp.msg || this.$t('upload.bookAdded'));
+                            this.$router.push(`/book/${rsp.book_id}`);
+                        }
                     }
-                }
-            })
-            .catch((error) => {
-                this.$alert("error", "添加图书时发生错误: " + error.message);
-            })
-            .finally(() => {
-                this.adding_book = false;
-                this.isbn = "";
-                // 只有在不继续添加的情况下才重置checkbox
-                if (!this.continueAdding) {
-                    this.continueAdding = false;
-                }
+                })
+                .catch((error) => {
+                    this.$alert("error", "添加图书时发生错误: " + error.message);
+                })
+                .finally(() => {
+                    this.adding_book = false;
+                    this.isbn = "";
+                    // 只有在不继续添加的情况下才重置checkbox
+                    if (!this.continueAdding) {
+                        this.continueAdding = false;
+                    }
+                });
             });
+        },
+
+        // 清除验证错误显示状态
+        clearValidationErrors() {
+            // 如果用户开始重新输入，重置验证错误显示状态
+            if (this.isbn && this.showValidationErrors) {
+                this.showValidationErrors = false;
+            }
         },
     },
 };
