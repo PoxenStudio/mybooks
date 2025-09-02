@@ -693,18 +693,15 @@ class LibraryStats(BaseHandler):
         month_physical_count = 0
 
         if all_book_ids:
-            # 统计电子书数量 (book_type = 0)
-            ebook_count = self.sqlite_session.query(Item).filter(
-                Item.book_id.in_(all_book_ids),
-                Item.book_type == 0
-            ).count()
-
             # 统计实体书数量 (book_type = 1, 需要加总book_count)
             physical_books = self.sqlite_session.query(func.sum(Item.book_count)).filter(
                 Item.book_id.in_(all_book_ids),
                 Item.book_type == 1
             ).scalar()
             physical_count = physical_books if physical_books else 0
+
+            # 统计电子书数量 (book_type = 0)
+            ebook_count = total_books - physical_books
 
             # 本月新增电子书数量
             month_ebook_count = self.sqlite_session.query(Item).filter(

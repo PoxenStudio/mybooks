@@ -55,7 +55,7 @@ class AsyncService(metaclass=SingletonType):
                 if 'book_type' not in columns or 'book_count' not in columns or 'create_time' not in columns:
                     if 'book_type' not in columns:
                         self.session.execute(text("""
-                            ALTER TABLE items ADD COLUMN book_type TEXT
+                            ALTER TABLE items ADD COLUMN book_type INTEGER DEFAULT 0
                         """))
                         changed = True
                     if 'book_count' not in columns:
