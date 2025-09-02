@@ -19,6 +19,7 @@ from tornado.options import define, options
 from webserver import loader, models, social_routes, handlers
 from webserver.services import AsyncService
 from webserver.services.book_barn import BookBarnService
+from webserver.services.item_sync import ItemSyncService
 
 CONF = loader.get_settings()
 define("host", default="", type=str, help=_("The host address on which to listen"))
@@ -194,12 +195,17 @@ def make_app():
     )
 
     logging.info("Now, Running...")
-    AsyncService().setup(book_db, ScopedSession)
+    need_sync_item_time = AsyncService().setup(book_db, ScopedSession)
     app = web.Application(social_routes.SOCIAL_AUTH_ROUTES + handlers.routes(), **app_settings)
     app._engine = engine
 
     # Start background service
     BookBarnService().get_daily_books()
+
+    # Start item create_time sync service if needed
+    if need_sync_item_time:
+        logging.info("Starting item create_time sync service")
+        ItemSyncService().sync_item_create_time()
 
     return app
 

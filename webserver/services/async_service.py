@@ -32,6 +32,8 @@ class AsyncService(metaclass=SingletonType):
         self.db = calibre_db
         self.scoped_session = scoped_session
         self.session = scoped_session()
+        need_sync_item_time = False
+
         # alter table as needed
         if self.session is not None:
             # Alter the item table to add a new bool column sole if it doesn't exist
@@ -50,7 +52,7 @@ class AsyncService(metaclass=SingletonType):
                     changed = True
 
                 # Check if the 'book_type' and 'book_count' columns exists, and add it if it doesn't
-                if 'book_type' not in columns or 'book_count' not in columns:
+                if 'book_type' not in columns or 'book_count' not in columns or 'create_time' not in columns:
                     if 'book_type' not in columns:
                         self.session.execute(text("""
                             ALTER TABLE items ADD COLUMN book_type TEXT
@@ -65,6 +67,7 @@ class AsyncService(metaclass=SingletonType):
                         self.session.execute(text("""
                             ALTER TABLE items ADD COLUMN create_time DATETIME
                         """))
+                        need_sync_item_time = True
                         changed = True
 
                 if changed:
@@ -75,6 +78,7 @@ class AsyncService(metaclass=SingletonType):
                 self.session.rollback()
         # logging.info("<%s> setup: db=%s, session=%s", self, self.db, self.session)
         logging.info("AsyncService setup completed")
+        return need_sync_item_time
 
     def get_queue(self, service_name) -> Queue:
         if service_name not in self.running:
