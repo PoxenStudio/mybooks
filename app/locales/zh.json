@@ -435,7 +435,16 @@
         "onlineReading": "在线阅读",
         "pushedBooks": "推送过的书",
         "visitRecords": "浏览记录",
-        "noBooks": "无记录"
+        "noBooks": "无记录",
+        "readingStats": "阅读统计",
+        "totalReading": "总在读",
+        "totalReadDone": "总已读",
+        "monthReading": "本月在读",
+        "monthReadDone": "本月已读",
+        "currentReadingBooks": "当前在读书籍",
+        "monthReadDoneBooks": "本月读完书籍",
+        "books": "本",
+        "booksUnit": "本书"
     },
     "footer": {
         "base_message": "本站基于Calibre构建，感谢开源界的力量。所有资源搜集于互联网，如有侵权请邮件联系。"
@@ -509,8 +518,8 @@
         "cancel": "取消阅读",
         "setReading": "设为在读",
         "setDone": "标记读完",
-        "favoriteHint": "点击收藏/取消收藏",
-        "wantsHint": "点击添加到待读清单/从待读清单移除",
+        "favoriteHint": "点击收藏或取消收藏",
+        "wantsHint": "点击添加到待读清单或从待读清单移除",
         "readingDays": "已阅读 {days} 天",
         "readingWithinOneDay": "已阅读不足一天",
         "completedReading": "本书已在 {date} 读完"

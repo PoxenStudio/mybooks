@@ -583,6 +583,92 @@ class BookReadDone(BaseHandler):
                 "books": read_done_books}
 
 
+class BookReadingStats(BaseHandler):
+    @js
+    @auth
+    def get(self):
+        """获取当前用户的阅读统计信息"""
+        import datetime
+        from sqlalchemy import func, extract
+
+        user_id = self.user_id()
+        logging.info("User %d is fetching reading statistics." % user_id)
+
+        # 获取当前月份和年份
+        now = datetime.datetime.now()
+        current_year = now.year
+        current_month = now.month
+
+        # 总体统计
+        total_reading = self.sqlite_session.query(ReadingState).filter(
+            ReadingState.reader_id == user_id,
+            ReadingState.read_state == 1  # 在读
+        ).count()
+
+        total_read_done = self.sqlite_session.query(ReadingState).filter(
+            ReadingState.reader_id == user_id,
+            ReadingState.read_state == 2  # 已读完
+        ).count()
+
+        # 本月统计 - 在读（本月设置为在读状态的书籍）
+        month_reading = self.sqlite_session.query(ReadingState).filter(
+            ReadingState.reader_id == user_id,
+            ReadingState.read_state == 1,
+            extract('year', ReadingState.read_date) == current_year,
+            extract('month', ReadingState.read_date) == current_month
+        ).count()
+
+        # 本月统计 - 已读完（本月读完的书籍）
+        month_read_done = self.sqlite_session.query(ReadingState).filter(
+            ReadingState.reader_id == user_id,
+            ReadingState.read_state == 2,
+            extract('year', ReadingState.read_date) == current_year,
+            extract('month', ReadingState.read_date) == current_month
+        ).count()
+
+        # 本月读完的书籍列表
+        month_read_done_states = self.sqlite_session.query(ReadingState).filter(
+            ReadingState.reader_id == user_id,
+            ReadingState.read_state == 2,
+            extract('year', ReadingState.read_date) == current_year,
+            extract('month', ReadingState.read_date) == current_month
+        ).order_by(ReadingState.read_date.desc()).limit(12).all()
+
+        month_read_done_books = []
+        for state in month_read_done_states:
+            book = self.get_book(state.book_id)
+            book_data = utils.BookFormatter(self, book).format()
+            book_data["state"] = utils.ReadingStateFormatter.format_reading_state(state)
+            month_read_done_books.append(book_data)
+
+        # 当前在读的书籍列表
+        current_reading_states = self.sqlite_session.query(ReadingState).filter(
+            ReadingState.reader_id == user_id,
+            ReadingState.read_state == 1
+        ).order_by(ReadingState.read_date.desc()).limit(12).all()
+
+        current_reading_books = []
+        for state in current_reading_states:
+            book = self.get_book(state.book_id)
+            book_data = utils.BookFormatter(self, book).format()
+            book_data["state"] = utils.ReadingStateFormatter.format_reading_state(state)
+            current_reading_books.append(book_data)
+
+        return {
+            "err": "ok",
+            "stats": {
+                "total_reading": total_reading,
+                "total_read_done": total_read_done,
+                "month_reading": month_reading,
+                "month_read_done": month_read_done,
+                "current_year": current_year,
+                "current_month": current_month
+            },
+            "month_read_done_books": month_read_done_books,
+            "current_reading_books": current_reading_books
+        }
+
+
 class BookReadingState(BaseHandler):
     @js
     @auth
@@ -1190,4 +1276,5 @@ def routes():
         (r"/api/wants", BookWantToRead),
         (r"/api/reading", BookReading),
         (r"/api/read-done", BookReadDone),
+        (r"/api/reading/stats", BookReadingStats),
     ]

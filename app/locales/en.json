@@ -435,7 +435,16 @@
         "onlineReading": "Online Reading",
         "pushedBooks": "Pushed Books",
         "visitRecords": "Visit Records",
-        "noBooks": "No Records"
+        "noBooks": "No Records",
+        "readingStats": "Reading Statistics",
+        "totalReading": "Total Reading",
+        "totalReadDone": "Total Read",
+        "monthReading": "This Month Reading",
+        "monthReadDone": "This Month Read",
+        "currentReadingBooks": "Currently Reading Books",
+        "monthReadDoneBooks": "Books Finished This Month",
+        "books": "",
+        "booksUnit": " books"
     },
     "footer": {
         "base_message": "This site is built on Calibre, thanks to the power of open source. All resources are collected from the internet. If there is any infringement, please contact us via email."
