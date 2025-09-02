@@ -528,12 +528,14 @@
         "continueAdding": "继续添加更多实体书",
         "confirmAdd": "确定添加",
         "isbnMinLength": "ISBN号至少需要10位",
-        "isbnInvalidFormat": "ISBN号只能包含数字、连字符和X"
+        "isbnInvalidFormat": "ISBN号只能包含数字、连字符和X",
+        "addSuccess": "图书添加成功"
     },
     "readingState": {
         "reading": "在读",
         "none": "未读",
         "done": "已读",
+        "finished": "读完",
         "cancel": "取消阅读",
         "setReading": "设为在读",
         "setDone": "标记读完",

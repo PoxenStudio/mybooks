@@ -249,12 +249,11 @@ export default {
                 if (rsp.err != "ok") {
                     this.$alert("error", rsp.msg);
                 } else {
-                    this.$alert("success", rsp.msg || "图书添加成功");
-
                     // 如果勾选了继续添加，则跳转时携带参数
                     if (this.continueAdding) {
                         this.$router.push(`/book/${rsp.book_id}?continue_adding=true`);
                     } else {
+                        this.$alert("success", rsp.msg || this.$t('upload.addSuccess'));
                         this.$router.push(`/book/${rsp.book_id}`);
                     }
                 }

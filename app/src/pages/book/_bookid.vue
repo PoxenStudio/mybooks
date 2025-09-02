@@ -327,7 +327,7 @@
                                         letter-spacing: 2px;
                                     "
                                 >
-                                    读完
+                                    {{ $t('readingState.finished') }}
                                 </span>
                             </div>
                         </div>
@@ -599,53 +599,54 @@
     </v-dialog>
 
     <!-- 添加实体书对话框 -->
-    <v-dialog v-model="isbn_dialog" persistent transition="dialog-bottom-transition" width="400">
+    <v-dialog v-model="isbn_dialog" persistent transition="dialog-bottom-transition" width="410">
         <v-card>
             <v-toolbar flat dense dark color="green">
                 <v-icon>mdi-book-plus</v-icon>
                 <v-toolbar-title class="ml-2">{{ $t('upload.addPhysicalBook') }}</v-toolbar-title>
+                <v-spacer></v-spacer>
+                <v-btn color="" text @click="cancelAddBook">{{ $t('upload.close') }}</v-btn>
             </v-toolbar>
+            <v-card-title></v-card-title>
             <v-card-text>
-                <div class="mt-4">
-                    <p class="body-1">{{ $t('upload.addPhysicalBookDesc') }}</p>
-                    <v-text-field
-                        v-model="isbn"
-                        :label="$t('upload.isbnLabel')"
-                        :placeholder="$t('upload.isbnPlaceholder')"
-                        outlined
-                        :rules="isbnRules"
-                        counter
-                        maxlength="17"
-                        :hint="$t('upload.isbnHint')"
-                        persistent-hint
-                        autofocus
-                        @keyup.enter="confirmAddBook"
-                    >
-                        <template v-slot:prepend-inner>
-                            <v-icon>mdi-barcode</v-icon>
-                        </template>
-                    </v-text-field>
+                <p class="body-1">{{ $t('upload.addPhysicalBookDesc') }}</p>
+                <v-text-field
+                    v-model="isbn"
+                    :label="$t('upload.isbnLabel')"
+                    :placeholder="$t('upload.isbnPlaceholder')"
+                    outlined
+                    :rules="isbnRules"
+                    counter
+                    maxlength="17"
+                    :hint="$t('upload.isbnHint')"
+                    persistent-hint
+                    autofocus
+                    @keyup.enter="confirmAddBook"
+                >
+                    <template v-slot:prepend-inner>
+                        <v-icon>mdi-barcode</v-icon>
+                    </template>
+                </v-text-field>
 
-                    <!-- 继续添加checkbox -->
-                    <v-checkbox
-                        v-model="continueAdding"
-                        :label="$t('upload.continueAdding')"
-                        color="green"
-                        class="mt-4"
-                    ></v-checkbox>
-                </div>
+                <!-- 继续添加checkbox -->
+                <v-checkbox
+                    v-model="continueAdding"
+                    :label="$t('upload.continueAdding')"
+                    color="green"
+                    class="mt-4"
+                ></v-checkbox>
             </v-card-text>
             <v-card-actions>
-                <v-btn @click="cancelAddBook" :disabled="adding_book">{{ $t('common.cancel') }}</v-btn>
                 <v-spacer></v-spacer>
                 <v-btn
+                    :loading="adding_book"
                     color="green"
                     @click="confirmAddBook"
-                    :loading="adding_book"
                     :disabled="!isValidIsbn"
                 >
                     {{ $t('upload.confirmAdd') }}
                 </v-btn>
+                <v-spacer></v-spacer>
             </v-card-actions>
         </v-card>
     </v-dialog>
@@ -716,6 +717,15 @@ export default {
             const cleanIsbn = this.isbn.replace(/[-\s]/g, '');
             // 检查是否为10位或13位数字（可能包含X）
             return /^[0-9]{9}[0-9X]$/.test(cleanIsbn) || /^[0-9]{13}$/.test(cleanIsbn);
+        },
+
+        // ISBN验证规则
+        isbnRules() {
+            return [
+                v => !!v || this.$t('upload.isbnRequired'),
+                v => (v && v.length >= 10) || this.$t('upload.isbnMinLength'),
+                v => (v && /^[0-9\-X]+$/.test(v)) || this.$t('upload.isbnInvalidFormat'),
+            ];
         }
     },
     data: () => ({
@@ -767,12 +777,6 @@ export default {
         currentAudioFile: null,
         // Progress polling timer
         progressTimer: null,
-        // 添加实体书相关数据
-        isbnRules: [
-            v => !!v || 'ISBN号不能为空',
-            v => (v && v.length >= 10) || 'ISBN号至少需要10位',
-            v => (v && /^[0-9\-X]+$/.test(v)) || 'ISBN号只能包含数字、连字符和X',
-        ],
         voice_options: [
             {
                 voice_name: "zh-CN-liaoning-XiaobeiNeural",
@@ -1389,12 +1393,11 @@ export default {
                 if (rsp.err != "ok") {
                     this.$alert("error", rsp.msg);
                 } else {
-                    this.$alert("success", rsp.msg || "图书添加成功");
-
                     // 如果勾选了继续添加，则跳转时携带参数，否则直接跳转
                     if (this.continueAdding) {
                         this.$router.push(`/book/${rsp.book_id}?continue_adding=true`);
                     } else {
+                        this.$alert("success", rsp.msg || this.$t('upload.bookAdded'));
                         this.$router.push(`/book/${rsp.book_id}`);
                     }
                 }

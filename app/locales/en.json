@@ -528,12 +528,14 @@
         "continueAdding": "Continue adding more physical books",
         "confirmAdd": "Confirm Add",
         "isbnMinLength": "ISBN number must be at least 10 digits",
-        "isbnInvalidFormat": "ISBN number can only contain digits, hyphens, and X"
+        "isbnInvalidFormat": "ISBN number can only contain digits, hyphens, and X",
+        "addSuccess": "Book added successfully"
     },
     "readingState": {
         "reading": "Reading",
         "none": "Unread",
         "done": "Read",
+        "finished": "Finished",
         "cancel": "Cancel Reading",
         "setReading": "Set as reading",
         "setDone": "Mark as done",
