@@ -100,7 +100,6 @@ class TestScanContinue(TestWithUserLogin):
         row.save()
         self.session.commit()
         return super().setUp()
-
     # def test_scan(self):
     #     d = self.json("/api/admin/scan/run", method="POST", body="")
     #     self.assertEqual(d["err"], "ok")

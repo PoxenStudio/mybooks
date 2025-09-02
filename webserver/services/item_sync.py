@@ -6,8 +6,7 @@ import logging
 import time
 
 from webserver.services import AsyncService
-from webserver.models import Item, BOOK_TYPE_EBOOK
-from gettext import gettext as _
+from webserver.models import Item
 
 
 class ItemSyncService(AsyncService):

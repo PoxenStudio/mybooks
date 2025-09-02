@@ -589,7 +589,7 @@ class BookReadingStats(BaseHandler):
     def get(self):
         """获取当前用户的阅读统计信息"""
         import datetime
-        from sqlalchemy import func, extract
+        from sqlalchemy import extract
 
         user_id = self.user_id()
         logging.info("User %d is fetching reading statistics." % user_id)

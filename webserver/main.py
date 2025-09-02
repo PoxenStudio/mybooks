@@ -203,7 +203,7 @@ def make_app():
     BookBarnService().get_daily_books()
 
     # Start item create_time sync service if needed
-    if True: #  need_sync_item_time:
+    if need_sync_item_time:
         logging.info("Starting item create_time sync service")
         ItemSyncService().sync_item_create_time()
 
