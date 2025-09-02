@@ -282,10 +282,11 @@ export default {
                         { icon: "mdi-star-shooting", href: "/rating", text: "appHeader.rating", color: "orange"},
                         { icon: "mdi-trending-up", href: "/hot", text: "appHeader.hotRanking", color: "orange"},
                         { icon: "mdi-translate", href: "/language", text: "appHeader.languages", color: "black"},
+                        { icon: "mdi-history", href: "/recent", text: "appHeader.recentBooks", color: "primary"},
+                        { icon: "mdi-bookshelf", href: "/printbooks", text: "appHeader.physicalBooks", color: "primary"},
                     ],
                 },
-                { icon: "mdi-history", href: "/recent", text: "appHeader.allBooks", color: "primary"},
-                { icon: "mdi-history", href: "/printbooks", text: "appHeader.physicalBooks", color: "primary"},
+
             ];
             var friend_links = [
                 // links

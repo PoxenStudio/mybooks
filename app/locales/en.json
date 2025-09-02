@@ -477,7 +477,7 @@
         "series": "Series",
         "rating": "Rating",
         "hotRanking": "Hot Ranking",
-        "allBooks": "All Books",
+        "recentBooks": "Recent Books",
         "systemVersion": "Revision",
         "userCount": "User Count",
         "opdsIntroduction": "About OPDS",
