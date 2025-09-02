@@ -285,6 +285,7 @@ export default {
                     ],
                 },
                 { icon: "mdi-history", href: "/recent", text: "appHeader.allBooks", color: "primary"},
+                { icon: "mdi-history", href: "/printbooks", text: "appHeader.physicalBooks", color: "primary"},
             ];
             var friend_links = [
                 // links

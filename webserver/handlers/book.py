@@ -992,6 +992,38 @@ class HotBook(ListHandler):
         return self.render_book_list([], ids=ids, title=title, sort_by_id=False)
 
 
+class PrintBook(ListHandler):
+    def get(self):
+        title = _(u"实体书")
+        # 查询所有实体书，按添加时间倒序排列
+        db_items = self.sqlite_session.query(Item).filter(
+            Item.book_type == BOOK_TYPE_PHYSICAL
+        ).order_by(Item.create_time.desc())
+
+        start = self.get_argument_start()
+        delta = 60
+        items = db_items.limit(delta).offset(start).all()
+        ids = [item.book_id for item in items]
+
+        # 获取总数用于分页
+        total_items = self.sqlite_session.query(Item).filter(
+            Item.book_type == BOOK_TYPE_PHYSICAL
+        ).count()
+
+        # 获取书籍详细信息
+        books = self.get_books(ids=ids) if ids else []
+
+        # 保持按时间倒序的顺序
+        books = sorted(books, key=lambda x: ids.index(x["id"]) if x["id"] in ids else -1)
+
+        return {
+            "err": "ok",
+            "title": title,
+            "total": total_items,
+            "books": [self.fmt(b, include_comments=True) for b in books]
+        }
+
+
 # 通ISBN添加实体图书
 class BookAddByISBN(BaseHandler):
     @js
@@ -1319,6 +1351,7 @@ def routes():
         (r"/api/search", SearchBook),
         (r"/api/recent", RecentBook),
         (r"/api/hot", HotBook),
+        (r"/api/printbooks", PrintBook),
         (r"/api/book/nav", BookNav),
         (r"/api/book/add", BookAddByISBN),
         (r"/api/book/upload", BookUpload),
