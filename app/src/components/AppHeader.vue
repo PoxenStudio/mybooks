@@ -116,7 +116,7 @@
                         <template v-slot:activator="{ on }">
                             <v-btn v-on="on" icon color="yellow"> <v-icon class="blink">notifications</v-icon> </v-btn>
                         </template>
-                        <v-card width="400">
+                        <v-card width="380">
                             <v-card-title class="py-2">
                                 <span>{{ $t('appHeader.message_notification') }}</span>
                                 <v-spacer></v-spacer>
@@ -125,7 +125,7 @@
                                     {{ $t('appHeader.clear_messages') }}
                                 </v-btn>
                             </v-card-title>
-                            <v-list three-line dense width="400">
+                            <v-list three-line dense width="380">
                                 <v-list-item v-for="(msg, idx) in messages" :key="msg.id">
                                     <v-list-item-avatar>
                                         <v-icon large color="green" v-if="msg.status == 'success'">mdi-information</v-icon>

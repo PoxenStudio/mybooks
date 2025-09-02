@@ -7,35 +7,35 @@
                 <v-divider class="mb-4"></v-divider>
             </v-col>
             <v-col cols=6 sm=3>
-                <v-card class="pa-4 text-center stats-card">
-                    <v-card-title class="justify-center">
-                        <span class="display-1 primary--text">{{ readingStats.total_reading }}</span>
+                <v-card class="pa-3 text-center stats-card gradient-bg-primary">
+                    <v-card-title class="justify-center pa-2">
+                        <div class="stat-number-badge">{{ readingStats.total_reading }}</div>
                     </v-card-title>
-                    <v-card-subtitle>{{ $t('history.totalReading') }}</v-card-subtitle>
+                    <v-card-subtitle class="stat-label-text">{{ $t('history.totalReading') }}</v-card-subtitle>
                 </v-card>
             </v-col>
             <v-col cols=6 sm=3>
-                <v-card class="pa-4 text-center stats-card">
-                    <v-card-title class="justify-center">
-                        <span class="display-1 success--text">{{ readingStats.total_read_done }}</span>
+                <v-card class="pa-3 text-center stats-card gradient-bg-success">
+                    <v-card-title class="justify-center pa-2">
+                        <div class="stat-number-badge">{{ readingStats.total_read_done }}</div>
                     </v-card-title>
-                    <v-card-subtitle>{{ $t('history.totalReadDone') }}</v-card-subtitle>
+                    <v-card-subtitle class="stat-label-text">{{ $t('history.totalReadDone') }}</v-card-subtitle>
                 </v-card>
             </v-col>
             <v-col cols=6 sm=3>
-                <v-card class="pa-4 text-center stats-card">
-                    <v-card-title class="justify-center">
-                        <span class="display-1 info--text">{{ readingStats.month_reading }}</span>
+                <v-card class="pa-3 text-center stats-card gradient-bg-info">
+                    <v-card-title class="justify-center pa-2">
+                        <div class="stat-number-badge">{{ readingStats.month_reading }}</div>
                     </v-card-title>
-                    <v-card-subtitle>{{ $t('history.monthReading') }}</v-card-subtitle>
+                    <v-card-subtitle class="stat-label-text">{{ $t('history.monthReading') }}</v-card-subtitle>
                 </v-card>
             </v-col>
             <v-col cols=6 sm=3>
-                <v-card class="pa-4 text-center stats-card">
-                    <v-card-title class="justify-center">
-                        <span class="display-1 orange--text">{{ readingStats.month_read_done }}</span>
+                <v-card class="pa-3 text-center stats-card gradient-bg-orange">
+                    <v-card-title class="justify-center pa-2">
+                        <div class="stat-number-badge">{{ readingStats.month_read_done }}</div>
                     </v-card-title>
-                    <v-card-subtitle>{{ $t('history.monthReadDone') }}</v-card-subtitle>
+                    <v-card-subtitle class="stat-label-text">{{ $t('history.monthReadDone') }}</v-card-subtitle>
                 </v-card>
             </v-col>
         </v-row>
@@ -163,13 +163,55 @@ export default {
 </script>
 
 <style scoped>
+/* 统计卡片样式 */
 .stats-card {
-    transition: transform 0.2s;
-    font-weight: bold;
+    border-radius: 16px;
+    border: none;
+    min-height: 120px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .stats-card:hover {
-    transform: translateY(-2px);
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+}
+
+.stat-number-badge {
+    background: rgba(0,0,0,0.3);
+    color: #ffffff;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 18px;
+    min-width: 50px;
+    text-align: center;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+    display: inline-block;
+}
+
+.stat-label-text {
+    color: white !important;
+    font-weight: 500;
+    font-size: 14px;
+    padding-top: 8px;
+}
+
+/* 渐变背景 */
+.gradient-bg-primary {
+    background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
+}
+
+.gradient-bg-success {
+    background: linear-gradient(135deg, #388e3c 0%, #66bb6a 100%);
+}
+
+.gradient-bg-info {
+    background: linear-gradient(135deg, #0288d1 0%, #29b6f6 100%);
+}
+
+.gradient-bg-orange {
+    background: linear-gradient(135deg, #f57c00 0%, #ffb74d 100%);
 }
 
 .book-card {

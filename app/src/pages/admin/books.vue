@@ -30,18 +30,6 @@
                         <v-icon>mdi-book-refresh-outline</v-icon>
                         <span v-if="!$vuetify.breakpoint.xs">{{ $t('admin.books.autoUpdate') }}</span>
                     </v-btn>
-                    <v-btn
-                        :disabled="loading"
-                        outlined
-                        color="primary"
-                        @click="addByIsbn"
-                        class="flex-shrink-0"
-                        :icon="$vuetify.breakpoint.xs"
-                        :small="$vuetify.breakpoint.xs"
-                    >
-                        <v-icon>mdi-plus</v-icon>
-                        <span v-if="!$vuetify.breakpoint.xs">{{ $t('admin.books.addByIsbn') }}</span>
-                    </v-btn>
                     <!-- 删除选中按钮紧跟在主要按钮后面 -->
                     <v-btn
                         v-if="!loading && books_selected.length > 0"
@@ -308,52 +296,6 @@
                 </v-card-actions>
             </v-card>
         </v-dialog>
-
-        <!-- 添加实体书对话框 -->
-        <v-dialog v-model="isbn_dialog" persistent transition="dialog-bottom-transition" width="400">
-            <v-card>
-                <v-toolbar flat dense dark color="green">
-                    <v-icon>mdi-book-plus</v-icon>
-                    <v-toolbar-title class="ml-2">添加实体书</v-toolbar-title>
-                    <v-spacer></v-spacer>
-                    <v-btn color="" text @click="cancelAddBook">关闭</v-btn>
-                </v-toolbar>
-                <v-card-title></v-card-title>
-                <v-card-text>
-                    <p class="body-1">请输入要添加的图书ISBN号，系统将自动从豆瓣获取图书信息：</p>
-                    <v-text-field
-                        v-model="isbn"
-                        label="ISBN号"
-                        placeholder="请输入13位或10位ISBN号"
-                        outlined
-                        :rules="isbnRules"
-                        counter
-                        maxlength="17"
-                        hint="例如: 9787570220601 或 978-7-5702-2060-1"
-                        persistent-hint
-                        autofocus
-                        @keyup.enter="confirmAddBook"
-                    >
-                        <template v-slot:prepend-inner>
-                            <v-icon>mdi-barcode</v-icon>
-                        </template>
-                    </v-text-field>
-                </v-card-text>
-                <v-card-actions>
-                    <v-spacer></v-spacer>
-                    <v-btn
-                        :loading="adding_book"
-                        color="green"
-                        @click="confirmAddBook"
-                        :disabled="!isValidIsbn"
-                    >
-                        确定添加
-                    </v-btn>
-                    <v-spacer></v-spacer>
-                </v-card-actions>
-            </v-card>
-        </v-dialog>
-
 </v-card>
 </template>
 
@@ -364,9 +306,7 @@ export default {
         snackColor: "",
         snackText: "",
         meta_dialog: false,
-        isbn_dialog: false,
         adding_book: false,
-        isbn: "",
         books_selected: [],
         tag_input: null,
         search: "",
@@ -395,11 +335,6 @@ export default {
             total: 0,
             status: "finish",
         },
-        isbnRules: [
-            v => !!v || 'ISBN号不能为空',
-            v => (v && v.length >= 10) || 'ISBN号至少需要10位',
-            v => (v && /^[0-9\-X]+$/.test(v)) || 'ISBN号只能包含数字、连字符和X',
-        ],
     }),
     created() {},
     watch: {
@@ -413,13 +348,6 @@ export default {
     computed: {
         auto_fill_mins: function() {
             return Math.floor(this.total/60) + 1;
-        },
-        isValidIsbn: function() {
-            if (!this.isbn) return false;
-            // 移除连字符和空格
-            const cleanIsbn = this.isbn.replace(/[-\s]/g, '');
-            // 检查是否为10位或13位数字（可能包含X）
-            return /^[0-9]{9}[0-9X]$/.test(cleanIsbn) || /^[0-9]{13}$/.test(cleanIsbn);
         },
         responsiveHeaders: function() {
             // 根据屏幕宽度返回不同的headers配置
@@ -509,50 +437,6 @@ export default {
                 .finally(() => {
                     this.loading = false;
                 });
-        },
-        addByIsbn() {
-            // 显示ISBN输入对话框
-            this.isbn = "";
-            this.isbn_dialog = true;
-        },
-        cancelAddBook() {
-            this.isbn_dialog = false;
-            this.isbn = "";
-        },
-        confirmAddBook() {
-            if (!this.isValidIsbn) {
-                this.$alert("error", "请输入有效的ISBN号");
-                return;
-            }
-
-            this.adding_book = true;
-            // 清理ISBN号（移除连字符和空格）
-            const cleanIsbn = this.isbn.replace(/[-\s]/g, '');
-
-            this.$backend("/book/add", {
-                method: "POST",
-                body: JSON.stringify({
-                    isbn: cleanIsbn,
-                }),
-            })
-            .then((rsp) => {
-                this.isbn_dialog = false;
-                if (rsp.err != "ok") {
-                    this.$alert("error", rsp.msg);
-                } else {
-                    this.snack = true;
-                    this.snackColor = "success";
-                    this.snackText = rsp.msg || "图书添加成功";
-                    this.getDataFromApi(); // 刷新列表
-                }
-            })
-            .catch((error) => {
-                this.$alert("error", "添加图书时发生错误: " + error.message);
-            })
-            .finally(() => {
-                this.adding_book = false;
-                this.isbn = "";
-            });
         },
         refresh_progress() {
             this.$backend("/admin/book/fill", {

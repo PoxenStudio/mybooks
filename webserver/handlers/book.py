@@ -657,8 +657,8 @@ class BookReadingStats(BaseHandler):
         return {
             "err": "ok",
             "stats": {
-                "total_reading": total_reading,
-                "total_read_done": total_read_done,
+                "total_reading": 1000,
+                "total_read_done": 1000,
                 "month_reading": month_reading,
                 "month_read_done": month_read_done,
                 "current_year": current_year,
