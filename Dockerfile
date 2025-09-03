@@ -26,7 +26,7 @@ RUN mkdir -p /app-ssr/ /app-static/ && \
 # ----------------------------------------
 # 第二阶段，构建环境
 # FROM linuxserver/calibre AS server
-FROM ubuntu:24.04 AS server
+FROM ubuntu:24.04-slim AS server
 ARG BUILD_COUNTRY="CN"
 
 # Set mirrors in china
@@ -36,18 +36,16 @@ RUN if [ "x${BUILD_COUNTRY}" = "xCN" ]; then \
     sed 's@security.ubuntu.com/ubuntu@mirrors.huaweicloud.com/repository/ubuntu@g' -i /etc/apt/sources.list.d/ubuntu.sources; \
     fi
 
-# install envsubst gosu procps
+# install required packages in one layer with minimal extras
 RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     echo "Asia/Shanghai" > /etc/timezone && \
-    apt update -y && \
-    apt install -y gettext gosu procps nginx calibre calibre-bin supervisor fonts-lato ffmpeg libzbar0 && \
-    apt clean && \
-    apt install -y python3-pip && \
-    pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        gettext gosu procps nginx calibre calibre-bin supervisor fonts-lato ffmpeg libzbar0 python3-pip && \
     rm -rf /var/lib/apt/lists/* && \
+    pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
     useradd -u 990 -U -d /var/www/talebook -s /bin/false talebook && \
-    usermod -G users talebook && \
-    groupmod -g 990 talebook && \
+    groupmod -g 990 talebook && usermod -aG users talebook && \
     sed -i "s/user www-data;/user talebook;/g" /etc/nginx/nginx.conf
 
 # RUN wget -nv -O- https://download.calibre-ebook.com/linux-installer.sh | sh /dev/stdin
@@ -57,9 +55,9 @@ RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
 # install python packages (--break-system-packages)
 # Apply calibre patches
 COPY calibre/7.6/calibre/db/cache.py /usr/lib/calibre/calibre/db/
-COPY requirements.txt /tmp/
+COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt --break-system-packages && \
-    rm -rf /root/.cache
+    rm -rf /root/.cache /tmp/requirements.txt
 
 
 # ----------------------------------------
