@@ -26,7 +26,7 @@ RUN mkdir -p /app-ssr/ /app-static/ && \
 # ----------------------------------------
 # 第二阶段，构建环境
 # FROM linuxserver/calibre AS server
-FROM ubuntu:24.04-slim AS server
+FROM ubuntu:24.04 AS server
 ARG BUILD_COUNTRY="CN"
 
 # Set mirrors in china
