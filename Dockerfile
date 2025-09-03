@@ -42,6 +42,7 @@ RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
         gettext gosu procps nginx calibre calibre-bin supervisor fonts-lato ffmpeg libzbar0 python3-pip && \
+    apt clean && \
     rm -rf /var/lib/apt/lists/* && \
     pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
     useradd -u 990 -U -d /var/www/talebook -s /bin/false talebook && \
