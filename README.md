@@ -9,6 +9,7 @@ A enhanced personal books management webserver built on Calibre + Vue, beautiful
 
 ## 简单好用的个人图书管理系统
 本项目基于talebook开发维护, 原项目地址:[talebook](https://github.com/talebook/talebook)。 后续目标是结合AI提供更多的扩展阅读内容，形成个人的知识库。
+![Example](document/example.jpg)
 
 **友情提醒：中国境内网站，个人是不允许进行在线出版的，维护公开的书籍网站是违法违规的行为！建议仅作为个人使用！**
 
@@ -18,6 +19,12 @@ A enhanced personal books management webserver built on Calibre + Vue, beautiful
     2. 增加文件的加密处理。可以帮助解决私有化部署场景下平台扫描导致的文件无法使用的问题。
     3. 带水印导出epub (待定)
     4. 增加统计信息显示
+* v3.18.0
+    1. 增加实体书管理功能
+    2. 增加阅读管理功能
+* v3.17.0 (完成)
+    1. 优化文件扫描导入
+    2. 增加版本更新通知
 * v3.16.* (完成)
     1. 支持封面设置
     2. 解决飞牛移动端无法登录的问题
