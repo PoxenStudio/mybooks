@@ -15,6 +15,8 @@ A enhanced personal books management webserver built on Calibre + Vue, beautiful
 
 ### 项目介绍
 poxenstudio/talebook增加的特性包括:
+* 支持添加实体书
+* 支持阅读管理
 * 集成epub2audio将epub转换有声书
 * 更新Calibre 7.6，系统使用Ubuntu 24.04
 * 支持中文搜索时，使用简繁体同时搜索
