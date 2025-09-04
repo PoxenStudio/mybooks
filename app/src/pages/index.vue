@@ -190,7 +190,8 @@ export default {
         if ( res !== undefined ) {
             res.setHeader('Cache-Control', 'no-cache');
         }
-        return app.$backend("/index?random=12&recent=12");
+        const baseURL = process.server ? (process.env.BASE_URL || 'http://localhost:3000') : '';
+        return baseURL + '/api/index?random=12&recent=12';
     },
     data: () => ({
         random_books: [],
