@@ -13,6 +13,43 @@ A enhanced personal books management webserver built on Calibre + Vue, beautiful
 
 **友情提醒：中国境内网站，个人是不允许进行在线出版的，维护公开的书籍网站是违法违规的行为！建议仅作为个人使用！**
 
+### 项目介绍
+poxenstudio/talebook增加的特性包括:
+* 集成epub2audio将epub转换有声书
+* 更新Calibre 7.6，系统使用Ubuntu 24.04
+* 支持中文搜索时，使用简繁体同时搜索
+* 支持epub与azw3互转
+* 支持将图书指定为私藏模式，仅有上传者可见
+* UI风格美化 - 增加暗黑模式
+* 支持切换不同图标，支持设置用户头像
+* 支持书栈推书的功能 每天推送2~5书，以社科、历史为主
+* 阅读器支持颜色样式切换，字体切换(提供4个内置字体)
+
+以下为talebook的介绍。
+这是一个基于Calibre的简单的个人图书管理系统，支持**在线阅读**。主要特点是：
+* 美观的界面：由于Calibre自带的网页太丑太难用，于是基于Vue，独立编写了新的界面，支持PC访问和手机浏览；
+* 支持多用户：为了网友们更方便使用，开发了多用户功能，支持~~豆瓣~~（已废弃）、QQ、微博、Github等社交网站的登录；
+* 支持在线阅读：借助[epub.js](https://github.com/intity/epubreader-js) 库，支持了网页在线阅读电子书（章评功能开发中）；
+* 支持批量扫描导入书籍；
+* 支持邮件推送：可方便推送到Kindle；
+* 支持OPDS：可使用[KyBooks](http://kybook-reader.com/)等APP方便地读书；
+* 支持一键安装，网页版初始化配置，轻松启动网站；
+* 优化大书库时文件存放路径，可以按字母分类、或者文件名保持中文；
+* 支持快捷更新书籍信息：支持从百度百科、豆瓣搜索并导入书籍基础信息；
+* 支持私人模式：需要输入访问码，才能进入网站，便于小圈子分享网站；
+
+### Web API
+[Web API文档](document/WebAPI.md)
+
+### 关注项目
+
+公众号```talebook```
+![talebook](document/gongzhonghao_talebook.jpg)
+
+微信扫码加好友, 备注```talebook```:
+![微信号PoxenStudio](document/weichat_poxenstudio.jpg)
+
+
 ## 版本
 * 待开发
     1. 支持信息共享及AI协助的功能。是一个大的修改，会分成几步完成。
@@ -49,48 +86,6 @@ A enhanced personal books management webserver built on Calibre + Vue, beautiful
 * v3.9.0 (完成)
     1. 更新Calibre 7.6，系统使用Ubuntu 24.04
     2. 信息管理中增加信息重置，出现刮削错误时更新
-
-### Web API
-[Web API文档](document/WebAPI.md)
-
-### 关注项目
-
-公众号```talebook```
-
-![talebook](document/gongzhonghao_talebook.jpg)
-
-微信扫码加好友, 备注```talebook```:
-
-![微信号PoxenStudio](document/weichat_poxenstudio.jpg)
-
-
-
-## 项目介绍
-poxenstudio/talebook增加的特性包括:
-* 集成epub2audio将epub转换有声书
-* 更新Calibre 7.6，系统使用Ubuntu 24.04
-* 支持中文搜索时，使用简繁体同时搜索
-* 支持epub与azw3互转
-* 支持将图书指定为私藏模式，仅有上传者可见
-* UI风格美化 - 增加暗黑模式
-* 支持切换不同图标，支持设置用户头像
-* 支持书栈推书的功能 每天推送2~5书，以社科、历史为主
-* 阅读器支持颜色样式切换，字体切换(提供4个内置字体)
-
-以下为talebook的介绍。
-这是一个基于Calibre的简单的个人图书管理系统，支持**在线阅读**。主要特点是：
-* 美观的界面：由于Calibre自带的网页太丑太难用，于是基于Vue，独立编写了新的界面，支持PC访问和手机浏览；
-* 支持多用户：为了网友们更方便使用，开发了多用户功能，支持~~豆瓣~~（已废弃）、QQ、微博、Github等社交网站的登录；
-* 支持在线阅读：借助[epub.js](https://github.com/intity/epubreader-js) 库，支持了网页在线阅读电子书（章评功能开发中）；
-* 支持批量扫描导入书籍；
-* 支持邮件推送：可方便推送到Kindle；
-* 支持OPDS：可使用[KyBooks](http://kybook-reader.com/)等APP方便地读书；
-* 支持一键安装，网页版初始化配置，轻松启动网站；
-* 优化大书库时文件存放路径，可以按字母分类、或者文件名保持中文；
-* 支持快捷更新书籍信息：支持从百度百科、豆瓣搜索并导入书籍基础信息；
-* 支持私人模式：需要输入访问码，才能进入网站，便于小圈子分享网站；
-
-
 
 ## Docker ![Docker Pulls](https://img.shields.io/docker/pulls/poxenstudio/talebook.svg)
 
