@@ -85,9 +85,10 @@
                 </v-container>
             </template>
 
-            <v-toolbar-title class="ml-n5 mr-12 align-center">
+            <v-toolbar-title class="ml-n5 mr-12 align-center d-flex">
                 <v-app-bar-nav-icon @click.stop="sidebar = !sidebar"><v-icon>menu</v-icon></v-app-bar-nav-icon>
-                <span class="cursor-pointer" @click="$router.push('/')">{{ sys.title }}</span>
+                <div class="breathing-light"></div>
+                <span class="cursor-pointer ml-2" @click="$router.push('/')">{{ sys.title }}</span>
             </v-toolbar-title>
 
             <v-spacer></v-spacer>
@@ -399,5 +400,36 @@ export default {
 }
 .blink {
   animation: blink 3s infinite;
+}
+
+@keyframes breathing {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+.breathing-light {
+  width: 12px !important;
+  height: 12px !important;
+  background-color: #ffffff !important;
+  border-radius: 50% !important;
+  animation: breathing 3s ease-in-out infinite !important;
+  margin-left: 4px !important;
+  margin-right: 4px !important;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.6) !important;
+  /* 防止被其他样式覆盖的额外保护 */
+  background: #ffffff !important;
+  color: #ffffff !important;
+  border: none !important;
+  outline: none !important;
+  filter: none !important;
+  /* 确保元素不会被阅读插件等修改 */
+  -webkit-appearance: none !important;
+  appearance: none !important;
 }
 </style>
