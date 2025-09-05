@@ -46,9 +46,11 @@ poxenstudio/talebook增加的特性包括:
 ### 关注项目
 
 公众号```talebook```
+
 ![talebook](document/gongzhonghao_talebook.jpg)
 
-微信扫码加好友, 备注```talebook```:
+微信扫码加好友, 备注```talebook```
+
 ![微信号PoxenStudio](document/weichat_poxenstudio.jpg)
 
 
