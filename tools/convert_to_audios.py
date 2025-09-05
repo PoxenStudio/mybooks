@@ -7,7 +7,7 @@
 支持指定声音、起始章节、输出目录等参数。
 
 使用方法：
-  python convert_to_audios.py /path/to/epub/dir --voice zh-CN-YunyangNeural --chapter-start 1 --output /path/to/output
+  python tools/convert_to_audios.py /home/horky/workspace/audios_book/books --output /home/horky/workspace/audios_book/audios --voice zh-CN-XiaoxiaoNeural
 """
 
 import os
