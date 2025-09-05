@@ -33,6 +33,7 @@ from bs4 import BeautifulSoup
 
 # 配置常量
 DEFAULT_CATEGORY = "小学语文阅读推荐"  # 默认分类，可根据需要修改
+BOOK_TITLE_PREFIX = "小学语文阅读推荐-"
 SKIP_TITLES = ["封面", "前折页", "后折页", "目录"]  # 需要跳过的页面标题
 
 # 配置日志
@@ -505,7 +506,7 @@ class EPUBDirectorySplitter:
 
         # 设置元数据
         book.set_identifier(metadata.get('isbn', f"unknown-{datetime.now().strftime('%Y%m%d%H%M%S')}"))
-        book.set_title(metadata.get('title', '未知书名'))
+        book.set_title(BOOK_TITLE_PREFIX + metadata.get('title', '未知书名'))
         book.set_language('zh-CN')
 
         # 添加作者信息
@@ -878,7 +879,7 @@ class EPUBDirectorySplitter:
                     title = f'book_{i+1}'
                     logger.warning(f"第 {i+1} 本书未能提取到书名，使用默认名称: {title}")
 
-                safe_title = re.sub(r'[<>:"|?*]', '_', title).replace('/', '_').replace('\\', '_')
+                safe_title = BOOK_TITLE_PREFIX + re.sub(r'[<>:"|?*]', '_', title).replace('/', '_').replace('\\', '_')
                 epub_filename = f"{safe_title}.epub"
                 epub_path = self.output_dir / epub_filename
 
