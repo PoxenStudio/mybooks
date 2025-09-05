@@ -3,8 +3,16 @@
 """
 EPUB图书合集拆分工具
 
-用于将包含多本图书的解压后EPUB目录拆分为独立的EPUB文件。
+用于将包含多本图书的EPUB文件或解压后EPUB目录拆分为独立的EPUB文件。
 每遇到一个title为"封面"的页面代表新书的开始。
+
+支持的输入格式：
+1. EPUB文件 (.epub) - 工具会自动解压到临时目录进行处理
+2. 已解压的EPUB目录 - 直接处理目录内容
+
+使用方法：
+  python epub_splitter.py input.epub output_dir/
+  python epub_splitter.py extracted_epub_dir/ output_dir/
 """
 
 import os
@@ -12,25 +20,104 @@ import sys
 import re
 import argparse
 import logging
-from pathlib import Path
+import zipfile
 import tempfile
 import shutil
-import zipfile
+from pathlib import Path
 import xml.etree.ElementTree as ET
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime
 
-import ebooklib
 from ebooklib import epub
 from bs4 import BeautifulSoup
 
 # 配置常量
 DEFAULT_CATEGORY = "小学语文阅读推荐"  # 默认分类，可根据需要修改
-SKIP_TITLES = ["封面", "前折页", "后折页"]  # 需要跳过的页面标题
+SKIP_TITLES = ["封面", "前折页", "后折页", "目录"]  # 需要跳过的页面标题
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+
+def extract_epub_to_temp(epub_path: str) -> str:
+    """
+    将EPUB文件解压到临时目录
+
+    Args:
+        epub_path: EPUB文件路径
+
+    Returns:
+        临时目录路径
+
+    Raises:
+        FileNotFoundError: EPUB文件不存在
+        zipfile.BadZipFile: 文件不是有效的ZIP/EPUB文件
+    """
+    epub_file = Path(epub_path)
+
+    # 检查文件是否存在
+    if not epub_file.exists():
+        raise FileNotFoundError(f"EPUB文件不存在: {epub_path}")
+
+    # 检查文件扩展名
+    if epub_file.suffix.lower() != '.epub':
+        raise ValueError(f"文件不是EPUB格式: {epub_path}")
+
+    # 创建临时目录
+    temp_dir = tempfile.mkdtemp(prefix=f"epub_split_{epub_file.stem}_")
+    logger.info(f"创建临时目录: {temp_dir}")
+
+    try:
+        # 检查是否是有效的ZIP文件
+        with zipfile.ZipFile(epub_path, 'r') as zip_file:
+            # 解压到临时目录
+            zip_file.extractall(temp_dir)
+            logger.info(f"EPUB文件已解压到: {temp_dir}")
+
+            # 列出解压的文件数量
+            extracted_files = list(Path(temp_dir).rglob('*'))
+            logger.info(f"解压了 {len(extracted_files)} 个文件")
+
+        return temp_dir
+
+    except zipfile.BadZipFile:
+        # 清理临时目录
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise zipfile.BadZipFile(f"文件不是有效的ZIP/EPUB文件: {epub_path}")
+    except Exception as e:
+        # 清理临时目录
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise e
+
+
+def cleanup_temp_directory(temp_dir: str) -> None:
+    """
+    清理临时目录
+
+    Args:
+        temp_dir: 临时目录路径
+    """
+    try:
+        if temp_dir and Path(temp_dir).exists():
+            shutil.rmtree(temp_dir)
+            logger.info(f"已清理临时目录: {temp_dir}")
+    except Exception as e:
+        logger.warning(f"清理临时目录失败: {e}")
+
+
+def is_epub_file(path: str) -> bool:
+    """
+    判断给定路径是否为EPUB文件
+
+    Args:
+        path: 文件或目录路径
+
+    Returns:
+        如果是EPUB文件返回True，否则返回False
+    """
+    path_obj = Path(path)
+    return path_obj.is_file() and path_obj.suffix.lower() == '.epub'
 
 
 class EPUBDirectorySplitter:
@@ -603,6 +690,7 @@ class EPUBDirectorySplitter:
 
         # 添加页面内容（跳过需要排除的页面）
         chapters = []
+        chapter_titles = []  # 存储章节标题，用于生成目录
         skipped_count = 0
         added_count = 0
         for i, page_file in enumerate(page_files):
@@ -623,20 +711,45 @@ class EPUBDirectorySplitter:
                 # 解析HTML内容，提取body部分并修复图片路径
                 soup = BeautifulSoup(page_content, 'html.parser')
 
-                # 修复所有图片的src路径
+                # 提取页面标题（用于目录）
+                title_tag = soup.find('title')
+                if title_tag:
+                    chapter_title = title_tag.get_text(strip=True)
+                else:
+                    # 如果没有title标签，尝试从h1, h2等标签提取
+                    heading_tag = soup.find(['h1', 'h2', 'h3'])
+                    if heading_tag:
+                        chapter_title = heading_tag.get_text(strip=True)
+                    else:
+                        chapter_title = f"第{added_count+1}章"  # 默认标题
+
+                # 过滤掉不适合作为章节的标题
+                if chapter_title in ['出版说明', '后折页']:
+                    # 对于这些页面，使用更合适的标题
+                    if chapter_title == '导读':
+                        chapter_title = '导读'
+                    elif chapter_title == '出版说明':
+                        chapter_title = '出版说明'
+                    else:
+                        chapter_title = f"附录{added_count+1}"
+
+                # 确保图片路径为 ../Images/ 格式
                 for img_tag in soup.find_all('img'):
                     src = img_tag.get('src')
                     if src:
-                        # 将相对路径 ../Images/xxx.jpg 转换为 Images/xxx.jpg
-                        if src.startswith('../Images/'):
-                            new_src = src[3:]  # 移除 "../"
+                        # 确保图片路径以 ../Images/ 开头
+                        if src.startswith('Images/'):
+                            new_src = f"../{src}"
                             img_tag['src'] = new_src
                             logger.debug(f"修复图片路径: {src} -> {new_src}")
-                        elif src.startswith('../'):
-                            # 处理其他可能的相对路径
-                            new_src = src[3:]
+                        elif not src.startswith('../Images/') and '/' not in src:
+                            # 如果是直接的图片文件名，添加 ../Images/ 前缀
+                            new_src = f"../Images/{src}"
                             img_tag['src'] = new_src
-                            logger.debug(f"修复路径: {src} -> {new_src}")
+                            logger.debug(f"修复图片路径: {src} -> {new_src}")
+                        elif src.startswith('../Images/'):
+                            # 已经是正确格式，保持不变
+                            logger.debug(f"图片路径已正确: {src}")
 
                 # 尝试提取body内容
                 body_tag = soup.find('body')
@@ -653,19 +766,25 @@ class EPUBDirectorySplitter:
                     continue
 
                 chapter = epub.EpubHtml()
-                chapter.id = f"chapter_{i}"  # 直接设置id属性
+                chapter.id = f"chapter_{added_count}"  # 使用added_count确保ID唯一
                 chapter.file_name = f"Text/{page_file.name}"
                 chapter.media_type = "application/xhtml+xml"  # 设置媒体类型
                 chapter.content = body_content  # 设置body内容
+
+                # 设置章节标题（用于目录显示）
+                chapter.title = chapter_title
+
                 book.add_item(chapter)
                 chapters.append(chapter)
+                chapter_titles.append(chapter_title)
                 added_count += 1
-                logger.debug(f"成功添加章节: {page_file.name}")
+                logger.debug(f"成功添加章节: {page_file.name} - '{chapter_title}'")
             except Exception as e:
                 logger.warning(f"添加章节 {page_file.name} 失败: {e}")
                 continue
 
         logger.info(f"页面处理完成: 总数 {len(page_files)}, 跳过 {skipped_count}, 添加 {added_count}")
+        logger.info(f"章节标题列表: {chapter_titles}")
 
         # 检查是否有有效的章节
         if not chapters:
@@ -674,12 +793,23 @@ class EPUBDirectorySplitter:
 
         logger.info(f"准备创建EPUB：包含 {len(chapters)} 个章节")
 
-        # 设置spine（阅读顺序），不包含导航页面
-        book.spine = chapters
+        # 创建目录导航
+        toc = []
+        for i, (chapter, title) in enumerate(zip(chapters, chapter_titles)):
+            # 创建目录项，使用章节标题
+            toc_item = epub.Link(chapter.file_name, title, chapter.id)
+            toc.append(toc_item)
+            logger.debug(f"添加目录项: {title}")
 
-        # 不添加目录导航文件，保持简洁
-        # book.add_item(epub.EpubNcx())
-        # book.add_item(epub.EpubNav())
+        # 设置书籍目录
+        book.toc = toc
+
+        # 添加导航文件
+        book.add_item(epub.EpubNcx())
+        book.add_item(epub.EpubNav())
+
+        # 设置spine（阅读顺序），包含导航页面
+        book.spine = ['nav'] + chapters
 
         item_count = len(list(book.get_items()))
         logger.debug(f"EPUB创建完成，包含项目数量: {item_count}")
@@ -949,7 +1079,7 @@ class EPUBDirectorySplitter:
 def main():
     """主函数"""
     parser = argparse.ArgumentParser(description='EPUB图书合集拆分工具')
-    parser.add_argument('source_dir', help='解压后的EPUB目录路径')
+    parser.add_argument('source_path', help='解压后的EPUB目录路径或EPUB文件路径')
     parser.add_argument('output_dir', nargs='?', help='输出目录')
     parser.add_argument('--category', default=DEFAULT_CATEGORY, help=f'图书分类 (默认: {DEFAULT_CATEGORY})')
     parser.add_argument('--verbose', '-v', action='store_true', help='详细输出')
@@ -960,20 +1090,29 @@ def main():
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    # 检查输入目录
-    if not os.path.exists(args.source_dir):
-        logger.error(f"源目录不存在: {args.source_dir}")
+    # 检查输入路径
+    if not os.path.exists(args.source_path):
+        logger.error(f"源路径不存在: {args.source_path}")
         sys.exit(1)
 
-    if not os.path.isdir(args.source_dir):
-        logger.error(f"输入路径不是目录: {args.source_dir}")
-        sys.exit(1)
+    # 判断输入是文件还是目录
+    temp_dir = None
+    source_dir = args.source_path
 
     try:
+        if is_epub_file(args.source_path):
+            # 如果是EPUB文件，解压到临时目录
+            logger.info(f"检测到EPUB文件: {args.source_path}")
+            source_dir = extract_epub_to_temp(args.source_path)
+            temp_dir = source_dir
+        elif not os.path.isdir(args.source_path):
+            logger.error(f"输入路径既不是目录也不是EPUB文件: {args.source_path}")
+            sys.exit(1)
+
         # 如果只是列出标题
         if args.list_titles:
             # 创建一个临时输出目录参数
-            splitter = EPUBDirectorySplitter(args.source_dir, "/tmp", args.category)
+            splitter = EPUBDirectorySplitter(source_dir, "/tmp", args.category)
             splitter.list_all_page_titles()
             return
 
@@ -983,7 +1122,7 @@ def main():
             sys.exit(1)
 
         # 创建拆分器并执行拆分
-        splitter = EPUBDirectorySplitter(args.source_dir, args.output_dir, args.category)
+        splitter = EPUBDirectorySplitter(source_dir, args.output_dir, args.category)
         generated_files = splitter.split_epub()
 
         logger.info(f"拆分完成！共生成 {len(generated_files)} 个EPUB文件:")
@@ -993,6 +1132,10 @@ def main():
     except Exception as e:
         logger.error(f"拆分过程中发生错误: {e}")
         sys.exit(1)
+    finally:
+        # 清理临时目录
+        if temp_dir:
+            cleanup_temp_directory(temp_dir)
 
 
 if __name__ == '__main__':
