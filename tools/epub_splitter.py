@@ -440,8 +440,19 @@ class EPUBDirectorySplitter:
         # 添加封面图片
         if cover_image_path:
             try:
-                image_file = self.source_dir / cover_image_path
-                if image_file.exists():
+                # 尝试多个可能的图片路径
+                possible_image_paths = [
+                    self.source_dir / cover_image_path,
+                    self.source_dir / "OEBPS" / cover_image_path
+                ]
+
+                image_file = None
+                for path in possible_image_paths:
+                    if path.exists():
+                        image_file = path
+                        break
+
+                if image_file:
                     with open(image_file, 'rb') as f:
                         image_data = f.read()
 
@@ -461,60 +472,134 @@ class EPUBDirectorySplitter:
                     book.set_cover(cover_img.file_name, image_data)
                     logger.info(f"成功设置封面图片: {cover_image_path}")
                 else:
-                    logger.warning(f"封面图片文件不存在: {image_file}")
+                    # 尝试所有可能的路径都失败
+                    logger.warning(f"封面图片文件不存在，尝试的路径: {[str(p) for p in possible_image_paths]}")
             except Exception as e:
                 logger.warning(f"添加封面图片失败: {e}")
 
         # 添加样式文件
-        styles_dir = self.source_dir / "Styles"
-        if styles_dir.exists():
-            for style_file in styles_dir.glob("*.css"):
-                try:
-                    with open(style_file, 'r', encoding='utf-8') as f:
-                        style_content = f.read()
+        # 尝试多个可能的样式目录位置
+        possible_styles_dirs = [
+            self.source_dir / "Styles",
+            self.source_dir / "OEBPS" / "Styles"
+        ]
 
-                    style = epub.EpubItem()
-                    style.id = style_file.stem  # 直接设置id属性
-                    style.file_name = f"Styles/{style_file.name}"
-                    style.media_type = "text/css"
-                    style.content = style_content  # 直接设置content属性
-                    book.add_item(style)
-                except Exception as e:
-                    logger.warning(f"添加样式文件 {style_file} 失败: {e}")
-
-        # 添加图片资源
-        images_dir = self.source_dir / "Images"
-        if images_dir.exists():
-            for img_file in images_dir.glob("*"):
-                if img_file.is_file() and img_file.suffix.lower() in ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp']:
+        for styles_dir in possible_styles_dirs:
+            if styles_dir.exists():
+                logger.info(f"找到样式目录: {styles_dir}")
+                for style_file in styles_dir.glob("*.css"):
                     try:
-                        with open(img_file, 'rb') as f:
-                            img_data = f.read()
+                        with open(style_file, 'r', encoding='utf-8') as f:
+                            style_content = f.read()
 
-                        img = epub.EpubImage()
-                        img.id = img_file.stem  # 直接设置id属性
-                        img.file_name = f"Images/{img_file.name}"  # 保持原始路径结构
-
-                        # 根据文件扩展名设置正确的媒体类型
-                        ext = img_file.suffix.lower()
-                        if ext == '.jpg' or ext == '.jpeg':
-                            img.media_type = "image/jpeg"
-                        elif ext == '.png':
-                            img.media_type = "image/png"
-                        elif ext == '.gif':
-                            img.media_type = "image/gif"
-                        elif ext == '.svg':
-                            img.media_type = "image/svg+xml"
-                        elif ext == '.webp':
-                            img.media_type = "image/webp"
-                        else:
-                            img.media_type = f"image/{ext[1:]}"
-
-                        img.content = img_data  # 直接设置content属性
-                        book.add_item(img)
-                        logger.debug(f"添加图片: {img_file.name}")
+                        style = epub.EpubItem()
+                        style.id = style_file.stem  # 直接设置id属性
+                        style.file_name = f"Styles/{style_file.name}"
+                        style.media_type = "text/css"
+                        style.content = style_content  # 直接设置content属性
+                        book.add_item(style)
+                        logger.debug(f"添加样式文件: {style_file.name}")
                     except Exception as e:
-                        logger.warning(f"添加图片文件 {img_file} 失败: {e}")
+                        logger.warning(f"添加样式文件 {style_file} 失败: {e}")
+                break  # 找到一个有效的样式目录就退出
+
+        # 分析页面内容中使用的图片
+        used_images = set()
+
+        # 扫描所有页面内容，收集使用的图片
+        for page_file in page_files:
+            if self.should_skip_page(page_file):
+                continue
+
+            try:
+                with open(page_file, 'r', encoding='utf-8', errors='ignore') as f:
+                    page_content = f.read()
+
+                # 解析HTML内容，查找img标签
+                soup = BeautifulSoup(page_content, 'html.parser')
+                for img_tag in soup.find_all('img'):
+                    src = img_tag.get('src')
+                    if src:
+                        # 处理相对路径，提取图片文件名
+                        if src.startswith('../Images/'):
+                            img_name = src[10:]  # 移除 "../Images/"，正确的长度是10不是11
+                            used_images.add(img_name)
+                            logger.debug(f"页面 {page_file.name} 使用图片: {img_name}")
+                        elif src.startswith('Images/'):
+                            img_name = src[7:]  # 移除 "Images/"
+                            used_images.add(img_name)
+                            logger.debug(f"页面 {page_file.name} 使用图片: {img_name}")
+                        elif '/' not in src:
+                            # 直接的图片文件名
+                            used_images.add(src)
+                            logger.debug(f"页面 {page_file.name} 使用图片: {src}")
+
+            except Exception as e:
+                logger.warning(f"分析页面 {page_file} 的图片使用情况失败: {e}")
+                continue
+
+        # 添加封面图片到使用列表（如果有的话）
+        if cover_image_path:
+            # 提取封面图片文件名
+            if cover_image_path.startswith('Images/'):
+                cover_img_name = cover_image_path[7:]
+            elif '/' in cover_image_path:
+                cover_img_name = cover_image_path.split('/')[-1]
+            else:
+                cover_img_name = cover_image_path
+            used_images.add(cover_img_name)
+            logger.info(f"添加封面图片到使用列表: {cover_img_name}")
+
+        logger.info(f"本书总共使用了 {len(used_images)} 张图片: {list(used_images)}")
+
+        # 添加图片资源 - 只添加实际使用的图片
+        # 尝试多个可能的图片目录位置
+        possible_images_dirs = [
+            self.source_dir / "Images",
+            self.source_dir / "OEBPS" / "Images"
+        ]
+
+        added_images = 0
+        for images_dir in possible_images_dirs:
+            if images_dir.exists():
+                logger.info(f"找到图片目录: {images_dir}")
+                for img_name in used_images:
+                    img_file = images_dir / img_name
+                    if img_file.is_file() and img_file.suffix.lower() in ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp']:
+                        try:
+                            with open(img_file, 'rb') as f:
+                                img_data = f.read()
+
+                            img = epub.EpubImage()
+                            img.id = img_file.stem  # 直接设置id属性
+                            img.file_name = f"Images/{img_file.name}"  # 保持原始路径结构
+
+                            # 根据文件扩展名设置正确的媒体类型
+                            ext = img_file.suffix.lower()
+                            if ext == '.jpg' or ext == '.jpeg':
+                                img.media_type = "image/jpeg"
+                            elif ext == '.png':
+                                img.media_type = "image/png"
+                            elif ext == '.gif':
+                                img.media_type = "image/gif"
+                            elif ext == '.svg':
+                                img.media_type = "image/svg+xml"
+                            elif ext == '.webp':
+                                img.media_type = "image/webp"
+                            else:
+                                img.media_type = f"image/{ext[1:]}"
+
+                            img.content = img_data  # 直接设置content属性
+                            book.add_item(img)
+                            added_images += 1
+                            logger.debug(f"添加使用的图片: {img_file.name}")
+                        except Exception as e:
+                            logger.warning(f"添加图片文件 {img_file} 失败: {e}")
+                    else:
+                        logger.warning(f"找不到使用的图片文件: {img_file}")
+                break  # 找到一个有效的图片目录就退出
+
+        logger.info(f"成功添加 {added_images} 张实际使用的图片（共需要 {len(used_images)} 张）")
 
         # 添加页面内容（跳过需要排除的页面）
         chapters = []
