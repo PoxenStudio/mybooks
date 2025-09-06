@@ -58,6 +58,7 @@
         "readingBooks": "在读书籍",
         "readDoneBooks": "已读书籍",
         "physicalBooks": "实体书",
+        "audioBooks": "有声书",
         "favorites": "收藏",
         "wants": "待读",
         "reading": "在读",
@@ -549,5 +550,19 @@
         "readingDays": "已阅读 {days} 天",
         "readingWithinOneDay": "已阅读不足一天",
         "completedReading": "本书已在 {date} 读完"
+    },
+    "audio": {
+        "audioBook": "有声书",
+        "playlist": "播放列表",
+        "chapters": "章节",
+        "noAudioFiles": "暂无音频文件",
+        "currentChapter": "当前章节",
+        "timer": "定时",
+        "timerOff": "关闭定时",
+        "timer15min": "15分钟",
+        "timer30min": "30分钟",
+        "timer1hour": "1小时",
+        "playbackSpeed": "播放速度",
+        "volume": "音量"
     }
 }

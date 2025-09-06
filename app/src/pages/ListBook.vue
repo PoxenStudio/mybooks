@@ -7,7 +7,7 @@
       </v-col>
 
       <v-col>
-        <book-cards :books="books"></book-cards>
+        <book-cards :books="books" :isAudioPage="isAudioPage"></book-cards>
       </v-col>
 
       <v-col cols=12>
@@ -39,6 +39,7 @@ export default {
     page_size: 60,
     page_cnt: 0,
     inited: false,
+    isAudioPage: false, // 标识是否为音频页面
   }),
   async asyncData({route, app, res}) {
     if (res !== undefined) {
@@ -80,6 +81,11 @@ export default {
 
       case "/printbooks":
         displayTitle = this.$t('listBook.physicalBooks');
+        break;
+
+      case "/audios":
+        displayTitle = this.$t('listBook.audioBooks');
+        this.isAudioPage = true;
         break;
 
       default:

@@ -285,6 +285,7 @@ export default {
                         { icon: "mdi-translate", href: "/language", text: "appHeader.languages", color: "black"},
                         { icon: "mdi-history", href: "/recent", text: "appHeader.recentBooks", color: "primary"},
                         { icon: "mdi-bookshelf", href: "/printbooks", text: "appHeader.physicalBooks", color: "primary"},
+                        { icon: "mdi-headphones", href: "/audios", text: "appHeader.audioBooks", color: "purple"},
                     ],
                 },
 

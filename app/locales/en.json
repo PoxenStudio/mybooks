@@ -58,6 +58,7 @@
         "readingBooks": "Reading",
         "readDoneBooks": "Read",
         "physicalBooks": "Physical Books",
+        "audioBooks": "Audio Books",
         "favorites": "My Favorites",
         "wants": "Want to Read",
         "reading": "Reading",
@@ -478,6 +479,8 @@
         "rating": "Rating",
         "hotRanking": "Hot Ranking",
         "recentBooks": "Recent Books",
+        "physicalBooks": "Physical Books",
+        "audioBooks": "Audio Books",
         "systemVersion": "Revision",
         "userCount": "User Count",
         "opdsIntroduction": "About OPDS",
@@ -548,5 +551,19 @@
         "readingDays": "Reading for {days} days",
         "readingWithinOneDay": "Within one day",
         "completedReading": "This book was completed on {date}"
+    },
+    "audio": {
+        "audioBook": "Audio Book",
+        "playlist": "Playlist",
+        "chapters": "chapters",
+        "noAudioFiles": "No audio files available",
+        "currentChapter": "Current Chapter",
+        "timer": "Timer",
+        "timerOff": "Timer Off",
+        "timer15min": "15 minutes",
+        "timer30min": "30 minutes",
+        "timer1hour": "1 hour",
+        "playbackSpeed": "Playback Speed",
+        "volume": "Volume"
     }
 }

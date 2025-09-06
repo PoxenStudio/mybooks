@@ -10,6 +10,10 @@
                             <div v-if="book.book_type === 1" class="physical-book-badge">
                                 <v-icon small color="white">mdi-bookshelf</v-icon>
                             </div>
+                            <!-- 音频书角标 -->
+                            <div v-if="isAudioPage" class="audio-book-badge">
+                                <v-icon small color="white">mdi-headphones</v-icon>
+                            </div>
                         </div>
                     </v-col>
                     <v-col cols=9 class='col-book-info'>
@@ -33,6 +37,10 @@
 export default {
     props: {
         books: Array,
+        isAudioPage: {
+            type: Boolean,
+            default: false
+        }
     },
     components: {
     },
@@ -40,7 +48,11 @@ export default {
         render_books: function() {
             return this.books.map( b => {
                 if ( b['href'] == undefined ) {
-                    b['href'] = "/book/" + b.id;
+                    if (this.isAudioPage) {
+                        b['href'] = "/audio/" + b.id;
+                    } else {
+                        b['href'] = "/book/" + b.id;
+                    }
                 }
                 return b;
             });
@@ -111,6 +123,20 @@ export default {
     align-items: center;
     justify-content: center;
     box-shadow: 0 2px 8px rgba(33, 150, 243, 0.4);
+    z-index: 3;
+}
+.audio-book-badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background-color: #9C27B0;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(156, 39, 176, 0.4);
     z-index: 3;
 }
 .col-book-info {

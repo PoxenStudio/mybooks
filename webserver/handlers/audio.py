@@ -3,12 +3,14 @@
 
 import logging
 import os
+import re
 import shutil
 import threading
 import time
 from gettext import gettext as _
 
 import tornado
+from tornado import web
 
 from webserver import loader
 from webserver.handlers.base import BaseHandler, auth, js
@@ -19,7 +21,12 @@ CONF = loader.get_settings()
 # map of conversion workers, key is book id, value is instance of the worker
 ConversionWorkerMap = {}
 ALLOW_MAX_RUNNING_WORKERS = CONF.get("BOOK2AUDIO_MAX_WORKERS", 2)
-AUDIO_OUTPUT_FOLDER = CONF.get("audio_output_folder", "/data/books/audios/")
+# 获取项目根目录
+import inspect
+current_file = inspect.getfile(inspect.currentframe())
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_file)))
+default_audio_path = os.path.join(project_root, "tests", "audios")
+AUDIO_OUTPUT_FOLDER = CONF.get("audio_output_folder", default_audio_path)
 
 
 class AudioUtils:
@@ -107,6 +114,7 @@ class AudioDetail(BaseHandler):
                             "size": os.path.getsize(os.path.join(audio_dir, file))
                         })
                     return {
+                        "err": "ok",
                         "audio_dir": audio_dir,
                         "audios": file_urls,
                         "status": EpubToAudioWorker.STATUS_COMPLETED,
@@ -125,6 +133,52 @@ class AudioDetail(BaseHandler):
             return {"err": "params.invalid", "msg": _(u"无效的书籍ID")}
         except Exception as e:
             logging.error(f"Error in AudioDetail.get: {e}")
+            return {"err": "server.error", "msg": str(e)}
+
+
+class AudioBooks(BaseHandler):
+    @js
+    def get(self):
+        """获取有音频的书籍列表"""
+        try:
+            # 获取启动参数
+            start = self.get_argument_start()
+            size = int(self.get_argument("size", 60))
+
+            # 扫描音频目录，获取有音频文件的书籍ID
+            audio_book_ids = []
+            if os.path.exists(AUDIO_OUTPUT_FOLDER):
+                for item in os.listdir(AUDIO_OUTPUT_FOLDER):
+                    item_path = os.path.join(AUDIO_OUTPUT_FOLDER, item)
+                    if os.path.isdir(item_path) and item.isdigit():
+                        book_id = int(item)
+                        # 检查目录中是否有音频文件
+                        audio_files = [f for f in os.listdir(item_path)
+                                      if f.endswith(('.mp3', '.wav', '.m4a', '.opus'))]
+                        if audio_files:
+                            audio_book_ids.append(book_id)
+
+            # 按书籍ID倒序排序（新的在前）
+            audio_book_ids.sort(reverse=True)
+
+            # 分页处理
+            total = len(audio_book_ids)
+            paginated_ids = audio_book_ids[start:start + size]
+
+            # 获取书籍信息，参考 base.py 中的 get_books 函数进行权限过滤
+            books = []
+            if paginated_ids:
+                books = self.get_books(ids=paginated_ids)
+
+            return {
+                "err": "ok",
+                "title": _(u"有声书"),
+                "books": books,
+                "total": total
+            }
+
+        except Exception as e:
+            logging.error(f"Error in AudioBooks.get: {e}")
             return {"err": "server.error", "msg": str(e)}
 
 
@@ -333,49 +387,91 @@ class AudioDelete(BaseHandler):
             return {"err": "server.error", "msg": str(e)}
 
 
-class AudioDownload(BaseHandler):
-    @js
+class AudioFile(BaseHandler):
     def get(self, book_id, filename):
-        # Download audio file for the book
+        """提供音频文件的静态文件服务"""
         try:
             book_id = int(book_id)
-            book = self.get_book(book_id)
-            if not book:
-                return {"err": "params.book.invalid", "msg": _(u"书籍未找到")}
 
-            # Security check: ensure filename doesn't contain path traversal
+            # 安全检查: 确保文件名不包含路径遍历
             if ".." in filename or "/" in filename:
-                return {"err": "params.invalid", "msg": _(u"无效的文件名")}
+                raise web.HTTPError(403, "Invalid filename")
 
             audio_dir = os.path.join(AUDIO_OUTPUT_FOLDER, str(book_id))
             file_path = os.path.join(audio_dir, filename)
 
             if not os.path.exists(file_path):
-                return {"err": "audio.not_found", "msg": _(u"音频文件未找到")}
+                raise web.HTTPError(404, "Audio file not found")
 
-            # Set appropriate headers for audio file download
-            self.set_header("Content-Type", "audio/mpeg")
-            self.set_header("Content-Disposition", f"attachment; filename=\"{filename}\"")
+            # 设置适当的Content-Type
+            if filename.endswith('.mp3'):
+                self.set_header("Content-Type", "audio/mpeg")
+            elif filename.endswith('.wav'):
+                self.set_header("Content-Type", "audio/wav")
+            elif filename.endswith('.m4a'):
+                self.set_header("Content-Type", "audio/mp4")
+            elif filename.endswith('.opus'):
+                self.set_header("Content-Type", "audio/opus")
+            else:
+                self.set_header("Content-Type", "audio/mpeg")
 
+            # 支持范围请求 (Range requests) 用于音频播放
+            self.set_header("Accept-Ranges", "bytes")
+
+            # 获取文件大小
+            file_size = os.path.getsize(file_path)
+
+            # 处理范围请求
+            range_header = self.request.headers.get("Range")
+            if range_header:
+                range_match = re.match(r"bytes=(\d+)-(\d*)", range_header)
+                if range_match:
+                    start = int(range_match.group(1))
+                    end = int(range_match.group(2)) if range_match.group(2) else file_size - 1
+
+                    if start >= file_size:
+                        self.set_status(416)  # Range Not Satisfiable
+                        return
+
+                    self.set_status(206)  # Partial Content
+                    self.set_header("Content-Range", f"bytes {start}-{end}/{file_size}")
+                    self.set_header("Content-Length", str(end - start + 1))
+
+                    with open(file_path, "rb") as f:
+                        f.seek(start)
+                        remaining = end - start + 1
+                        while remaining > 0:
+                            chunk_size = min(8192, remaining)
+                            chunk = f.read(chunk_size)
+                            if not chunk:
+                                break
+                            self.write(chunk)
+                            remaining -= len(chunk)
+                    return
+
+            # 正常文件传输
+            self.set_header("Content-Length", str(file_size))
             with open(file_path, "rb") as f:
                 while True:
-                    chunk = f.read(1024 * 1024)  # 1MB chunks
+                    chunk = f.read(8192)
                     if not chunk:
                         break
                     self.write(chunk)
 
         except ValueError:
-            return {"err": "params.invalid", "msg": _(u"无效的书籍ID")}
+            raise web.HTTPError(400, "Invalid book ID")
         except Exception as e:
-            logging.error(f"Error in AudioDownload.get: {e}")
-            return {"err": "server.error", "msg": str(e)}
+            logging.error(f"Error in AudioFile.get: {e}")
+            raise web.HTTPError(500, "Internal server error")
 
 
 def routes():
     return [
         (r"/api/audio/([0-9]+)", AudioDetail),
-        (r"/api/audio/([0-9]+)/download/([^/]+)", AudioDownload),
         (r"/api/audio/([0-9]+)/conversion", AudioConversion),
         (r"/api/audio/([0-9]+)/cancel", AudioConversionCancel),
-        (r"/api/audio/([0-9]+)/delete", AudioDelete)
+        (r"/api/audio/([0-9]+)/delete", AudioDelete),
+        (r"/audios", AudioBooks),  # 音频书籍列表
+        # 音频文件服务
+        (r"/audios/([0-9]+)/([^/]+)", AudioFile),
     ]
