@@ -153,8 +153,7 @@ class AudioBooks(BaseHandler):
                     if os.path.isdir(item_path) and item.isdigit():
                         book_id = int(item)
                         # 检查目录中是否有音频文件
-                        audio_files = [f for f in os.listdir(item_path)
-                                      if f.endswith(('.mp3', '.wav', '.m4a', '.opus'))]
+                        audio_files = [f for f in os.listdir(item_path) if f.endswith(('.mp3', '.wav', '.m4a', '.opus'))]
                         if audio_files:
                             audio_book_ids.append(book_id)
                             audios_cnt_map[book_id] = len(audio_files)
