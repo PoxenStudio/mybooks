@@ -105,7 +105,7 @@ class BookDetail(BaseHandler):
             "err": "ok",
             "kindle_sender": CONF["smtp_username"],
             "book": utils.BookFormatter(self, book).format(with_files=True, with_perms=True),
-            "audios": AudioUtils.get_audios(bid),
+            "audios": AudioUtils.get_audios(bid, self.current_user.id if self.current_user else None),
         }
 
 

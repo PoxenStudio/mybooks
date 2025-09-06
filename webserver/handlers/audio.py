@@ -38,8 +38,11 @@ class AudioUtils:
         return sum(1 for worker in ConversionWorkerMap.values() if worker.is_running())
 
     @staticmethod
-    def get_audios(bid):
+    def get_audios(bid, uid=None):
         """Get audio files for a book."""
+        if uid is None:
+            return {"status": "unavailable", "msg": _(u"登录后才能查看音频"), "count": 0}
+
         if not AudioUtils.site_url:
             AudioUtils.site_url = BaseHandler.get_site_url()
 
