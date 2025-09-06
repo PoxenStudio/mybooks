@@ -914,9 +914,13 @@ class BookDelete(BaseHandler):
         if not self.current_user.can_delete() or not (self.is_admin() or self.is_book_owner(bid, cid)):
             return {"err": "permission", "msg": _(u"无权操作")}
 
-        self.calibre_db.delete_book(bid)
-        self.add_msg("success", _(u"删除书籍《%s》") % book["title"])
-        return {"err": "ok", "msg": _(u"删除成功")}
+        try:
+            self.calibre_db.delete_book(bid)
+            self.add_msg("success", _(u"删除书籍《%s》") % book["title"])
+            return {"err": "ok", "msg": _(u"删除成功")}
+        except Exception as e:
+            logging.error(f"删除书籍《{book['title']}》失败: {e}")
+            return {"err": "fail", "msg": _(u"删除失败, 请查看日志。如果一直出错，请联系管理员。")}
 
 
 class BookDownload(BaseHandler, web.StaticFileHandler):
@@ -1159,7 +1163,10 @@ class BookUpload(BaseHandler):
         with open(fpath, "rb") as stream:
             mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
             mi.title = utils.super_strip(mi.title)
-            mi.authors = [utils.super_strip(mi.author_sort)]
+            if mi.author_sort == "Unknown" and mi.authors and len(mi.authors) > 0:
+                mi.authors = [utils.super_strip(a) for a in mi.authors]
+            else:
+                mi.authors = [utils.super_strip(mi.author_sort)]
 
         # 非结构化的格式，calibre无法识别准确的信息，直接从文件名提取
         if fmt in ["txt", "pdf"]:
