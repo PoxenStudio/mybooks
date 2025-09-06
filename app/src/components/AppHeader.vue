@@ -279,11 +279,11 @@ export default {
                 {
                     target: "",
                     links: [
+                        { icon: "mdi-headphones", href: "/audiobooks", text: "appHeader.audioBooks", color: "purple"},
                         { icon: "mdi-trending-up", href: "/hot", text: "appHeader.hotRanking", color: "orange"},
                         { icon: "mdi-translate", href: "/language", text: "appHeader.languages", color: "black"},
                         { icon: "mdi-history", href: "/recent", text: "appHeader.recentBooks", color: "primary"},
                         { icon: "mdi-bookshelf", href: "/printbooks", text: "appHeader.physicalBooks", color: "primary"},
-                        { icon: "mdi-headphones", href: "/audios", text: "appHeader.audioBooks", color: "purple"},
                         { icon: "mdi-star-shooting", href: "/rating", text: "appHeader.rating", color: "orange"},
                         { icon: "mdi-library-shelves", href: "/series", text: "appHeader.series", count: this.sys.series, color: "primary"},
                     ],

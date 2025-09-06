@@ -21,12 +21,7 @@ CONF = loader.get_settings()
 # map of conversion workers, key is book id, value is instance of the worker
 ConversionWorkerMap = {}
 ALLOW_MAX_RUNNING_WORKERS = CONF.get("BOOK2AUDIO_MAX_WORKERS", 2)
-# 获取项目根目录
-import inspect
-current_file = inspect.getfile(inspect.currentframe())
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_file)))
-default_audio_path = os.path.join(project_root, "tests", "audios")
-AUDIO_OUTPUT_FOLDER = CONF.get("audio_output_folder", default_audio_path)
+AUDIO_OUTPUT_FOLDER = CONF.get("audio_output_folder", "/data/books/audios/")
 
 
 class AudioUtils:
@@ -483,6 +478,6 @@ def routes():
         (r"/api/audio/([0-9]+)/conversion", AudioConversion),
         (r"/api/audio/([0-9]+)/cancel", AudioConversionCancel),
         (r"/api/audio/([0-9]+)/delete", AudioDelete),
-        (r"/api/audios", AudioBooks),  # 音频书籍列表
+        (r"/api/audiobooks", AudioBooks),  # 音频书籍列表
         (r"/api/audios/([0-9]+)/([^/]+)", AudioFile),
     ]

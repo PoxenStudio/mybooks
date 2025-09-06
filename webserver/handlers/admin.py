@@ -26,7 +26,7 @@ from webserver.utils import SimpleBookFormatter
 from webserver.version import VERSION
 
 CONF = loader.get_settings()
-
+USER_UPDATE_TS_MAP = {}
 
 class AdminUsers(BaseHandler):
     @js
@@ -79,9 +79,15 @@ class AdminUsers(BaseHandler):
                     d[attr] = getattr(user, attr)()
 
             # Update the user statistic count
-            if "upload_history_count" not in d["extra"]:
+            need_update = False
+            ts = USER_UPDATE_TS_MAP.get(user.id, 0)
+            if not ts or (datetime.datetime.now() - ts).total_seconds() > 3600:
+                need_update = True
+                USER_UPDATE_TS_MAP[user.id] = datetime.datetime.now()
+            if need_update or "upload_history_count" not in user.extra:
                 d["extra"]["upload_history_count"] = self.get_user_upload_cnt(user.id)
-
+            else:
+                d["extra"]["upload_history_count"] = user.extra.get("upload_history_count", 0)
             items.append(d)
         return {"err": "ok", "users": {"items": items, "total": total}}
 
