@@ -585,9 +585,7 @@ class PrintBooks(BaseHandler):
             books.sort(key=lambda x: x["id"], reverse=True)
 
             books_result = []
-            index = 0
             for book in books:
-                index += 1
                 book_data = utils.BookFormatter(self, book).format()
                 books_result.append(book_data)
 

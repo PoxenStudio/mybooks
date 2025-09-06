@@ -202,7 +202,7 @@ export default {
       }
 
       // 获取音频文件列表
-      const audioResponse = await app.$backend(`/api/audio/${bookId}`);
+      const audioResponse = await app.$backend(`/audio/${bookId}`);
 
       return {
         book: bookResponse.book,

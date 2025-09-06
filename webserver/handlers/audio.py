@@ -12,7 +12,7 @@ from gettext import gettext as _
 import tornado
 from tornado import web
 
-from webserver import loader
+from webserver import loader, utils
 from webserver.handlers.base import BaseHandler, auth, js
 from webserver.worker.epub2audio_worker import EpubToAudioWorker
 
@@ -117,7 +117,6 @@ class AudioDetail(BaseHandler):
                         "err": "ok",
                         "audio_dir": audio_dir,
                         "audios": file_urls,
-                        "status": EpubToAudioWorker.STATUS_COMPLETED,
                         "total_files": len(audio_files)
                     }
 
@@ -146,6 +145,7 @@ class AudioBooks(BaseHandler):
             size = int(self.get_argument("size", 60))
 
             # 扫描音频目录，获取有音频文件的书籍ID
+            audios_cnt_map = {}
             audio_book_ids = []
             if os.path.exists(AUDIO_OUTPUT_FOLDER):
                 for item in os.listdir(AUDIO_OUTPUT_FOLDER):
@@ -157,6 +157,7 @@ class AudioBooks(BaseHandler):
                                       if f.endswith(('.mp3', '.wav', '.m4a', '.opus'))]
                         if audio_files:
                             audio_book_ids.append(book_id)
+                            audios_cnt_map[book_id] = len(audio_files)
 
             # 按书籍ID倒序排序（新的在前）
             audio_book_ids.sort(reverse=True)
@@ -170,10 +171,17 @@ class AudioBooks(BaseHandler):
             if paginated_ids:
                 books = self.get_books(ids=paginated_ids)
 
+            books_result = []
+            for book in books:
+                book_data = utils.BookFormatter(self, book).format()
+                book_data['has_audio'] = True
+                book_data['audio_count'] = audios_cnt_map.get(book['id'], 0)
+                books_result.append(book_data)
+
             return {
                 "err": "ok",
                 "title": _(u"有声书"),
-                "books": books,
+                "books": books_result,
                 "total": total
             }
 
@@ -471,7 +479,6 @@ def routes():
         (r"/api/audio/([0-9]+)/conversion", AudioConversion),
         (r"/api/audio/([0-9]+)/cancel", AudioConversionCancel),
         (r"/api/audio/([0-9]+)/delete", AudioDelete),
-        (r"/audios", AudioBooks),  # 音频书籍列表
-        # 音频文件服务
-        (r"/audios/([0-9]+)/([^/]+)", AudioFile),
+        (r"/api/audios", AudioBooks),  # 音频书籍列表
+        (r"/api/audios/([0-9]+)/([^/]+)", AudioFile),
     ]
