@@ -22,9 +22,20 @@
       <div class="playlist-section">
         <div class="playlist-header">
           <h3>{{ $t('audio.playlist') }}</h3>
-          <v-chip v-if="audioFiles.length > 0" small outlined>
-            {{ audioFiles.length }} {{ $t('audio.chapters') }}
-          </v-chip>
+          <div class="playlist-controls">
+            <v-chip v-if="audioFiles.length > 0" small outlined class="chapter-info">
+              {{ currentTrackIndex + 1 }}/{{ audioFiles.length }}
+            </v-chip>
+            <v-btn
+              small
+              outlined
+              @click="closePlayer"
+              class="close-btn"
+            >
+              <v-icon small left>mdi-close</v-icon>
+              {{ $t('common.close') }}
+            </v-btn>
+          </div>
         </div>
 
         <div class="playlist-container" v-if="audioFiles.length > 0">
@@ -81,7 +92,7 @@
             large
             @click="previousTrack"
             :disabled="currentTrackIndex <= 0"
-            class="control-btn"
+            class="control-btn nav-btn"
           >
             <v-icon>mdi-skip-previous</v-icon>
           </v-btn>
@@ -103,7 +114,7 @@
             large
             @click="nextTrack"
             :disabled="currentTrackIndex >= audioFiles.length - 1"
-            class="control-btn"
+            class="control-btn nav-btn"
           >
             <v-icon>mdi-skip-next</v-icon>
           </v-btn>
@@ -114,12 +125,14 @@
           <v-menu offset-y>
             <template v-slot:activator="{ on, attrs }">
               <v-btn
-                text
+                icon
+                large
                 v-bind="attrs"
                 v-on="on"
                 class="speed-btn"
               >
-                {{ playbackRate }}x
+                <v-icon>mdi-speedometer</v-icon>
+                <span class="speed-text">{{ playbackRate }}x</span>
               </v-btn>
             </template>
             <v-list>
@@ -137,14 +150,14 @@
           <v-menu offset-y>
             <template v-slot:activator="{ on, attrs }">
               <v-btn
-                text
+                icon
+                large
                 v-bind="attrs"
                 v-on="on"
                 class="timer-btn"
                 :color="sleepTimer ? 'primary' : ''"
               >
-                <v-icon left>mdi-timer</v-icon>
-                {{ sleepTimer ? sleepTimer.label : $t('audio.timer') }}
+                <v-icon>{{ sleepTimer ? 'mdi-timer' : 'mdi-timer-outline' }}</v-icon>
               </v-btn>
             </template>
             <v-list>
@@ -160,18 +173,6 @@
               </v-list-item>
             </v-list>
           </v-menu>
-
-          <!-- 音量控制 -->
-          <div class="volume-control">
-            <v-icon>mdi-volume-high</v-icon>
-            <v-slider
-              v-model="volume"
-              :max="100"
-              hide-details
-              @input="setVolume"
-              class="volume-slider"
-            ></v-slider>
-          </div>
         </div>
       </div>
     </div>
@@ -207,14 +208,16 @@ export default {
       return {
         book: bookResponse.book,
         audioFiles: audioResponse.audios || [],
-        audioStatus: audioResponse.status || 'unavailable'
+        audioStatus: audioResponse.status || 'unavailable',
+        bookId: bookId
       };
     } catch (error) {
       console.error('Error loading audio data:', error);
       return {
         book: {},
         audioFiles: [],
-        audioStatus: 'unavailable'
+        audioStatus: 'unavailable',
+        bookId: params.id
       };
     }
   },
@@ -241,7 +244,6 @@ export default {
       // 音频设置
       playbackRate: 1,
       playbackRates: [0.5, 1, 1.25, 1.5, 2],
-      volume: 80,
 
       // 定时器
       sleepTimer: null,
@@ -251,7 +253,11 @@ export default {
         { value: 15, label: this.$t('audio.timer15min') },
         { value: 30, label: this.$t('audio.timer30min') },
         { value: 60, label: this.$t('audio.timer1hour') }
-      ]
+      ],
+
+      // 播放位置记录
+      saveProgressInterval: null,
+      bookId: null
     };
   },
 
@@ -263,10 +269,14 @@ export default {
 
   mounted() {
     this.initializePlayer();
+    this.restorePlaybackPosition();
+    this.startProgressSaving();
   },
 
   beforeDestroy() {
+    this.savePlaybackPosition();
     this.clearSleepTimer();
+    this.stopProgressSaving();
     if (this.$refs.audioPlayer) {
       this.$refs.audioPlayer.pause();
     }
@@ -277,7 +287,6 @@ export default {
       if (this.audioFiles.length > 0) {
         this.loadTrack(0);
       }
-      this.setVolume(this.volume);
     },
 
     loadTrack(index) {
@@ -291,6 +300,9 @@ export default {
 
     selectTrack(index) {
       if (index !== this.currentTrackIndex) {
+        // 保存当前播放位置
+        this.savePlaybackPosition();
+
         this.loadTrack(index);
         if (this.isPlaying) {
           this.$nextTick(() => {
@@ -312,6 +324,9 @@ export default {
 
     previousTrack() {
       if (this.currentTrackIndex > 0) {
+        // 保存当前播放位置
+        this.savePlaybackPosition();
+
         this.loadTrack(this.currentTrackIndex - 1);
         if (this.isPlaying) {
           this.$nextTick(() => {
@@ -323,6 +338,9 @@ export default {
 
     nextTrack() {
       if (this.currentTrackIndex < this.audioFiles.length - 1) {
+        // 保存当前播放位置
+        this.savePlaybackPosition();
+
         this.loadTrack(this.currentTrackIndex + 1);
         if (this.isPlaying) {
           this.$nextTick(() => {
@@ -343,13 +361,6 @@ export default {
       this.playbackRate = rate;
       if (this.$refs.audioPlayer) {
         this.$refs.audioPlayer.playbackRate = rate;
-      }
-    },
-
-    setVolume(value) {
-      this.volume = value;
-      if (this.$refs.audioPlayer) {
-        this.$refs.audioPlayer.volume = value / 100;
       }
     },
 
@@ -403,6 +414,9 @@ export default {
     },
 
     onTrackEnded() {
+      // 保存播放位置
+      this.savePlaybackPosition();
+
       // 检查定时器
       if (this.sleepTimer && this.sleepTimer.type === 'current') {
         this.pauseAndClearTimer();
@@ -414,6 +428,8 @@ export default {
         this.nextTrack();
       } else {
         this.isPlaying = false;
+        // 整本书播放完成，可以选择清除播放位置记录
+        // this.clearPlaybackPosition();
       }
     },
 
@@ -442,6 +458,148 @@ export default {
       if (!bytes) return '';
       const mb = bytes / (1024 * 1024);
       return `${mb.toFixed(1)}MB`;
+    },
+
+    // 播放位置管理方法
+    getStorageKey() {
+      // 生成存储键：audio_progress_用户ID_书籍ID
+      const userId = this.$store.state.user?.id || 'guest';
+      return `audio_progress_${userId}_${this.bookId}`;
+    },
+
+    savePlaybackPosition() {
+      if (!process.client || !this.bookId) return;
+
+      try {
+        const progressData = {
+          trackIndex: this.currentTrackIndex,
+          currentTime: this.currentTime,
+          timestamp: Date.now(),
+          bookTitle: this.book.title || '',
+          totalTracks: this.audioFiles.length
+        };
+
+        localStorage.setItem(this.getStorageKey(), JSON.stringify(progressData));
+        console.log('Saved playback position:', progressData);
+      } catch (error) {
+        console.error('Error saving playback position:', error);
+      }
+    },
+
+    restorePlaybackPosition() {
+      if (!process.client || !this.bookId || this.audioFiles.length === 0) return;
+
+      try {
+        const saved = localStorage.getItem(this.getStorageKey());
+        if (!saved) return;
+
+        const progressData = JSON.parse(saved);
+
+        // 验证数据的有效性
+        if (
+          progressData.trackIndex >= 0 &&
+          progressData.trackIndex < this.audioFiles.length &&
+          progressData.currentTime >= 0
+        ) {
+          console.log('Restoring playback position:', progressData);
+
+          // 恢复播放位置
+          this.currentTrackIndex = progressData.trackIndex;
+
+          // 加载对应的音频文件
+          this.loadTrack(this.currentTrackIndex);
+
+          // 等待音频加载完成后设置时间位置
+          this.$nextTick(() => {
+            if (this.$refs.audioPlayer) {
+              const onCanPlay = () => {
+                this.$refs.audioPlayer.currentTime = progressData.currentTime;
+                this.$refs.audioPlayer.removeEventListener('canplay', onCanPlay);
+              };
+
+              if (this.$refs.audioPlayer.readyState >= 2) {
+                // 如果音频已经加载完成
+                this.$refs.audioPlayer.currentTime = progressData.currentTime;
+              } else {
+                // 等待音频加载完成
+                this.$refs.audioPlayer.addEventListener('canplay', onCanPlay);
+              }
+            }
+          });
+
+          // 显示恢复提示信息
+          if (this.$refs.audioPlayer && progressData.currentTime > 10) {
+            this.showRestoreMessage(progressData);
+          }
+        }
+      } catch (error) {
+        console.error('Error restoring playback position:', error);
+      }
+    },
+
+    showRestoreMessage(progressData) {
+      // 可以在这里添加一个提示消息，告知用户已恢复播放位置
+      const minutes = Math.floor(progressData.currentTime / 60);
+      const seconds = Math.floor(progressData.currentTime % 60);
+      const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+      console.log(`已恢复到第${progressData.trackIndex + 1}章 ${timeStr} 的播放位置`);
+
+      // 这里可以添加 toast 通知或其他 UI 提示
+      // 例如：this.$toast.info(`已恢复到第${progressData.trackIndex + 1}章 ${timeStr} 的播放位置`);
+    },
+
+    startProgressSaving() {
+      // 每5秒自动保存一次播放进度
+      this.saveProgressInterval = setInterval(() => {
+        if (this.isPlaying && this.currentTime > 0) {
+          this.savePlaybackPosition();
+        }
+      }, 5000);
+    },
+
+    stopProgressSaving() {
+      if (this.saveProgressInterval) {
+        clearInterval(this.saveProgressInterval);
+        this.saveProgressInterval = null;
+      }
+    },
+
+    clearPlaybackPosition() {
+      // 清除播放位置记录（可用于"从头开始"功能）
+      if (!process.client || !this.bookId) return;
+
+      try {
+        localStorage.removeItem(this.getStorageKey());
+        console.log('Cleared playback position for book:', this.bookId);
+      } catch (error) {
+        console.error('Error clearing playback position:', error);
+      }
+    },
+
+    startFromBeginning() {
+      // 从头开始播放
+      this.clearPlaybackPosition();
+      this.currentTrackIndex = 0;
+      this.currentTime = 0;
+      this.loadTrack(0);
+
+      if (this.$refs.audioPlayer) {
+        this.$refs.audioPlayer.currentTime = 0;
+      }
+
+      console.log('Started from beginning');
+    },
+
+    closePlayer() {
+      // 停止播放并保存当前位置
+      if (this.$refs.audioPlayer) {
+        this.$refs.audioPlayer.pause();
+      }
+      this.savePlaybackPosition();
+
+      // 退出播放界面
+      this.$router.go(-1); // 返回上一页
     }
   }
 };
@@ -515,6 +673,28 @@ export default {
 .playlist-header h3 {
   margin: 0;
   color: #ffffff;
+}
+
+.playlist-controls {
+  display: flex;
+  align-items: center;
+}
+
+.close-btn {
+  background-color: #404040 !important;
+  color: white !important;
+  border-color: #666666 !important;
+}
+
+.chapter-info {
+  background-color: transparent !important;
+  color: white !important;
+  border-color: #666666 !important;
+  margin-right: 8px;
+}
+
+.chapter-info .v-chip__content {
+  color: white !important;
 }
 
 .playlist-container {
@@ -640,6 +820,16 @@ export default {
   background-color: #404040 !important;
 }
 
+.nav-btn:not(:disabled) {
+  background-color: #404040 !important;
+  color: white !important;
+}
+
+.nav-btn:disabled {
+  background-color: #2a2a2a !important;
+  color: #666666 !important;
+}
+
 .play-btn {
   background-color: #9C27B0 !important;
   color: white !important;
@@ -657,13 +847,22 @@ export default {
 .timer-btn {
   background-color: #404040 !important;
   color: white !important;
+  position: relative;
 }
 
-.volume-control {
+.speed-text {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  font-size: 10px;
+  background-color: #9C27B0;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-width: 120px;
+  justify-content: center;
+  line-height: 1;
 }
 
 .volume-slider {

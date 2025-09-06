@@ -558,6 +558,7 @@
         "chapters": "chapters",
         "noAudioFiles": "No audio files available",
         "currentChapter": "Current Chapter",
+        "startFromBeginning": "Start From Beginning",
         "timer": "Timer",
         "timerOff": "Timer Off",
         "timer15min": "15 minutes",

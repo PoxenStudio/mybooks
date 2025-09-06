@@ -558,6 +558,7 @@
         "chapters": "章节",
         "noAudioFiles": "暂无音频文件",
         "currentChapter": "当前章节",
+        "startFromBeginning": "重新开始",
         "timer": "定时",
         "timerOff": "关闭定时",
         "timer15min": "15分钟",
