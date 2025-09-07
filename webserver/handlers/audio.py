@@ -442,8 +442,11 @@ class AudioFile(BaseHandler):
             # URL解码文件名
             filename = urllib.parse.unquote(filename)
 
-            user = self.get_current_user()
             enable_vip_quota = CONF.get(ENABLE_VIP_QUOTA_KEY, False)
+            if enable_vip_quota:
+                user = self.get_current_user_sync()
+            else:
+                user = self.get_current_user()
 
             if enable_vip_quota:
                 # 检查当前用户是否已购买此书
@@ -754,7 +757,7 @@ class AudioPurchase(BaseHandler):
             book_id = int(book_id)
 
             # 获取当前用户
-            user = self.get_current_user()
+            user = self.get_current_user_sync()
             if not user:
                 return {"err": "auth.required", "msg": _("需要登录")}
 

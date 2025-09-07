@@ -328,8 +328,10 @@ class UserInfo(BaseHandler):
     def get_user_info(self, detail):
         enable_vip_quota = CONF.get("ENABLE_VIP_QUOTA", False)
         if enable_vip_quota:
-            self.sqlite_session.expunge(self.current_user)
-        user = self.get_current_user()
+            user = self.get_current_user_sync()
+            logging.info("Refreshed user info for VIP quota check: %s", user)
+        else:
+            user = self.get_current_user()
         d = {
             "avatar": "https://tva1.sinaimg.cn/default/images/default_avatar_male_50.gif",
             "is_login": False,
@@ -414,8 +416,7 @@ class UserVipInfo(BaseHandler):
                 "vip_expire": "",
             }
 
-        self.sqlite_session.expunge(self.current_user)
-        user = self.get_current_user()
+        user = self.get_current_user_sync()
         return {
             "err": "ok",
             "vipquota": user.vipquota or 0,

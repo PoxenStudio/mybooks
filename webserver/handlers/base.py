@@ -299,6 +299,14 @@ class BaseHandler(web.RequestHandler):
             self.admin_user = user
         return user
 
+    def get_current_user_sync(self):
+        user_id = self.user_id()
+        if user_id:
+            user_id = int(user_id)
+        self.sqlite_session.expunge(self.current_user)
+        user = self.sqlite_session.query(Reader).filter(Reader.id == user_id).first()
+        return user
+
     def is_admin(self):
         if self.admin_user:
             return True
