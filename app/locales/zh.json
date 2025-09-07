@@ -207,7 +207,8 @@
             "edit": "编辑",
             "delete": "删除",
             "push": "推送",
-            "read": "在线阅读"
+            "read": "在线阅读",
+            "vipquota": "额度{count}本"
         }
     },
     "imports": {
@@ -575,6 +576,7 @@
         "purchaseFailed": "购买失败，请稍后重试",
         "notPurchased": "您还未购买此音频，请先购买",
         "dailyLimitExceeded": "今日已下载过此音频合集，请明天再试",
-        "purchaseHint": "购买后解锁全部章节及下载功能"
+        "purchaseHint": "购买后解锁全部章节及下载功能",
+        "downloadFailed": "下载失败，请稍后重试"
     }
 }

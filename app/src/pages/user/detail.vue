@@ -137,19 +137,20 @@
         ></v-text-field>
       </v-col>
 
-      <!-- Kindle Email -->
-      <v-col cols="3">
-        <v-subheader class="pa-0 float-right">{{ $t('user.kindleAddress') }}</v-subheader>
+      <!-- VIP Quota -->
+      <v-col cols="3" v-if="user.vipquota !== undefined">
+        <v-subheader class="pa-0 float-right">VIP配额</v-subheader>
       </v-col>
-      <v-col cols="9">
-        <v-text-field
-          solo
-          v-model="user.kindle_email"
-          :label="$t('user.kindle')"
-          type="text"
-          autocomplete="new-email"
-          :rules="[rules.email]"
-        ></v-text-field>
+      <v-col cols="9" v-if="user.vipquota !== undefined">
+        <p class="pt-3 mb-0">{{ user.vipquota }}</p>
+      </v-col>
+
+      <!-- VIP Expire -->
+      <v-col cols="3" v-if="user.vip_expire && user.vip_expire.length > 0">
+        <v-subheader class="pa-0 float-right">VIP有效期</v-subheader>
+      </v-col>
+      <v-col cols="9" v-if="user.vip_expire && user.vip_expire.length > 0">
+        <p class="pt-3 mb-0">{{ user.vip_expire }}</p>
       </v-col>
 
       <!-- Save Button -->
@@ -175,7 +176,9 @@ export default {
         password0: '',
         password1: '',
         password2: '',
-        is_active: false
+        is_active: false,
+        vipquota: undefined,
+        vip_expire: ''
       },
       show_pass: false,
       rules: {

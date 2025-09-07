@@ -573,29 +573,31 @@ class AudioCollection(BaseHandler):
                 db_log.save()
                 return {"err": "book.not_found", "msg": _("书籍未找到")}
 
-            # 检查用户是否已购买此书
-            paid_record = self.sqlite_session.query(ReaderPaidBook).filter_by(
-                reader_id=user.id,
-                book_id=book_id
-            ).first()
+            enable_vip_quota = CONF.get(ENABLE_VIP_QUOTA_KEY, False)
+            if enable_vip_quota:
+                # 检查用户是否已购买此书
+                paid_record = self.sqlite_session.query(ReaderPaidBook).filter_by(
+                    reader_id=user.id,
+                    book_id=book_id
+                ).first()
 
-            if not paid_record:
-                db_log.set_extra('result', -1)
-                db_log.set_extra('reason', "not.purchased")
-                db_log.save()
-                return {"err": "not.purchased", "msg": _("您还未购买此音频，请先购买")}
-
-            # 检查每日下载限制
-            download_key = (user.id, book_id)
-            today = datetime.datetime.now().date()
-
-            if download_key in DailyDownloadMap:
-                last_download = DailyDownloadMap[download_key]
-                if last_download.date() == today:
+                if not paid_record:
                     db_log.set_extra('result', -1)
-                    db_log.set_extra('reason', "daily.limit.exceeded")
+                    db_log.set_extra('reason', "not.purchased")
                     db_log.save()
-                    return {"err": "daily.limit.exceeded", "msg": _("今日已下载过此音频合集，请明天再试")}
+                    return {"err": "not.purchased", "msg": _("您还未购买此音频，请先购买")}
+
+                # 检查每日下载限制
+                download_key = (user.id, book_id)
+                today = datetime.datetime.now().date()
+
+                if download_key in DailyDownloadMap:
+                    last_download = DailyDownloadMap[download_key]
+                    if last_download.date() == today:
+                        db_log.set_extra('result', -1)
+                        db_log.set_extra('reason', "daily.limit.exceeded")
+                        db_log.save()
+                        return {"err": "daily.limit.exceeded", "msg": _("今日已下载过此音频合集，请明天再试")}
 
             # 检查音频目录
             audio_dir = os.path.join(AUDIO_OUTPUT_FOLDER, str(book_id))
@@ -780,7 +782,7 @@ class AudioPurchase(BaseHandler):
 
                     return {
                         "err": "vip.expired",
-                        "message": "非VIP用户或VIP已过期，无法购买音频",
+                        "msg": "非VIP用户或VIP已过期，无法购买音频",
                         "vipexpired": user.vipexpire.strftime("%Y-%m-%d %H:%M:%S") if user.vipexpire else "",
                         "notes": vip_notes
                     }
@@ -800,7 +802,7 @@ class AudioPurchase(BaseHandler):
 
                     return {
                         "err": "vip.quota_insufficient",
-                        "message": "购买的额度不足",
+                        "msg": "购买的额度不足",
                         "notes": vip_notes
                     }
 
@@ -864,7 +866,7 @@ class AudioPurchase(BaseHandler):
 
                 return {
                     "err": "ok",
-                    "message": _("购买成功"),
+                    "msg": _("购买成功"),
                     "order_id": order_id
                 }
             except Exception as e:

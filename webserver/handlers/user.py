@@ -326,7 +326,10 @@ class UserInfo(BaseHandler):
         }
 
     def get_user_info(self, detail):
-        user = self.current_user
+        enable_vip_quota = CONF.get("ENABLE_VIP_QUOTA", False)
+        if enable_vip_quota:
+            self.sqlite_session.expunge(self.current_user)
+        user = self.get_current_user()
         d = {
             "avatar": "https://tva1.sinaimg.cn/default/images/default_avatar_male_50.gif",
             "is_login": False,
@@ -334,7 +337,7 @@ class UserInfo(BaseHandler):
             "nickname": "",
             "email": "",
             "kindle_email": "",
-            "extra": {},
+            "extra": {}
         }
 
         if not user:
@@ -352,6 +355,11 @@ class UserInfo(BaseHandler):
                 "create_time": user.create_time.strftime("%Y-%m-%d %H:%M:%S"),
             }
         )
+        if enable_vip_quota:
+            d["vipquota"] = user.vipquota or 0
+            d["vip_expire"] = user.vipexpire.strftime("%Y-%m-%d") if user.vipexpire else ""
+            logging.debug("VIP QUOTA = %s", d["vipquota"])
+
         if user.avatar:
             if user.avatar.startswith("http"):
                 gravatar_url = "https://www.gravatar.com"
@@ -392,6 +400,27 @@ class UserInfo(BaseHandler):
             "user": self.get_user_info(detail),
         }
         return rsp
+
+
+class UserVipInfo(BaseHandler):
+    @js
+    @auth
+    def get(self):
+        enable_vip_quota = CONF.get("ENABLE_VIP_QUOTA", False)
+        if not enable_vip_quota:
+            return {
+                "err": "ok",
+                "vipquota": 0,
+                "vip_expire": "",
+            }
+
+        self.sqlite_session.expunge(self.current_user)
+        user = self.get_current_user()
+        return {
+            "err": "ok",
+            "vipquota": user.vipquota or 0,
+            "vip_expire": user.vipexpire.strftime("%Y-%m-%d") if user.vipexpire else "",
+        }
 
 
 class Welcome(BaseHandler):
@@ -448,6 +477,7 @@ def routes():
     return [
         (r"/api/welcome", Welcome),
         (r"/api/user/info", UserInfo),
+        (r"/api/user/vip", UserVipInfo),
         (r"/api/user/messages", UserMessages),
         (r"/api/user/messages/clear", UserMessagesClear),
         (r"/api/user/sign_in", SignIn),

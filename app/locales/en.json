@@ -207,7 +207,8 @@
             "edit": "Edit",
             "delete": "Delete",
             "push": "Push",
-            "read": "Read Online"
+            "read": "Read Online",
+            "vipquota": "Quota: {count} books"
         }
     },
     "imports": {
@@ -575,6 +576,7 @@
         "purchaseFailed": "Purchase failed, please try again later",
         "notPurchased": "You have not purchased this audio yet, please purchase first",
         "dailyLimitExceeded": "You have already downloaded this audio collection today, please try again tomorrow",
-        "purchaseHint": "Purchase to unlock all chapters and download functionality"
+        "purchaseHint": "Purchase to unlock all chapters and download functionality",
+        "downloadFailed": "Download failed, please try again later"
     }
 }

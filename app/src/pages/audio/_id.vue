@@ -30,7 +30,7 @@
               v-if="!isPaid && audioFiles.length > 0"
               small
               color="orange"
-              @click="showPurchaseDialog = true"
+              @click="showPurchaseDialogWithVipInfo"
               class="purchase-btn"
               :loading="purchaseLoading"
             >
@@ -414,7 +414,6 @@ export default {
     selectTrack(index) {
       // 检查是否为付费内容
       if (!this.isPaid && index >= 5) {
-        this.showPurchaseDialog = true;
         return;
       }
 
@@ -423,11 +422,13 @@ export default {
         this.savePlaybackPosition();
 
         this.loadTrack(index);
-        if (this.isPlaying) {
-          this.$nextTick(() => {
-            this.$refs.audioPlayer.play();
-          });
-        }
+        // 自动开始播放新选择的音频
+        this.$nextTick(() => {
+          this.$refs.audioPlayer.play();
+        });
+      } else {
+        // 如果点击的是当前正在播放的音频，则切换播放/暂停状态
+        this.togglePlay();
       }
     },
 
@@ -729,16 +730,11 @@ export default {
           link.click();
           document.body.removeChild(link);
         } else {
-          // 显示错误信息和VIP说明
-          this.vipDialogTitle = response.message || '下载失败';
-          this.vipDialogContent = response.notes || '无法获取详细信息';
-          this.showVipDialog = true;
+          this.$alert('error', response.msg || this.$t('audio.downloadFailed'));
         }
       } catch (error) {
         console.error('Download collection error:', error);
-        this.vipDialogTitle = '下载失败';
-        this.vipDialogContent = '网络错误，请稍后重试';
-        this.showVipDialog = true;
+        this.$alert('error', this.$t('audio.downloadFailed'));
       } finally {
         this.downloadLoading = false;
       }
@@ -783,6 +779,29 @@ export default {
 
       // 退出播放界面
       this.$router.go(-1); // 返回上一页
+    },
+
+    async showPurchaseDialogWithVipInfo() {
+      try {
+        // 获取用户VIP信息
+        const response = await this.$backend('/user/vip');
+        if (response.err === 'ok') {
+          // 使用临时变量存储当前查询的配额值
+          this.vipquota = response.vipquota || 0;
+          if (this.vipquota === 0) {
+            this.$alert('error', "配额不足，请在首页关注公众号后台私信充值。");
+          } else {
+            this.showPurchaseDialog = true;
+          }
+        } else {
+          // 如果获取VIP信息失败，直接显示购买对话框
+          this.$alert('error', '无法获取账号信息，请稍后再试。');
+        }
+      } catch (error) {
+        console.error('Error fetching VIP info:', error);
+        // 如果网络错误，直接显示购买对话框
+        this.$alert('error', '无法获取账号信息，请稍后再试。');
+      }
     }
   }
 };

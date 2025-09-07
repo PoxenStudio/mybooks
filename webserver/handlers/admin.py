@@ -53,6 +53,7 @@ class AdminUsers(BaseHandler):
         else:
             f = f.desc()
 
+        enable_vip_quota = CONF.get("ENABLE_VIP_QUOTA", False)
         query = self.sqlite_session.query(Reader).order_by(f)
         total = query.count()
         start = page * num
@@ -74,6 +75,11 @@ class AdminUsers(BaseHandler):
                 "update_time": user.update_time.strftime("%Y-%m-%d %H:%M:%S") if user.update_time else "N/A",
                 "access_time": user.access_time.strftime("%Y-%m-%d %H:%M:%S") if user.access_time else "N/A",
             }
+
+            if enable_vip_quota:
+                d["vipquota"] = user.vipquota or 0
+                d["vip_expire"] = user.vipexpire.strftime("%Y-%m-%d") if user.vipexpire else ""
+
             for attr in dir(user):
                 if attr.startswith("can_"):
                     d[attr] = getattr(user, attr)()
