@@ -115,6 +115,8 @@ class Reader(Base, SQLAlchemyMixin):
     update_time = Column(DateTime)
     access_time = Column(DateTime)
     extra = Column(MutableDict.as_mutable(JSONType), default={})
+    vipquota = Column(Integer, default=0)  # VIP用户的下载配额
+    vipexpire = Column(DateTime)  # VIP用户的到期时间
 
     def __str__(self):
         return "<id=%d, username=%s, email=%s>" % (self.id, self.username, self.email)
@@ -242,6 +244,38 @@ class Reader(Base, SQLAlchemyMixin):
 
     def is_admin(self):
         return self.admin
+
+
+class ReaderLog(Base, SQLAlchemyMixin):
+    ACTION_LOGIN = 1
+    ACTION_DISABLE = 2
+    ACTION_ENABLE = 3
+    ACTION_UPDATE_EXPIRE = 10
+    ACTION_UPDATE_QUOTA = 11
+
+    __tablename__ = "readerlogs"
+    id = Column(Integer, primary_key=True)
+    reader_id = Column(Integer, ForeignKey("readers.id"))
+    action = Column(String(100))
+    create_time = Column(DateTime)
+    extra = Column(MutableDict.as_mutable(JSONType), default={})
+    revision = Column(String(100), default=0)
+    operator_id = Column(Integer, ForeignKey("readers.id"), default=0)
+
+
+    def __init__(self, reader_id, action, operator_id=0, revision=""):
+        super(ReaderLog, self).__init__()
+        self.reader_id = reader_id
+        self.action = action
+        self.operator_id = operator_id
+        self.revision = revision
+        self.create_time = datetime.datetime.now()
+
+    def set_extra(self, key, value):
+        self.extra[key] = value
+
+    def get_extra(self, key, default=None):
+        return self.extra.get(key, default)
 
 
 class Message(Base, SQLAlchemyMixin):

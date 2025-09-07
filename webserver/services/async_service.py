@@ -38,37 +38,7 @@ class AsyncService(metaclass=SingletonType):
         if self.session is not None:
             # Alter the item table to add a new bool column sole if it doesn't exist
             try:
-                result = self.session.execute(text("""
-                    PRAGMA table_info(items)
-                """)).fetchall()
-                columns = [row[1] for row in result]
-
-                changed = False
-                # Check if the 'sole' column exists, and add it if it doesn't
-                if 'sole' not in columns:
-                    self.session.execute(text("""
-                        ALTER TABLE items ADD COLUMN sole BOOLEAN DEFAULT FALSE
-                    """))
-                    changed = True
-
-                # Check if the 'book_type' and 'book_count' columns exists, and add it if it doesn't
-                if 'book_type' not in columns or 'book_count' not in columns or 'create_time' not in columns:
-                    if 'book_type' not in columns:
-                        self.session.execute(text("""
-                            ALTER TABLE items ADD COLUMN book_type INTEGER DEFAULT 0
-                        """))
-                        changed = True
-                    if 'book_count' not in columns:
-                        self.session.execute(text("""
-                            ALTER TABLE items ADD COLUMN book_count INTEGER DEFAULT 0
-                        """))
-                        changed = True
-                    if 'create_time' not in columns:
-                        self.session.execute(text("""
-                            ALTER TABLE items ADD COLUMN create_time DATETIME
-                        """))
-                        need_sync_item_time = True
-                        changed = True
+                need_sync_item_time, changed = self.adjust_item_table()
 
                 if changed:
                     self.session.commit()
@@ -79,6 +49,60 @@ class AsyncService(metaclass=SingletonType):
         # logging.info("<%s> setup: db=%s, session=%s", self, self.db, self.session)
         logging.info("AsyncService setup completed")
         return need_sync_item_time
+
+    def adjust_item_table(self):
+        result = self.session.execute(text("""
+            PRAGMA table_info(items)
+        """)).fetchall()
+        columns = [row[1] for row in result]
+
+        changed = False
+        need_sync_item_time = False
+        # Check if the 'sole' column exists, and add it if it doesn't
+        if 'sole' not in columns:
+            self.session.execute(text("""
+                ALTER TABLE items ADD COLUMN sole BOOLEAN DEFAULT FALSE
+            """))
+            changed = True
+
+        # Check if the 'book_type' and 'book_count' columns exists, and add it if it doesn't
+        if 'book_type' not in columns or 'book_count' not in columns or 'create_time' not in columns:
+            if 'book_type' not in columns:
+                self.session.execute(text("""
+                    ALTER TABLE items ADD COLUMN book_type INTEGER DEFAULT 0
+                """))
+                changed = True
+            if 'book_count' not in columns:
+                self.session.execute(text("""
+                    ALTER TABLE items ADD COLUMN book_count INTEGER DEFAULT 0
+                """))
+                changed = True
+            if 'create_time' not in columns:
+                self.session.execute(text("""
+                    ALTER TABLE items ADD COLUMN create_time DATETIME
+                """))
+                need_sync_item_time = True
+                changed = True
+            return need_sync_item_time, changed
+
+    def adjust_reader_table(self):
+        result = self.session.execute(text("""
+            PRAGMA table_info(readers)
+        """)).fetchall()
+        columns = [row[1] for row in result]
+
+        changed = False
+        if 'vipquota' not in columns:
+            self.session.execute(text("""
+                ALTER TABLE readers ADD COLUMN vipquota INTEGER DEFAULT 0
+            """))
+            changed = True
+        if 'vipexpire' not in columns:
+            self.session.execute(text("""
+                ALTER TABLE readers ADD COLUMN vipexpire DATETIME
+            """))
+            changed = True
+        return changed
 
     def get_queue(self, service_name) -> Queue:
         if service_name not in self.running:
