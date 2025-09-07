@@ -240,7 +240,7 @@
                         dark
                         color="primary"
                         class="mx-2 d-flex d-sm-flex"
-                        @click="switch_audio_dialog"
+                        @click="switch_to_audio_player"
                         v-if="book.book_type != 1"
                     >
                         <v-icon dark>{{ audios.status === AUDIO_STATUS.FAILED ? 'error' : 'audiotrack' }}</v-icon>
@@ -1066,6 +1066,14 @@ export default {
                 this.$alert("error", rsp.msg, "/");
             }
             if (next) next();
+        },
+        switch_to_audio_player() {
+            if (this.audios.status === this.AUDIO_STATUS.CONVERTED && this.audios.count > 0) {
+                // 切换到音频播放页面, /audio/<bid>
+                this.$router.push("/audio/" + this.book.id);
+            } else {
+                this.switch_audio_dialog();
+            }
         },
         switch_audio_dialog() {
             // 如果是实体书，则不允许转换音频
