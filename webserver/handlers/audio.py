@@ -8,17 +8,19 @@ import re
 import shutil
 import threading
 import time
+import traceback
 import urllib.parse
 import uuid
 import zipfile
 from gettext import gettext as _
+from webserver.version import VERSION
 
 import tornado
 from tornado import web
 
 from webserver import loader, utils
 from webserver.handlers.base import BaseHandler, auth, js
-from webserver.models import BizKey, Reader
+from webserver.models import BizKey, ReaderLog
 from webserver.worker.epub2audio_worker import EpubToAudioWorker
 
 CONF = loader.get_settings()
@@ -497,6 +499,9 @@ class AudioCollection(BaseHandler):
             # 检查是否启用VIP配额功能
             enable_vip_quota = CONF.get(ENABLE_VIP_QUOTA_KEY, False)
 
+            db_log = ReaderLog(user.id, ReaderLog.ACTION_COLLECTION_DOWNLOAD, user.id, revision=VERSION)
+            db_log.set_extra('book_id', book_id)
+
             if enable_vip_quota:
                 # 检查VIP是否过期
                 if not user.vipexpire or user.vipexpire < datetime.datetime.now():
@@ -511,9 +516,13 @@ class AudioCollection(BaseHandler):
                         logging.error(f"Error reading vip_notes.txt: {e}")
                         vip_notes = "无法读取VIP说明文件"
 
+                    db_log.set_extra('result', -1)
+                    db_log.set_extra('reason', "vip.expired")
+                    db_log.save()
                     return {
                         "err": "vip.expired",
                         "message": "非VIP用户或VIP已过期",
+                        "vipexpired": user.vipexpire.strftime("%Y-%m-%d %H:%M:%S") if user.vipexpire else "",
                         "notes": vip_notes
                     }
 
@@ -530,6 +539,9 @@ class AudioCollection(BaseHandler):
                         logging.error(f"Error reading vip_notes.txt: {e}")
                         vip_notes = "无法读取VIP说明文件"
 
+                    db_log.set_extra('result', -1)
+                    db_log.set_extra('reason', "vip.quota_insufficient")
+                    db_log.save()
                     return {
                         "err": "vip.quota_insufficient",
                         "message": "合集下载的额度不足",
@@ -539,6 +551,9 @@ class AudioCollection(BaseHandler):
             # 检查书籍是否存在
             book = self.get_book(book_id)
             if not book:
+                db_log.set_extra('result', -1)
+                db_log.set_extra('reason', "book.not_found")
+                db_log.save()
                 return {"err": "book.not_found", "msg": _("书籍未找到")}
 
             # 检查音频目录
@@ -573,13 +588,13 @@ class AudioCollection(BaseHandler):
 
             # 保存key到BizKey表，设置过期时间为24小时
             expire_time = datetime.datetime.now() + datetime.timedelta(hours=24)
-            biz_key = BizKey(key=download_key, expire=expire_time, type=BizKey.TYPE_DOWNLOAD)
+            biz_key = BizKey(user.id, key=download_key, expire=expire_time, type=BizKey.TYPE_DOWNLOAD)
 
             try:
                 biz_key.save()
             except Exception as e:
                 logging.error(f"Error saving BizKey: {e}")
-                return {"err": "server.error", "msg": _("保存下载密钥失败")}
+                return {"err": "server.error", "msg": _("内部处理错误")}
 
             # 如果启用VIP配额功能，则扣减用户VIP配额
             if enable_vip_quota:
@@ -599,6 +614,11 @@ class AudioCollection(BaseHandler):
             # 生成下载链接
             download_url = f"{self.get_site_url()}/api/audios/{book_id}/collection/download?key={download_key}"
 
+            # 保存日志
+            db_log.set_extra('result', 0)
+            db_log.set_extra('reason', "success")
+            db_log.save()
+
             return {
                 "err": "ok",
                 "download_url": download_url,
@@ -608,6 +628,8 @@ class AudioCollection(BaseHandler):
             return {"err": "params.invalid", "msg": _("无效的书籍ID")}
         except Exception as e:
             logging.error(f"Error in AudioCollectionDownload.get: {e}")
+            logging.error(f"Stack trace: {traceback.format_exc()}")
+
             return {"err": "server.error", "msg": str(e)}
 
 
@@ -636,6 +658,11 @@ class AudioCollectionDownloadFile(BaseHandler):
             audio_dir = os.path.join(AUDIO_OUTPUT_FOLDER, str(book_id))
             zip_filename = f"audio_collection_{book_id}.zip"
             zip_path = os.path.join(audio_dir, zip_filename)
+            uid = biz_key.reader_id
+
+            db_log = ReaderLog(uid, ReaderLog.ACTION_COLLECTION_DOWNLOAD_START, uid, revision=VERSION)
+            db_log.set_extra('book_id', book_id)
+            db_log.save()
 
             if not os.path.exists(zip_path):
                 raise web.HTTPError(404, "合集文件不存在")
@@ -659,6 +686,7 @@ class AudioCollectionDownloadFile(BaseHandler):
             self.set_header("Content-Length", str(file_size))
 
             # 传输文件
+            start = time.time()
             chunk_size = 2 * 1024 * 1024  # 2MB
             with open(zip_path, "rb") as f:
                 while True:
@@ -666,9 +694,13 @@ class AudioCollectionDownloadFile(BaseHandler):
                     if not chunk:
                         break
                     self.write(chunk)
-
+            duration = int(time.time() - start)
             # 删除使用过的key
             try:
+                db_log = ReaderLog(uid, ReaderLog.ACTION_COLLECTION_DOWNLOAD_FINISHED, uid, revision=VERSION)
+                db_log.set_extra('book_id', book_id)
+                db_log.set_extra('duration', duration)
+                db_log.save()
                 self.sqlite_session.delete(biz_key)
                 self.sqlite_session.commit()
             except Exception as e:

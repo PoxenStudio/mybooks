@@ -306,7 +306,7 @@ export default {
       }
 
       // 如果作者只有一个元素且是 "Unknown"，隐藏
-      if (this.book.authors === 'Unknown') {
+      if (this.book.authors[0] === 'Unknown') {
         return false;
       }
 

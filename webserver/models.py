@@ -252,6 +252,9 @@ class ReaderLog(Base, SQLAlchemyMixin):
     ACTION_ENABLE = 3
     ACTION_UPDATE_EXPIRE = 10
     ACTION_UPDATE_QUOTA = 11
+    ACTION_COLLECTION_DOWNLOAD = 20
+    ACTION_COLLECTION_DOWNLOAD_START = 21
+    ACTION_COLLECTION_DOWNLOAD_FINISHED = 22
 
     __tablename__ = "readerlogs"
     id = Column(Integer, primary_key=True)
@@ -272,9 +275,13 @@ class ReaderLog(Base, SQLAlchemyMixin):
         self.create_time = datetime.datetime.now()
 
     def set_extra(self, key, value):
+        if not self.extra:
+            self.extra = {}
         self.extra[key] = value
 
     def get_extra(self, key, default=None):
+        if not self.extra:
+            self.extra = {}
         return self.extra.get(key, default)
 
 
@@ -287,13 +294,15 @@ class BizKey(Base, SQLAlchemyMixin):
 
     __tablename__ = "biz_key"
     id = Column(Integer, primary_key=True)
+    reader_id = Column(Integer, ForeignKey("readers.id"))
     key = Column(String(100))
     expire = Column(DateTime)
     create_time = Column(DateTime)
     type = Column(Integer)
 
-    def __init__(self, key, expire, type=0):
+    def __init__(self, reader_id, key, expire, type=0):
         super(BizKey, self).__init__()
+        self.reader_id = reader_id
         self.key = key
         self.expire = expire
         self.create_time = datetime.datetime.now()
