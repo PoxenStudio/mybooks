@@ -34,6 +34,7 @@ DailyDownloadMap = {}
 ALLOW_MAX_RUNNING_WORKERS = CONF.get("BOOK2AUDIO_MAX_WORKERS", 2)
 AUDIO_OUTPUT_FOLDER = CONF.get("audio_output_folder", "/data/books/audios/")
 SKIP_FILE_PREFIX = "图书在版编目CIP数据"
+MAX_FREE_AUDIO_FILES = 6
 
 
 class AudioUtils:
@@ -79,7 +80,7 @@ class AudioUtils:
                 continue
             file_urls.append({
                 "filename": os.path.splitext(file)[0],
-                "url": f"{AudioUtils.site_url}/audios/{book_id}/{file}",
+                "url": f"{AudioUtils.site_url}/api/audio/{book_id}/{file}",
                 "size": file_size
             })
 
@@ -137,7 +138,7 @@ class AudioDetail(BaseHandler):
                             continue
                         file_urls.append({
                             "filename": os.path.splitext(file)[0],
-                            "url": f"{self.site_url}/audios/{book_id}/{file}",
+                            "url": f"{self.site_url}/api/audio/{book_id}/{file}",
                             "size": os.path.getsize(os.path.join(audio_dir, file))
                         })
                     return {
@@ -431,12 +432,36 @@ class AudioDelete(BaseHandler):
 
 
 class AudioFile(BaseHandler):
-    @js
     @auth
     def get(self, book_id, filename):
         """提供音频文件的静态文件服务"""
+        logging.info(f"AudioFile requested: book_id={book_id}, filename={filename}")
         try:
             book_id = int(book_id)
+
+            # URL解码文件名
+            filename = urllib.parse.unquote(filename)
+
+            user = self.get_current_user()
+            enable_vip_quota = CONF.get(ENABLE_VIP_QUOTA_KEY, False)
+
+            if enable_vip_quota:
+                # 检查当前用户是否已购买此书
+                paid_record = self.sqlite_session.query(ReaderPaidBook).filter_by(
+                    reader_id=user.id,
+                    book_id=book_id
+                ).first()
+
+                # 如果未购买，检查是否为免费音频
+                if not paid_record:
+                    try:
+                        # 从文件名中提取序号，文件名格式为0000_xxxxxx, 前四个是序号
+                        serial_number = int(filename.split("_")[0])
+                        if serial_number > MAX_FREE_AUDIO_FILES:
+                            raise web.HTTPError(403, "未购买音频，无法播放此章节")
+                    except (ValueError, IndexError):
+                        # 如果无法解析序号，则不允许播放
+                        raise web.HTTPError(403, "无效的音频文件格式")
 
             # 安全检查: 确保文件名不包含路径遍历
             if ".." in filename or "/" in filename:
@@ -861,7 +886,7 @@ def routes():
         (r"/api/audio/([0-9]+)/delete", AudioDelete),
         (r"/api/audio/([0-9]+)/purchase", AudioPurchase),  # 音频购买接口
         (r"/api/audiobooks", AudioBooks),  # 音频书籍列表
-        # (r"/api/audios/([0-9]+)/([^/]+)", AudioFile),
+        (r"/api/audio/([0-9]+)/([^/]+)", AudioFile),
         (r"/api/audios/([0-9]+)/collection", AudioCollection),  # 音频合集下载接口
         (r"/api/audios/([0-9]+)/collection/download", AudioCollectionDownloadFile),  # 音频合集文件下载
     ]
