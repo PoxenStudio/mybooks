@@ -241,7 +241,7 @@
                         color="primary"
                         class="mx-2 d-flex d-sm-flex"
                         @click="switch_to_audio_player"
-                        v-if="book.book_type != 1"
+                        v-if="book.book_type != this.BOOK_TYPE.PHYSICAL"
                     >
                         <v-icon dark>{{ audios.status === AUDIO_STATUS.FAILED ? 'error' : 'audiotrack' }}</v-icon>
                         {{ $t('book.convertToAudio') }}
@@ -308,7 +308,7 @@
                                    contain style="border-radius: 14px;"></v-img>
                             <!-- 读完状态水印 -->
                             <div
-                                v-if="book.state && book.state.read_state === 2"
+                                v-if="book.state && book.state.read_state === this.READING_STATE.FINISHED"
                                 style="
                                     position: absolute;
                                     top: 95%;
@@ -390,12 +390,12 @@
                                     {{ book.author }}{{ $t('book.author') }}，{{ pub_year }}{{ $t('book.year') }}
                                 </span>
                                 <br />
-                                <span v-if="book.book_type==1">
+                                <span v-if="book.book_type==this.BOOK_TYPE.PHYSICAL">
                                     <v-chip rounded small dark color="indigo">
                                         <v-icon>mdi-bookshelf</v-icon>{{ $t('book.bookPhysical') }}
                                     </v-chip>
                                 </span>
-                                <span v-if="book.book_type==1">{{ $t('book.bookCount')}}: {{book.book_count}}</span>
+                                <span v-if="book.book_type==this.BOOK_TYPE.PHYSICAL">{{ $t('book.bookCount')}}: {{book.book_count}}</span>
                                 <span
                                     v-if='book.files.length>0 && book.files[0].size >= 1048576'
                                     color="grey--text" style="font-weight: bold">&nbsp;&nbsp;&nbsp;[{{book.files[0].format}} - {{
@@ -424,7 +424,7 @@
                             <v-rating v-model="book.rating" color="yellow accent-4" length="10" readonly dense
                                       small></v-rating>
                             <!-- Reading state display -->
-                            <div v-if="book.state && book.state.read_state === 1" class="mt-2">
+                            <div v-if="book.state && book.state.read_state === this.READING_STATE.READING" class="mt-2">
                                 <v-chip
                                     small
                                     color="green"
@@ -434,7 +434,7 @@
                                     {{ readingDaysText }}
                                 </v-chip>
                             </div>
-                            <div v-else-if="book.state && book.state.read_state === 2" class="mt-2">
+                            <div v-else-if="book.state && book.state.read_state === this.READING_STATE.FINISHED" class="mt-2">
                                 <v-chip
                                     small
                                     color="grey"
@@ -558,12 +558,12 @@
         <v-col cols="12" :sm="is_txt?6:5" :md="is_txt?3:4">
             <v-card outlined>
                 <v-list>
-                    <v-list-item @click="switch_audio_dialog" :disabled="book.book_type == 1">
-                        <v-list-item-avatar large :color="book.book_type == 1 ? 'grey' : (audios.status === AUDIO_STATUS.FAILED ? 'red' : 'primary')">
+                    <v-list-item @click="switch_audio_dialog" :disabled="book.book_type == this.BOOK_TYPE.PHYSICAL">
+                        <v-list-item-avatar large :color="book.book_type == this.BOOK_TYPE.PHYSICAL ? 'grey' : (audios.status === AUDIO_STATUS.FAILED ? 'red' : 'primary')">
                             <v-icon dark>{{ audios.status === AUDIO_STATUS.FAILED ? 'error' : 'audiotrack' }}</v-icon>
                         </v-list-item-avatar>
                         <v-list-item-content>
-                            <v-list-item-title :class="{ 'grey--text': book.book_type == 1 }">
+                            <v-list-item-title :class="{ 'grey--text': book.book_type == this.BOOK_TYPE.PHYSICAL }">
                                 {{ $t('book.convertToAudio') }}
                                 <span v-if="audios.status === AUDIO_STATUS.PROCESSING && audios.progress && audios.progress.converted_chapters !== undefined"
                                       class="ml-1 text-caption">
@@ -797,6 +797,15 @@ export default {
             FAILED: "failed",
             OK: "ok"
         },
+        READING_STATE: {
+            UNREAD: 0,
+            READING: 1,
+            FINISHED: 2
+        },
+        BOOK_TYPE: {
+            EBOOK: 0,
+            PHYSICAL: 1
+        },
         debug: false,
         loaded: false,
         mail_to: "",
@@ -1024,13 +1033,13 @@ export default {
                 let newReadState;
                 let successMessage;
 
-                if (!this.book.state || this.book.state.read_state === 0 || this.book.state.read_state === 2) {
+                if (!this.book.state || this.book.state.read_state === this.READING_STATE.UNREAD || this.book.state.read_state === this.READING_STATE.FINISHED) {
                     // 未读或已读完 -> 设为在读
-                    newReadState = 1;
+                    newReadState = this.READING_STATE.READING;
                     successMessage = '已设置为在读状态';
-                } else if (this.book.state.read_state === 1) {
+                } else if (this.book.state.read_state === this.READING_STATE.READING) {
                     // 在读 -> 设为读完
-                    newReadState = 2;
+                    newReadState = this.READING_STATE.FINISHED;
                     successMessage = '已标记为读完';
                 }
 
@@ -1046,6 +1055,9 @@ export default {
                     }
                     this.book.state.read_state = newReadState;
                     this.book.state.read_date = new Date().toISOString();
+                    if (newReadState === this.READING_STATE.READING) {
+                        this.book.state.wants = 0; // 在读后自动移除待读状态
+                    }
 
                     // 显示成功提示
                     this.$alert('success', successMessage);
@@ -1077,7 +1089,7 @@ export default {
         },
         switch_audio_dialog() {
             // 如果是实体书，则不允许转换音频
-            if (this.book.book_type == 1) {
+            if (this.book.book_type == this.BOOK_TYPE.PHYSICAL) {
                 return;
             }
 
