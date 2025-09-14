@@ -606,7 +606,7 @@
     </v-dialog>
 
     <!-- 添加实体书对话框 -->
-    <v-dialog v-model="isbn_dialog" persistent transition="dialog-bottom-transition" width="410">
+    <v-dialog v-if="$store.state.sys.allow.physical_books" v-model="isbn_dialog" persistent transition="dialog-bottom-transition" width="410">
         <v-card>
             <v-toolbar flat dense dark color="green">
                 <v-icon>mdi-book-plus</v-icon>
@@ -922,7 +922,7 @@ export default {
             this.voice_name = lastUsedVoice || "zh-CN-XiaoxiaoNeural"; // 如果没有保存的语音，使用默认的晓晓
 
             // 检查URL参数，如果有continue_adding=true则自动弹出添加对话框
-            if (this.$route.query.continue_adding === 'true') {
+            if (this.$route.query.continue_adding === 'true' && this.$store.state.sys.allow.physical_books) {
                 this.$nextTick(() => {
                     this.isbn_dialog = true;
                     this.continueAdding = true;

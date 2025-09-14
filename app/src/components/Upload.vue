@@ -16,7 +16,7 @@
 
         <!-- 添加实体书按钮 -->
         <v-btn
-            v-show="showUploadButtons"
+            v-show="showUploadButtons && $store.state.sys.allow.physical_books"
             bottom
             color="green"
             dark
@@ -52,7 +52,7 @@
         </v-dialog>
 
         <!-- 添加实体书对话框 -->
-        <v-dialog v-model="isbn_dialog" persistent transition="dialog-bottom-transition" width="410">
+        <v-dialog v-if="$store.state.sys.allow.physical_books" v-model="isbn_dialog" persistent transition="dialog-bottom-transition" width="410">
             <v-card>
                 <v-toolbar flat dense dark color="green">
                     <v-icon>mdi-book-plus</v-icon>

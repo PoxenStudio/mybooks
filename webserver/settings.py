@@ -60,6 +60,8 @@ settings = {
     "BOOKBARN_COLLECTION_HOUR": 3,
     "USE_BOOKBARN_PROXY": False,
     "BOOK2AUDIO_PROXY": "",
+    "ENABLE_PHYSICAL_BOOKS": True,
+    "ALLOW_GUEST_UPLOAD": False,
 
     "EPUB_VIEWER": "epubjs.html",
     "PDF_VIEWER": "/static/pdfjs/web/viewer.html?file=%(pdf_url)s",

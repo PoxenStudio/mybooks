@@ -269,6 +269,7 @@
         "douban_max_count":"Max results of Douban plugin query",
         "douban_plugin_description": "If you need to enable the Douban plugin, please refer to the installation documentation. If it fails, try changing the mirror, such as talebook/douban-api-rs.",
         "advanced_settings": "Advanced Configuration",
+        "enable_physical_books": "Enable Physical Books",
         "cdn_domain": "CDN Domain",
         "book_names_format": "Directory and File Name Format",
         "pinyin_directory": "Use Pinyin Directory Names (High Compatibility)",

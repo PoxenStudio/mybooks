@@ -282,13 +282,8 @@ export default {
           { icon: "info", key: "push_content", label: "settings.push_content" },
           { icon: "info", key: "convert_timeout", label: "settings.convert_timeout" },
           { icon: "", key: "autoreload", label: "settings.autoreload", type: 'checkbox' },
-        ],
-        tips: [
-          {
-            text: "settings.logo_adjustment_description",
-            link: "https://github.com/HorkyChen/talebook/blob/master/document/README.zh_CN.md#logo",
-          }
-        ],
+          { icon: "", key: "ENABLE_PHYSICAL_BOOKS", label: "settings.enable_physical_books", type: 'checkbox' },
+        ]
       },
 
       {

@@ -328,6 +328,8 @@ class UserInfo(BaseHandler):
                 "download": CONF["ALLOW_GUEST_DOWNLOAD"],
                 "push": CONF["ALLOW_GUEST_PUSH"],
                 "read": CONF["ALLOW_GUEST_READ"],
+                "physical_books": CONF.get("ENABLE_PHYSICAL_BOOKS", True),
+                "upload": CONF.get("ALLOW_GUEST_UPLOAD", False),
             },
         }
 
