@@ -312,6 +312,7 @@ class EpubToAudioWorker:
                 'stderr': stderr_data,
                 'return_code': return_code,
                 'progress': self.progress_data,
+                'status': self.progress_data["status"],
                 'error': None if success else (self.progress_data["error_message"] or f"Exited code {return_code}")
             }
 
@@ -333,7 +334,8 @@ class EpubToAudioWorker:
                 'stdout': stdout_data,
                 'stderr': stderr_data,
                 'return_code': -2,
-                'progress': self.progress_data
+                'progress': self.progress_data,
+                'status': self.progress_data["status"],
             }
 
         except Exception as e:

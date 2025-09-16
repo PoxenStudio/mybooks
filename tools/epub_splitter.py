@@ -32,8 +32,8 @@ from ebooklib import epub
 from bs4 import BeautifulSoup
 
 # 配置常量
-DEFAULT_CATEGORY = "小学语文阅读推荐"  # 默认分类，可根据需要修改
-BOOK_TITLE_PREFIX = "小学语文阅读推荐-"
+DEFAULT_CATEGORY = "初中语文阅读推荐"  # 默认分类，可根据需要修改
+BOOK_TITLE_PREFIX = "初中语文阅读推荐-"
 SKIP_TITLES = ["封面", "前折页", "后折页", "目录"]  # 需要跳过的页面标题
 
 # 配置日志
