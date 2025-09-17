@@ -199,9 +199,6 @@ class AudioBooks(BaseHandler):
                             audio_book_ids.append(book_id)
                             audios_cnt_map[book_id] = len(audio_files)
 
-            # 按书籍ID倒序排序（新的在前）
-            audio_book_ids.sort(reverse=True)
-
             # 分页处理
             total = len(audio_book_ids)
             paginated_ids = audio_book_ids[start:start + size]
@@ -210,6 +207,9 @@ class AudioBooks(BaseHandler):
             books = []
             if paginated_ids:
                 books = self.get_books(ids=paginated_ids)
+
+            # 按书籍ID倒排
+            books.sort(key=lambda x: x['id'], reverse=True)
 
             books_result = []
             for book in books:
