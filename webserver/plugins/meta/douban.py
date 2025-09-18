@@ -11,6 +11,8 @@ import logging
 import re
 import sys
 from gettext import gettext as _
+from urllib.parse import urlparse
+from pathlib import Path
 
 import requests
 
@@ -28,6 +30,20 @@ REMOVES = [
     re.compile(r"^【[^】]*】\s*"),
     re.compile(r"^（[^）]*）\s*"),
 ]
+
+
+def get_filename_from_url(url):
+    parsed = urlparse(url)
+    return Path(parsed.path).name
+
+
+def get_extension_from_url(url):
+    filename = get_filename_from_url(url)
+    if not filename:
+        return ""
+    if "." not in filename:
+        return ""
+    return filename.split(".")[-1]
 
 
 def str2date(s):
@@ -142,8 +158,14 @@ class DoubanBookApi(object):
     def get_cover(self, cover_url):
         if not self.copy_image:
             return None
-        img = requests.get(cover_url, headers=CHROME_HEADERS).content
-        img_fmt = cover_url.split(".")[-1]
+        img_fmt = get_extension_from_url(cover_url)
+        if not img_fmt:
+            return None
+        response = requests.get(cover_url, headers=CHROME_HEADERS)
+        if response.status_code != 200:
+            logging.error("Get cover fail, status_code[%s] != 200 OK", response.status_code)
+            return None
+        img = response.content
         return (img_fmt, img)
 
     def _metadata(self, book):
@@ -180,8 +202,14 @@ class DoubanBookApi(object):
         mi.provider_key = KEY
         mi.provider_value = book["id"]
 
-        mi.cover_url = book["images"]["large"]
-        mi.cover_data = self.get_cover(mi.cover_url)
+        cover_url = book["images"]["large"]
+        if not self.copy_image:
+            mi.cover_url = cover_url
+        else:
+            cover_data = self.get_cover(cover_url)
+            if cover_data is not None:
+                mi.cover_url = cover_url
+                mi.cover_data = cover_data
 
         logging.debug("=================\ndouban metadata:\n%s" % mi)
         return mi
