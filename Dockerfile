@@ -54,12 +54,22 @@ RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
 # Create a talebook user and change the Nginx startup user
 
 # install python packages (--break-system-packages)
+# Install OpenCC based on architecture
+COPY prebuilt/ /tmp/prebuilt/
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "aarch64" ]; then \
+        pip install --no-cache-dir /tmp/prebuilt/opencc-1.1.9-cp312-cp312-manylinux2014_aarch64.whl --break-system-packages; \
+    else \
+        pip install opencc  --break-system-packages;\
+        exit 1; \
+    fi && \
+    rm -rf /tmp/prebuilt
+
 # Apply calibre patches
 COPY calibre/7.6/calibre/db/cache.py /usr/lib/calibre/calibre/db/
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt --break-system-packages && \
     rm -rf /root/.cache /tmp/requirements.txt
-
 
 # ----------------------------------------
 # 测试阶段 (--break-system-packages)

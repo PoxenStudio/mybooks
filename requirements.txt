@@ -15,7 +15,6 @@ xxhash
 pymysql
 pytest==7.4.4
 flake8
-opencc
 psutil
 beautifulsoup4==4.12.3
 EbookLib==0.19
