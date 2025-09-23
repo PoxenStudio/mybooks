@@ -1284,6 +1284,7 @@ class BookRead(BaseHandler):
                 "book": book,
                 "epub_dir": epub_dir,
                 "is_ready": (fmt == 'epub'),
+                "CANDLE_READER_SERVER": CONF["CANDLE_READER_SERVER"],
             })
 
         if "fmt_pdf" in book:

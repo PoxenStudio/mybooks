@@ -64,6 +64,7 @@ settings = {
     "ALLOW_GUEST_UPLOAD": False,
 
     "EPUB_VIEWER": "epubjs.html",
+    "CANDLE_READER_SERVER": "https://brs.talebook.org",
     "PDF_VIEWER": "/static/pdfjs/web/viewer.html?file=%(pdf_url)s",
 
     "SOCIAL_AUTH_LOGIN_URL"          : '/',

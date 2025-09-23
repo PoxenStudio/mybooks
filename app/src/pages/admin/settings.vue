@@ -68,8 +68,7 @@
               </v-row>
               <v-row>
                 <v-col align="center">
-                  <v-btn color="primary" @click="settings.FRIENDS.push({ text: '', href: '' })"><v-icon>add</v-icon>{{
-                    $t('settings.add') }}</v-btn>
+                  <v-btn color="primary" @click="settings.FRIENDS.push({ text: '', href: '' })"><v-icon>add</v-icon>{{$t('settings.add') }}</v-btn>
                 </v-col>
               </v-row>
             </template>
@@ -273,6 +272,9 @@ export default {
           {
             icon: "info", key: "BOOK_NAMES_FORMAT", label: "settings.book_names_format", type: 'select',
             items: [{ text: this.$t('settings.pinyin_directory'), value: "en" }, { text: this.$t('settings.utf8_directory'), value: "utf8" }]
+          },
+          { icon: "info", key: "EPUB_VIEWER", label: "settings.epub_viewer", type: 'select',
+            items: [{ text: this.$t('settings.epubjs'), value: "epubjs.html" }, { text: this.$t('settings.creader'), value: "creader.html" }]
           },
           { icon: "info", key: "avatar_service", label: "settings.avatar_service" },
           { icon: "info", key: "MAX_UPLOAD_SIZE", label: "settings.max_upload_size" },

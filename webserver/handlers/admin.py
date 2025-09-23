@@ -269,6 +269,7 @@ class AdminSettings(BaseHandler):
             "ALLOW_REGISTER",
             "BOOK_NAMES_FORMAT",
             "BOOK_NAV",
+            "EPUB_VIEWER",
             "FRIENDS",
             "FOOTER",
             "HEADER",
