@@ -599,6 +599,53 @@ class PrintBooks(BaseHandler):
             return {"err": "internal", "msg": _(u"获取实体书失败")}
 
 
+class BookSoled(BaseHandler):
+    @js
+    @auth
+    def get(self):
+        """获取当前用户设为soled的所有图书信息"""
+        user_id = self.user_id()
+        title = _(u"私有书籍")
+
+        # 查询当前用户设为sole的所有图书，按添加时间倒序排列
+        db_items = self.sqlite_session.query(Item).filter(
+            Item.collector_id == user_id,
+            Item.sole == True
+        ).order_by(Item.create_time.desc())
+
+        try:
+            start = self.get_argument_start()
+            delta = 60
+            items = db_items.limit(delta).offset(start).all()
+            ids = [item.book_id for item in items]
+            total_items = 0
+
+            if len(ids) > 0:
+                # 获取总数用于分页
+                total_items = self.sqlite_session.query(Item).filter(
+                    Item.collector_id == user_id,
+                    Item.sole == True
+                ).count()
+
+            books = self.get_books(ids=ids)
+            books.sort(key=lambda x: x["id"], reverse=True)
+
+            books_result = []
+            for book in books:
+                book_data = utils.BookFormatter(self, book).format()
+                books_result.append(book_data)
+
+            return {"err": "ok",
+                    "title": title,
+                    "total": total_items,
+                    "books": books_result}
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            logging.error("Failed to get soled books: %s", e)
+            return {"err": "internal", "msg": _(u"获取私有书籍失败")}
+
+
 class BookReadDone(BaseHandler):
     @js
     @auth
@@ -1374,6 +1421,7 @@ def routes():
         (r"/api/recent", RecentBook),
         (r"/api/hot", HotBook),
         (r"/api/printbooks", PrintBooks),
+        (r"/api/soledbooks", BookSoled),
         (r"/api/book/nav", BookNav),
         (r"/api/book/add", BookAddByISBN),
         (r"/api/book/upload", BookUpload),

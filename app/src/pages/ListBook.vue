@@ -87,6 +87,10 @@ export default {
         displayTitle = this.$t('listBook.audioBooks');
         break;
 
+      case "/soledbooks":
+        displayTitle = this.$t('listBook.soledBooks');
+        break;
+
       default:
         if (this.$route.params.meta !== undefined) {
           var name = decodeURIComponent(this.$route.params.name);

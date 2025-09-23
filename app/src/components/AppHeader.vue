@@ -185,7 +185,10 @@
                                     <v-list-item-title> {{ $t('appHeader.admin_entry') }} </v-list-item-title>
                                 </v-list-item>
                             </template>
-
+                            <v-list-item to="/soledbooks">
+                                <v-list-item-action><v-icon>mdi-shield-account</v-icon></v-list-item-action>
+                                <v-list-item-title> {{ $t('appHeader.soledBooks') }} </v-list-item-title>
+                            </v-list-item>
                             <v-list-item to="/logout">
                                 <v-list-item-action><v-icon>exit_to_app</v-icon></v-list-item-action>
                                 <v-list-item-title> {{ $t('appHeader.logout') }} </v-list-item-title>

@@ -62,7 +62,8 @@
         "favorites": "My Favorites",
         "wants": "Want to Read",
         "reading": "Reading",
-        "readDone": "Read"
+        "readDone": "Read",
+        "soledBooks": "Private Books"
     },
     "listMeta": {
         "ratingSuffix": " stars",
@@ -503,7 +504,8 @@
         "wants": "Want to Read",
         "reading": "Reading",
         "readDone": "Read",
-        "gongzhonghao": "WeiChat"
+        "gongzhonghao": "WeiChat",
+        "soledBooks": "Private Books"
     },
     "bookCards": {
         "browseDetails": "Click to browse details"
