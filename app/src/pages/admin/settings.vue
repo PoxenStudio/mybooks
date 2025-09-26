@@ -279,6 +279,7 @@ export default {
           },
           { icon: "info", key: "avatar_service", label: "settings.avatar_service" },
           { icon: "info", key: "MAX_UPLOAD_SIZE", label: "settings.max_upload_size" },
+          { icon: "info", key: "CHUNK_UPLOAD_SIZE", label: "settings.chunk_upload_size" },
           { icon: "lock", key: "cookie_secret", label: "settings.cookie_secret" },
           { icon: "info", key: "scan_upload_path", label: "settings.scan_upload_path" },
           { icon: "info", key: "push_title", label: "settings.push_title" },
@@ -315,6 +316,9 @@ export default {
         if (process.client && this.settings['MAX_UPLOAD_SIZE'] !== '') {
           localStorage.setItem('max_upload_size', this.settings['MAX_UPLOAD_SIZE']);
         }
+        if (process.client && this.settings['CHUNK_UPLOAD_SIZE'] !== '') {
+          localStorage.setItem('chunk_upload_size', this.settings['CHUNK_UPLOAD_SIZE']);
+        }
         var m = {}
         rsp.sns.forEach(function (ele) {
           m[ele.value] = ele;
@@ -348,6 +352,10 @@ export default {
 
       if (process.client && this.settings['MAX_UPLOAD_SIZE'] !== '') {
         localStorage.setItem('max_upload_size', this.settings['MAX_UPLOAD_SIZE']);
+      }
+
+      if (process.client && this.settings['CHUNK_UPLOAD_SIZE'] !== '') {
+        localStorage.setItem('chunk_upload_size', this.settings['CHUNK_UPLOAD_SIZE']);
       }
 
       if (process.client && this.settings['site_theme'] !== '') {
