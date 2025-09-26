@@ -1254,6 +1254,164 @@ class BookUpload(BaseHandler):
         return {"err": "ok", "book_id": book_id}
 
 
+class BookUploadChunk(BaseHandler):
+    """Handler for chunked file upload"""
+
+    @staticmethod
+    def get_chunk_size():
+        """Get the configured chunk upload threshold size in bytes"""
+        size_str = CONF.get("CHUNK_UPLOAD_SIZE", "0MB").lower().strip()
+        if size_str == "0" or size_str == "0mb" or size_str == "0kb":
+            return 0
+
+        if size_str.endswith("mb"):
+            return int(size_str[:-2]) * 1024 * 1024
+        elif size_str.endswith("kb"):
+            return int(size_str[:-2]) * 1024
+        else:
+            return int(size_str)
+
+    @js
+    def post(self):
+        """Handle chunked upload POST requests"""
+        if CONF["ALLOW_GUEST_UPLOAD"] == False:
+            if self.current_user.is_guest():
+                return {"err": "permission", "msg": _(u"无权操作，请先登录")}
+            if not self.current_user.can_upload():
+                return {"err": "permission", "msg": _(u"无权操作")}
+
+        # Get parameters from form data
+        filename = self.get_argument("filename", "")
+        chunk_index = int(self.get_argument("chunk_index", 0))
+        total_chunks = int(self.get_argument("total_chunks", 1))
+        file_hash = self.get_argument("file_hash", "")
+
+        if not filename:
+            return {"err": "params.filename", "msg": _(u"文件名不能为空")}
+
+        if not file_hash:
+            return {"err": "params.hash", "msg": _(u"文件hash不能为空")}
+
+        # Get the chunk data
+        if "chunk" not in self.request.files:
+            return {"err": "params.chunk", "msg": _(u"未找到文件块数据")}
+
+        chunk_file = self.request.files["chunk"][0]
+        chunk_data = chunk_file["body"]
+
+        # Create temporary directory for chunks
+        temp_dir = os.path.join(CONF["upload_path"], "temp_chunks", file_hash)
+        os.makedirs(temp_dir, exist_ok=True)
+
+        # Save current chunk
+        chunk_path = os.path.join(temp_dir, f"chunk_{chunk_index}")
+        with open(chunk_path, "wb") as f:
+            f.write(chunk_data)
+
+        # Check if all chunks are received
+        received_chunks = []
+        for i in range(total_chunks):
+            chunk_file_path = os.path.join(temp_dir, f"chunk_{i}")
+            if os.path.exists(chunk_file_path):
+                received_chunks.append(i)
+
+        if len(received_chunks) == total_chunks:
+            # All chunks received, merge them
+            return self._merge_chunks_and_import(filename, file_hash, total_chunks, temp_dir)
+        else:
+            # Still waiting for more chunks
+            return {
+                "err": "ok",
+                "msg": _(u"块上传成功"),
+                "received_chunks": len(received_chunks),
+                "total_chunks": total_chunks
+            }
+
+    def _merge_chunks_and_import(self, filename, file_hash, total_chunks, temp_dir):
+        """Merge all chunks and import the book"""
+        from calibre.ebooks.metadata.meta import get_metadata
+
+        try:
+            # Clean filename
+            filename = re.sub(r"[\x80-\xFF]+", BookUpload.convert, filename)
+            fmt = os.path.splitext(filename)[1]
+            fmt = fmt[1:] if fmt else None
+            if not fmt:
+                return {"err": "params.filename", "msg": _(u"文件名不合法")}
+            fmt = fmt.lower()
+
+            # Merge chunks into final file
+            final_path = os.path.join(CONF["upload_path"], filename)
+            with open(final_path, "wb") as outfile:
+                for i in range(total_chunks):
+                    chunk_path = os.path.join(temp_dir, f"chunk_{i}")
+                    with open(chunk_path, "rb") as chunk_file:
+                        outfile.write(chunk_file.read())
+
+            # Clean up temporary chunks
+            import shutil
+            shutil.rmtree(temp_dir)
+
+            logging.debug("Merged chunked upload file into [%s]", final_path)
+
+            # Read ebook metadata (same logic as BookUpload)
+            with open(final_path, "rb") as stream:
+                mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
+                mi.title = utils.super_strip(mi.title)
+                if mi.author_sort == "Unknown" and mi.authors and len(mi.authors) > 0:
+                    mi.authors = [utils.super_strip(a) for a in mi.authors]
+                else:
+                    mi.authors = [utils.super_strip(mi.author_sort)]
+
+            # Handle special formats like txt and pdf
+            if fmt in ["txt", "pdf"]:
+                mi.title = filename.replace("." + fmt, "")
+                if mi.title.endswith(ZLIBRARY_SUFFIX):
+                    mi.title = mi.title[:-len(ZLIBRARY_SUFFIX)]
+                mi.authors = [_(u"佚名")]
+
+            logging.info("chunked upload mi.title = " + repr(mi.title))
+
+            # Check for existing books
+            books = self.calibre_db.books_with_same_title(mi)
+            if books:
+                book_id = None
+                for b in self.calibre_db.get_data_as_dict(ids=books):
+                    if book_id is None:
+                        book_id = b.get("id")
+                    if b.get("authors", "") != mi.authors:
+                        continue
+                    if fmt.upper() in b.get("available_formats", ""):
+                        return {
+                            "err": "samebook",
+                            "msg": _(u"同名书籍《%s》已存在这一图书格式 %s") % (mi.title, fmt),
+                            "book_id": b.get("id")
+                        }
+                logging.info("import [%s] from %s with format %s", repr(mi.title), final_path, fmt)
+                self.calibre_db.add_format(book_id, fmt.upper(), final_path, True)
+            else:
+                fpaths = [final_path]
+                book_id = self.calibre_db.import_book(mi, fpaths)
+                self.increase_history_count("upload_history")
+                item = Item()
+                item.book_id = book_id
+                item.collector_id = self.user_id()
+                self.sqlite_session.add(item)
+                self.sqlite_session.commit()
+
+            self.add_msg("success", _(u"导入书籍成功！"))
+            AutoFillService().auto_fill(book_id)
+            return {"err": "ok", "book_id": book_id}
+
+        except Exception as e:
+            logging.error("Error in chunked upload: %s", str(e))
+            # Clean up on error
+            if os.path.exists(temp_dir):
+                import shutil
+                shutil.rmtree(temp_dir)
+            return {"err": "upload_error", "msg": _(u"文件上传处理失败：%s") % str(e)}
+
+
 class BookRead(BaseHandler):
     def get(self, id):
         if not CONF["ALLOW_GUEST_READ"] and not self.current_user:
@@ -1428,6 +1586,7 @@ def routes():
         (r"/api/book/nav", BookNav),
         (r"/api/book/add", BookAddByISBN),
         (r"/api/book/upload", BookUpload),
+        (r"/api/book/upload/chunk", BookUploadChunk),
         (r"/api/book/([0-9]+)", BookDetail),
         (r"/api/book/([0-9]+)/delete", BookDelete),
         (r"/api/book/([0-9]+)/edit", BookEdit),

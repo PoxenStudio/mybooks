@@ -54,6 +54,9 @@ settings = {
     # 100MB, tornado default max_buffer_size value
     "MAX_UPLOAD_SIZE": "100MB",
 
+    # Chunked upload size threshold (0 means disabled, >0 means files larger than this will be uploaded in chunks)
+    "CHUNK_UPLOAD_SIZE": "0MB",
+
     "ENABLE_BOOKBARN": False,
     "BOOKBARN_TOKEN": "",
     "ENABLE_RECEIVING_BOOKS": False,

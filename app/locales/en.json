@@ -281,6 +281,7 @@
         "creader":"Candle Reader (Beta Version, Supports Chapter Reviews)",
         "avatar_service": "Avatar service available at www.gravatar.com or cravatar.cn",
         "max_upload_size": "File upload size limit (e.g., 100MB or 100KB)",
+        "chunk_upload_size": "Chunked upload threshold (default 0 means chunked upload is disabled, values greater than 0 will trigger chunked upload for files larger than this size, minimum 20MB per chunk, e.g., 50MB)",
         "cookie_secret": "COOKIE Random Secret Key",
         "scan_upload_path": "Batch Import from directory",
         "push_title": "Email Title",

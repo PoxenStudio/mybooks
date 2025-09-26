@@ -269,29 +269,133 @@ export default {
         }
     },
     methods: {
-        do_upload: function () {
+        async do_upload() {
             this.loading = true;
-            var data = new FormData();
-            data.append("ebook", this.ebooks);
-            this.$backend("/book/upload", {
-                method: 'POST',
-                body: data,
-            })
-                .then(rsp => {
-                    this.dialog = false;
-                    if (rsp.err === 'ok') {
-                        this.$alert("success", "上传成功！", "/book/" + rsp.book_id);
-                        this.$router.push("/book/" + rsp.book_id)
-                    } else if (rsp.err === 'samebook') {
-                        this.$alert("error", rsp.msg, "/book/" + rsp.book_id);
-                        this.$router.push("/book/" + rsp.book_id)
-                    } else {
-                        this.$alert("error", rsp.msg);
-                    }
-                })
-                .finally(() => {
-                    this.loading = false;
+
+            // Check if file is selected
+            if (!this.ebooks) {
+                this.$alert("error", "请选择要上传的文件");
+                this.loading = false;
+                return;
+            }
+
+            // Get chunk upload threshold from localStorage or server config
+            const chunkThresholdStr = localStorage.getItem('chunk_upload_size') || '0MB';
+            const chunkThreshold = this.parseSizeString(chunkThresholdStr);
+
+            // If file size exceeds threshold and chunking is enabled, use chunked upload
+            if (chunkThreshold > 0 && this.ebooks.size > chunkThreshold) {
+                await this.do_chunked_upload();
+            } else {
+                await this.do_regular_upload();
+            }
+        },
+
+        async do_regular_upload() {
+            try {
+                const data = new FormData();
+                data.append("ebook", this.ebooks);
+
+                const rsp = await this.$backend("/book/upload", {
+                    method: 'POST',
+                    body: data,
                 });
+
+                this.dialog = false;
+                this.handleUploadResponse(rsp);
+            } catch (error) {
+                this.$alert("error", "上传失败: " + error.message);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async do_chunked_upload() {
+            try {
+                const file = this.ebooks;
+                const chunkSize = 1024 * 1024 * 20; // 20MB per chunk (minimum)
+                const totalChunks = Math.ceil(file.size / chunkSize);
+
+                // Generate file hash for unique identification
+                const fileHash = await this.generateFileHash(file);
+
+                // Upload chunks sequentially
+                for (let i = 0; i < totalChunks; i++) {
+                    const start = i * chunkSize;
+                    const end = Math.min(start + chunkSize, file.size);
+                    const chunk = file.slice(start, end);
+
+                    const formData = new FormData();
+                    formData.append("chunk", chunk);
+                    formData.append("filename", file.name);
+                    formData.append("chunk_index", i.toString());
+                    formData.append("total_chunks", totalChunks.toString());
+                    formData.append("file_hash", fileHash);
+
+                    const rsp = await this.$backend("/book/upload/chunk", {
+                        method: 'POST',
+                        body: formData,
+                    });
+
+                    if (rsp.err !== 'ok') {
+                        throw new Error(rsp.msg || "块上传失败");
+                    }
+
+                    // Update progress (this is the final chunk response)
+                    if (i === totalChunks - 1) {
+                        this.dialog = false;
+                        this.handleUploadResponse(rsp);
+                        return;
+                    }
+                }
+            } catch (error) {
+                this.$alert("error", "分片上传失败: " + error.message);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        handleUploadResponse(rsp) {
+            if (rsp.err === 'ok') {
+                this.$alert("success", "上传成功！", "/book/" + rsp.book_id);
+                this.$router.push("/book/" + rsp.book_id);
+            } else if (rsp.err === 'samebook') {
+                this.$alert("error", rsp.msg, "/book/" + rsp.book_id);
+                this.$router.push("/book/" + rsp.book_id);
+            } else {
+                this.$alert("error", rsp.msg);
+            }
+        },
+
+        parseSizeString(sizeStr) {
+            if (!sizeStr || sizeStr === "0" || sizeStr === "0MB" || sizeStr === "0KB") {
+                return 0;
+            }
+
+            const size = sizeStr.toLowerCase().trim();
+            if (size.endsWith("mb")) {
+                return parseInt(size.slice(0, -2)) * 1024 * 1024;
+            } else if (size.endsWith("kb")) {
+                return parseInt(size.slice(0, -2)) * 1024;
+            } else {
+                return parseInt(size);
+            }
+        },
+
+        async generateFileHash(file) {
+            // Simple hash based on file name, size, and first few bytes
+            const firstChunk = file.slice(0, 1024);
+            const arrayBuffer = await firstChunk.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+
+            let hash = 0;
+            const str = file.name + file.size + Array.from(uint8Array).join('');
+            for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; // Convert to 32-bit integer
+            }
+            return Math.abs(hash).toString(16);
         },
 
         cancelAddBook() {

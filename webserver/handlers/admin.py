@@ -277,6 +277,7 @@ class AdminSettings(BaseHandler):
             "INVITE_MESSAGE",
             "INVITE_MODE",
             "MAX_UPLOAD_SIZE",
+            "CHUNK_UPLOAD_SIZE",
             "RESET_MAIL_CONTENT",
             "RESET_MAIL_TITLE",
             "SIGNUP_MAIL_CONTENT",
