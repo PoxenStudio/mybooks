@@ -252,6 +252,7 @@
         "allow_guest_read": "Allow guests to read online (no registration or login required)",
         "allow_guest_download": "Allow unrestricted downloads (no registration or login required)",
         "allow_guest_push": "Allow unrestricted Kindle push (no registration or login required)",
+        "allow_guest_upload": "Allow guests to upload books (no registration or login required, please ensure you understand the risks of enabling this)",
         "allow_guest_register": "Allow guests to register accounts via email",
         "signup_mail_title": "Activation Email Title",
         "signup_mail_content": "Activation Email Content",

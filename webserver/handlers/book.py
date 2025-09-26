@@ -1179,12 +1179,15 @@ class BookUpload(BaseHandler):
         return (p["filename"], p["body"])
 
     @js
-    @auth
     def post(self):
         from calibre.ebooks.metadata.meta import get_metadata
 
-        if not self.current_user.can_upload():
-            return {"err": "permission", "msg": _(u"无权操作")}
+        if CONF["ALLOW_GUEST_UPLOAD"] == False:
+            if self.current_user.is_guest():
+                return {"err": "permission", "msg": _(u"无权操作，请先登录")}
+            if not self.current_user.can_upload():
+                return {"err": "permission", "msg": _(u"无权操作")}
+
         name, data = self.get_upload_file()
         if name is None:
             return {"err": "params.filename", "msg": _(u"文件不存在或未选择文件")}
@@ -1220,7 +1223,6 @@ class BookUpload(BaseHandler):
             mi.authors = [_(u"佚名")]
 
         logging.info("upload mi.title = " + repr(mi.title))
-        logging.info(f"upload mi.authors = {mi.authors}")
         books = self.calibre_db.books_with_same_title(mi)
         if books:
             book_id = None

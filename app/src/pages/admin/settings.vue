@@ -188,6 +188,7 @@ export default {
         fields: [
           { icon: "", key: "ALLOW_GUEST_READ", label: "settings.allow_guest_read", type: 'checkbox' },
           { icon: "", key: "ALLOW_GUEST_DOWNLOAD", label: "settings.allow_guest_download", type: 'checkbox' },
+          { icon: "", key: "ALLOW_GUEST_UPLOAD", label: "settings.allow_guest_upload", type: 'checkbox' },
           { icon: "", key: "ALLOW_GUEST_PUSH", label: "settings.allow_guest_push", type: 'checkbox' },
         ],
         groups: [

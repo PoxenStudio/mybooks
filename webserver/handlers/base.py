@@ -286,6 +286,9 @@ class BaseHandler(web.RequestHandler):
         uid = self.get_secure_cookie("user_id")
         return int(uid) if uid and uid.isdigit() else None
 
+    def is_guest(self):
+        return self.current_user is None
+
     def get_current_user(self):
         user_id = self.user_id()
         if user_id:

@@ -358,6 +358,7 @@
         "allow_guest_read": "允许访客在线阅读（无需注册和登录）",
         "allow_guest_download": "允许任意下载（访客无需注册和登录）",
         "allow_guest_push": "允许任意推送Kindle（访客无需注册和登录）",
+        "allow_guest_upload": "允许访客上传书籍（无需注册和登录,请确保清楚开启后的风险）",
         "allow_guest_register": "允许访客以邮箱注册账号",
         "signup_mail_title": "激活邮件标题",
         "signup_mail_content": "激活邮件正文",
