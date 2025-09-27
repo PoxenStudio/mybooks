@@ -610,7 +610,7 @@ class BookSoled(BaseHandler):
         # 查询当前用户设为sole的所有图书，按添加时间倒序排列
         db_items = self.sqlite_session.query(Item).filter(
             Item.collector_id == user_id,
-            Item.sole == True
+            Item.sole is True
         ).order_by(Item.create_time.desc())
 
         try:
@@ -624,7 +624,7 @@ class BookSoled(BaseHandler):
                 # 获取总数用于分页
                 total_items = self.sqlite_session.query(Item).filter(
                     Item.collector_id == user_id,
-                    Item.sole == True
+                    Item.sole is True
                 ).count()
 
             books = self.get_books(ids=ids)
@@ -1182,7 +1182,7 @@ class BookUpload(BaseHandler):
     def post(self):
         from calibre.ebooks.metadata.meta import get_metadata
 
-        if CONF["ALLOW_GUEST_UPLOAD"] == False:
+        if CONF["ALLOW_GUEST_UPLOAD"] is False:
             if self.is_guest():
                 return {"err": "permission", "msg": _(u"无权操作，请先登录")}
             if not self.current_user.can_upload():
@@ -1274,7 +1274,7 @@ class BookUploadChunk(BaseHandler):
     @js
     def post(self):
         """Handle chunked upload POST requests"""
-        if CONF["ALLOW_GUEST_UPLOAD"] == False:
+        if CONF["ALLOW_GUEST_UPLOAD"] is False:
             if self.is_guest():
                 return {"err": "permission", "msg": _(u"无权操作，请先登录")}
             if not self.current_user.can_upload():
