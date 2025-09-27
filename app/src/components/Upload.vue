@@ -285,7 +285,7 @@ export default {
 
             // If file size exceeds threshold and chunking is enabled, use chunked upload
             if (chunkThreshold > 0 && this.ebooks.size > chunkThreshold) {
-                await this.do_chunked_upload();
+                await this.do_chunked_upload(chunkThreshold);
             } else {
                 await this.do_regular_upload();
             }
@@ -310,10 +310,9 @@ export default {
             }
         },
 
-        async do_chunked_upload() {
+        async do_chunked_upload(chunkSize) {
             try {
                 const file = this.ebooks;
-                const chunkSize = 1024 * 1024 * 20; // 20MB per chunk (minimum)
                 const totalChunks = Math.ceil(file.size / chunkSize);
 
                 // Generate file hash for unique identification

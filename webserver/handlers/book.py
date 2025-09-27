@@ -1183,7 +1183,7 @@ class BookUpload(BaseHandler):
         from calibre.ebooks.metadata.meta import get_metadata
 
         if CONF["ALLOW_GUEST_UPLOAD"] == False:
-            if self.current_user.is_guest():
+            if self.is_guest():
                 return {"err": "permission", "msg": _(u"无权操作，请先登录")}
             if not self.current_user.can_upload():
                 return {"err": "permission", "msg": _(u"无权操作")}
@@ -1275,7 +1275,7 @@ class BookUploadChunk(BaseHandler):
     def post(self):
         """Handle chunked upload POST requests"""
         if CONF["ALLOW_GUEST_UPLOAD"] == False:
-            if self.current_user.is_guest():
+            if self.is_guest():
                 return {"err": "permission", "msg": _(u"无权操作，请先登录")}
             if not self.current_user.can_upload():
                 return {"err": "permission", "msg": _(u"无权操作")}
