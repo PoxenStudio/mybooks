@@ -61,7 +61,6 @@ RUN ARCH=$(uname -m) && \
         pip install --no-cache-dir /tmp/prebuilt/opencc-1.1.9-cp312-cp312-manylinux2014_aarch64.whl --break-system-packages; \
     else \
         pip install opencc  --break-system-packages;\
-        exit 1; \
     fi && \
     rm -rf /tmp/prebuilt
 
