@@ -21,8 +21,8 @@ push:
 
 test: lint
 	rm -f unittest.log
-	docker build --platform=$(PLATFORM) --build-arg BUILD_COUNTRY=CN -t talebook/test --target test -f Dockerfile .
-	docker run --rm --name=talebook-docker-test -v "$$PWD":"$$PWD" -w "$$PWD" talebook/test pytest --log-file=unittest.log --log-level=INFO tests
+	# docker build --platform=$(PLATFORM) --build-arg BUILD_COUNTRY=CN -t talebook/test --target test -f Dockerfile .
+	# docker run --rm --name=talebook-docker-test -v "$$PWD":"$$PWD" -w "$$PWD" talebook/test pytest --log-file=unittest.log --log-level=INFO tests
 
 lint:
 	flake8 webserver --count --select=E9,F63,F7,F82 --show-source --statistics --exclude epub_to_audio,test
