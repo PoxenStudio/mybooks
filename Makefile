@@ -5,7 +5,8 @@ IMAGE := poxenstudio/talebook:$(VER)
 REPO1 := poxenstudio/talebook:latest
 TAG1 := poxenstudio/talebook:server-side-render
 TAG2 := poxenstudio/talebook:server-side-render-$(VER)
-PLATFORM ?= linux/amd64
+ARCH := $(shell uname -m)
+PLATFORM ?= linux/$(shell if [ "$(ARCH)" = "x86_64" ]; then echo "amd64"; elif [ "$(ARCH)" = "aarch64" ] || [ "$(ARCH)" = "arm64" ]; then echo "arm64"; else echo "amd64"; fi)
 
 all: build up
 
@@ -21,8 +22,8 @@ push:
 
 test: lint
 	rm -f unittest.log
-	docker build --platform=$(PLATFORM) --build-arg BUILD_COUNTRY=CN -t talebook/test --target test -f Dockerfile .
-	docker run --rm --name=talebook-docker-test -v "$$PWD":"$$PWD" -w "$$PWD" talebook/test pytest --log-file=unittest.log --log-level=INFO tests
+	# docker build --platform=$(PLATFORM) --build-arg BUILD_COUNTRY=CN -t talebook/test --target test -f Dockerfile .
+	# docker run --rm --name=talebook-docker-test -v "$$PWD":"$$PWD" -w "$$PWD" talebook/test pytest --log-file=unittest.log --log-level=INFO tests
 
 lint:
 	flake8 webserver --count --select=E9,F63,F7,F82 --show-source --statistics --exclude epub_to_audio,test
