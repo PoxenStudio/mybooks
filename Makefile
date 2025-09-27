@@ -8,6 +8,13 @@ TAG2 := poxenstudio/talebook:server-side-render-$(VER)
 ARCH := $(shell uname -m)
 PLATFORM ?= linux/$(shell if [ "$(ARCH)" = "x86_64" ]; then echo "amd64"; elif [ "$(ARCH)" = "aarch64" ] || [ "$(ARCH)" = "arm64" ]; then echo "arm64"; else echo "amd64"; fi)
 
+message:
+	@echo "Building for platform: $(PLATFORM)"
+	@echo "Building image: $(IMAGE)"
+	@echo "Building tag1: $(TAG1)"
+	@echo "Building tag2: $(TAG2)"
+
+
 all: build up
 
 build: test
