@@ -610,7 +610,7 @@ class BookSoled(BaseHandler):
         # 查询当前用户设为sole的所有图书，按添加时间倒序排列
         db_items = self.sqlite_session.query(Item).filter(
             Item.collector_id == user_id,
-            Item.sole is True
+            Item.sole == 1
         ).order_by(Item.create_time.desc())
 
         try:
@@ -624,7 +624,7 @@ class BookSoled(BaseHandler):
                 # 获取总数用于分页
                 total_items = self.sqlite_session.query(Item).filter(
                     Item.collector_id == user_id,
-                    Item.sole is True
+                    Item.sole == 1
                 ).count()
 
             books = self.get_books(ids=ids)
