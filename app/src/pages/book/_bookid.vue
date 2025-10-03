@@ -1254,6 +1254,7 @@ export default {
                 if (rsp.err === "ok") {
                     this.$alert("success", this.$t('book.updateTagsSuccessful'));
                     this.$router.push("/book/" + this.book.id);
+                    location.reload();
                 } else {
                     this.$alert("error", rsp.msg);
                 }

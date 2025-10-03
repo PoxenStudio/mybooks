@@ -135,14 +135,13 @@ class BookTags(BaseHandler):
                 return {"err": "plugin.fail", "msg": _(u"BookBarn Tags插件拉取标签失败")}
             logging.info(f"BookBarn Tags for book {book_id} ({title}): {tags}")
             if len(tags) > 0:
-                current_tags = set(book.get("tags", []))
-                new_tags = set(tags) - current_tags
+                new_tags = tags.split(",") if tags else None
                 if len(new_tags) > 0:
-                    updated_tags = list(current_tags | new_tags)
+                    updated_tags = list(set(new_tags))
                     self.calibre_db.set_tags(book_id, updated_tags)
                     logging.info(f"Updated tags for book {book_id}: {updated_tags}")
-                    return {"err": "ok", "msg": _(u"标签更新成功"), "tags": updated_tags}
-            return {"err": "ok", "msg": _(u"标签已是最新，无需更新"), "tags": list(current_tags)}
+                    return {"err": "ok", "msg": _(u"标签更新成功")}
+            return {"err": "ok", "msg": _(u"标签已是最新，无需更新")}
         except Exception as e:
             logging.error(f"Error updating tags for book {book_id}: {e}")
             return {"err": "internal", "msg": _(u"更新标签时发生错误，请稍后再试")}
