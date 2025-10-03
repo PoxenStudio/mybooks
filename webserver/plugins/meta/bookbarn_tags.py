@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 # from webserver.version import VERSION
-import json
 import logging
 import requests
 import re
+from webserver.version import VERSION
 
-VERSION = "1.0.0"
 
 class BookBarnTags:
     HOST_BASE = "http://43.138.200.142:8088/"
@@ -30,7 +29,6 @@ class BookBarnTags:
         clean = clean[:cut_index]
         clean = clean.replace("：", ":").replace("，", ",").replace('"', "")
         return clean.strip()
-
 
     def normalize_author(self, author: str) -> str:
         """Remove suffix like '著' and normalize punctuation for authors."""
