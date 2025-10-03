@@ -8,6 +8,7 @@ from gettext import gettext as _
 
 from webserver import loader
 from webserver.plugins.meta import baike, douban
+from webserver.plugins.meta.bookbarn_tags import BookBarnTags
 from webserver.services import AsyncService
 
 CONF = loader.get_settings()
@@ -50,9 +51,10 @@ class AutoFillService(AsyncService):
 
     @AsyncService.register_function
     def auto_fill(self, book_id):
-        if not CONF['auto_fill_meta']:
-            return
         mi = self.db.get_metadata(book_id, index_is_id=True)
+        if not CONF['auto_fill_meta']:
+            self.do_fill_tags(book_id, mi, need_commit=True)
+            return
         return self.do_fill_metadata(book_id, mi)
 
     def do_fill_metadata(self, book_id, mi):
@@ -72,8 +74,10 @@ class AutoFillService(AsyncService):
             return False
 
         # 自动填充tag
+        self.do_fill_tags(book_id, refer_mi, need_commit=False)
         if len(refer_mi.tags) == 0 and len(mi.tags) == 0:
             mi.tags = self.guess_tags(refer_mi)
+
         # 保留书名不修改（万一出BUG，还能抢救一下）
         refer_mi.title = mi.title
 
@@ -97,6 +101,21 @@ class AutoFillService(AsyncService):
             if len(ts) > max_count:
                 break
         return ts
+
+    def do_fill_tags(self, book_id, mi, need_commit=False):
+        try:
+            tags = self.plugin_search_book_tag(mi)
+            if tags:
+                mi.tags = tags
+                if need_commit:
+                    self.db.set_metadata(book_id, mi, ignore_errors=True)
+                logging.info(_("自动更新书籍 id=[%d] 的标签，title=%s"), book_id, mi.title)
+                return True
+            else:
+                logging.info(_("忽略更新书籍 id=%d : 无法获取标签, title=%s"), book_id, mi.title)
+        except Exception as e:
+            logging.error(_("bookbarn_tags 接口查询 %s 失败: %s"), mi.title, e)
+        return False
 
     def plugin_search_best_book_info(self, mi):
         title = re.sub("[(（].*", "", mi.title)
@@ -141,4 +160,20 @@ class AutoFillService(AsyncService):
         except:
             logging.error(_("baidu 接口查询 %s 失败"), title)
 
+        return None
+
+    def plugin_search_book_tag(self, mi):
+        if not mi.isbn and not mi.title and not mi.author:
+            logging.info(_("忽略获取标签书籍 id=%d : 无有效数据"), mi.id)
+            return None
+
+        api = BookBarnTags(token=CONF.get("bookbarn_token", ""))
+        try:
+            author = mi.authors[0] if mi.authors else ""
+            logging.info(_("调用 bookbarn_tags 接口查询 %s, %s, %s"), mi.title, author, mi.isbn)
+            tags = api.get_tags(mi.isbn, mi.title, author)
+            logging.info(f"bookbarn_tags 返回标签: {tags}")
+            return tags.split(",") if tags else None
+        except:
+            logging.error(_("bookbarn_tags 接口查询 %s 失败"), mi.title)
         return None

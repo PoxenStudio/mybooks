@@ -13,7 +13,8 @@ import sys
 
 # 常量定义
 API_KEY = "054022eaeae0b00e0fc068c0c0a2102a"
-BASE_URL = "http://127.0.0.1:8085"
+# BASE_URL = "http://127.0.0.1:8085"
+BASE_URL = "http://douban-rs-api:80/"
 
 # Chrome浏览器头部信息
 CHROME_HEADERS = {
