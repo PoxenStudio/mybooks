@@ -398,7 +398,8 @@
         "bookPhysical":"Physical Book",
         "bookCount":"Count",
         "chooseVoice":"Choose voice",
-        "recommendedBooks":"Others"
+        "recommendedBooks":"Others",
+        "recommendedBooksDesc":"Recommended based on tags and authors"
     },
     "reader": {
         "tip": {

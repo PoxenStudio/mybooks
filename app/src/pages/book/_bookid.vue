@@ -594,8 +594,11 @@
             <v-card>
                 <v-card-title class="headline">
                     <v-icon left>mdi-book-multiple</v-icon>
-                    {{ $t('book.recommendedBooks') || '推荐图书' }}
+                    {{ $t('book.recommendedBooks') }}
                 </v-card-title>
+                <v-card-subtitle>
+                    {{ $t('book.recommendedBooksDesc') }}
+                </v-card-subtitle>
                 <v-card-text>
                     <v-progress-circular
                         v-if="suggestionBooksLoading"
@@ -999,7 +1002,6 @@ export default {
     methods: {
         async toggleFavorite() {
             if (this.favoriteLoading) return;
-
             this.favoriteLoading = true;
             try {
                 const newFavoriteStatus = !this.isFavorite;
