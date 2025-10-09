@@ -1617,7 +1617,6 @@ class BookPush(BaseHandler):
 
 class BookSuggestion(ListHandler):
     @js
-    @auth
     def get(self, id):
         book = self.get_book(id)
         if not book:
@@ -1637,13 +1636,6 @@ class BookSuggestion(ListHandler):
                 similar_books = self.get_item_books("authors", authors[0], max_count=12)
         # 移除结果中的当前书籍
         similar_books = [b for b in similar_books if b["id"] != book["id"]]
-
-        # if not similar_books:
-        #     # 如果以上查询为空，则从 Index 中随机选取 12 本书
-        #     ids = list(self.calibre_db_cache.search(""))
-        #     random_ids = random.sample(ids, 12)
-        #     similar_books = [b for b in self.get_books(ids=random_ids)]
-
         return {
             "err": "ok",
             "msg": _(u"推荐成功"),
