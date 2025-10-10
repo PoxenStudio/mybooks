@@ -1,0 +1,68 @@
+<template>
+    <v-row>
+        <v-col cols=12 class='text-center position-relative'>
+            <div class="watermark">PoxenStudio/Talebook</div>
+
+            <v-divider class='mt-10 mb-3'></v-divider>
+            <p class='mb-0 text-center footer-text' v-html="footer_text"></p>
+            <p>
+                <v-btn small text target="_blank" href="https://github.com/HorkyChen/talebook">Project</v-btn>
+                | <v-btn small text target="_blank" href="https://hub.docker.com/r/poxenstudio/talebook">Docker</v-btn>
+                | <v-btn small text target="_blank" href="http://talebook.org">DEMO</v-btn>
+            </p>
+            <!-- 系统版本信息 -->
+            <p v-if="version" class="version-info">
+                {{ $t('appHeader.systemVersion') }}: {{ version }}
+            </p>
+        </v-col>
+    </v-row>
+</template>
+
+<script>
+export default {
+    name: 'AppFooter',
+    computed: {
+        footer_text: function () {
+            if (this.$store.state.sys.footer != undefined) {
+                return this.$store.state.sys.footer;
+            }
+            return this.footer;
+        },
+        version: function () {
+            return this.$store.state.sys.version || '';
+        },
+    },
+    footer: function () {
+        return this.$t('footer.base_message');
+    },
+}
+</script>
+
+<style>
+.position-relative {
+    position: relative;
+}
+
+.watermark {
+    position: absolute;
+    top: 75%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Times New Roman', serif;
+    font-size: clamp(2rem, 5vw, 3rem);    /* 在 2rem–3rem 之间，按屏幕宽度自适应 */
+    font-weight: bold;
+    color: rgba(200, 200, 200, 0.2); /* 浅灰色，半透明 */
+    pointer-events: none;
+    z-index: 0;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.version-info {
+    color: #666;
+    font-size: 12px;
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
+
+</style>

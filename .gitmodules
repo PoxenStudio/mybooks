@@ -1,0 +1,3 @@
+[submodule "webserver/epub_to_audio"]
+	path = webserver/epub_to_audio
+	url = https://github.com/HorkyChen/epub_to_audiobook.git
