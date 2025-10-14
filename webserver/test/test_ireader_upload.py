@@ -5,6 +5,7 @@ import os
 import requests
 from pathlib import Path
 from requests_toolbelt.multipart.encoder import MultipartEncoder
+from uploader import IReaderUploader
 
 
 def upload_file_to_ireader(file_path, server_url="http://192.168.31.179:10123/?action=addBook"):
@@ -87,29 +88,16 @@ def main():
     import sys
     if len(sys.argv) != 2:
         print("用法: python test_ireader_upload.py <文件路径>")
-        print("示例: python test_ireader_upload.py /path/to/book.epub")
         return
     file_path = sys.argv[1]
+    server_url = "http://192.168.31.230:9310/files"
     try:
         print(f"开始上传文件: {file_path}")
-        result = upload_file_to_ireader(file_path)
+        result = IReaderUploader(file_path).upload(server_url)
         print("上传成功!")
-        print(f"文件名: {result['filename']}")
-        print(f"文件大小: {result['file_size']} bytes")
-        print(f"Content-Type: {result['content_type']}")
-        print(f"HTTP状态码: {result['status_code']}")
-        if 'response_data' in result:
-            print(f"服务器响应: {result['response_data']}")
-        elif 'response_text' in result:
-            print(f"服务器响应: {result['response_text']}")
-    except ValueError as e:
-        print(f"参数错误: {e}")
-    except FileNotFoundError as e:
-        print(f"文件错误: {e}")
-    except requests.exceptions.RequestException as e:
-        print(f"网络错误: {e}")
+        print(result)
     except Exception as e:
-        print(f"未知错误: {e}")
+        print(f"上传失败: {e}")
 
 
 if __name__ == "__main__":
