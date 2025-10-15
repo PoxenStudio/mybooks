@@ -409,7 +409,11 @@
         "bookCount":"Count",
         "chooseVoice":"Choose voice",
         "recommendedBooks":"Others",
-        "recommendedBooksDesc":"Recommended based on tags and authors"
+        "recommendedBooksDesc":"Recommended based on tags and authors",
+        "sendToDevice": "Send to device",
+        "selectDevice": "Choose device",
+        "noDevices": "No devices configured yet",
+        "configDeviceDesc": "Please configure reading devices in system settings first"
     },
     "reader": {
         "tip": {

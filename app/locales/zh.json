@@ -316,7 +316,11 @@
         "bookCount":"在库数",
         "chooseVoice":"选择声音",
         "recommendedBooks":"其它书籍",
-        "recommendedBooksDesc":"根据当前图书的标签和作者推荐"
+        "recommendedBooksDesc":"根据当前图书的标签和作者推荐",
+        "sendToDevice": "发送到设备",
+        "selectDevice": "选择设备",
+        "noDevices": "还没有配置任何设备",
+        "configDeviceDesc": "请先在系统设置中配置阅读设备"
     },
     "reader": {
         "tip": {

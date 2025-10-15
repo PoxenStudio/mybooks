@@ -1,6 +1,9 @@
-import os
+#!/usr/bin/env python3
+# -*- coding: UTF-8 -*-
+
 from pathlib import Path
 import requests
+
 
 class BaseUploader:
     def __init__(self, file_path, timeout=60):

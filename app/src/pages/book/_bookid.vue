@@ -746,19 +746,19 @@
         <v-card>
             <v-card-title class="headline">
                 <v-icon class="mr-2">devices</v-icon>
-                发送到设备
+                {{ $t('book.sendToDevice') }}
             </v-card-title>
             <v-card-text>
                 <div v-if="!devices || devices.length === 0" class="text-center py-4">
                     <v-icon size="48" color="grey">device_unknown</v-icon>
                     <p class="mt-2 grey--text">
-                        还没有配置任何设备<br>
-                        请先在系统设置中配置阅读设备
+                        {{ $t('book.noDevices') }}<br>
+                        {{ $t('book.configDeviceDesc') }}
                     </p>
                 </div>
                 <div v-else>
                     <p class="mb-4">
-                        选择要发送到的设备：
+                        {{ $t('book.selectDevice') }}:
                         <span class="caption grey--text">
                             (将发送 {{ selectedFormat }} 格式)
                         </span>
@@ -776,7 +776,7 @@
             <v-card-actions>
                 <v-spacer></v-spacer>
                 <v-btn text @click="dialog_send_to_device = false">
-                    取消
+                    {{ $t('common.cancel') }}
                 </v-btn>
                 <v-btn
                     color="primary"
@@ -784,7 +784,7 @@
                     @click="sendToDevice"
                     :disabled="!selectedDevice || !devices || devices.length === 0"
                 >
-                    发送
+                    {{ $t('common.send') }}
                 </v-btn>
             </v-card-actions>
         </v-card>
