@@ -73,6 +73,43 @@
               </v-row>
             </template>
 
+            <template v-if="card.show_devices">
+              <v-row v-for="(device, idx) in settings.DEVICES" :key="'device-' + idx">
+                <v-col class='py-0' cols=2>
+                  <v-text-field flat small hide-details single-line v-model="device.name" :label="$t('settings.device_name')"
+                    type="text"></v-text-field>
+                </v-col>
+                <v-col class='py-0' cols=2>
+                  <v-select flat small hide-details single-line v-model="device.type" :items="deviceTypes" :label="$t('settings.device_type')">
+                  </v-select>
+                </v-col>
+                <v-col class='py-0' cols=2>
+                  <v-text-field flat small hide-details single-line v-model="device.ip" :label="$t('settings.device_ip')"
+                    type="text"></v-text-field>
+                </v-col>
+                <v-col class='py-0' cols=2>
+                  <v-text-field flat small hide-details single-line v-model.number="device.port" :label="$t('settings.device_port')"
+                    type="number"></v-text-field>
+                </v-col>
+                <v-col class='py-0' cols=1>
+                  <v-select flat small hide-details single-line v-model="device.schema" :items="deviceSchemas" :label="$t('settings.device_schema')">
+                  </v-select>
+                </v-col>
+                <v-col class='py-0' cols=1>
+                  <v-btn icon small @click="settings.DEVICES.splice(idx, 1)">
+                    <v-icon>delete</v-icon>
+                  </v-btn>
+                </v-col>
+              </v-row>
+              <v-row>
+                <v-col align="center">
+                  <v-btn color="primary" @click="settings.DEVICES.push({ name: '', type: 'duokan', ip: '', port: 80, schema: 'http' })">
+                    <v-icon>add</v-icon>{{ $t('settings.add') }}
+                  </v-btn>
+                </v-col>
+              </v-row>
+            </template>
+
             <template v-if="card.show_bookbarn">
               <p>{{ $t('settings.book_barn_description') }}</p>
               <v-checkbox small hide-details
@@ -151,6 +188,13 @@ export default {
     "ssl-manager": SSLManager,
   },
   created() {
+    // 初始化设备类型选项
+    this.deviceTypes = [
+      { text: this.$t('settings.device_type_duokan'), value: "duokan" },
+      { text: this.$t('settings.device_type_ireader'), value: "ireader" },
+      { text: this.$t('settings.device_type_hanwang'), value: "hanwang" }
+    ];
+
     this.cards = [
       {
         show: false,
@@ -252,6 +296,14 @@ export default {
 
       {
         show: false,
+        title: 'settings.device_mgt',
+        subtitle: 'settings.device_mgt_description',
+        fields: [],
+        show_devices: true,
+      },
+
+      {
+        show: false,
         title: "settings.internet_book_sources",
         fields: [
           { icon: "", key: "auto_fill_meta", label: "settings.auto_fill_meta", type: 'checkbox' },
@@ -313,6 +365,9 @@ export default {
         if (!('site_icon' in this.settings) || this.settings['site_icon'] === '') {
           this.settings['site_icon'] = "favicon_0";
         }
+        if (!('DEVICES' in this.settings) || !Array.isArray(this.settings['DEVICES'])) {
+          this.settings['DEVICES'] = [];
+        }
         if (process.client && this.settings['MAX_UPLOAD_SIZE'] !== '') {
           localStorage.setItem('max_upload_size', this.settings['MAX_UPLOAD_SIZE']);
         }
@@ -339,6 +394,11 @@ export default {
     cards: [],
     appliedToken: false,
     testingConnection: false,
+    deviceTypes: [],
+    deviceSchemas: [
+      { text: "HTTP", value: "http" },
+      { text: "HTTPS", value: "https" }
+    ],
   }),
   methods: {
     save_settings: function () {

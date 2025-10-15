@@ -316,7 +316,17 @@
         "book2audio_proxy_comment": "Able to access EdgeTTS proxy configuration, can be confirmed by visiting https://edge-tts.com. If no proxy service is available, you can use Book Barn's proxy service, which requires payment due to bandwidth costs.",
         "book2audio_proxy_address": "Audio Proxy Server Address",
         "use_bookbarn_proxy": "Use Book Barn Proxy Service (enabled after authorization via WeChat official account)",
-        "book2audio_proxy_test": "Test Connection"
+        "book2audio_proxy_test": "Test Connection",
+        "device_mgt": "Device Management",
+        "device_mgt_description": "Configure devices that can connect to TaleBook for syncing books.",
+        "device_name": "Name",
+        "device_ip": "IP",
+        "device_port": "Port",
+        "device_type": "Type",
+        "device_schema": "Schema",
+        "device_type_duokan": "Duokan Reader",
+        "device_type_ireader": "iReader",
+        "device_type_hanwang": "Hanwang Reader"
     },
     "book": {
         "edit": {

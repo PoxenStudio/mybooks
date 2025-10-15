@@ -426,7 +426,17 @@
         "book2audio_proxy_comment": "能够访问EdgeTTS使用的代理配置, 可以通过访问https://edge-tts.com确认。没有代理服务可用时, 可以使用书栈代理服务, 因为有带宽成本, 需要付费使用。",
         "book2audio_proxy_address": "语音代理服务器地址",
         "use_bookbarn_proxy": "使用书栈代理服务 (公众号后台私信授权后开通)",
-        "book2audio_proxy_test": "测试是否连通"
+        "book2audio_proxy_test": "测试是否连通",
+        "device_mgt": "设备管理",
+        "device_mgt_description": "管理您用来阅读的设备, 并且支持通网络上传电子书的功能。",
+        "device_name": "名称",
+        "device_ip": "IP地址",
+        "device_port": "端口",
+        "device_type": "类型",
+        "device_schema": "访问协议",
+        "device_type_duokan": "多看阅读器",
+        "device_type_ireader": "掌阅",
+        "device_type_hanwang": "汉王"
     },
     "user": {
         "avatar": "头像",
