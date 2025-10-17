@@ -1710,7 +1710,12 @@ class BookSendToDevice(BaseHandler):
                 return {"err": "uploader.not_found", "msg": _(u"找不到对应的上传器: %s") % device_type}
 
             # 创建上传器实例
-            uploader = uploader_class(file_path)
+            book_name = book.get("title", "")
+            if not book_name:
+                book_name = None
+            else:
+                book_name += os.path.splitext(file_path)[-1]
+            uploader = uploader_class(file_path, file_name=book_name)
 
             # 构建设备上传URL
             if not device_url.startswith(('http://', 'https://')):

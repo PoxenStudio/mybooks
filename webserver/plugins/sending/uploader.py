@@ -3,9 +3,9 @@ from pathlib import Path
 import requests
 
 class BaseUploader:
-    def __init__(self, file_path, filename=None, timeout=60):
+    def __init__(self, file_path, file_name=None, timeout=60):
         self.file_path = Path(file_path)
-        self.filename = self.file_path.name if filename is None else filename
+        self.filename = self.file_path.name if file_name is None else file_name
         self.file_extension = self.file_path.suffix.lower()
         self.content_type = self._get_content_type()
         self.timeout = timeout

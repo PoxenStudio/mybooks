@@ -742,47 +742,79 @@
     </v-dialog>
 
     <!-- 发送到设备对话框 -->
-    <v-dialog v-model="dialog_send_to_device" persistent max-width="500">
+    <v-dialog v-model="dialog_send_to_device" persistent max-width="600">
         <v-card>
             <v-card-title class="headline">
                 <v-icon class="mr-2">devices</v-icon>
                 {{ $t('book.sendToDevice') }}
             </v-card-title>
             <v-card-text>
-                <div v-if="!devices || devices.length === 0" class="text-center py-4">
+                <p class="mb-4">
+                    {{ $t('book.selectDevice') }}:
+                    <span class="caption grey--text">
+                        (将发送 {{ selectedFormat }} 格式)
+                    </span>
+                </p>
+                <v-radio-group v-model="selectedDeviceOption">
+                    <v-radio
+                        v-for="(device, idx) in devices"
+                        :key="'device-' + idx"
+                        :value="'saved-' + idx"
+                        :label="`${device.name} (${getDeviceTypeText(device.type)}) - ${device.ip}:${device.port}`"
+                    ></v-radio>
+                    <v-radio
+                        value="temporary"
+                        :label="$t('book.temporaryDevice')"
+                    ></v-radio>
+                </v-radio-group>
+
+                <!-- 临时设备输入框 -->
+                <div v-if="selectedDeviceOption === 'temporary'" class="mt-4 pl-8">
+                    <v-select
+                        v-model="tempDevice.type"
+                        :items="deviceTypes"
+                        :label="$t('book.deviceType') + ' *'"
+                        outlined
+                        dense
+                        :rules="[v => !!v || $t('book.deviceTypeRequired')]"
+                    ></v-select>
+                    <v-text-field
+                        v-model="tempDevice.ip"
+                        :label="$t('book.deviceIP') + ' *'"
+                        outlined
+                        dense
+                        :rules="[v => !!v || $t('book.deviceIPRequired')]"
+                        placeholder="192.168.1.100"
+                    ></v-text-field>
+                    <v-text-field
+                        v-model="tempDevice.port"
+                        :label="$t('book.devicePort') + ' *'"
+                        outlined
+                        dense
+                        type="number"
+                        :rules="[v => !!v || $t('book.devicePortRequired')]"
+                        placeholder="8080"
+                    ></v-text-field>
+                </div>
+
+                <div v-if="devices.length === 0 && selectedDeviceOption !== 'temporary'" class="text-center py-4">
                     <v-icon size="48" color="grey">device_unknown</v-icon>
                     <p class="mt-2 grey--text">
                         {{ $t('book.noDevices') }}<br>
                         {{ $t('book.configDeviceDesc') }}
                     </p>
                 </div>
-                <div v-else>
-                    <p class="mb-4">
-                        {{ $t('book.selectDevice') }}:
-                        <span class="caption grey--text">
-                            (将发送 {{ selectedFormat }} 格式)
-                        </span>
-                    </p>
-                    <v-radio-group v-model="selectedDevice" mandatory>
-                        <v-radio
-                            v-for="(device, idx) in devices"
-                            :key="idx"
-                            :value="device"
-                            :label="`${device.name} (${getDeviceTypeText(device.type)}) - ${device.ip}:${device.port}`"
-                        ></v-radio>
-                    </v-radio-group>
-                </div>
             </v-card-text>
             <v-card-actions>
                 <v-spacer></v-spacer>
-                <v-btn text @click="dialog_send_to_device = false">
+                <v-btn text @click="closeDeviceDialog">
                     {{ $t('common.cancel') }}
                 </v-btn>
                 <v-btn
                     color="primary"
                     :loading="sending_to_device"
                     @click="sendToDevice"
-                    :disabled="!selectedDevice || !devices || devices.length === 0"
+                    :disabled="!canSendToDevice"
                 >
                     {{ $t('common.send') }}
                 </v-btn>
@@ -905,6 +937,19 @@ export default {
                     return (v && /^[0-9\-X]+$/.test(v)) || this.$t('upload.isbnInvalidFormat');
                 }
             ];
+        },
+
+        // 检查是否可以发送到设备
+        canSendToDevice() {
+            if (!this.selectedDeviceOption) return false;
+
+            if (this.selectedDeviceOption === 'temporary') {
+                // 临时设备需要验证所有字段
+                return this.tempDevice.type && this.tempDevice.ip && this.tempDevice.port;
+            } else {
+                // 选择了已保存的设备
+                return true;
+            }
         }
     },
     data: () => ({
@@ -953,6 +998,17 @@ export default {
         sending_to_device: false,
         devices: [],
         selectedDevice: null,
+        selectedDeviceOption: null,
+        tempDevice: {
+            type: '',
+            ip: '',
+            port: ''
+        },
+        deviceTypes: [
+            { text: '多看阅读器', value: 'duokan' },
+            { text: '掌阅', value: 'ireader' },
+            { text: '汉王', value: 'hanwang' }
+        ],
         adding_book: false,
         isbn: "",
         continueAdding: false,
@@ -1053,6 +1109,9 @@ export default {
             const lastUsedVoice = localStorage.getItem("last_used_voice_name");
             this.voice_name = lastUsedVoice || "zh-CN-XiaoxiaoNeural"; // 如果没有保存的语音，使用默认的晓晓
 
+            // 从localStorage加载上次使用的设备选项
+            this.loadDevicePreferences();
+
             // 检查URL参数，如果有continue_adding=true则自动弹出添加对话框
             if (this.$route.query.continue_adding === 'true' && this.$store.state.sys.allow.physical_books) {
                 this.$nextTick(() => {
@@ -1084,6 +1143,50 @@ export default {
             },
             immediate: true, // 立即执行一次，用于初始数据检查
             deep: true // 深度监听对象变化
+        },
+        // 监听发送到设备对话框的打开状态，自动选择默认设备
+        dialog_send_to_device: {
+            handler(isOpen) {
+                if (!isOpen || !process.client) return;
+
+                // 只有当没有选择任何设备选项时才自动选择
+                if (this.selectedDeviceOption) return;
+
+                // 如果有可用设备，默认选择第一个
+                if (this.devices && this.devices.length > 0) {
+                    this.selectedDeviceOption = 'saved-0';
+                } else {
+                    // 如果没有可用设备，默认选择临时设备
+                    this.selectedDeviceOption = 'temporary';
+                }
+            }
+        },
+        // 监听临时设备信息变化，实时保存到localStorage
+        tempDevice: {
+            handler(newValue) {
+                if (!process.client) return;
+                try {
+                    localStorage.setItem('temp_device_info', JSON.stringify({
+                        type: newValue.type || '',
+                        ip: newValue.ip || '',
+                        port: newValue.port || ''
+                    }));
+                } catch (error) {
+                    console.error('保存临时设备信息失败:', error);
+                }
+            },
+            deep: true
+        },
+        // 监听设备选项变化，实时保存到localStorage
+        selectedDeviceOption: {
+            handler(newValue) {
+                if (!process.client || !newValue) return;
+                try {
+                    localStorage.setItem('last_selected_device_option', newValue);
+                } catch (error) {
+                    console.error('保存设备选项失败:', error);
+                }
+            }
         }
     },
     beforeRouteUpdate(to, from, next) {
@@ -1758,6 +1861,49 @@ export default {
             }
         },
 
+        // 从localStorage加载设备偏好设置
+        loadDevicePreferences() {
+            if (!process.client) return;
+
+            try {
+                const savedOption = localStorage.getItem('last_selected_device_option');
+                const savedTempDevice = localStorage.getItem('temp_device_info');
+
+                if (savedOption) {
+                    this.selectedDeviceOption = savedOption;
+                } else {
+                    // 如果没有保存的选项，根据设备列表设置默认值
+                    if (this.devices && this.devices.length > 0) {
+                        this.selectedDeviceOption = 'saved-0';
+                    } else {
+                        this.selectedDeviceOption = 'temporary';
+                    }
+                }
+
+                if (savedTempDevice) {
+                    const tempDeviceData = JSON.parse(savedTempDevice);
+                    this.tempDevice = {
+                        type: tempDeviceData.type || '',
+                        ip: tempDeviceData.ip || '',
+                        port: tempDeviceData.port || ''
+                    };
+                }
+            } catch (error) {
+                console.error('加载设备偏好设置失败:', error);
+            }
+        },
+
+        // 保存设备偏好设置到localStorage（注：现在通过watcher实时保存，这个方法保留以便兼容）
+        saveDevicePreferences() {
+            // 已通过watcher实时保存，此方法现在为空，保留以便兼容现有代码
+            // 如果需要，可以在这里添加额外的保存逻辑
+        },
+
+        // 关闭设备对话框
+        closeDeviceDialog() {
+            this.dialog_send_to_device = false;
+        },
+
         // 获取设备类型文本
         getDeviceTypeText(type) {
             const typeMap = {
@@ -1770,26 +1916,46 @@ export default {
 
         // 发送到设备
         async sendToDevice() {
-            if (!this.selectedDevice) {
-                this.$alert('error', '请选择要发送到的设备');
+            if (!this.canSendToDevice) {
+                this.$alert('error', '请完整填写设备信息');
                 return;
             }
 
             this.sending_to_device = true;
             try {
-                const url = `${this.selectedDevice.schema}://${this.selectedDevice.ip}:${this.selectedDevice.port}`;
+                let deviceInfo;
+                let deviceName;
+
+                if (this.selectedDeviceOption === 'temporary') {
+                    // 使用临时设备
+                    deviceInfo = {
+                        type: this.tempDevice.type,
+                        ip: this.tempDevice.ip,
+                        port: this.tempDevice.port,
+                        schema: 'http'
+                    };
+                    deviceName = this.$t('book.temporaryDevice');
+                } else {
+                    // 使用已保存的设备
+                    const deviceIndex = parseInt(this.selectedDeviceOption.replace('saved-', ''));
+                    deviceInfo = this.devices[deviceIndex];
+                    deviceName = deviceInfo.name;
+                }
+
+                const url = `${deviceInfo.schema || 'http'}://${deviceInfo.ip}:${deviceInfo.port}`;
                 const response = await this.$backend(`/book/${this.book.id}/send_to_device`, {
                     method: 'POST',
                     body: JSON.stringify({
-                        device_type: this.selectedDevice.type,
+                        device_type: deviceInfo.type,
                         device_url: url
                     })
                 });
 
                 if (response.err === 'ok') {
-                    this.$alert('success', `书籍已成功发送到 ${this.selectedDevice.name}`);
+                    this.$alert('success', `书籍已成功发送到 ${deviceName}`);
                     this.dialog_send_to_device = false;
-                    this.selectedDevice = null;
+                    // 保存设备偏好设置
+                    this.saveDevicePreferences();
                 } else {
                     this.$alert('error', response.msg || '发送失败');
                 }

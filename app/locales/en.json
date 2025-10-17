@@ -413,7 +413,14 @@
         "sendToDevice": "Send to device",
         "selectDevice": "Choose device",
         "noDevices": "No devices configured yet",
-        "configDeviceDesc": "Please configure reading devices in system settings first"
+        "configDeviceDesc": "Please configure reading devices in system settings first",
+        "temporaryDevice": "Temporary device",
+        "deviceType": "Device type",
+        "deviceIP": "Device IP address",
+        "devicePort": "Device port",
+        "deviceTypeRequired": "Please select device type",
+        "deviceIPRequired": "Please enter device IP address",
+        "devicePortRequired": "Please enter device port"
     },
     "reader": {
         "tip": {

@@ -320,7 +320,14 @@
         "sendToDevice": "发送到设备",
         "selectDevice": "选择设备",
         "noDevices": "还没有配置任何设备",
-        "configDeviceDesc": "请先在系统设置中配置阅读设备"
+        "configDeviceDesc": "请先在系统设置中配置阅读设备",
+        "temporaryDevice": "临时设备",
+        "deviceType": "设备类型",
+        "deviceIP": "设备IP地址",
+        "devicePort": "设备端口",
+        "deviceTypeRequired": "请选择设备类型",
+        "deviceIPRequired": "请输入设备IP地址",
+        "devicePortRequired": "请输入设备端口"
     },
     "reader": {
         "tip": {
