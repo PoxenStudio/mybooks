@@ -40,7 +40,13 @@
         <v-col cols=6 xs=6 sm=4 md=2 lg=1 v-for="(book,idx) in get_random_books" :key="'rec'+idx+book.id" class="book-card">
             <v-card :to="book.href" class="ma-1">
                 <div class="book-img-container">
-                    <v-img :src="book.img" :aspect-ratio="11/15" style="border-radius: 12px;" class="book-img-hover"> </v-img>
+                    <v-img
+                        :src="book.img"
+                        :aspect-ratio="11/15"
+                        style="border-radius: 12px;"
+                        class="book-img-hover"
+                        contain
+                    ></v-img>
                     <!-- 实体书角标 -->
                     <div v-if="book.book_type === 1" class="physical-book-badge">
                         <v-icon small color="white">mdi-bookshelf</v-icon>
@@ -174,6 +180,16 @@ export default {
     mounted() {
         this.loadLibraryStats();
         this.checkReleaseNotes();
+        // 强制重新渲染图片，修复从其他页面返回时的布局问题
+        this.$nextTick(() => {
+            window.dispatchEvent(new Event('resize'));
+        });
+    },
+    activated() {
+        // 当使用 keep-alive 缓存时，激活页面时强制重新计算布局
+        this.$nextTick(() => {
+            window.dispatchEvent(new Event('resize'));
+        });
     },
     beforeDestroy() {
         if (this.countdownTimer) {
@@ -308,9 +324,23 @@ export default {
 }
 .book-img-container {
     position: relative;
-    display: inline-block;
+    display: block;
     width: 100%;
+    overflow: hidden;
 }
+
+/* 确保图片容器保持正确的宽高比 */
+.book-img-container .v-image {
+    width: 100% !important;
+    height: auto !important;
+}
+
+/* 确保响应式内容填充整个容器 */
+.book-img-container .v-responsive__content {
+    width: 100% !important;
+    height: 100% !important;
+}
+
 .physical-book-badge {
     position: absolute;
     top: 6px;
@@ -325,13 +355,25 @@ export default {
     box-shadow: 0 2px 8px rgba(33, 150, 243, 0.4);
     z-index: 3;
 }
+
 .book-img-hover {
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform;
 }
+
 .book-img-hover:hover {
     transform: scale(1.06);
     z-index: 2;
     box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+}
+
+/* 确保书籍卡片在路由切换时正确渲染 */
+.book-card {
+    min-height: 0;
+}
+
+.book-card .v-card {
+    overflow: hidden;
 }
 /* Release Notes Dialog card font size */
 .release-notes-card {

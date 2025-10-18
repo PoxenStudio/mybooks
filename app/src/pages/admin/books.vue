@@ -80,7 +80,17 @@
                 <v-chip small v-else class="info">{{ item.status }}</v-chip>
             </template>
             <template v-slot:item.img="{ item }">
-                <a target="_blank" :href="item.img"><v-img :src="item.thumb" class="my-1" max-height="80"  :aspect-ratio="3/4" /></a>
+                <a target="_blank" :href="item.img" class="book-cover-link">
+                    <v-img
+                        :src="item.thumb"
+                        class="my-1 book-cover-img"
+                        :max-height="$vuetify.breakpoint.xs ? 40 : 80"
+                        :min-height="$vuetify.breakpoint.xs ? 40 : 60"
+                        :max-width="$vuetify.breakpoint.xs ? 30 : 60"
+                        :min-width="$vuetify.breakpoint.xs ? 30 : 45"
+                        :aspect-ratio="3/4"
+                    />
+                </a>
             </template>
             <template v-slot:item.id="{ item }">
                 <a target="_blank" :href="`/book/${item.id}`">{{ item.id }}</a>
@@ -352,11 +362,13 @@ export default {
         responsiveHeaders: function() {
             // 根据屏幕宽度返回不同的headers配置
             if (this.$vuetify.breakpoint.xs) {
-                // 超小屏幕（手机）：只显示最重要的列
+                // 超小屏幕（手机）：显示封面、ID、书名、作者和操作
                 return [
-                    { text: "封面", sortable: false, value: "img", width: "60px" },
+                    { text: "封面", sortable: false, value: "img", width: "40px" },
+                    { text: "ID", sortable: true, value: "id", width: "50px" },
                     { text: "书名", sortable: true, value: "title" },
-                    { text: "操作", sortable: false, value: "actions", width: "80px" },
+                    { text: "作者", sortable: true, value: "author", width: "80px" },
+                    { text: "操作", sortable: false, value: "actions", width: "60px" },
                 ];
             } else if (this.$vuetify.breakpoint.sm) {
                 // 小屏幕（平板）：显示核心信息
@@ -567,10 +579,62 @@ export default {
         max-width: 80px;
     }
 
-    /* 图片在小屏幕上更小 */
-    .v-image {
-        max-width: 40px !important;
-        max-height: 60px !important;
+    /* 封面图片在小屏幕上保持30x40的固定尺寸 */
+    .v-data-table .v-image {
+        min-width: 30px !important;
+        max-width: 30px !important;
+        width: 30px !important;
+        min-height: 40px !important;
+        max-height: 40px !important;
+        height: 40px !important;
+        margin-left: auto !important;
+        display: block !important;
+    }
+
+    /* 确保图片单元格也有合适的宽度和右对齐 - 桌面端表格 */
+    .v-data-table td:has(.v-image) {
+        width: 40px !important;
+        min-width: 40px !important;
+        padding: 2px !important;
+        text-align: right !important;
+    }
+
+    /* 确保图片链接也是右对齐的 - 桌面端表格 */
+    .v-data-table td:has(.v-image) a {
+        display: flex !important;
+        justify-content: flex-end !important;
+        width: 100% !important;
+    }
+
+    /* 移动端表格整体布局 */
+    .v-data-table--mobile {
+        font-size: 12px !important;
+    }
+
+    /* 移动端表格行 */
+    .v-data-table--mobile .v-data-table__mobile-row {
+        display: block !important;
+    }
+
+    /* 移动端表格行单元格 - 默认左对齐 */
+    .v-data-table--mobile .v-data-table__mobile-row .v-data-table__mobile-row__cell {
+        text-align: left !important;
+        display: flex !important;
+        align-items: center !important;
+        padding: 4px 8px !important;
+    }
+
+    /* 移动端表格中包含图片的单元格 - 右对齐 */
+    .v-data-table--mobile .v-data-table__mobile-row .v-data-table__mobile-row__cell:has(a > .v-image),
+    .v-data-table--mobile .v-data-table__mobile-row .v-data-table__mobile-row__cell:has(.v-image) {
+        justify-content: flex-end !important;
+    }
+
+    /* 移动端表格中图片的链接容器 */
+    .v-data-table--mobile .v-data-table__mobile-row .v-data-table__mobile-row__cell a {
+        display: inline-flex !important;
+        justify-content: center !important;
+        align-items: center !important;
     }
 
     /* Chip组件在小屏幕上更小 */
