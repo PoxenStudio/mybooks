@@ -1648,7 +1648,6 @@ class BookSuggestion(ListHandler):
 
 class BookSendToDevice(BaseHandler):
     @js
-    @auth
     def post(self, bid):
         """发送书籍到指定设备"""
         book_id = int(bid)
@@ -1657,8 +1656,14 @@ class BookSendToDevice(BaseHandler):
             return {"err": "book.not_found", "msg": _(u"书籍不存在")}
 
         # 检查用户权限
-        if not self.current_user.can_save():
-            return {"err": "user.no_permission", "msg": _(u"无权限发送书籍到设备")}
+        if not CONF["ALLOW_GUEST_PUSH"]:
+            if not self.current_user:
+                return {"err": "user.need_login", "msg": _(u"请先登录")}
+            else:
+                if not self.current_user.can_push():
+                    return {"err": "permission", "msg": _(u"无权操作")}
+                elif not self.current_user.is_active():
+                    return {"err": "permission", "msg": _(u"无权操作，请先激活账号。")}
 
         # 解析请求参数
         try:
