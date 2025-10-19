@@ -1851,6 +1851,10 @@ export default {
 
         // 加载设备列表
         async loadDevices() {
+            if (this.$store.state.user?.is_login !== true) {
+                this.devices = [];
+                return;
+            }
             try {
                 const response = await this.$backend('/admin/settings');
                 if (response.err === 'ok' && response.settings && response.settings.DEVICES) {
