@@ -1716,6 +1716,8 @@ class BookSendToDevice(BaseHandler):
 
             # 创建上传器实例
             book_name = book.get("title", "")
+            if len(book_name) > 120:
+                book_name = ""
             if not book_name:
                 book_name = None
             else:
