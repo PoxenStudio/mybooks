@@ -154,6 +154,52 @@ class SignUp(BaseHandler):
         return {"err": "ok"}
 
 
+class UserNew(BaseHandler):
+    @js
+    @auth
+    def post(self):
+        if not self.admin_user:
+            return {"err": "permission.not_admin", "msg": _(u"当前用户非管理员")}
+        
+        email = self.get_argument("email", "").strip()
+        nickname = self.get_argument("nickname", "").strip()
+        username = self.get_argument("username", "").strip().lower()
+        password = self.get_argument("password", "").strip()
+        if not nickname or not username or not password:
+            return {"err": "params.invalid", "msg": _(u"用户名或密码无效")}
+
+        if not re.match(Reader.RE_EMAIL, email):
+            return {"err": "params.email.invalid", "msg": _(u"Email无效")}
+        if len(username) < 5 or len(username) > 20 or not re.match(Reader.RE_USERNAME, username):
+            return {"err": "params.username.invalid", "msg": _(u"用户名无效")}
+        if len(password) < 8 or len(password) > 20 or not re.match(Reader.RE_PASSWORD, password):
+            return {"err": "params.password.invalid", "msg": _(u"密码无效")}
+
+        user = self.sqlite_session.query(Reader).filter(Reader.username == username).first()
+        if user:
+            return {"err": "params.username.exist", "msg": _(u"用户名已被使用")}
+            
+        user = Reader()
+        user.username = username
+        user.name = nickname
+        user.email = email
+        user.avatar = "reader.png"
+        user.create_time = datetime.datetime.now()
+        user.update_time = datetime.datetime.now()
+        user.access_time = datetime.datetime.now()
+        user.active = True  # 管理员添加的用户直接激活
+        user.extra = {"kindle_email": ""}
+        user.set_secure_password(password)
+        try:
+            user.save()
+        except:
+            import traceback
+            logging.error(traceback.format_exc())
+            return {"err": "db.error", "msg": _(u"系统异常，请重试或更换注册信息")}
+        
+        return {"err": "ok", "msg": _(u"用户添加成功")}
+
+
 class UserSendActive(SignUp):
     @js
     @auth
@@ -490,6 +536,7 @@ def routes():
         (r"/api/user/messages/clear", UserMessagesClear),
         (r"/api/user/sign_in", SignIn),
         (r"/api/user/sign_up", SignUp),
+        (r"/api/user/new", UserNew),
         (r"/api/user/sign_out", SignOut),
         (r"/api/user/update", UserUpdate),
         (r"/api/user/reset", UserReset),

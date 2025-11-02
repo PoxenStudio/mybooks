@@ -1,6 +1,12 @@
 <template>
     <v-card>
-        <v-card-title> {{ $t('admin.users.title') }} </v-card-title>
+        <v-card-title> 
+            {{ $t('admin.users.title') }}
+            <v-btn color="primary" @click="showAddUserDialog = true" class="ml-4">
+                <v-icon left>mdi-account-plus</v-icon>
+                {{ $t('admin.users.add_user') }}
+            </v-btn>
+        </v-card-title>
         <v-data-table
             :headers="headers"
             :items="items"
@@ -109,6 +115,74 @@
                 </v-menu>
             </template>
         </v-data-table>
+
+        <!-- Add User Dialog -->
+        <v-dialog v-model="showAddUserDialog" max-width="500px" persistent>
+            <v-card>
+                <v-card-title>
+                    {{ $t('admin.users.add_user') }}
+                    <v-spacer></v-spacer>
+                    <v-btn icon @click="closeAddUserDialog">
+                        <v-icon>mdi-close</v-icon>
+                    </v-btn>
+                </v-card-title>
+                <v-card-text>
+                    <v-form ref="addUserForm" @submit.prevent="addUser">
+                        <v-text-field 
+                            required 
+                            prepend-icon="person" 
+                            v-model="newUser.username"  
+                            :label="$t('admin.users.username')"   
+                            type="text"     
+                            autocomplete="new-username"  
+                            :rules="[rules.user]"
+                        ></v-text-field>
+                        <v-text-field 
+                            required 
+                            prepend-icon="lock"   
+                            v-model="newUser.password"  
+                            :label="$t('admin.users.password')"   
+                            type="password" 
+                            autocomplete="new-password"  
+                            :rules="[rules.pass]" 
+                        ></v-text-field>
+                        <v-text-field 
+                            required 
+                            prepend-icon="lock"   
+                            v-model="newUser.password2" 
+                            :label="$t('admin.users.confirm_password')" 
+                            type="password" 
+                            autocomplete="new-password2" 
+                            :rules="[validatePassword]"
+                        ></v-text-field>
+                        <v-text-field 
+                            required 
+                            prepend-icon="face"   
+                            v-model="newUser.nickname"  
+                            :label="$t('admin.users.nickname')"   
+                            type="text"     
+                            autocomplete="new-nickname"  
+                            :rules="[rules.nick]"
+                        ></v-text-field>
+                        <v-text-field 
+                            required 
+                            prepend-icon="email"  
+                            v-model="newUser.email"     
+                            :label="$t('admin.users.email')"      
+                            type="text"     
+                            autocomplete="new-email"     
+                            :rules="[rules.email]"
+                        ></v-text-field>
+                    </v-form>
+                    <v-alert v-if="addUserError" type="error">{{ addUserError }}</v-alert>
+                </v-card-text>
+                <v-card-actions>
+                    <v-spacer></v-spacer>
+                    <v-btn text @click="closeAddUserDialog">{{ $t('admin.users.cancel') }}</v-btn>
+                    <v-btn color="primary" @click="addUser" :loading="addingUser">{{ $t('admin.users.add') }}</v-btn>
+                </v-card-actions>
+            </v-card>
+        </v-dialog>
     </v-card>
 </template>
 
@@ -122,6 +196,25 @@ export default {
         options: { sortBy: ["access_time"], sortDesc: [true] },
         headers: [],
         permissions: [],
+        showAddUserDialog: false,
+        addingUser: false,
+        addUserError: "",
+        newUser: {
+            username: "",
+            password: "",
+            password2: "",
+            nickname: "",
+            email: ""
+        },
+        rules: {
+            user: v => ( 20 >= v.length && v.length >= 5) || '6 ~ 20 字符',
+            pass: v => ( 20 >= v.length && v.length >= 8) || '8 ~ 20 字符',
+            nick: v => v.length >= 2 || '最少2个字符',
+            email: function (email) {
+                var re = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+                return re.test(email) || "错误的邮箱格式";
+            },
+        },
     }),
     created() {
         this.headers = [
@@ -164,6 +257,57 @@ export default {
         },
     },
     methods: {
+        validatePassword: function(v) {
+            if ( v.length < 8 ) {
+                return '最少8个字符';
+            }
+            return v == this.newUser.password || "密码不匹配";
+        },
+        closeAddUserDialog() {
+            this.showAddUserDialog = false;
+            this.addUserError = "";
+            this.newUser = {
+                username: "",
+                password: "",
+                password2: "",
+                nickname: "",
+                email: ""
+            };
+            if (this.$refs.addUserForm) {
+                this.$refs.addUserForm.resetValidation();
+            }
+        },
+        addUser() {
+            if (!this.$refs.addUserForm.validate()) {
+                return false;
+            }
+
+            this.addingUser = true;
+            this.addUserError = "";
+
+            var data = new URLSearchParams();
+            data.append('username', this.newUser.username);
+            data.append('password', this.newUser.password);
+            data.append('nickname', this.newUser.nickname);
+            data.append('email', this.newUser.email);
+
+            this.$backend('/user/new', {
+                method: 'POST',
+                body: data,
+            })
+            .then(rsp => {
+                if (rsp.err != 'ok') {
+                    this.addUserError = rsp.msg;
+                } else {
+                    this.closeAddUserDialog();
+                    this.getDataFromApi(); // 刷新用户列表
+                    this.$alert("success", rsp.msg || "用户添加成功");
+                }
+            })
+            .finally(() => {
+                this.addingUser = false;
+            });
+        },
         getDataFromApi() {
             this.loading = true;
             const { sortBy, sortDesc, page, itemsPerPage } = this.options;
