@@ -26,7 +26,7 @@
 
                 <v-card-actions>
                     <v-spacer></v-spacer>
-                    <v-btn ref="install_btn"  @click="do_install" color="blue" style="color: white;">{{ $t('install.completeSetup') }}</v-btn>
+                    <v-btn ref="install_btn" @click="do_install" color="blue" style="color: white;" :disabled="installing" :loading="installing">{{ $t('install.completeSetup') }}</v-btn>
                     <v-spacer></v-spacer>
                 </v-card-actions>
             </v-card>
@@ -46,6 +46,7 @@ export default {
         title: "TaleBook",
         tips: "",
         retry: 20,
+        installing: false,
         rules: {
             user: null,
             pass: null,
@@ -57,8 +58,8 @@ export default {
         store.commit("navbar", false);
     },
     created() {
-        this.rules.user = (v) => (20 >= v.length && v.length >= 5) || this.$t('install.usernameRule');
-        this.rules.pass = (v) => (20 >= v.length && v.length >= 8) || this.$t('install.passwordRule');
+        this.rules.user = (v) => (20 >= v.length && v.length >= 3) || this.$t('install.usernameRule');
+        this.rules.pass = (v) => (20 >= v.length && v.length >= 6) || this.$t('install.passwordRule');
         this.rules.email = (email) => {
             var re = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
             return re.test(email) || this.$t('install.invalidEmail');
@@ -95,8 +96,8 @@ export default {
             if (!this.$refs.form.validate()) {
                 return false;
             }
-            // set install_btn to be disabled
-            this.$refs.install_btn.disabled = true;
+            // 设置按钮为禁用状态
+            this.installing = true;
 
             var data = new URLSearchParams();
             data.append('username', this.username);
@@ -112,7 +113,8 @@ export default {
             })
                 .then(rsp => {
                     if (rsp.err != 'ok') {
-                        this.$refs.install_btn.disabled = false;
+                        this.installing = false;
+                        this.tips = "";
                         this.$alert("error", rsp.msg);
                     } else {
                         this.tips += this.$t('install.configSuccess') + "<br/>" + this.$t('install.checkingServer');

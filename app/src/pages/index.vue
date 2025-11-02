@@ -205,7 +205,6 @@ export default {
             { icon: 'mdi-tag-heart',      href:'/tag',       text: this.$t('index.tags'),     count: this.$store.state.sys.tags       },
             { icon: 'mdi-translate',      href:'/language',       text: this.$t('index.languages'),     count: this.$store.state.sys.languages       },
             { icon: 'mdi-history',        href:'/recent',    text: this.$t('index.allBooks'), },
-            { icon: 'mdi-trending-up',    href:'/hot',       text: this.$t('index.hotRanking'), },
             ]
     },
     async asyncData({ app, res }) {

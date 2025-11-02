@@ -73,7 +73,7 @@ class UserUpdate(BaseHandler):
         if len(p0) > 0:
             if user.get_secure_password(p0) != user.password:
                 return {"err": "params.password.error", "msg": _(u"密码错误")}
-            if p1 != p2 or len(p1) < 8 or len(p1) > 20 or not re.match(Reader.RE_PASSWORD, p1):
+            if p1 != p2 or len(p1) < 6 or len(p1) > 20 or not re.match(Reader.RE_PASSWORD, p1):
                 return {"err": "params.password.invalid", "msg": _(u"密码无效")}
             user.set_secure_password(p1)
 
@@ -125,9 +125,9 @@ class SignUp(BaseHandler):
 
         if not re.match(Reader.RE_EMAIL, email):
             return {"err": "params.email.invalid", "msg": _(u"Email无效")}
-        if len(username) < 5 or len(username) > 20 or not re.match(Reader.RE_USERNAME, username):
+        if len(username) < 3 or len(username) > 20 or not re.match(Reader.RE_USERNAME, username):
             return {"err": "params.username.invalid", "msg": _(u"用户名无效")}
-        if len(password) < 8 or len(password) > 20 or not re.match(Reader.RE_PASSWORD, password):
+        if len(password) < 6 or len(password) > 20 or not re.match(Reader.RE_PASSWORD, password):
             return {"err": "params.password.invalid", "msg": _(u"密码无效")}
 
         user = self.sqlite_session.query(Reader).filter(Reader.username == username).first()
@@ -170,9 +170,9 @@ class UserNew(BaseHandler):
 
         if not re.match(Reader.RE_EMAIL, email):
             return {"err": "params.email.invalid", "msg": _(u"Email无效")}
-        if len(username) < 5 or len(username) > 20 or not re.match(Reader.RE_USERNAME, username):
+        if len(username) < 3 or len(username) > 20 or not re.match(Reader.RE_USERNAME, username):
             return {"err": "params.username.invalid", "msg": _(u"用户名无效")}
-        if len(password) < 8 or len(password) > 20 or not re.match(Reader.RE_PASSWORD, password):
+        if len(password) < 6 or len(password) > 20 or not re.match(Reader.RE_PASSWORD, password):
             return {"err": "params.password.invalid", "msg": _(u"密码无效")}
 
         user = self.sqlite_session.query(Reader).filter(Reader.username == username).first()

@@ -38,8 +38,8 @@ export default {
         failmsg: "",
         validmsg: "",
         rules: {
-            user: v => ( 20 >= v.length && v.length >= 5) || '6 ~ 20 字符',
-            pass: v => ( 20 >= v.length && v.length >= 8) || '8 ~ 20 字符',
+            user: v => ( 20 >= v.length && v.length >= 3) || '3 ~ 20 字符',
+            pass: v => ( 20 >= v.length && v.length >= 6) || '6 ~ 20 字符',
             nick: v => v.length >= 2 || '最少2个字符',
             email: function (email) {
                 var re = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
@@ -55,8 +55,8 @@ export default {
     },
     methods: {
         valid: function(v) {
-            if ( v.length < 8 ) {
-                return '最少8个字符';
+            if ( v.length < 6 ) {
+                return '最少6个字符';
             }
             return v == this.password || "密码不匹配";
         },
