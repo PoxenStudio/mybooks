@@ -1007,7 +1007,8 @@ export default {
         deviceTypes: [
             { text: '多看阅读器', value: 'duokan' },
             { text: '掌阅', value: 'ireader' },
-            { text: '汉王', value: 'hanwang' }
+            { text: '汉王', value: 'hanwang' },
+            { text: '文石', value: 'boox' }
         ],
         adding_book: false,
         isbn: "",

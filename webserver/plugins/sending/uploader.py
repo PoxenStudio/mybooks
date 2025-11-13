@@ -107,6 +107,35 @@ class DuokanUploader(BaseUploader):
         return 12121
 
 
+class BooxUploader(BaseUploader):
+    def get_upload_url(self, base_url):
+        """构建Boox设备的上传URL"""
+        if not base_url.endswith('/'):
+            base_url += '/'
+        return base_url + 'api/library/upload'
+
+    def upload(self, server_url):
+        try:
+            upload_url = self.get_upload_url(server_url)
+            with open(self.file_path, 'rb') as file:
+                files = {
+                    'parent': (None, 'null'),
+                    'sender': (None, 'web'),
+                    'file': (self.filename, file, self.content_type),
+                }
+                response = requests.post(upload_url, files=files, timeout=self.timeout)
+                response.raise_for_status()
+                result = response.json()
+                if result.get("code") != 0 or not result.get("successful"):
+                    raise Exception(f"上传失败: {result}")
+                return {'success': True, 'data': result}
+        except Exception as e:
+            return self.handle_exception(e, server_url)
+
+    def default_port(self):
+        return 8085
+
+
 class HanwangUploader(BaseUploader):
     def get_upload_url(self, base_url):
         """构建汉王设备的上传URL"""

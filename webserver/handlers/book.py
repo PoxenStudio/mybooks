@@ -1677,7 +1677,7 @@ class BookSendToDevice(BaseHandler):
             return {"err": "params.missing", "msg": _(u"设备类型和设备地址不能为空")}
 
         # 支持的设备类型
-        supported_types = ["duokan", "ireader", "hanwang"]
+        supported_types = ["duokan", "ireader", "hanwang", "boox"]
         if device_type not in supported_types:
             return {"err": "device.unsupported", "msg": _(u"不支持的设备类型: %s") % device_type}
 
@@ -1702,12 +1702,13 @@ class BookSendToDevice(BaseHandler):
 
         # 导入对应的上传器
         try:
-            from webserver.plugins.sending.uploader import DuokanUploader, IReaderUploader, HanwangUploader
+            from webserver.plugins.sending.uploader import DuokanUploader, IReaderUploader, HanwangUploader, BooxUploader
 
             uploader_map = {
                 "duokan": DuokanUploader,
                 "ireader": IReaderUploader,
-                "hanwang": HanwangUploader
+                "hanwang": HanwangUploader,
+                "boox": BooxUploader
             }
 
             uploader_class = uploader_map.get(device_type)
