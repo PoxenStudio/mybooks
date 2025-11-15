@@ -176,6 +176,7 @@
 
     <br />
     <div class="text-center">
+      <p>{{ $t('settings.save_hints')}}</p>
       <v-btn color="primary" @click="save_settings">{{ $t('settings.save') }}</v-btn>
     </div>
   </div>

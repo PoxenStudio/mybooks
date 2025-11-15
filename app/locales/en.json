@@ -268,6 +268,7 @@
         "socials_description": "Enabled social networks will automatically display buttons on the login page.",
         "select_socials": "Select social network accounts to enable",
         "save": "Save",
+        "save_hints": "Note: Saving will restart the service, and any ongoing background tasks such as importing and updating information will be interrupted!",
         "switch_language_to": "Switch language to",
         "save_error": "Save failed!",
         "save_success": "Save successful! It may take 5~10 seconds to take effect!",
