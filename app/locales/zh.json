@@ -454,7 +454,8 @@
         "device_schema": "访问协议",
         "device_type_duokan": "多看阅读器",
         "device_type_ireader": "掌阅",
-        "device_type_hanwang": "汉王"
+        "device_type_hanwang": "汉王",
+        "device_type_boox": "文石Boox"
     },
     "user": {
         "avatar": "头像",

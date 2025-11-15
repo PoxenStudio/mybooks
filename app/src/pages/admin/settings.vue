@@ -91,7 +91,7 @@
                   <v-text-field flat small hide-details single-line v-model.number="device.port" :label="$t('settings.device_port')"
                     type="number"></v-text-field>
                 </v-col>
-                <v-col class='py-0' cols=1>
+                <v-col class='py-0' cols=2>
                   <v-select flat small hide-details single-line v-model="device.schema" :items="deviceSchemas" :label="$t('settings.device_schema')">
                   </v-select>
                 </v-col>
@@ -193,6 +193,7 @@ export default {
       { text: this.$t('settings.device_type_duokan'), value: "duokan" },
       { text: this.$t('settings.device_type_ireader'), value: "ireader" },
       { text: this.$t('settings.device_type_hanwang'), value: "hanwang" }
+      , { text: this.$t('settings.device_type_boox'), value: "boox" }
     ];
 
     this.cards = [

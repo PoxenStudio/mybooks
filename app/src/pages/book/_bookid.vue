@@ -1164,31 +1164,24 @@ export default {
         },
         // 监听临时设备信息变化，实时保存到localStorage
         tempDevice: {
-            handler(newValue) {
-                if (!process.client) return;
-                try {
-                    localStorage.setItem('temp_device_info', JSON.stringify({
-                        type: newValue.type || '',
-                        ip: newValue.ip || '',
-                        port: newValue.port || ''
-                    }));
-                } catch (error) {
-                    console.error('保存临时设备信息失败:', error);
+            handler(newVal) {
+                if (process.client) {
+                    localStorage.setItem('tempDevice', JSON.stringify(newVal));
                 }
             },
             deep: true
         },
-        // 监听设备选项变化，实时保存到localStorage
-        selectedDeviceOption: {
-            handler(newValue) {
-                if (!process.client || !newValue) return;
-                try {
-                    localStorage.setItem('last_selected_device_option', newValue);
-                } catch (error) {
-                    console.error('保存设备选项失败:', error);
-                }
+        'tempDevice.type': function(newType) {
+            const portMap = {
+                duokan: '12121',
+                boox: '8085',
+                hanwang: '9310',
+                ireader: '10123'
+            };
+            if (portMap[newType]) {
+                this.tempDevice.port = portMap[newType];
             }
-        }
+        },
     },
     beforeRouteUpdate(to, from, next) {
         this.init(to, next);

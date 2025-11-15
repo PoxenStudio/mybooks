@@ -333,7 +333,8 @@
         "device_schema": "Schema",
         "device_type_duokan": "Duokan Reader",
         "device_type_ireader": "iReader",
-        "device_type_hanwang": "Hanwang Reader"
+        "device_type_hanwang": "Hanwang Reader",
+        "device_type_boox": "Boox Reader"
     },
     "book": {
         "edit": {
