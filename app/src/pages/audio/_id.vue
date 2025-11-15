@@ -9,6 +9,7 @@
             :src="book.img"
             :aspect-ratio="3/4"
             class="book-cover"
+            @click="gotoBookDetail()"
             contain
           ></v-img>
           <div class="book-info">
@@ -768,6 +769,10 @@ export default {
       } finally {
         this.purchaseLoading = false;
       }
+    },
+
+    gotoBookDetail() {
+      this.$router.push("/book/" + this.bookId);
     },
 
     closePlayer() {
