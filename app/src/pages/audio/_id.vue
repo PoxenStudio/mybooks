@@ -846,6 +846,17 @@ export default {
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   margin-bottom: 20px;
+  cursor: pointer;
+  transition: transform 0.3s ease, filter 0.3s ease;
+}
+
+.book-cover >>> .v-image__image {
+  transition: transform 0.3s ease, filter 0.3s ease;
+}
+
+.book-cover:hover >>> .v-image__image {
+  transform: scale(1.02);
+  filter: brightness(1.1);
 }
 
 .book-title {
