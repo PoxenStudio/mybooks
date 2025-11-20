@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 
+import datetime
 import json
 import logging
 import opencc
 import os
 import random
 import re
+import shutil
+import traceback
 import urllib
 from gettext import gettext as _
 
@@ -1761,6 +1764,123 @@ class BookSendToDevice(BaseHandler):
             return {"err": "upload.error", "msg": _(u"发送过程出错，请查看日志获取详细信息")}
 
 
+class BookSperate(BaseHandler):
+    @js
+    @auth
+    def post(self, bid):
+        """将指定格式从书籍中分离并创建为新的独立书籍"""
+        from calibre.ebooks.metadata.meta import get_metadata
+        
+        book_id = int(bid)
+        book = self.get_book(book_id)
+        if not book:
+            return {"err": "params.book.invalid", "msg": _(u"书籍不存在")}
+
+        if isinstance(book["collector"], dict):
+            cid = book["collector"]["id"]
+        else:
+            cid = book["collector"].id
+        if not self.current_user.can_edit() or not (self.is_admin() or self.is_book_owner(book_id, cid)):
+            return {"err": "permission", "msg": _(u"无权操作")}
+        
+        try:
+            data = tornado.escape.json_decode(self.request.body)
+            fmt = data.get("format", "").strip().lower()
+        except:
+            return {"err": "params.invalid", "msg": _(u"请求参数格式错误")}
+        
+        if not fmt:
+            return {"err": "params.missing", "msg": _(u"格式参数不能为空")}
+
+        fmt_key = "fmt_%s" % fmt
+        if fmt_key not in book:
+            return {"err": "format.not_found", "msg": _(u"书籍不包含 %s 格式") % fmt.upper()}
+
+        original_path = book[fmt_key]
+        if not os.path.exists(original_path):
+            return {"err": "file.missing", "msg": _(u"格式文件不存在: %s") % original_path}
+        
+        # 检查书籍是否只有一个格式
+        available_formats = book.get("available_formats", "").split(",")
+        available_formats = [f.strip() for f in available_formats if f.strip()]
+        if len(available_formats) <= 1:
+            return {"err": "last.format", "msg": _(u"书籍只有一个格式，无法分离")}
+        
+        try:
+            # 复制文件到上传目录
+            filename = os.path.basename(original_path)
+            upload_path = os.path.join(CONF["upload_path"], filename)
+            
+            # 如果目标文件已存在，添加时间戳避免冲突
+            if os.path.exists(upload_path):
+                timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+                name, ext = os.path.splitext(filename)
+                upload_path = os.path.join(CONF["upload_path"], f"{name}_{timestamp}{ext}")
+            
+            shutil.copy2(original_path, upload_path)
+            logging.info(f"[SEPARATE] Copied format file from {original_path} to {upload_path}")
+            
+            # 读取元数据
+            with open(upload_path, "rb") as stream:
+                mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
+                mi.title = utils.super_strip(mi.title)
+                if mi.author_sort == "Unknown" and mi.authors and len(mi.authors) > 0:
+                    mi.authors = [utils.super_strip(a) for a in mi.authors]
+                else:
+                    mi.authors = [utils.super_strip(mi.author_sort)]
+            
+            # 对于txt和pdf格式，从文件名提取信息
+            if fmt in ["txt", "pdf"]:
+                mi.title = filename.replace("." + fmt, "")
+                if mi.title.endswith(ZLIBRARY_SUFFIX):
+                    mi.title = mi.title[:-len(ZLIBRARY_SUFFIX)]
+                mi.authors = [_(u"佚名")]
+            
+            # 创建新书籍
+            fpaths = [upload_path]
+            new_book_id = self.calibre_db.import_book(mi, fpaths)
+            
+            if new_book_id is None:
+                # 清理临时文件
+                if os.path.exists(upload_path):
+                    os.remove(upload_path)
+                return {"err": "book.create.failed", "msg": _(u"创建新书籍失败")}
+            
+            # 创建Item记录
+            item = Item()
+            item.book_id = new_book_id
+            item.collector_id = self.user_id()
+            self.sqlite_session.add(item)
+            self.sqlite_session.commit()
+            
+            # 从原书籍中删除该格式
+            self.calibre_db.remove_formats({book_id: [fmt.upper()]})
+            
+            logging.info(f"[SEPARATE] Successfully separated format {fmt} from book {book_id} to new book {new_book_id}")
+            
+            # 自动填充新书籍的元数据
+            AutoFillService().auto_fill(new_book_id)
+            
+            self.add_msg("success", _(u"成功将 %s 格式分离为新书籍") % fmt.upper())
+            return {
+                "err": "ok",
+                "msg": _(u"格式分离成功"),
+                "original_book_id": book_id,
+                "new_book_id": new_book_id
+            }
+            
+        except Exception as e:
+            logging.error(f"[SEPARATE] Failed to separate format {fmt} from book {book_id}: {e}")
+            traceback.print_exc()
+            # 清理可能存在的临时文件
+            if 'upload_path' in locals() and os.path.exists(upload_path):
+                try:
+                    os.remove(upload_path)
+                except:
+                    pass
+            return {"err": "internal", "msg": _(u"分离格式时发生错误: %s") % str(e)}
+
+
 def routes():
     return [
         (r"/api/index", Index),
@@ -1797,4 +1917,5 @@ def routes():
         (r"/api/library/stats", LibraryStats),
         (r"/api/book/([0-9]+)/tags", BookTags),
         (r"/api/book/([0-9]+)/suggestion", BookSuggestion),
+        (r"/api/book/([0-9]+)/separate", BookSperate),
     ]

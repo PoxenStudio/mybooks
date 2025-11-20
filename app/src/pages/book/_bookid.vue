@@ -293,6 +293,10 @@
                                     {{ $t('book.convert') }}
                                 </v-list-item>
                                 <v-divider></v-divider>
+                                <v-list-item @click="seperate_book" :disabled="book.files.length <= 1">
+                                    <v-icon>mdi-content-copy</v-icon>
+                                    {{ $t('book.seperate') }}
+                                </v-list-item>
                                 <v-list-item @click="set_sole">
                                     <v-icon>{{ book.sole ? 'public_off' : 'public' }}</v-icon>
                                     {{ book.sole ? $t('book.setPublic') : $t('book.setSole') }}
@@ -741,6 +745,44 @@
         </v-card>
     </v-dialog>
 
+    <!-- 拆分格式对话框 -->
+    <v-dialog v-model="dialog_separate" persistent max-width="500">
+        <v-card>
+            <v-card-title class="headline">
+                <v-icon class="mr-2">mdi-content-copy</v-icon>
+                {{ $t('book.seperate') }}
+            </v-card-title>
+            <v-card-text>
+                <p class="mb-4">{{ $t('book.selectFormatToSeparate') }}</p>
+                <v-radio-group v-model="selectedSeparateFormat">
+                    <v-radio
+                        v-for="file in book.files"
+                        :key="'sep-' + file.format"
+                        :value="file.format.toLowerCase()"
+                        :label="`${file.format} - ${formatFileSize(file.size)}`"
+                    ></v-radio>
+                </v-radio-group>
+                <v-alert type="info" text dense class="mt-4">
+                    {{ $t('book.separateHint') }}
+                </v-alert>
+            </v-card-text>
+            <v-card-actions>
+                <v-spacer></v-spacer>
+                <v-btn text @click="dialog_separate = false">
+                    {{ $t('common.cancel') }}
+                </v-btn>
+                <v-btn
+                    color="primary"
+                    :loading="separating_book"
+                    @click="confirmSeparate"
+                    :disabled="!selectedSeparateFormat"
+                >
+                    {{ $t('common.ok') }}
+                </v-btn>
+            </v-card-actions>
+        </v-card>
+    </v-dialog>
+
     <!-- 发送到设备对话框 -->
     <v-dialog v-model="dialog_send_to_device" persistent max-width="600">
         <v-card>
@@ -991,6 +1033,10 @@ export default {
         dialog_refer: false,
         dialog_msg: false,
         dialog_set_cover: false,
+        // 拆分格式对话框
+        dialog_separate: false,
+        selectedSeparateFormat: null,
+        separating_book: false,
         // 添加实体书对话框
         isbn_dialog: false,
         // 发送到设备对话框
@@ -1493,6 +1539,58 @@ export default {
                     this.$alert("error", rsp.msg);
                 }
             });
+        },
+        seperate_book() {
+            // 检查是否有多个格式
+            if (!this.book.files || this.book.files.length <= 1) {
+                this.$alert("error", this.$t('book.needMultipleFormats'));
+                return;
+            }
+            
+            // 默认选择第一个格式
+            this.selectedSeparateFormat = this.book.files[0].format.toLowerCase();
+            this.dialog_separate = true;
+        },
+        confirmSeparate() {
+            if (!this.selectedSeparateFormat) {
+                this.$alert("error", this.$t('book.selectFormat'));
+                return;
+            }
+            
+            this.separating_book = true;
+            this.$backend("/book/" + this.book.id + "/separate", {
+                method: "POST",
+                body: JSON.stringify({ format: this.selectedSeparateFormat }),
+            }).then((rsp) => {
+                this.separating_book = false;
+                if (rsp.err === "ok") {
+                    this.dialog_separate = false;
+                    this.$alert("success", rsp.msg || this.$t('book.separateSuccess'));
+                    // 跳转到新创建的书籍页面
+                    if (rsp.new_book_id) {
+                        setTimeout(() => {
+                            this.$router.push("/book/" + rsp.new_book_id);
+                        }, 1500);
+                    } else {
+                        // 如果没有返回新书ID，则刷新当前页面
+                        setTimeout(() => {
+                            location.reload();
+                        }, 1500);
+                    }
+                } else {
+                    this.$alert("error", rsp.msg || this.$t('book.separateFailed'));
+                }
+            }).catch((err) => {
+                this.separating_book = false;
+                this.$alert("error", this.$t('book.separateFailed'));
+            });
+        },
+        formatFileSize(size) {
+            if (size >= 1048576) {
+                return parseInt(size / 1048576) + 'MB';
+            } else {
+                return parseInt(size / 1024) + 'KB';
+            }
         },
         delete_book() {
             this.$backend("/book/" + this.book.id + "/delete", {
