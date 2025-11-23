@@ -57,6 +57,8 @@ def init_calibre():
         )
         sys.stderr.write("\n")
         sys.exit(2)
+    else:
+        logging.info("Using library path: [%s]" % options.with_library)
 
 
 def safe_filename(filename):
@@ -145,41 +147,54 @@ def make_app():
     # build sql session factory
     engine = create_engine(auth_db_path, **CONF["db_engine_args"])
     ScopedSession = scoped_session(sessionmaker(bind=engine, autoflush=True, autocommit=False))
-    models.bind_session(ScopedSession)
-    init_social(models.Base, ScopedSession, CONF)
+    try:
+        models.bind_session(ScopedSession)
+        init_social(models.Base, ScopedSession, CONF)
+    except Exception as e:
+        logging.error(f"Error binding session: {e}")
+        sys.exit(1)
 
     if options.syncdb:
         models.user_syncdb(engine)
         logging.info("Create tables into DB")
         sys.exit(0)
 
-    init_calibre()
+    try:
+        init_calibre()
+    except Exception as e:
+        logging.error(f"Error initializing calibre: {e}")
+        sys.exit(1)
 
     from calibre.db.legacy import LibraryDatabase
     from calibre.utils.date import fromtimestamp
 
-    book_db = LibraryDatabase(os.path.expanduser(options.with_library))
-    cache = book_db.new_api
+    try:
+        logging.info("Initializing library database...")
+        book_db = LibraryDatabase(os.path.expanduser(options.with_library))
+        cache = book_db.new_api
+    except Exception as e:
+        logging.error(f"Error initializing library database: {e}")
+        sys.exit(1)
 
     # hook 1: 按字母作为第一级目录，解决书库子目录太多的问题
+    logging.info("Patching calibre book names format...")
     if CONF["BOOK_NAMES_FORMAT"].lower() == "utf8":
         bind_utf8_book_names(cache)
     else:
         bind_topdir_book_names(cache)
 
     # hook 2: don't force GUI
+    logging.info("Patching calibre GUI requirement...")
     from calibre import gui2
-
     old_must_use_qt = gui2.must_use_qt
-
     def new_must_use_qt(headless=True):
         try:
             old_must_use_qt(headless)
-        except:
+        except Exception as e:
             pass
-
     gui2.must_use_qt = new_must_use_qt
 
+    logging.info("Loading default cover image...")
     path = CONF["resource_path"] + "/calibre/default_cover.jpg"
     with open(path, "rb") as cover_file:
         default_cover = cover_file.read()
