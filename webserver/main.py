@@ -259,7 +259,14 @@ def setup_logging():
 def main():
     tornado.options.parse_command_line()
     setup_logging()
-    app = make_app()
+    try:
+        app = make_app()
+    except Exception as e:
+        logging.error(f"Error making app: {e}")
+        logging.error(traceback.format_exc())
+        sys.exit(1)
+
+    logging.info("Starting server...")
     http_server = tornado.httpserver.HTTPServer(app, xheaders=True, max_buffer_size=get_upload_size())
     http_server.listen(options.port, options.host)
     tornado.ioloop.IOLoop.instance().start()
