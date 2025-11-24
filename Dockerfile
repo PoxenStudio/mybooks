@@ -41,7 +41,7 @@ RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     echo "Asia/Shanghai" > /etc/timezone && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-        gettext gosu procps nginx calibre calibre-bin supervisor fonts-lato ffmpeg libzbar0 python3-pip && \
+    gettext gosu procps nginx calibre calibre-bin supervisor fonts-lato ffmpeg libzbar0 python3-pip && \
     apt clean && \
     rm -rf /var/lib/apt/lists/* && \
     pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
@@ -58,9 +58,9 @@ RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
 COPY prebuilt/ /tmp/prebuilt/
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "aarch64" ]; then \
-        pip install --no-cache-dir /tmp/prebuilt/opencc-1.1.9-cp312-cp312-manylinux2014_aarch64.whl --break-system-packages; \
+    pip install --no-cache-dir /tmp/prebuilt/opencc-1.1.9-cp312-cp312-manylinux2014_aarch64.whl --break-system-packages; \
     else \
-        pip install opencc  --break-system-packages;\
+    pip install opencc  --break-system-packages;\
     fi && \
     rm -rf /tmp/prebuilt
 
@@ -111,10 +111,7 @@ RUN mkdir -p /data/log/nginx/ && \
     mkdir -p /var/www/talebook/ && \
     chmod a+w -R /data/log /data/books /var/www
 
-COPY server.py /var/www/talebook/
 COPY docker/ /var/www/talebook/docker/
-COPY webserver/ /var/www/talebook/webserver/
-COPY webserver/settings.py /var/www/talebook/webserver/
 COPY conf/nginx/ssl.* /data/books/ssl/
 COPY conf/nginx/talebook.conf /etc/nginx/conf.d/
 COPY conf/supervisor/talebook.conf /etc/supervisor/conf.d/
@@ -127,13 +124,9 @@ RUN rm -f /etc/nginx/sites-enabled/default /var/www/html -rf && \
     cd /var/www/talebook/ && \
     ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && \
     echo ${TZ} > /etc/timezone && \
-    echo "VERSION = \"$GIT_VERSION\"" > webserver/version.py && \
     echo 'settings = {}' > /data/books/settings/auto.py && \
     chmod a+w /data/books/settings/auto.py && \
     calibredb add --library-path=/data/books/library/ -r docker/book/ && \
-    python3 server.py --syncdb  && \
-    python3 server.py --update-config  && \
-    find webserver -name "*.pyc" -type f -delete && \
     rm -rf app/src && \
     rm -rf app/dist/logo && \
     ln -s /data/books/logo app/dist/logo && \
@@ -143,6 +136,17 @@ RUN rm -f /etc/nginx/sites-enabled/default /var/www/html -rf && \
     mkdir -p /prebuilt/ && \
     mv /data/* /prebuilt/ && \
     chmod +x /var/www/talebook/docker/start.sh
+
+COPY server.py /var/www/talebook/
+COPY webserver/ /var/www/talebook/webserver/
+COPY webserver/settings.py /var/www/talebook/webserver/
+
+ARG GIT_VERSION=""
+RUN cd /var/www/talebook/ && \
+    echo "VERSION = \"$GIT_VERSION\"" > webserver/version.py && \
+    python3 server.py --syncdb  && \
+    python3 server.py --update-config  && \
+    find webserver -name "*.pyc" -type f -delete
 
 EXPOSE 80 443
 
