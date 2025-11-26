@@ -359,7 +359,8 @@ class BatchAddService(AsyncService):
                     existing.author = author
                 self.session.add(existing)
             else:
-                scan_file = ScanFile(csv_filename, hash_value, 0)
+                item_path = f"{isbn}({csv_filename})"
+                scan_file = ScanFile(item_path, hash_value, 0)
                 scan_file.name = isbn
                 scan_file.title = title
                 scan_file.author = author
@@ -378,7 +379,8 @@ class BatchAddService(AsyncService):
             hash_str = f"{csv_filename}_{isbn}_{title}"
             hash_value = hashlib.md5(hash_str.encode('utf-8')).hexdigest()
 
-            scan_file = ScanFile(csv_filename, hash_value, 0)
+            item_path = f"{isbn}({csv_filename})"
+            scan_file = ScanFile(item_path, hash_value, 0)
             scan_file.name = isbn if isbn else "NO_ISBN"
             scan_file.title = title
             scan_file.author = author

@@ -9,7 +9,6 @@
         <v-card-actions>
             <v-btn :disabled="loading" outlined color="primary" @click="getDataFromApi"><v-icon>mdi-reload</v-icon>{{ $t('imports.refresh') }}</v-btn>
             <v-btn :disabled="loading" color="primary" @click="scan_books"><v-icon>mdi-file-find</v-icon>{{ $t('imports.scan_books') }}</v-btn>
-            <v-btn :disabled="loading" color="warning" @click="show_batch_add_dialog"><v-icon>mdi-book-plus-multiple</v-icon>{{ $t('imports.batch_add_books') }}</v-btn>
             <template v-if="selected.length > 0">
                 <v-btn :disabled="loading" color="secondary" @click="import_books"><v-icon>mdi-import</v-icon>{{ $t('imports.import_selected') }}</v-btn>
                 <v-btn :disabled="loading" outlined color="primary" @click="delete_record"><v-icon>mdi-delete</v-icon>{{ $t('imports.delete') }}</v-btn>
@@ -17,6 +16,7 @@
             <template v-else>
                 <v-btn :disabled="loading" color="secondary" @click="import_books"><v-icon>mdi-import</v-icon>{{ $t('imports.import_all') }}</v-btn>
             </template>
+            <v-btn :disabled="loading" color="warning" @click="show_batch_add_dialog"><v-icon>mdi-book-plus-multiple</v-icon>{{ $t('imports.batch_add_books') }}</v-btn>
         </v-card-actions>
         <v-progress-linear
             v-if="((scanning || importing || batchAdding) && count_total > 0)"
@@ -440,9 +440,11 @@ export default {
             this.batchAdding = true;
             this.loading = true;
 
+            // 立即创建 FormData，避免文件引用问题
             const formData = new FormData();
-            formData.append('csv_file', this.csvFile);
-
+            // 确保文件名被正确传递
+            formData.append('csv_file', this.csvFile, this.csvFile.name);
+            // 不要设置 Content-Type，让浏览器自动设置 multipart/form-data 边界
             this.$backend("/admin/batch_add/run", {
                 method: "POST",
                 body: formData,
@@ -476,6 +478,7 @@ export default {
                     });
                 })
                 .catch((err) => {
+                    console.error("Batch add error:", err);
                     this.$alert("error", err.message || "上传失败");
                     this.batchAdding = false;
                     this.loading = false;
