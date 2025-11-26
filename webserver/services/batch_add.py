@@ -214,6 +214,14 @@ class BatchAddService(AsyncService):
     def _add_book_by_isbn(self, isbn, user_id, csv_filename, title="", author=""):
         """通过ISBN从豆瓣获取信息并添加书籍"""
         try:
+            # 先检查ISBN是否已存在
+            existing_books = self._find_books_by_isbn(isbn)
+            if existing_books:
+                book_id = list(existing_books)[0]
+                logging.info("Book with ISBN %s already exists, book_id=%d, marking as DROP", isbn, book_id)
+                self._record_scan_file(csv_filename, isbn, title, author, ScanFile.DROP, book_id)
+                return None
+
             api = douban.DoubanBookApi(
                 CONF["douban_apikey"],
                 CONF["douban_baseurl"],
@@ -269,6 +277,14 @@ class BatchAddService(AsyncService):
     def _add_book_with_metadata(self, isbn, title, author, cover_url, user_id, csv_filename):
         """使用提供的元数据添加书籍"""
         try:
+            # 先检查ISBN是否已存在
+            existing_books = self._find_books_by_isbn(isbn)
+            if existing_books:
+                book_id = list(existing_books)[0]
+                logging.info("Book with ISBN %s already exists, book_id=%d, marking as DROP", isbn, book_id)
+                self._record_scan_file(csv_filename, isbn, title, author, ScanFile.DROP, book_id)
+                return None
+
             from calibre.ebooks.metadata.book.base import Metadata
             from calibre.utils.date import now as nowf
 
@@ -317,8 +333,11 @@ class BatchAddService(AsyncService):
 
             # 记录到ScanFile
             self._record_scan_file(csv_filename, isbn, title, author, ScanFile.IMPORTED, book_id)
-
             logging.info("Added book with metadata: %s, book_id=%d", title, book_id)
+
+            # 自动填充信息
+            from webserver.services.autofill import AutoFillService
+            AutoFillService().auto_fill(book_id)
             return book_id
 
         except Exception as e:

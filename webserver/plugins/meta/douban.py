@@ -207,9 +207,15 @@ class DoubanBookApi(object):
             mi.cover_url = cover_url
         else:
             cover_data = self.get_cover(cover_url)
+            # try with small image if large image not available
+            if cover_data is None:
+                cover_url = book["images"]["small"]
+                cover_data = self.get_cover(cover_url)
             if cover_data is not None:
                 mi.cover_url = cover_url
                 mi.cover_data = cover_data
+            else:
+                logging.debug("获取封面图片失败，使用默认封面")
 
         logging.debug("=================\ndouban metadata:\n%s" % mi)
         return mi
