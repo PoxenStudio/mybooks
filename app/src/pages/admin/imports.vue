@@ -9,16 +9,17 @@
         <v-card-actions>
             <v-btn :disabled="loading" outlined color="primary" @click="getDataFromApi"><v-icon>mdi-reload</v-icon>{{ $t('imports.refresh') }}</v-btn>
             <v-btn :disabled="loading" color="primary" @click="scan_books"><v-icon>mdi-file-find</v-icon>{{ $t('imports.scan_books') }}</v-btn>
+            <v-btn :disabled="loading" color="warning" @click="show_batch_add_dialog"><v-icon>mdi-book-plus-multiple</v-icon>{{ $t('imports.batch_add_books') }}</v-btn>
             <template v-if="selected.length > 0">
                 <v-btn :disabled="loading" color="secondary" @click="import_books"><v-icon>mdi-import</v-icon>{{ $t('imports.import_selected') }}</v-btn>
                 <v-btn :disabled="loading" outlined color="primary" @click="delete_record"><v-icon>mdi-delete</v-icon>{{ $t('imports.delete') }}</v-btn>
             </template>
             <template v-else>
-                <v-btn :disabled="loading" color="warning" @click="import_books"><v-icon>mdi-import</v-icon>{{ $t('imports.import_all') }}</v-btn>
+                <v-btn :disabled="loading" color="secondary" @click="import_books"><v-icon>mdi-import</v-icon>{{ $t('imports.import_all') }}</v-btn>
             </template>
         </v-card-actions>
         <v-progress-linear
-            v-if="(scanning || importing) && count_total > 0"
+            v-if="((scanning || importing || batchAdding) && count_total > 0)"
             :value="progressPercent"
             height="24"
             color="green"
@@ -60,6 +61,7 @@
                 <v-chip small v-else-if="item.status == 'imported'" class="primary">{{ $t('imports.status.imported') }}</v-chip>
                 <v-chip small v-else-if="item.status == 'new'" class="grey">{{ $t('imports.status.new') }}</v-chip>
                 <v-chip small v-else-if="item.status == 'drop'" class="warning">{{ $t('imports.status.drop') }}</v-chip>
+                <v-chip small v-else-if="item.status == 'invalid'" class="error">{{ $t('imports.status.invalid') }}</v-chip>
                 <v-chip small v-else class="info">{{ item.status }}</v-chip>
             </template>
             <template v-slot:item.title="{ item }">
@@ -68,6 +70,38 @@
                 {{ $t('imports.book_author') }}{{ item.author }}
             </template>
         </v-data-table>
+
+        <!-- Batch Add Dialog -->
+        <v-dialog v-model="batchAddDialog" max-width="600px">
+            <v-card>
+                <v-card-title>{{ $t('imports.batch_add_dialog_title') }}</v-card-title>
+                <v-card-text>
+                    <p>{{ $t('imports.batch_add_dialog_description') }}</p>
+                    <ul>
+                        <li>{{ $t('imports.batch_add_dialog_rule1') }}</li>
+                        <li>{{ $t('imports.batch_add_dialog_rule2') }}</li>
+                        <li>{{ $t('imports.batch_add_dialog_rule3') }}</li>
+                        <li>{{ $t('imports.batch_add_dialog_rule4') }}</li>
+                    </ul>
+                    <v-file-input
+                        v-model="csvFile"
+                        :label="$t('imports.batch_add_select_file')"
+                        accept=".csv"
+                        prepend-icon="mdi-file-delimited"
+                        :disabled="batchAdding"
+                    ></v-file-input>
+                </v-card-text>
+                <v-card-actions>
+                    <v-spacer></v-spacer>
+                    <v-btn text @click="batchAddDialog = false" :disabled="batchAdding">{{ $t('common.cancel') }}</v-btn>
+                    <v-btn color="primary" @click="start_batch_add" :disabled="!csvFile || batchAdding">
+                        <v-icon left v-if="!batchAdding">mdi-upload</v-icon>
+                        <v-progress-circular v-if="batchAdding" indeterminate size="20" class="mr-2"></v-progress-circular>
+                        {{ batchAdding ? $t('imports.batch_add_processing') : $t('imports.batch_add_start') }}
+                    </v-btn>
+                </v-card-actions>
+            </v-card>
+        </v-dialog>
     </v-card>
 </template>
 
@@ -84,6 +118,9 @@ export default {
         loading: false,
         importing: false,
         scanning: false,
+        batchAdding: false,
+        batchAddDialog: false,
+        csvFile: null,
         options: {},
         count_todo: 0,
         count_done: 0,
@@ -127,6 +164,7 @@ export default {
         progressPrefix() {
             if (this.scanning) return "扫描中";
             if (this.importing) return "导入中";
+            if (this.batchAdding) return "批量添加中";
             return "";
         },
     },
@@ -333,6 +371,33 @@ export default {
                         this.checkImportState();
                     }
                 });
+
+            // Check batch add status
+            this.$backend("/admin/batch_add/status")
+                .then((rsp) => {
+                    if (rsp.err !== "ok") {
+                        return;
+                    }
+
+                    if (rsp.batch_adding) {
+                        this.batchAdding = true;
+                        this.loading = true;
+                        this.loop_check_status("/admin/batch_add/status", (rsp) => {
+                            this.count_total = rsp.status.total || 0;
+                            this.count_processed = rsp.status.processed || 0;
+                            this.count_done = rsp.summary.done;
+                            this.count_todo = rsp.summary.todo;
+                            this.batchAdding = rsp.batch_adding || false;
+
+                            if (!rsp.batch_adding) {
+                                this.loading = false;
+                                return false;
+                            }
+                            this.loading = true;
+                            return true;
+                        });
+                    }
+                });
         },
         checkImportState() {
             this.$backend("/admin/import/status")
@@ -360,6 +425,60 @@ export default {
                             return true;
                         });
                     }
+                });
+        },
+        show_batch_add_dialog() {
+            this.batchAddDialog = true;
+            this.csvFile = null;
+        },
+        start_batch_add() {
+            if (!this.csvFile) {
+                this.$alert("error", this.$t('imports.batch_add_no_file'));
+                return;
+            }
+
+            this.batchAdding = true;
+            this.loading = true;
+
+            const formData = new FormData();
+            formData.append('csv_file', this.csvFile);
+
+            this.$backend("/admin/batch_add/run", {
+                method: "POST",
+                body: formData,
+            })
+                .then((rsp) => {
+                    if (rsp.err !== "ok") {
+                        this.$alert("error", rsp.msg);
+                        this.batchAdding = false;
+                        this.loading = false;
+                        return;
+                    }
+
+                    this.batchAddDialog = false;
+                    this.csvFile = null;
+
+                    // 开始轮询状态
+                    this.loop_check_status("/admin/batch_add/status", (rsp) => {
+                        this.count_total = rsp.status.total || 0;
+                        this.count_processed = rsp.status.processed || 0;
+                        this.count_done = rsp.summary.done;
+                        this.count_todo = rsp.summary.todo;
+                        this.batchAdding = rsp.batch_adding || false;
+
+                        if (!rsp.batch_adding) {
+                            this.loading = false;
+                            this.getDataFromApi();
+                            return false;
+                        }
+                        this.loading = true;
+                        return true;
+                    });
+                })
+                .catch((err) => {
+                    this.$alert("error", err.message || "上传失败");
+                    this.batchAdding = false;
+                    this.loading = false;
                 });
         },
     },

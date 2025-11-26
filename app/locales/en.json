@@ -160,7 +160,8 @@
                 "exist": "Existed",
                 "imported": "Imported",
                 "new": "Pending",
-                "drop": "Dropped"
+                "drop": "Dropped",
+                "invalid": "Invalid"
             },
             "close": "Close",
             "reminderTitle": "Reminder",
@@ -225,6 +226,7 @@
         "calibre": "Additionally, you can use the PC version of Calibre to manage books. However, please note: After using the PC version, you need to restart the Web version for it to take effect.",
         "refresh": "Refresh",
         "scan_books": "Scan Books",
+        "batch_add_books": "Batch Add Physical Books",
         "import_selected": "Import Selected Books",
         "delete": "Delete",
         "import_all": "Import All Books",
@@ -237,10 +239,21 @@
             "exist": "Existed",
             "imported": "Imported",
             "new": "To Scan",
-            "drop": "Duplicated"
+            "drop": "Duplicated",
+            "invalid": "Invalid"
         },
         "book_title": "Title:",
-        "book_author": "Author:"
+        "book_author": "Author:",
+        "batch_add_dialog_title": "Batch Add Physical Books",
+        "batch_add_dialog_description": "Please select a CSV file for batch import. The CSV file must meet the following requirements:",
+        "batch_add_dialog_rule1": "• Fields separated by Tab character",
+        "batch_add_dialog_rule2": "• First row contains field names (header)",
+        "batch_add_dialog_rule3": "• Must include isbn field",
+        "batch_add_dialog_rule4": "• Optional fields: title, author, coverUrl",
+        "batch_add_select_file": "Select CSV File",
+        "batch_add_start": "Start Import",
+        "batch_add_processing": "Processing...",
+        "batch_add_no_file": "Please select a CSV file"
     },
     "settings": {
         "basic_info": "Basic Information",

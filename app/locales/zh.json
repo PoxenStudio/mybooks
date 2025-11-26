@@ -160,7 +160,8 @@
                 "exist": "已存在",
                 "imported": "导入成功",
                 "new": "待扫描",
-                "drop": "重复"
+                "drop": "重复",
+                "invalid": "无效"
             },
             "close": "关闭",
             "reminderTitle": "提醒",
@@ -225,6 +226,7 @@
         "calibre": "另外，还可以使用PC版Calibre软件管理书籍，但是请注意：使用完PC版后，需重启Web版方可生效。",
         "refresh": "刷新",
         "scan_books": "扫描书籍",
+        "batch_add_books": "批量导入实体书",
         "import_selected": "导入选中书籍",
         "delete": "删除",
         "import_all": "导入全部书籍",
@@ -237,10 +239,21 @@
             "exist": "已存在",
             "imported": "导入成功",
             "new": "待扫描",
-            "drop": "重复"
+            "drop": "重复",
+            "invalid": "无效"
         },
         "book_title": "书名：",
-        "book_author": "作者："
+        "book_author": "作者：",
+        "batch_add_dialog_title": "批量导入实体书",
+        "batch_add_dialog_description": "请选择一个CSV文件进行批量导入。CSV文件需要满足以下要求：",
+        "batch_add_dialog_rule1": "• 使用Tab键（制表符）分隔字段",
+        "batch_add_dialog_rule2": "• 第一行为字段名（表头）",
+        "batch_add_dialog_rule3": "• 必须包含 isbn 字段",
+        "batch_add_dialog_rule4": "• 可选字段：title（书名）、author（作者）、coverUrl（封面链接）",
+        "batch_add_select_file": "选择CSV文件",
+        "batch_add_start": "开始导入",
+        "batch_add_processing": "正在处理...",
+        "batch_add_no_file": "请选择CSV文件"
     },
     "book": {
         "edit": {

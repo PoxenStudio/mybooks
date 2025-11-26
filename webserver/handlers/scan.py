@@ -351,6 +351,117 @@ class ImportStatus(BaseHandler):
                     logging.error(f"Error closing scanner: {e}")
 
 
+class BatchAddRun(BaseHandler):
+    @js
+    @is_admin
+    def post(self):
+        """批量添加实体书 - 从CSV文件导入"""
+        from webserver.services.batch_add import BatchAddService
+
+        # 检查是否上传了文件
+        if "csv_file" not in self.request.files:
+            return {"err": "params.error", "msg": _("请选择CSV文件")}
+
+        fileinfo = self.request.files["csv_file"][0]
+        filename = fileinfo["filename"]
+        csv_data = fileinfo["body"]
+
+        # 检查文件扩展名
+        if not filename.lower().endswith('.csv'):
+            return {"err": "params.error", "msg": _("文件格式错误，请上传CSV文件")}
+
+        try:
+            # 保存临时文件
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix='.csv') as tmp_file:
+                tmp_file.write(csv_data)
+                csv_path = tmp_file.name
+
+            # 验证CSV文件格式
+            import csv
+            import codecs
+
+            # 尝试检测编码
+            try:
+                with open(csv_path, 'rb') as f:
+                    raw_data = f.read()
+                    # 尝试UTF-8
+                    try:
+                        raw_data.decode('utf-8')
+                        encoding = 'utf-8'
+                    except:
+                        # 尝试GBK
+                        try:
+                            raw_data.decode('gbk')
+                            encoding = 'gbk'
+                        except:
+                            encoding = 'utf-8'
+            except:
+                encoding = 'utf-8'
+
+            with codecs.open(csv_path, 'r', encoding=encoding) as f:
+                # 使用Tab作为分隔符
+                reader = csv.DictReader(f, delimiter='\t')
+
+                # 检查是否有isbn字段
+                if 'isbn' not in reader.fieldnames:
+                    import os
+                    os.unlink(csv_path)
+                    return {"err": "params.error", "msg": _("CSV文件必须包含isbn字段")}
+
+                # 读取所有行
+                rows = list(reader)
+                if len(rows) == 0:
+                    import os
+                    os.unlink(csv_path)
+                    return {"err": "params.error", "msg": _("CSV文件中没有数据")}
+
+            # 启动批量添加服务
+            service = BatchAddService()
+            total = service.start_batch_add(csv_path, filename, self.user_id())
+
+            return {"err": "ok", "msg": _("开始批量添加实体书"), "total": total}
+
+        except Exception as e:
+            logging.error(f"BatchAddRun error: {e}")
+            import traceback
+            logging.error(traceback.format_exc())
+            return {"err": "server.error", "msg": str(e)}
+
+
+class BatchAddStatus(BaseHandler):
+    @js
+    @is_admin
+    def get(self):
+        """获取批量添加状态"""
+        from webserver.services.batch_add import BatchAddService
+
+        scanner = None
+        try:
+            scanner = Scanner(self.calibre_db, self.settings["ScopedSession"])
+            summary = scanner.summary()
+
+            service = BatchAddService()
+            status = service.get_status()
+
+            return {
+                "err": "ok",
+                "msg": _("成功"),
+                "status": status,
+                "summary": summary,
+                "batch_adding": service.is_running()
+            }
+        except Exception as e:
+            logging.error(f"BatchAddStatus error: {e}")
+            return {"err": "server.error", "msg": str(e)}
+        finally:
+            if scanner:
+                try:
+                    scanner.close()
+                except Exception as e:
+                    logging.error(f"Error closing scanner: {e}")
+
+
 def routes():
     return [
         (r"/api/admin/scan/list", ScanList),
@@ -360,4 +471,6 @@ def routes():
         (r"/api/admin/scan/mark", ScanMark),
         (r"/api/admin/import/run", ImportRun),
         (r"/api/admin/import/status", ImportStatus),
+        (r"/api/admin/batch_add/run", BatchAddRun),
+        (r"/api/admin/batch_add/status", BatchAddStatus),
     ]

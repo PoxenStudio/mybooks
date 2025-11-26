@@ -92,3 +92,5 @@ node_modules
 .nuxt
 .config
 package-lock.json
+.DS_Store
+.vscode
