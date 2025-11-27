@@ -62,6 +62,7 @@
                 <v-chip small v-else-if="item.status == 'new'" class="grey">{{ $t('imports.status.new') }}</v-chip>
                 <v-chip small v-else-if="item.status == 'drop'" class="warning">{{ $t('imports.status.drop') }}</v-chip>
                 <v-chip small v-else-if="item.status == 'invalid'" class="error">{{ $t('imports.status.invalid') }}</v-chip>
+                <v-chip small v-else-if="item.status == 'missed'" class="error">{{ $t('imports.status.missed') }}</v-chip>
                 <v-chip small v-else class="info">{{ item.status }}</v-chip>
             </template>
             <template v-slot:item.title="{ item }">

@@ -161,7 +161,8 @@
                 "imported": "导入成功",
                 "new": "待扫描",
                 "drop": "重复",
-                "invalid": "无效"
+                "invalid": "无效",
+                "missed": "文件丢失"
             },
             "close": "关闭",
             "reminderTitle": "提醒",

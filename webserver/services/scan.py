@@ -240,6 +240,12 @@ class ScanService(AsyncService):
             fpath = row.path
             fname = os.path.basename(row.path)
             fmt = fpath.split(".")[-1].lower()
+            if not os.path.exists(fpath):
+                row.status = ScanFile.MISSED
+                self.save_or_rollback(row)
+                logging.error("file not exists: %s", fpath)
+                continue
+
             with open(fpath, "rb") as stream:
                 mi = get_metadata(stream, stream_type=fmt,
                                   use_libprs_metadata=True)

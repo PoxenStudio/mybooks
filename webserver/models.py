@@ -426,6 +426,7 @@ class ScanFile(Base, SQLAlchemyMixin):
     EXIST = "exist"
     IMPORTED = "imported"
     INVALID_ISBN = "invalid"
+    MISSED = "missed"
 
     def __init__(self, path, hash_value, scan_id):
         super(ScanFile, self).__init__()

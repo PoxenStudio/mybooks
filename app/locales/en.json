@@ -161,7 +161,8 @@
                 "imported": "Imported",
                 "new": "Pending",
                 "drop": "Dropped",
-                "invalid": "Invalid"
+                "invalid": "Invalid",
+                "missed": "No File"
             },
             "close": "Close",
             "reminderTitle": "Reminder",
