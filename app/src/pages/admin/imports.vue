@@ -1,6 +1,6 @@
 <template>
     <v-card>
-        <v-card-title> {{ $t('imports.title') }} <v-chip small class="primary">Beta</v-chip> </v-card-title>
+        <v-card-title> {{ $t('imports.title') }} </v-card-title>
         <v-card-text>
         {{ $t('imports.instructions', {scan_dir: scan_dir}) }}<br/>
         {{ $t('imports.note') }}<br/>

@@ -175,8 +175,11 @@
                 "progressDetails": "Total {total} books, {done} updated, {fail} failed, {skip} skipped.",
                 "estimate": "Estimated runtime is {minutes} minutes. Please do not stop the program during this period."
             },
+            "scraping": "Scraping",
             "cancel": "Cancel",
-            "execute": "Execute!"
+            "execute": "Execute!",
+            "failed": "Failed",
+            "skipped": "Skipped"
         },
         "users": {
             "title": "User Management",
@@ -347,8 +350,7 @@
         "device_type": "Type",
         "device_schema":"Schema",
         "default_reader_name": "Reader",
-        "ai_capabilities_description":"Configure AI assistant features, requires Ollama service deployment",
-        "ai_ollama_host":"Ollama Service URL",
+        "ai_capabilities_description":"Configure AI assistant features",
         "ai_ollama_model":"AI Model",
         "ai_mcp_token":"MCP Access Token",
         "ai_mcp_token_generated":"MCP token has been generated",

@@ -167,16 +167,17 @@
             "close": "关闭",
             "reminderTitle": "提醒",
             "reminder": {
-                "description": "即将从互联网拉取所有图书的书籍信息，请了解以下功能限制：",
+                "description": "即将从互联网刮削所有图书的书籍信息，请了解以下功能限制：",
                 "rule1": "1. 请在「系统设置」中配置好「互联网书籍信息源」，启用豆瓣插件；",
                 "rule2": "2. 本操作只更新「没有封面」或「没有简介」的图书；",
                 "rule3": "3. 受限于豆瓣等服务的限制，每秒钟仅更新1本书;",
-                "progress": "当前进展：",
-                "progressDetails": "总共 {total} 本书籍，已更新 {done} 本，更新失败 {fail} 本，无需处理 {skip} 本。",
                 "estimate": "预计需要运行 {minutes} 分钟，在此期间请不要停止程序"
             },
+            "scraping": "正在刮削",
             "cancel": "取消",
-            "execute": "开始执行！"
+            "execute": "开始执行！",
+            "failed": "错误",
+            "skipped": "跳过"
         },
         "users": {
             "title": "用户管理",
@@ -479,8 +480,8 @@
         "device_type_ireader": "掌阅",
         "device_type_hanwang": "汉王",
         "device_type_boox": "文石Boox",
+        "ai_capabilities_description": "配置AI助手相关功能",
         "ai_capability": "AI助手",
-        "ai_ollama_host": "Ollama服务地址",
         "ai_ollama_model": "AI模型",
         "ai_mcp_token": "MCP访问令牌"
     },

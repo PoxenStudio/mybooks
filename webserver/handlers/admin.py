@@ -561,8 +561,8 @@ class AdminBookFill(BaseHandler):
                 "skip": status["count_skip"],
                 "done": status["count_done"],
                 "fail": status["count_fail"],
+                "running": status["is_running"],
             },
-            "running": status["is_running"],
         }
 
     @js

@@ -1,6 +1,6 @@
 <template>
     <v-card>
-        <v-card-title> {{ $t('admin.books.title') }} <v-chip small class="primary">Beta</v-chip> </v-card-title>
+        <v-card-title> {{ $t('admin.books.title') }}</v-card-title>
         <v-card-text> {{ $t('admin.books.description') }} </v-card-text>
         <v-card-actions class="pa-4">
             <!-- 第一行：主要操作按钮 -->
@@ -19,7 +19,7 @@
                         <span v-if="!$vuetify.breakpoint.xs">{{ $t('admin.books.refresh') }}</span>
                     </v-btn>
                     <v-btn
-                        :disabled="loading"
+                        :disabled="loading || scraping"
                         outlined
                         color="info"
                         @click="show_dialog_auto_file"
@@ -56,6 +56,17 @@
                 </v-col>
             </v-row>
         </v-card-actions>
+        <v-progress-linear
+            v-if="scraping && progress.count_total > 0"
+            :value="progressPercent"
+            height="24"
+            color="green"
+            background-color="green"
+            style="opacity: 1;"
+            class="mb-4"
+        >
+            <strong class="white--text">{{ $t('admin.books.scraping') }} {{ progress.count_processed }} / {{ progress.count_total }} ({{ $t('admin.books.failed') }}: {{ progress.count_failed }}, {{ $t('admin.books.skipped') }}: {{ progress.count_skipped }}) ({{ progressPercent }}%)</strong>
+        </v-progress-linear>
         <v-data-table
             dense
             class="elevation-1 text-body-2"
@@ -288,16 +299,7 @@
                     <p> {{ $t('admin.books.reminder.rule1') }} </p>
                     <p> {{ $t('admin.books.reminder.rule2') }} </p>
                     <p> {{ $t('admin.books.reminder.rule3') }} </p>
-                    <br></br>
-                    <template v-if="progress.total > 0">
-                        <p>{{ $t('admin.books.reminder.progress') }}<v-btn small text link @click="refresh_progress">{{ $t('admin.books.refresh') }}</v-btn></p>
-                        <p>{{ $t('admin.books.reminder.progressDetails', { total: progress.total, done: progress.done, fail: progress.fail, skip: progress.skip }) }}</p>
-                    </template>
-                    <p v-else> {{ $t('admin.books.reminder.estimate', { minutes: auto_fill_mins }) }} </p>
-
-                    <template v-else>
-
-                    </template>
+                    <p> {{ $t('admin.books.reminder.estimate', { minutes: auto_fill_mins }) }} </p>
                 </v-card-text>
                 <v-card-actions>
                     <v-btn @click="meta_dialog = !meta_dialog">{{ $t('admin.books.cancel') }}</v-btn>
@@ -324,6 +326,7 @@ export default {
         items: [],
         total: 0,
         loading: false,
+        scraping: false,
         options: { sortBy: ["id"], sortDesc: [true] },
         headers: [
             { text: "封面", sortable: false, value: "img", width: "80px" },
@@ -339,14 +342,16 @@ export default {
             { text: "操作", sortable: false, value: "actions" },
         ],
         progress: {
-            skip: 0,
-            fail: 0,
-            done: 0,
-            total: 0,
-            status: "finish",
+            count_total: 0,
+            count_processed: 0,
+            count_done: 0,
+            count_failed: 0,
+            count_skipped: 0,
         },
     }),
-    created() {},
+    created() {
+        this.checkCurrentState();
+    },
     watch: {
         options: {
             handler() {
@@ -358,6 +363,15 @@ export default {
     computed: {
         auto_fill_mins: function() {
             return Math.floor(this.total/60) + 1;
+        },
+        progressPercent() {
+            if (!this.progress.count_total) {
+                return 0;
+            }
+            const pct = Math.round((this.progress.count_processed / this.progress.count_total) * 100);
+            if (pct < 0) return 0;
+            if (pct > 100) return 100;
+            return pct;
         },
         responsiveHeaders: function() {
             // 根据屏幕宽度返回不同的headers配置
@@ -450,17 +464,8 @@ export default {
                     this.loading = false;
                 });
         },
-        refresh_progress() {
-            this.$backend("/admin/book/fill", {
-                method: "GET",
-            })
-            .then((rsp) => {
-                this.progress = rsp.status;
-            })
-        },
         show_dialog_auto_file() {
             this.meta_dialog = true;
-            this.refresh_progress();
         },
         auto_fill() {
             this.$backend("/admin/book/fill", {
@@ -471,10 +476,11 @@ export default {
                 this.meta_dialog = false;
                 if (rsp.err != "ok") {
                     this.$alert("error", rsp.msg);
+                    return;
                 }
-                this.snack = true;
-                this.snackColor = "success";
-                this.snackText = rsp.msg;
+                this.$alert("success", rsp.msg);
+                // Start checking status
+                this.checkCurrentState();
             })
         },
         delete_book(book) {
@@ -513,6 +519,62 @@ export default {
                     this.$alert("error", rsp.msg);
                 }
             });
+        },
+        loop_check_status(url, callback) {
+            setTimeout(() => {
+                this.$backend(url)
+                    .then((rsp) => {
+                        if (rsp.err != "ok") {
+                            this.$alert("error", rsp.msg);
+                            return;
+                        }
+                        if (callback(rsp)) {
+                            setTimeout(() => {
+                                this.loop_check_status(url, callback);
+                            }, 1000);
+                        } else {
+                            this.getDataFromApi();
+                        }
+                    })
+            }, 2000);
+        },
+        checkCurrentState() {
+            this.$backend("/admin/book/fill", {
+                method: "GET",
+            })
+            .then((rsp) => {
+                if (rsp.err !== "ok" || !rsp.status) {
+                    return;
+                }
+                // Check if scraping is in progress
+                if (rsp.status.running) {
+                    this.scraping = true;
+                    this.loop_check_status("/admin/book/fill", (rsp) => {
+                        this.progress.count_total = rsp.status.total || 0;
+                        this.progress.count_failed = rsp.status.fail || 0;
+                        this.progress.count_skipped = rsp.status.skip || 0;
+                        this.progress.count_done = rsp.status.done || 0;
+                        this.progress.count_processed = (rsp.status.done || 0) + (rsp.status.fail || 0) + (rsp.status.skip || 0);
+                        if (!rsp.status.running) {
+                            this.scraping = false;
+                            this.progress.count_total = 0;
+                            this.progress.count_processed = 0;
+                            this.progress.count_done = 0;
+                            this.progress.count_failed = 0;
+                            this.progress.count_skipped = 0;
+                            return false;
+                        }
+                        return true;
+                    });
+                } else {
+                    this.scraping = false;
+                    this.progress.count_total = 0;
+                    this.progress.count_processed = 0;
+                    this.progress.count_done = 0;
+                    this.progress.count_failed = 0;
+                    this.progress.count_skipped = 0;
+                }
+            })
         },
     },
 };
