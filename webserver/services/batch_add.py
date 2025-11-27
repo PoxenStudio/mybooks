@@ -6,9 +6,7 @@ import codecs
 import hashlib
 import logging
 import os
-import tempfile
 import requests
-from gettext import gettext as _
 
 from webserver import loader
 from webserver.models import Item, ScanFile, BOOK_TYPE_PHYSICAL
@@ -116,8 +114,7 @@ class BatchAddService(AsyncService):
             author = row.get('author', '').strip()
             cover_url = row.get('coverUrl', '').strip()
 
-            logging.info("Processing row %d/%d: ISBN=%s, title=%s",
-                        idx + 1, len(rows), isbn, title)
+            logging.info("Processing row %d/%d: ISBN=%s, title=%s", idx + 1, len(rows), isbn, title)
 
             if not isbn:
                 # 没有ISBN，记录为无效
@@ -161,7 +158,6 @@ class BatchAddService(AsyncService):
         """查找ISBN对应的书籍"""
         try:
             # 使用calibre DB查找
-            from calibre.utils.date import parse_date
             books = set()
 
             # 搜索ISBN
@@ -205,8 +201,7 @@ class BatchAddService(AsyncService):
             # 记录到ScanFile
             self._record_scan_file(csv_filename, isbn, title, author, ScanFile.EXIST, book_id)
 
-            logging.info("Updated book count for ISBN %s, book_id=%d, count=%d",
-                        isbn, book_id, book_count)
+            logging.info("Updated book count for ISBN %s, book_id=%d, count=%d", isbn, book_id, book_count)
         except Exception as e:
             logging.error("Error updating book count: %s", e)
             self.session.rollback()

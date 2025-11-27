@@ -33,9 +33,8 @@ class MCPHandler(ListHandler):
                 cls.mcp_service_single = MCPService(base_handler, token=token)
             return cls.mcp_service_single
         else:
-            if cls.last_service_token is not None \
-                and token == cls.last_service_token \
-                and cls.mcp_service_with_token is not None:
+            if cls.last_service_token is not None and token == cls.last_service_token \
+                    and cls.mcp_service_with_token is not None:
                 return cls.mcp_service_with_token
             cls.mcp_service_with_token = MCPService(base_handler, token=token)
             cls.last_service_token = token

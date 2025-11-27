@@ -23,6 +23,7 @@ from webserver import loader
 CONF = loader.get_settings()
 MCP_TOKEN_KEY = "AI_MCP_TOKEN"
 
+
 class MCPService:
     """MCP协议处理服务类"""
     MAX_BOOKS_COUNT_IN_RESULT = 20  # 返回结果中最大书籍数量限制
