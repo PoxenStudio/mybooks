@@ -552,13 +552,18 @@ class AdminBookFill(BaseHandler):
     @is_admin
     def get(self):
         s = AutoFillService()
-        status = {
-            "total": s.count_total,
-            "skip": s.count_skip,
-            "done": s.count_done,
-            "fail": s.count_fail,
+        status = s.status()
+        return {
+            "err": "ok",
+            "msg": "ok",
+            "status": {
+                "total": status["count_total"],
+                "skip": status["count_skip"],
+                "done": status["count_done"],
+                "fail": status["count_fail"],
+            },
+            "running": status["is_running"],
         }
-        return {"err": "ok", "msg": "ok", "status": status}
 
     @js
     @is_admin
@@ -567,6 +572,11 @@ class AdminBookFill(BaseHandler):
         idlist = req["idlist"]
         if not idlist:
             return {"err": "params.error", "msg": _(u"参数错误")}
+
+        # 检查是否有正在运行的任务
+        filling_status = AutoFillService().status()
+        if filling_status["is_running"]:
+            return {"err": "task.running", "msg": _(u"有任务正在运行中，请稍后再试")}
 
         if idlist == "all":
             idlist = list(self.calibre_db_cache.search(""))

@@ -21,6 +21,21 @@ class AutoFillService(AsyncService):
         self.count_skip = 0
         self.count_done = 0
         self.count_fail = 0
+        self.is_running = False
+        self.current_book_id = None
+        self.start_time = None
+
+    def status(self):
+        """获取运行状态及处理的进度信息"""
+        return {
+            "is_running": self.is_running,
+            "current_book_id": self.current_book_id,
+            "start_time": self.start_time,
+            "count_total": self.count_total,
+            "count_skip": self.count_skip,
+            "count_done": self.count_done,
+            "count_fail": self.count_fail,
+        }
 
     @AsyncService.register_service
     def auto_fill_all(self, idlist: list, qpm=60):
@@ -28,6 +43,9 @@ class AutoFillService(AsyncService):
         sleep_seconds = 60.0 / qpm
         batch_size = 10  # 每批处理的书籍数量
 
+        # 设置运行状态
+        self.is_running = True
+        self.start_time = time.time()
         self.count_total = len(idlist)
         self.count_skip = 0
         self.count_done = 0
@@ -41,6 +59,7 @@ class AutoFillService(AsyncService):
             # 第一阶段：批量读取元数据（持有锁的时间短）
             books_to_update = []
             for book_id in batch_ids:
+                self.current_book_id = book_id
                 try:
                     mi = self.db.get_metadata(book_id, index_is_id=True)
                     if self.should_update(mi):
@@ -86,6 +105,10 @@ class AutoFillService(AsyncService):
                 except Exception as err:
                     self.count_fail += 1
                     logging.error(_("更新书籍元数据失败 id=%d: %s"), book_id, err)
+
+        # 重置运行状态
+        self.is_running = False
+        self.current_book_id = None
 
     @AsyncService.register_function
     def auto_fill(self, book_id):
