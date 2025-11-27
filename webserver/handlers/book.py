@@ -1854,13 +1854,9 @@ class BookSperate(BaseHandler):
             self.sqlite_session.commit()
 
             # 从原书籍中删除该格式
-            self.calibre_db.remove_formats({book_id: [fmt.upper()]})
+            self.calibre_db_cache.remove_formats({book_id: [fmt.upper()]})
 
             logging.info(f"[SEPARATE] Successfully separated format {fmt} from book {book_id} to new book {new_book_id}")
-
-            # 自动填充新书籍的元数据
-            AutoFillService().auto_fill(new_book_id)
-
             self.add_msg("success", _(u"成功将 %s 格式分离为新书籍") % fmt.upper())
             return {
                 "err": "ok",
