@@ -142,6 +142,8 @@
                 type="text"
                 :append-icon="'mdi-refresh'"
                 @click:append="generateMCPToken"
+                readonly
+                :rules="tokenRules"
               ></v-text-field>
             </template>
 
@@ -422,6 +424,10 @@ export default {
       const pattern = /^https?:\/\/.+/;
       return pattern.test(v) || 'Must be a valid HTTP/HTTPS URL';
     },
+    tokenRules: [
+      v => !v || /^[a-zA-Z0-9]*$/.test(v) || 'Only alphanumeric characters allowed',
+      v => !v || (v.length >= 16 && v.length <= 32) || 'Length must be between 16 and 32 characters'
+    ],
   }),
   methods: {
     save_settings: function () {

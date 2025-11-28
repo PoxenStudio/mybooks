@@ -13,6 +13,8 @@ sys.resources_location = os.environ.get('CALIBRE_RESOURCES_PATH', '/usr/share/ca
 sys.extensions_location = os.environ.get('CALIBRE_EXTENSIONS_PATH', '/usr/lib/calibre/calibre/plugins')
 sys.executables_location = os.environ.get('CALIBRE_EXECUTABLES_PATH', '/usr/bin')
 
+READING_STATUS_KEY = 'reading_status'
+
 try:
     from calibre.db.legacy import LibraryDatabase
 except ImportError:
@@ -61,7 +63,7 @@ def main():
     print(f"Found book ID: {book_id}")
 
     # Find the custom field key for 'reading_status'
-    target_label = 'reading_status'
+    target_label = READING_STATUS_KEY
     field_key = None
 
     # Check metadata for the custom field
