@@ -1145,18 +1145,20 @@ export default {
             title: this.book.title,
         };
     },
-    created() {
+    async created() {
         this.init(this.$route);
         this.mail_to = this.$store.state.user.kindle_email;
         this.get_txt_parse_status();
-        this.loadDevices(); // 加载设备列表
+        // 先加载设备列表，等待完成后再加载设备偏好
+        await this.loadDevices();
+
         if (process.client) {
             this.mail_to = this.$cookies.get("last_mailto");
             // 从localStorage获取上次使用的语音名称
             const lastUsedVoice = localStorage.getItem("last_used_voice_name");
             this.voice_name = lastUsedVoice || "zh-CN-XiaoxiaoNeural"; // 如果没有保存的语音，使用默认的晓晓
 
-            // 从localStorage加载上次使用的设备选项
+            // 从localStorage加载上次使用的设备选项（在devices加载完成后）
             this.loadDevicePreferences();
 
             // 检查URL参数，如果有continue_adding=true则自动弹出添加对话框
@@ -1977,7 +1979,19 @@ export default {
                 const savedTempDevice = localStorage.getItem('temp_device_info');
 
                 if (savedOption) {
-                    this.selectedDeviceOption = savedOption;
+                    // 验证保存的选项是否仍然有效
+                    if (savedOption === 'temporary') {
+                        this.selectedDeviceOption = savedOption;
+                    } else if (savedOption.startsWith('saved-')) {
+                        const deviceIndex = parseInt(savedOption.replace('saved-', ''));
+                        // 确保设备仍然存在
+                        if (this.devices && this.devices.length > deviceIndex) {
+                            this.selectedDeviceOption = savedOption;
+                        } else {
+                            // 如果保存的设备不存在，重置为默认选项
+                            this.selectedDeviceOption = this.devices && this.devices.length > 0 ? 'saved-0' : 'temporary';
+                        }
+                    }
                 } else {
                     // 如果没有保存的选项，根据设备列表设置默认值
                     if (this.devices && this.devices.length > 0) {
@@ -1997,6 +2011,8 @@ export default {
                 }
             } catch (error) {
                 console.error('加载设备偏好设置失败:', error);
+                // 出错时设置默认值
+                this.selectedDeviceOption = this.devices && this.devices.length > 0 ? 'saved-0' : 'temporary';
             }
         },
 
