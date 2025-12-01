@@ -280,25 +280,60 @@ class MCPService:
             return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Authentication required"}))]
 
         name = arguments.get("name", "")
-        if not name:
-            return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Invalid parameter 'name'"}))]
+        rating = arguments.get("rating", "")
+        tags = arguments.get("tags", "")
+        isbn = arguments.get("isbn", "")
+        create_time = arguments.get("create_time", "")
+
+        if not any([name, rating, tags, isbn, create_time]):
+            return [TextContent(type="text", text=json.dumps({"status": "error", "message": "At least one search parameter is required"}))]
 
         include_comments = arguments.get("include_comments", False)
+        title = _(u"搜索结果")
 
-        title = _(u"搜索：%(name)s") % {"name": name}
         try:
-            import opencc
-            ids = self.base_handler.calibre_db_cache.search(name)
-            for profile in {'s2t', "t2s"}:
-                if len(ids) >= self.MAX_BOOKS_COUNT_IN_RESULT:
-                    break
-                converted_name = opencc.OpenCC(profile).convert(name)
-                if converted_name == name:
-                    continue
-                ids2 = self.base_handler.calibre_db_cache.search(converted_name)
-                if len(ids2) > 0:
-                    ids = ids.union(ids, ids2)
-                    break
+            ids = None
+
+            def intersect(new_ids):
+                nonlocal ids
+                if ids is None:
+                    ids = set(new_ids)
+                else:
+                    ids = ids.intersection(new_ids)
+
+            # 1. Handle name with OpenCC support
+            if name:
+                import opencc
+                name_ids = self.base_handler.calibre_db_cache.search(name)
+                for profile in {'s2t', "t2s"}:
+                    if len(name_ids) >= self.MAX_BOOKS_COUNT_IN_RESULT * 2:
+                        break
+                    converted_name = opencc.OpenCC(profile).convert(name)
+                    if converted_name == name:
+                        continue
+                    ids2 = self.base_handler.calibre_db_cache.search(converted_name)
+                    if len(ids2) > 0:
+                        name_ids = name_ids.union(ids2)
+                intersect(name_ids)
+                title = _(u"搜索：%(name)s") % {"name": name}
+
+            # 2. Handle rating
+            if rating:
+                intersect(self.base_handler.calibre_db_cache.search(f"rating:{rating}"))
+
+            # 3. Handle tags
+            if tags:
+                for tag in tags.split(","):
+                    if tag.strip():
+                        intersect(self.base_handler.calibre_db_cache.search(f"tags:\"{tag.strip()}\""))
+
+            # 4. Handle isbn
+            if isbn:
+                intersect(self.base_handler.calibre_db_cache.search(f"isbn:{isbn}"))
+
+            # 5. Handle create_time (mapped to date added)
+            if create_time:
+                intersect(self.base_handler.calibre_db_cache.search(f"added:{create_time}"))
 
             if not ids:
                 return [TextContent(type="text", text=json.dumps({"status": "success",
@@ -497,13 +532,38 @@ class MCPService:
             ),
             Tool(
                 name="search_books",
-                description="Search for books in the collection." + self.need_login_prompt,
+                description="Search for books in the collection." + self.need_login_prompt + "\n\n"
+                            "Returns a list of books with the following structure:\n"
+                            "- id: Book ID\n"
+                            "- title: Book title\n"
+                            "- author: Author name\n"
+                            "- comments: Book description (if include_comments=True)\n"
+                            "- publisher: Publisher\n"
+                            "- tags: List of tags\n"
+                            "- rating: Rating (0-10)\n"
+                            "- pubdate: Publication date\n",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "name": {
                             "type": "string",
                             "description": "Name of the book, author to search for"
+                        },
+                        "rating": {
+                            "type": "string",
+                            "description": "Rating search query (e.g., '>=4', '5')"
+                        },
+                        "tags": {
+                            "type": "string",
+                            "description": "Tags to search for (comma separated)"
+                        },
+                        "isbn": {
+                            "type": "string",
+                            "description": "ISBN to search for"
+                        },
+                        "create_time": {
+                            "type": "string",
+                            "description": "Create time (date added) query (e.g., '>2024-01-01')"
                         },
                         "include_comments": {
                             "type": "boolean",
@@ -512,7 +572,13 @@ class MCPService:
                             "default": False
                         }
                     },
-                    "required": ["name"]
+                    "anyOf": [
+                        {"required": ["name"]},
+                        {"required": ["rating"]},
+                        {"required": ["tags"]},
+                        {"required": ["isbn"]},
+                        {"required": ["create_time"]}
+                    ]
                 }
             ),
             Tool(
