@@ -578,7 +578,7 @@ class AdminBookFill(BaseHandler):
             return {"err": "task.running", "msg": _(u"有任务正在运行中，请稍后再试")}
 
         if idlist == "all":
-            idlist = list(self.calibre_db_cache.search(""))
+            idlist = list(self.calibre_db_cache.all_book_ids())
         elif isinstance(idlist, list):
             for bid in idlist:
                 if not isinstance(bid, int):

@@ -227,67 +227,105 @@ class ScanService(AsyncService):
 
         # 生成任务ID
         import_id = int(time.time())
-
         query = self.build_query(hashlist)
         query.update({ScanFile.import_id: import_id},
                      synchronize_session=False)
         self.session.commit()
 
         imported = []
+        batch_size = 20  # 每批处理的文件数量
 
-        # 逐个处理
-        for row in query.all():
-            fpath = row.path
-            fname = os.path.basename(row.path)
-            fmt = fpath.split(".")[-1].lower()
-            if not os.path.exists(fpath):
-                row.status = ScanFile.MISSED
-                self.save_or_rollback(row)
-                logging.error("file not exists: %s", fpath)
-                continue
+        # 获取所有待处理的记录
+        all_rows = query.all()
+        total_count = len(all_rows)
+        logging.info("Total files to import: %d", total_count)
 
-            with open(fpath, "rb") as stream:
-                mi = get_metadata(stream, stream_type=fmt,
-                                  use_libprs_metadata=True)
-                mi.title = utils.super_strip(mi.title)
-                mi.authors = [utils.super_strip(s) for s in mi.authors]
+        # 分批处理，避免长时间持有数据库连接
+        for batch_start in range(0, total_count, batch_size):
+            batch_end = min(batch_start + batch_size, total_count)
+            batch_rows = all_rows[batch_start:batch_end]
 
-            # 非结构化的格式，calibre无法识别准确的信息，直接从文件名提取
-            if fmt in ["txt", "pdf"]:
-                mi.title = fname.replace("." + fmt, "")
-                mi.authors = [_(u"佚名")]
+            logging.info("Processing batch: %d-%d / %d", batch_start + 1, batch_end, total_count)
 
-            # 再次检查是否有重复书籍
-            ids = self.db.books_with_same_title(mi)
-            if ids:
-                row.book_id = ids.pop()
-                for b in self.db.get_data_as_dict(ids=ids):
-                    if fmt.upper() in b.get("available_formats", ""):
-                        row.status = ScanFile.EXIST
-                        break
-                if row.status != ScanFile.EXIST:
-                    logging.info(
-                        "import [%s] from %s with format %s", repr(mi.title), fpath, fmt)
-                    self.db.add_format(row.book_id, fmt.upper(), fpath, True)
-                    row.status = ScanFile.IMPORTED
-                self.save_or_rollback(row)
-            else:
-                logging.info("import [%s] from %s", repr(mi.title), fpath)
-                row.book_id = self.db.import_book(mi, [fpath])
-                row.status = ScanFile.IMPORTED
-                self.save_or_rollback(row)
+            # 处理当前批次
+            for row in batch_rows:
+                fpath = row.path
+                fname = os.path.basename(row.path)
+                fmt = fpath.split(".")[-1].lower()
 
-                # 添加关联表
-                item = Item()
-                item.book_id = row.book_id
-                item.collector_id = user_id
+                if not os.path.exists(fpath):
+                    row.status = ScanFile.MISSED
+                    logging.error("file not exists: %s", fpath)
+                    continue
+
                 try:
-                    item.save()
-                    imported.append(row.book_id)
+                    with open(fpath, "rb") as stream:
+                        mi = get_metadata(stream, stream_type=fmt,
+                                          use_libprs_metadata=True)
+                        mi.title = utils.super_strip(mi.title)
+                        mi.authors = [utils.super_strip(s) for s in mi.authors]
+
+                    # 非结构化的格式，calibre无法识别准确的信息，直接从文件名提取
+                    if fmt in ["txt", "pdf"]:
+                        mi.title = fname.replace("." + fmt, "")
+                        mi.authors = [_(u"佚名")]
+
+                    # 再次检查是否有重复书籍
+                    ids = self.db.books_with_same_title(mi)
+                    if ids:
+                        row.book_id = ids.pop()
+                        for b in self.db.get_data_as_dict(ids=ids):
+                            if fmt.upper() in b.get("available_formats", ""):
+                                row.status = ScanFile.EXIST
+                                break
+                        if row.status != ScanFile.EXIST:
+                            logging.info(
+                                "import [%s] from %s with format %s", repr(mi.title), fpath, fmt)
+                            self.db.add_format(row.book_id, fmt.upper(), fpath, True)
+                            row.status = ScanFile.IMPORTED
+                    else:
+                        logging.info("import [%s] from %s", repr(mi.title), fpath)
+                        row.book_id = self.db.import_book(mi, [fpath])
+                        row.status = ScanFile.IMPORTED
+
+                        # 添加关联表
+                        item = Item()
+                        item.book_id = row.book_id
+                        item.collector_id = user_id
+                        try:
+                            item.save()
+                            imported.append(row.book_id)
+                        except Exception as err:
+                            logging.error("save link error: %s", err)
+
                 except Exception as err:
-                    self.session.rollback()
-                    logging.error("save link error: %s", err)
-            pass
+                    row.status = ScanFile.INVALID_ISBN
+                    logging.error("Failed to process file %s: %s", fpath, err)
+
+            # 批量提交当前批次的更改
+            try:
+                self.session.commit()
+                logging.info("Batch committed: %d-%d", batch_start + 1, batch_end)
+            except Exception as err:
+                logging.error("Batch commit error: %s", err)
+                self.session.rollback()
+
+            # 批次之间短暂休息，让其他进程有机会访问数据库
+            if batch_end < total_count:
+                time.sleep(0.3)
+
+        # 最终提交，确保所有更改已保存
+        try:
+            self.session.commit()
+            logging.info("Final commit completed")
+        except Exception as err:
+            logging.error("Final commit error: %s", err)
+            self.session.rollback()
+
         ScanService.static_is_importing = False
+
         # 全部导入完毕后，开始拉取书籍信息
-        AutoFillService().auto_fill_all(imported)
+        # 这个操作可能需要很长时间，在此之前已经释放了数据库连接
+        if imported:
+            logging.info("Starting auto-fill for %d imported books", len(imported))
+            AutoFillService().auto_fill_all(imported)

@@ -816,9 +816,10 @@ class BookReadingStats(BaseHandler):
 
 
 class LibraryStats(BaseHandler):
-    @js
-    def get(self):
-        """获取书库统计信息"""
+    _cache_data = None
+    _cache_time = 0
+
+    def _get_stats(self):
         import datetime
         from sqlalchemy import func, extract
         from ..models import Item
@@ -829,7 +830,7 @@ class LibraryStats(BaseHandler):
         current_month = now.month
 
         # 查询所有书籍ID
-        all_book_ids = list(self.calibre_db_cache.search(""))
+        all_book_ids = list(self.calibre_db_cache.all_book_ids())
         total_books = len(all_book_ids)
 
         # 从items表统计书籍类型
@@ -867,17 +868,47 @@ class LibraryStats(BaseHandler):
             month_physical_count = month_physical_books if month_physical_books else 0
 
         return {
-            "err": "ok",
-            "stats": {
-                "total_books": total_books,
-                "ebook_count": ebook_count,
-                "physical_count": physical_count,
-                "month_ebook_count": month_ebook_count,
-                "month_physical_count": month_physical_count,
-                "current_year": current_year,
-                "current_month": current_month
-            }
+            "total_books": total_books,
+            "ebook_count": ebook_count,
+            "physical_count": physical_count,
+            "month_ebook_count": month_ebook_count,
+            "month_physical_count": month_physical_count,
         }
+
+    @js
+    def get(self):
+        """获取书库统计信息"""
+        import datetime
+        now = datetime.datetime.now()
+        current_year = now.year
+        current_month = now.month
+
+        stats = None
+        # check cache
+        if time.time() - LibraryStats._cache_time < 30 and LibraryStats._cache_data:
+            stats = LibraryStats._cache_data
+        else:
+            try:
+                stats = self._get_stats()
+                LibraryStats._cache_data = stats
+                LibraryStats._cache_time = time.time()
+            except Exception as e:
+                logging.error("Failed to get library stats: %s", e)
+                if LibraryStats._cache_data:
+                    stats = LibraryStats._cache_data
+                else:
+                    # fallback to empty stats
+                    stats = {
+                        "total_books": 0,
+                        "ebook_count": 0,
+                        "physical_count": 0,
+                        "month_ebook_count": 0,
+                        "month_physical_count": 0,
+                    }
+
+        stats["current_year"] = current_year
+        stats["current_month"] = current_month
+        return {"err": "ok", "stats": stats}
 
 
 class BookReadingState(BaseHandler):
