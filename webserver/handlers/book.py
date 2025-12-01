@@ -69,7 +69,7 @@ class BookDetail(BaseHandler):
         book = None
         try:
             book_id = int(bid)
-            book = self.get_book(book_id)
+            book = self.get_book(book_id, raise_exception=False)
         except Exception as e:
             logging.error("get book %s failed: %s" % (bid, e))
 
@@ -118,7 +118,7 @@ class BookTags(BaseHandler):
     @auth
     def post(self, id):
         book_id = int(id)
-        book = self.get_book(book_id)
+        book = self.get_book(book_id, raise_exception=False)
         if not book:
             return {"err": "params.book.invalid", "msg": _(u"书籍不存在")}
 
@@ -159,14 +159,13 @@ class BookConverter(BaseHandler):
     @auth
     def post(self, id):
         book_id = int(id)
-        book = self.get_book(book_id)
+        book = self.get_book(book_id, raise_exception=False)
         if not book:
             return {"err": "params.book.invalid", "msg": _(u"书籍不存在")}
 
         if not self.is_admin() and not self.is_book_owner(book_id, self.user_id()):
             return {"err": "user.no_permission", "msg": _(u"无权限")}
 
-        book = self.get_book(book_id)
         fmts = []
         paths = []
         for fmt in ["epub", "azw3", "mobi", "azw", "txt"]:
@@ -197,7 +196,9 @@ class BookSetSole(BaseHandler):
     @js
     @auth
     def post(self, bid):
-        book = self.get_book(bid)
+        book = self.get_book(bid, raise_exception=False)
+        if not book:
+            return {"err": "params.book.invalid", "msg": _(u"书籍已不存在")}
         bid = book["id"]
         if isinstance(book["collector"], dict):
             cid = book["collector"]["id"]
@@ -477,9 +478,9 @@ class BookFavorite(BaseHandler):
     def post(self, id):
         """设置或取消收藏某本书"""
         book_id = int(id)
-        book = self.get_book(book_id)
+        book = self.get_book(book_id, raise_exception=False)
         if not book:
-            return {"err": "params.book.invalid", "msg": _(u"书籍不存在")}
+            return {"err": "params.book.invalid", "msg": _(u"书籍已不存在")}
 
         user_id = self.user_id()
         data = tornado.escape.json_decode(self.request.body)
@@ -515,7 +516,9 @@ class BookFavorite(BaseHandler):
         ).order_by(ReadingState.favorite_date.desc()).all()
         favorite_books = []
         for state in reading_states:
-            book = self.get_book(state.book_id)
+            book = self.get_book(state.book_id, raise_exception=False)
+            if not book:
+                continue
             book_data = utils.BookFormatter(self, book).format()
             book_data["state"] = utils.ReadingStateFormatter.format_reading_state(state)
             favorite_books.append(book_data)
@@ -532,9 +535,9 @@ class BookWantToRead(BaseHandler):
     def post(self, id):
         """设置或取消待读某本书"""
         book_id = int(id)
-        book = self.get_book(book_id)
+        book = self.get_book(book_id, raise_exception=False)
         if not book:
-            return {"err": "params.book.invalid", "msg": _(u"书籍不存在")}
+            return {"err": "params.book.invalid", "msg": _(u"书籍已不存在")}
 
         user_id = self.user_id()
         data = tornado.escape.json_decode(self.request.body)
@@ -569,7 +572,9 @@ class BookWantToRead(BaseHandler):
         ).order_by(ReadingState.wants_date.desc()).all()
         favorite_books = []
         for state in reading_states:
-            book = self.get_book(state.book_id)
+            book = self.get_book(state.book_id, raise_exception=False)
+            if not book:
+                continue
             book_data = utils.BookFormatter(self, book).format()
             book_data["state"] = utils.ReadingStateFormatter.format_reading_state(state)
             favorite_books.append(book_data)
@@ -593,7 +598,9 @@ class BookReading(BaseHandler):
         ).order_by(ReadingState.read_date.desc()).all()
         reading_books = []
         for state in reading_states:
-            book = self.get_book(state.book_id)
+            book = self.get_book(state.book_id, raise_exception=False)
+            if not book:
+                continue
             book_data = utils.BookFormatter(self, book).format()
             book_data["state"] = utils.ReadingStateFormatter.format_reading_state(state)
             reading_books.append(book_data)
@@ -705,7 +712,9 @@ class BookReadDone(BaseHandler):
         ).order_by(ReadingState.read_date.desc()).all()
         read_done_books = []
         for state in reading_states:
-            book = self.get_book(state.book_id)
+            book = self.get_book(state.book_id, raise_exception=False)
+            if not book:
+                continue
             book_data = utils.BookFormatter(self, book).format()
             book_data["state"] = utils.ReadingStateFormatter.format_reading_state(state)
             read_done_books.append(book_data)
@@ -769,7 +778,9 @@ class BookReadingStats(BaseHandler):
 
         month_read_done_books = []
         for state in month_read_done_states:
-            book = self.get_book(state.book_id)
+            book = self.get_book(state.book_id, raise_exception=False)
+            if not book:
+                continue
             book_data = utils.BookFormatter(self, book).format()
             book_data["state"] = utils.ReadingStateFormatter.format_reading_state(state)
             month_read_done_books.append(book_data)
@@ -782,7 +793,9 @@ class BookReadingStats(BaseHandler):
 
         current_reading_books = []
         for state in current_reading_states:
-            book = self.get_book(state.book_id)
+            book = self.get_book(state.book_id, raise_exception=False)
+            if not book:
+                continue
             book_data = utils.BookFormatter(self, book).format()
             book_data["state"] = utils.ReadingStateFormatter.format_reading_state(state)
             current_reading_books.append(book_data)
@@ -873,9 +886,9 @@ class BookReadingState(BaseHandler):
     def post(self, id):
         """设置某本书的阅读状态"""
         book_id = int(id)
-        book = self.get_book(book_id)
+        book = self.get_book(book_id, raise_exception=False)
         if not book:
-            return {"err": "params.book.invalid", "msg": _(u"书籍不存在")}
+            return {"err": "params.book.invalid", "msg": _(u"书籍已不存在")}
 
         user_id = self.user_id()
         data = tornado.escape.json_decode(self.request.body)
@@ -928,7 +941,9 @@ class BookEdit(BaseHandler):
     @js
     @auth
     def post(self, bid):
-        book = self.get_book(bid)
+        book = self.get_book(bid, raise_exception=False)
+        if not book:
+            return {"err": "params.book.invalid", "msg": _(u"书籍已不存在")}
         bid = book["id"]
         if isinstance(book["collector"], dict):
             cid = book["collector"]["id"]
@@ -1470,7 +1485,9 @@ class BookRead(BaseHandler):
             else:
                 raise web.HTTPError(403, reason=_(u"无权在线阅读"))
 
-        book = self.get_book(id)
+        book = self.get_book(id, raise_exception=False)
+        if not book:
+            return {"err": "params.book.invalid", "msg": _(u"书籍已不存在")}
         book_id = book["id"]
         self.user_history("read_history", book)
         self.count_increase(book_id, count_download=1)
@@ -1593,7 +1610,9 @@ class BookPush(BaseHandler):
         if not mail_to:
             return {"err": "params.error", "msg": _(u"参数错误")}
 
-        book = self.get_book(id)
+        book = self.get_book(id, raise_exception=False)
+        if not book:
+            return {"err": "params.book.invalid", "msg": _(u"书籍已不存在")}
         book_id = book["id"]
 
         self.user_history("push_history", book)
@@ -1624,9 +1643,9 @@ class BookPush(BaseHandler):
 class BookSuggestion(ListHandler):
     @js
     def get(self, id):
-        book = self.get_book(id)
+        book = self.get_book(id, raise_exception=False)
         if not book:
-            return {"err": "params.book.invalid", "msg": _(u"书籍不存在")}
+            return {"err": "params.book.invalid", "msg": _(u"书籍已不存在")}
 
         tags = book.get("tags", [])
         similar_books = []
@@ -1654,9 +1673,9 @@ class BookSendToDevice(BaseHandler):
     def post(self, bid):
         """发送书籍到指定设备"""
         book_id = int(bid)
-        book = self.get_book(book_id)
+        book = self.get_book(book_id, raise_exception=False)
         if not book:
-            return {"err": "book.not_found", "msg": _(u"书籍不存在")}
+            return {"err": "book.not_found", "msg": _(u"书籍已不存在")}
 
         # 检查用户权限
         if not CONF["ALLOW_GUEST_PUSH"]:
@@ -1772,9 +1791,9 @@ class BookSperate(BaseHandler):
         from calibre.ebooks.metadata.meta import get_metadata
 
         book_id = int(bid)
-        book = self.get_book(book_id)
+        book = self.get_book(book_id, raise_exception=False)
         if not book:
-            return {"err": "params.book.invalid", "msg": _(u"书籍不存在")}
+            return {"err": "params.book.invalid", "msg": _(u"书籍已不存在")}
 
         if isinstance(book["collector"], dict):
             cid = book["collector"]["id"]
@@ -1897,9 +1916,9 @@ class BookExchangeType(BaseHandler):
 
         for book_id in idlist:
             try:
-                book = self.get_book(book_id)
+                book = self.get_book(book_id, raise_exception=False)
                 if not book:
-                    results.append({"book_id": book_id, "status": "not_found", "msg": _(u"书籍不存在")})
+                    results.append({"book_id": book_id, "status": "not_found", "msg": _(u"书籍已不存在")})
                     skip_count += 1
                     continue
 
