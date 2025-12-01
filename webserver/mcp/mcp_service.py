@@ -18,6 +18,7 @@ from mcp.server import Server
 from mcp.types import Tool, TextContent
 from webserver.handlers.base import BaseHandler
 from webserver.utils import MCPBookFormatter
+from webserver.services.book_search import BookSearch
 from webserver import loader
 
 CONF = loader.get_settings()
@@ -458,6 +459,70 @@ class MCPService:
             logging.error(error_msg)
             return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
 
+    async def query_book_metadata(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
+        """Query book metadata from external sources (Douban, Baidu Baike, Youshu) by title or ISBN."""
+        # 验证token
+        user_info = self._require_auth(arguments)
+        if not user_info:
+            return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Authentication required"}))]
+
+        try:
+            title = arguments.get("title", "").strip()
+            isbn = arguments.get("isbn", "").strip()
+
+            if not title and not isbn:
+                return [TextContent(type="text", text=json.dumps({
+                    "status": "error",
+                    "message": "At least one of 'title' or 'isbn' is required"
+                }))]
+
+            # 使用BookSearch查询图书元数据
+            books = BookSearch.plugin_search_books(title=title if title else None, isbn=isbn if isbn else None)
+
+            if not books:
+                return [TextContent(type="text", text=json.dumps({
+                    "status": "success",
+                    "message": "No books found from external sources",
+                    "books": []
+                }))]
+
+            # 格式化返回结果
+            formatted_books = []
+            for book in books:
+                book_info = {
+                    "title": book.get("title", ""),
+                    "authors": book.get("authors", []),
+                    "author_sort": book.get("author_sort", ""),
+                    "publisher": book.get("publisher", ""),
+                    "isbn": book.get("isbn", ""),
+                    "isbn13": book.get("isbn13", ""),
+                    "comments": book.get("comments", ""),
+                    "tags": book.get("tags", []),
+                    "rating": book.get("rating", 0),
+                    "pubdate": str(book.get("pubdate", "")) if book.get("pubdate") else "",
+                    "cover_url": book.get("cover_url", ""),
+                    "source": book.get("source", ""),
+                    "provider_key": book.get("provider_key", ""),
+                    "provider_value": book.get("provider_value", "")
+                }
+                formatted_books.append(book_info)
+
+            result = {
+                "status": "success",
+                "message": f"Found {len(formatted_books)} book(s) from external sources",
+                "books": formatted_books,
+                "queried_by": user_info["username"]
+            }
+
+            logging.info(f"Book metadata query by {user_info['username']}: title='{title}', isbn='{isbn}', found={len(formatted_books)} results")
+            return [TextContent(type="text", text=json.dumps(result))]
+
+        except Exception as e:
+            error_msg = f"Error querying book metadata: {str(e)}"
+            logging.error(error_msg)
+            logging.error(traceback.format_exc())
+            return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
+
     async def get_books_count(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
         """Get the current count of books in the collection."""
         # 验证token
@@ -620,6 +685,39 @@ class MCPService:
                     },
                     "required": ["book_id"]
                 }
+            ),
+            Tool(
+                name="query_book_metadata",
+                description="Query book metadata from external sources (Douban, Baidu Baike, Youshu) by title or ISBN. "
+                            "This is useful for finding book information before adding it to the collection or updating existing books." + self.need_login_prompt + "\n\n"
+                            "Returns a list of books with metadata including:\n"
+                            "- title: Book title\n"
+                            "- authors: List of authors\n"
+                            "- publisher: Publisher name\n"
+                            "- isbn/isbn13: ISBN numbers\n"
+                            "- comments: Book description\n"
+                            "- tags: List of tags\n"
+                            "- rating: Rating (0-10)\n"
+                            "- pubdate: Publication date\n"
+                            "- cover_url: Cover image URL\n"
+                            "- source: Data source (douban/baike/youshu)\n",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "title": {
+                            "type": "string",
+                            "description": "Book title to search for"
+                        },
+                        "isbn": {
+                            "type": "string",
+                            "description": "ISBN number to search for"
+                        }
+                    },
+                    "anyOf": [
+                        {"required": ["title"]},
+                        {"required": ["isbn"]}
+                    ]
+                }
             )
         ]
         if self.need_login:
@@ -777,6 +875,9 @@ class MCPService:
                     return self._create_tool_result(request_id, result[0].text)
                 elif tool_name == "update_book_info":
                     result = await self.update_book_info(arguments)
+                    return self._create_tool_result(request_id, result[0].text)
+                elif tool_name == "query_book_metadata":
+                    result = await self.query_book_metadata(arguments)
                     return self._create_tool_result(request_id, result[0].text)
                 else:
                     return self._create_jsonrpc_response(
