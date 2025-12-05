@@ -29,4 +29,3 @@ mcp>=1.0.0
 Pillow
 pyzbar
 requests_toolbelt
-vllm==0.11.2
