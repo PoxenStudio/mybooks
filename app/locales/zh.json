@@ -450,7 +450,7 @@
         "ssl_certificate_management": "SSL证书管理",
         "social_network_login": "社交网络登录",
         "save": "保存",
-        "save_hints": "注意：保存将会重启服务，当前正进行的后台信息，如导入及联网更新信息等任务将会中断！",
+        "save_hints": "注意：保存将会重启服务，当前正进行的后台处理，如导入及联网更新信息等任务将会中断！",
         "switch_language_to": "切换语言为",
         "save_error": "保存失败！",
         "save_success": "保存成功！可能需要5~10秒钟生效！",
