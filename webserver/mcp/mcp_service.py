@@ -287,7 +287,8 @@ class MCPService:
         create_time = arguments.get("create_time", "")
 
         if not any([name, rating, tags, isbn, create_time]):
-            return [TextContent(type="text", text=json.dumps({"status": "error", "message": "At least one search parameter is required"}))]
+            return [TextContent(type="text",
+                                text=json.dumps({"status": "error", "message": "At least one search parameter is required"}))]
 
         include_comments = arguments.get("include_comments", False)
         title = _(u"搜索结果")
@@ -352,7 +353,8 @@ class MCPService:
         except Exception as e:
             logging.error(f"Error processing book: {e}")
             logging.error(traceback.format_exc())
-            return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Search books failed: %s" % str(e)}))]
+            return [TextContent(type="text",
+                                text=json.dumps({"status": "error", "message": "Search books failed: %s" % str(e)}))]
 
     async def update_book_info(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
         """更新书籍详细信息"""
@@ -514,7 +516,8 @@ class MCPService:
                 "queried_by": user_info["username"]
             }
 
-            logging.info(f"Book metadata query by {user_info['username']}: title='{title}', isbn='{isbn}', found={len(formatted_books)} results")
+            logging.info(f"Book metadata query by {user_info['username']}: title='{title}', isbn='{isbn}', "
+                         f"found={len(formatted_books)} results")
             return [TextContent(type="text", text=json.dumps(result))]
 
         except Exception as e:
@@ -689,7 +692,8 @@ class MCPService:
             Tool(
                 name="query_book_metadata",
                 description="Query book metadata from external sources (Douban, Baidu Baike, Youshu) by title or ISBN. "
-                            "This is useful for finding book information before adding it to the collection or updating existing books." + self.need_login_prompt + "\n\n"
+                            "This is useful for finding book information before adding it to the collection or "
+                            "updating existing books." + self.need_login_prompt + "\n\n"
                             "Returns a list of books with metadata including:\n"
                             "- title: Book title\n"
                             "- authors: List of authors\n"
