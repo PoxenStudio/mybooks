@@ -149,9 +149,8 @@ def make_app():
 
     if auth_db_path.startswith("sqlite"):
         @event.listens_for(engine, "connect")
-        def set_sqlite_pragma(dbapi_connection, connection_record):
-            cursor = dbapi_connection.cursor()
-            cursor.execute("PRAGMA journal_mode=WAL")
+        def set_sqlite_pragma(db_connection, connection_record):
+            cursor = db_connection.cursor()
             cursor.execute("PRAGMA busy_timeout=30000")
             cursor.close()
 
