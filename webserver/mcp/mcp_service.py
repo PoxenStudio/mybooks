@@ -19,6 +19,7 @@ from mcp.types import Tool, TextContent
 from webserver.handlers.base import BaseHandler
 from webserver.utils import MCPBookFormatter
 from webserver.services.book_search import BookSearch
+from webserver.services.autofill import AutoFillService
 from webserver import loader
 
 CONF = loader.get_settings()
@@ -526,6 +527,172 @@ class MCPService:
             logging.error(traceback.format_exc())
             return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
 
+    async def auto_fill_book_info(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
+        """Auto-fill book information from online sources."""
+        # 验证token
+        user_info = self._require_auth(arguments)
+        if not user_info:
+            return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Authentication required"}))]
+
+        try:
+            book_ids = arguments.get("book_ids")
+            title = arguments.get("title", "").strip()
+
+            # 如果提供了title，先搜索对应的书籍
+            if title and not book_ids:
+                # 搜索匹配的书籍
+                search_ids = self.base_handler.calibre_db_cache.search(title)
+
+                if not search_ids:
+                    return [TextContent(type="text", text=json.dumps({
+                        "status": "error",
+                        "message": f"No books found with title: {title}"
+                    }))]
+
+                if len(search_ids) == 1:
+                    # 只有一本书，自动更新
+                    book_ids = [list(search_ids)[0]]
+                else:
+                    # 有多本书，返回列表让用户选择
+                    book_list = []
+                    for bid in list(search_ids)[:20]:  # 最多返回20本
+                        try:
+                            book = self.base_handler.get_book(bid)
+                            book_list.append({
+                                "id": book["id"],
+                                "title": book["title"],
+                                "authors": book.get("authors", []),
+                                "publisher": book.get("publisher", ""),
+                                "isbn": book.get("isbn", "")
+                            })
+                        except Exception as e:
+                            logging.error(f"Error getting book {bid}: {e}")
+
+                    return [TextContent(type="text", text=json.dumps({
+                        "status": "multiple_found",
+                        "message": f"Found {len(search_ids)} books with title '{title}'. Please specify book_ids to update.",
+                        "books": book_list,
+                        "total": len(search_ids)
+                    }))]
+
+            # 验证book_ids参数
+            if not book_ids:
+                return [TextContent(type="text", text=json.dumps({
+                    "status": "error",
+                    "message": "Either book_ids or title parameter is required"
+                }))]
+
+            # 确保book_ids是列表
+            if not isinstance(book_ids, list):
+                book_ids = [book_ids]
+
+            # 检查用户权限
+            from webserver.models import Reader
+            user = self.base_handler.sqlite_session.query(Reader).get(user_info["user_id"])
+            if not user:
+                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "User not found"}))]
+
+            if not user.can_edit():
+                return [TextContent(type="text", text=json.dumps({
+                    "status": "error",
+                    "message": "Permission denied: cannot edit books"
+                }))]
+
+            # 处理每本书的自动填充
+            results = []
+            success_count = 0
+            failed_count = 0
+            skipped_count = 0
+
+            autofill_service = AutoFillService()
+
+            for book_id in book_ids:
+                try:
+                    # 验证书籍ID
+                    book_id = int(book_id)
+
+                    # 检查书籍是否存在
+                    try:
+                        book = self.base_handler.get_book(book_id)
+                    except Exception as e:
+                        results.append({
+                            "book_id": book_id,
+                            "status": "error",
+                            "message": f"Book not found: {str(e)}"
+                        })
+                        failed_count += 1
+                        continue
+
+                    # 检查权限（管理员或书籍拥有者）
+                    if not (user.is_admin() or self.base_handler.is_book_owner(book_id, user_info["user_id"])):
+                        results.append({
+                            "book_id": book_id,
+                            "title": book.get("title", ""),
+                            "status": "error",
+                            "message": "Permission denied: not book owner or admin"
+                        })
+                        skipped_count += 1
+                        continue
+
+                    # 执行自动填充
+                    success = autofill_service.auto_fill(book_id)
+
+                    if success:
+                        results.append({
+                            "book_id": book_id,
+                            "title": book.get("title", ""),
+                            "status": "success",
+                            "message": "Book information updated successfully"
+                        })
+                        success_count += 1
+                    else:
+                        results.append({
+                            "book_id": book_id,
+                            "title": book.get("title", ""),
+                            "status": "failed",
+                            "message": "Failed to retrieve online information or no update needed"
+                        })
+                        failed_count += 1
+
+                except ValueError:
+                    results.append({
+                        "book_id": book_id,
+                        "status": "error",
+                        "message": "Invalid book ID format"
+                    })
+                    failed_count += 1
+                except Exception as e:
+                    logging.error(f"Error auto-filling book {book_id}: {e}")
+                    logging.error(traceback.format_exc())
+                    results.append({
+                        "book_id": book_id,
+                        "status": "error",
+                        "message": str(e)
+                    })
+                    failed_count += 1
+
+            result = {
+                "status": "completed",
+                "message": f"Processed {len(book_ids)} book(s): {success_count} succeeded, {failed_count} failed, {skipped_count} skipped",
+                "summary": {
+                    "total": len(book_ids),
+                    "success": success_count,
+                    "failed": failed_count,
+                    "skipped": skipped_count
+                },
+                "results": results,
+                "updated_by": user_info["username"]
+            }
+
+            logging.info(f"Auto-fill completed by {user_info['username']}: {success_count}/{len(book_ids)} succeeded")
+            return [TextContent(type="text", text=json.dumps(result))]
+
+        except Exception as e:
+            error_msg = f"Error in auto-fill operation: {str(e)}"
+            logging.error(error_msg)
+            logging.error(traceback.format_exc())
+            return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
+
     async def get_books_count(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
         """Get the current count of books in the collection."""
         # 验证token
@@ -722,6 +889,39 @@ class MCPService:
                         {"required": ["isbn"]}
                     ]
                 }
+            ),
+            Tool(
+                name="auto_fill_book_info",
+                description="Automatically update book information from online sources (Douban, Baike, etc.). "
+                            "This tool fetches and fills missing metadata including cover, description, tags, "
+                            "publisher, and other details." + self.need_login_prompt + "\n\n"
+                            "You can specify either book_ids or title:\n"
+                            "- book_ids: Array of book IDs to update (can be a single ID or multiple IDs)\n"
+                            "- title: Book title to search. If only one book matches, it will be auto-updated. "
+                            "If multiple books match, a list will be returned for you to choose specific IDs.\n\n"
+                            "Returns:\n"
+                            "- When using title with multiple matches: list of books for selection\n"
+                            "- When updating: summary of success/failed/skipped books with details for each book",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "book_ids": {
+                            "type": ["array", "integer", "string"],
+                            "description": "Book ID(s) to auto-fill. Can be a single ID or an array of IDs",
+                            "items": {
+                                "type": ["integer", "string"]
+                            }
+                        },
+                        "title": {
+                            "type": "string",
+                            "description": "Book title to search for. If one book found, auto-update. If multiple found, return list for selection."
+                        }
+                    },
+                    "anyOf": [
+                        {"required": ["book_ids"]},
+                        {"required": ["title"]}
+                    ]
+                }
             )
         ]
         if self.need_login:
@@ -882,6 +1082,9 @@ class MCPService:
                     return self._create_tool_result(request_id, result[0].text)
                 elif tool_name == "query_book_metadata":
                     result = await self.query_book_metadata(arguments)
+                    return self._create_tool_result(request_id, result[0].text)
+                elif tool_name == "auto_fill_book_info":
+                    result = await self.auto_fill_book_info(arguments)
                     return self._create_tool_result(request_id, result[0].text)
                 else:
                     return self._create_jsonrpc_response(
