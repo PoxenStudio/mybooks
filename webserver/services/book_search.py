@@ -56,7 +56,7 @@ class BookSearch:
 
         # 清理标题，移除括号及其内容
         if title:
-            clean_title = re.sub(u"[(（].*", "", title)
+            clean_title = re.sub(u"[(（].*《》<>", "", title)
         else:
             clean_title = ""
 

@@ -462,7 +462,7 @@ class MCPService:
             return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
 
     async def query_book_metadata(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
-        """Query book metadata from external sources (Douban, Baidu Baike, Youshu) by title or ISBN."""
+        """Query book metadata online by title or ISBN."""
         # 验证token
         user_info = self._require_auth(arguments)
         if not user_info:
@@ -484,7 +484,7 @@ class MCPService:
             if not books:
                 return [TextContent(type="text", text=json.dumps({
                     "status": "success",
-                    "message": "No books found from external sources",
+                    "message": "No books found from online resource",
                     "books": []
                 }))]
 
@@ -511,7 +511,7 @@ class MCPService:
 
             result = {
                 "status": "success",
-                "message": f"Found {len(formatted_books)} book(s) from external sources",
+                "message": f"Found {len(formatted_books)} book(s) online",
                 "books": formatted_books,
                 "queried_by": user_info["username"]
             }
@@ -691,7 +691,7 @@ class MCPService:
             ),
             Tool(
                 name="query_book_metadata",
-                description="Query book metadata from external sources (Douban, Baidu Baike, Youshu) by title or ISBN. "
+                description="Query book metadata online by title or ISBN. "
                             "This is useful for finding book information before adding it to the collection or "
                             "updating existing books." + self.need_login_prompt + "\n\n"
                             "Returns a list of books with metadata including:\n"
