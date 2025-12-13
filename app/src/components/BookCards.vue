@@ -1,6 +1,6 @@
 <template>
     <v-row>
-        <v-col cols=12 xs=12 sm=6 md=4 v-for="(book,idx) in render_books" :key="idx+'-books-'+book.id" class="book-list-card">
+        <v-col cols=12 xs=12 sm=6 md=4 lg=3 v-for="(book,idx) in render_books" :key="idx+'-books-'+book.id" class="book-list-card">
             <v-card :to="book.href" >
                 <v-row>
                     <v-col cols=3 class='col-book-img'>
