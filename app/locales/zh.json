@@ -489,7 +489,9 @@
         "ai_model": "AI模型",
         "ai_mcp_token": "MCP访问令牌",
         "ai_mcp_token_generated": "MCP访问令牌已生成",
-        "ai_mcp_token_generate_failed": "生成MCP访问令牌失败"
+        "ai_mcp_token_generate_failed": "生成MCP访问令牌失败",
+        "main_page_recent_count": "首页 - 最近图书显示数量",
+        "main_page_random_count": "首页 - 随机推荐图书数量 (为0时隐藏)"
     },
     "user": {
         "avatar": "头像",

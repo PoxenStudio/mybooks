@@ -362,7 +362,9 @@
         "device_type_hanwang": "Hanwang Reader",
         "device_type_boox": "Boox Reader",
         "device_type_dangdang": "Dangdang Reader",
-        "ai_capability": "AI Assistant"
+        "ai_capability": "AI Assistant",
+        "main_page_recent_count": "Main Page - Recent Updates Count",
+        "main_page_random_count": "Main Page - Random Recommendations Count"
     },
     "book": {
         "edit": {

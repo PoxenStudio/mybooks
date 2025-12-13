@@ -232,6 +232,11 @@ class AdminSettings(BaseHandler):
             CONF["BOOKBARN_COLLECTION_HOUR"] = 3
         if CONF.get("ENABLE_RECEIVING_BOOKS", None) is None:
             CONF["ENABLE_RECEIVING_BOOKS"] = CONF.get("ENABLE_BOOKBARN", False)
+    
+        if CONF.get("MAIN_PAGE_RANDOM_COUNT", -1) == -1:
+            CONF["MAIN_PAGE_RANDOM_COUNT"] = 12
+        if CONF.get("MAIN_PAGE_RECENT_COUNT", -1) == -1:
+            CONF["MAIN_PAGE_RECENT_COUNT"] = 12
 
         CONF["site_icon"] = "favicon_0"  # default icon, means use current favicon.ico
 
@@ -319,7 +324,9 @@ class AdminSettings(BaseHandler):
             "LAST_REVISION",
             "DEVICES",
             "AI_MODEL",
-            "AI_MCP_TOKEN"
+            "AI_MCP_TOKEN",
+            "MAIN_PAGE_RANDOM_COUNT",
+            "MAIN_PAGE_RECENT_COUNT"
         ]
 
         current_icon = CONF.get("site_icon", "favicon_0")  # favicon_0 means use current icon

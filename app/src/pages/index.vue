@@ -33,7 +33,7 @@
         </v-col>
     </v-row>
 
-    <v-row>
+    <v-row v-if="random_books.length > 0">
         <v-col cols=12>
             <p class="ma-0 title">{{ $t('index.randomRecommendation') }}</p>
         </v-col>
@@ -56,7 +56,7 @@
         </v-col>
     </v-row>
     <v-row>
-        <v-col cols=12>
+        <v-col cols=12 v-if="random_books.length > 0">
             <v-divider class="new-legend"></v-divider>
             <p class="ma-0 title">{{ $t('index.newRecommendation') }}</p>
         </v-col>
@@ -211,7 +211,7 @@ export default {
         if ( res !== undefined ) {
             res.setHeader('Cache-Control', 'no-cache');
         }
-        return app.$backend("/index?random=12&recent=12");
+        return app.$backend("/index");
     },
     data: () => ({
         random_books: [],

@@ -227,7 +227,15 @@ export default {
             items: Array.from({ length: 9 }, (_, i) => ({ image_file: "favicon_" + i.toString(), value: "favicon_" + i.toString() }))
           },
           { icon: "mdi-copyright", key: "HEADER", label: "settings.site_header", type: 'textarea' },
-          { icon: "mdi-copyright", key: "FOOTER", label: "settings.site_footer", type: 'textarea' }
+          { icon: "mdi-copyright", key: "FOOTER", label: "settings.site_footer", type: 'textarea' },
+          {
+            icon: "mdi-shuffle", key: "MAIN_PAGE_RANDOM_COUNT", label: "settings.main_page_random_count", type: 'select',
+            items: [0, 12, 24, 48].map(v => ({ text: String(v), value: v }))
+          },
+          {
+            icon: "mdi-book-multiple", key: "MAIN_PAGE_RECENT_COUNT", label: "settings.main_page_recent_count", type: 'select',
+            items: [12, 24, 48, 96, 192].map(v => ({ text: String(v), value: v }))
+          },
         ],
         groups: [
           {
@@ -395,6 +403,7 @@ export default {
         if (process.client && this.settings['CHUNK_UPLOAD_SIZE'] !== '') {
           localStorage.setItem('chunk_upload_size', this.settings['CHUNK_UPLOAD_SIZE']);
         }
+        console.log("Loaded settings:", this.settings);
         var m = {}
         rsp.sns.forEach(function (ele) {
           m[ele.value] = ele;
