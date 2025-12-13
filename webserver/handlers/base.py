@@ -324,6 +324,8 @@ class BaseHandler(web.RequestHandler):
         logging.info("LOGIN: %s - %d - %s" % (self.request.remote_ip, user.id, user.username))
         self.set_secure_cookie("user_id", str(user.id))
         self.set_secure_cookie("lt", str(int(time.time())))
+        # 确保user对象在当前会话中，避免"already attached to session"错误
+        user = self.sqlite_session.merge(user)
         user.access_time = datetime.datetime.now()
         user.extra["login_ip"] = self.request.remote_ip
         user.save()

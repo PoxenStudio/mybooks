@@ -28,6 +28,7 @@ from webserver.version import VERSION
 CONF = loader.get_settings()
 USER_UPDATE_TS_MAP = {}
 ENABLE_VIP_QUOTA_KEY = "ENABLE_VIP_QUOTA"
+DEFAULT_GOOGLE_ANALYTICS_ID = "G-LLF01B5ZZ8"
 
 
 class AdminUsers(BaseHandler):
@@ -185,11 +186,13 @@ class AdminOwnerMode(BaseHandler):
 class SettingsSaverLogic:
     def update_nuxtjs_env(self):
         # update nuxtjs .env file
+        if CONF.get("google_analytics_id", "").strip() == DEFAULT_GOOGLE_ANALYTICS_ID:
+            CONF["google_analytics_id"] = ""  # disable it by default
+
         nuxtjs_env = """
 TITLE="%(site_title)s"
 TITLE_TEMPLATE="%%s | %(site_title)s"
 GOOGLE_ANALYTICS_ID=%(google_analytics_id)s
-
 """
         with open(CONF["nuxt_env_path"], "w") as f:
             f.write(nuxtjs_env % CONF)
