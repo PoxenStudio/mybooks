@@ -1006,6 +1006,11 @@ class BookEdit(BaseHandler):
         if "tags" in data and not data["tags"]:
             self.calibre_db.set_tags(bid, [])
 
+        if "category" in data:
+            category = data["category"].strip()
+            # Use set_field directly on the cache to avoid Metadata object issues
+            self.calibre_db_cache.set_field('#category', {bid: category})
+
         self.calibre_db.set_metadata(bid, mi)
         return {"err": "ok", "msg": _(u"更新成功")}
 

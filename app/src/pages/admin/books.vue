@@ -213,7 +213,7 @@
                     <span v-else> - </span>
                     <template v-slot:input>
                         <div class="mt-4 text-h6">修改字段</div>
-                        <v-text-field :label="$t('admin.books.category')" v-model="item.category" color="yellow accent-4" length="10" dense></v-text-field>
+                        <v-select :items="categories" :label="$t('admin.books.category')" v-model="item.category" color="yellow accent-4" dense></v-select>
                     </template>
                 </v-edit-dialog>
             </template>
@@ -376,6 +376,7 @@ export default {
             { text: "数量", sortable: false, value: "book_count", width: "70px" },
             { text: "书名", sortable: true, value: "title" },
             { text: "作者", sortable: true, value: "author", width: "100px" },
+            { text: "分类", sortable: false, value: "category"},
             { text: "评分", sortable: false, value: "rating", width: "60px" },
             { text: "出版社", sortable: false, value: "publisher" },
             { text: "标签", sortable: true, value: "tags", width: "100px" },
@@ -389,9 +390,11 @@ export default {
             count_failed: 0,
             count_skipped: 0,
         },
+        categories: [],
     }),
     created() {
         this.checkCurrentState();
+        this.getSettings();
     },
     watch: {
         options: {
@@ -648,6 +651,21 @@ export default {
                     this.progress.count_skipped = 0;
                 }
             })
+        },
+        async getSettings() {
+            try {
+                const response = await this.$backend('/admin/settings');
+                if (response.err === 'ok' && response.settings) {
+                    if (response.settings.BOOK_NAV) {
+                        this.categories = response.settings.BOOK_NAV.split('\n').map(line => {
+                            const parts = line.split('=');
+                            return parts[0].trim();
+                        }).filter(c => c);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to get settings:', error);
+            }
         },
     },
 };
