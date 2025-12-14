@@ -136,6 +136,17 @@ export default {
                 return b;
             });
         },
+        indexPage() {
+            return this.$store.state.sys.indexPage;
+        },
+    },
+    watch: {
+        indexPage: {
+            handler: function(val) {
+                this.checkRedirect(val);
+            },
+            immediate: true
+        }
     },
     methods: {
         async loadLibraryStats() {
@@ -176,6 +187,13 @@ export default {
                 this.countdownTimer = null;
             }
         },
+        checkRedirect(type) {
+            if (type === 'all') {
+                this.$router.replace('/recent');
+            } else if (type === 'categories') {
+                this.$router.replace('/categories');
+            }
+        },
     },
     mounted() {
         this.loadLibraryStats();
@@ -199,11 +217,11 @@ export default {
     created() {
         this.$store.commit('navbar', true);
         this.navs = [
-            { icon: 'widgets',            href:'/nav',       text: this.$t('index.categoryNavigation'),  count: this.$store.state.sys.books      },
-            { icon: 'mdi-account-group',  href:'/author',    text: this.$t('index.authors'),     count: this.$store.state.sys.authors    },
-            { icon: 'mdi-home-group',     href:'/publisher', text: this.$t('index.publishers'),   count: this.$store.state.sys.publishers },
-            { icon: 'mdi-tag-heart',      href:'/tag',       text: this.$t('index.tags'),     count: this.$store.state.sys.tags       },
-            { icon: 'mdi-translate',      href:'/language',       text: this.$t('index.languages'),     count: this.$store.state.sys.languages       },
+            { icon: 'widgets',            href:'/nav',       text: this.$t('index.categoryNavigation'),  count: this.$store.state.sys.books},
+            { icon: 'mdi-account-group',  href:'/author',    text: this.$t('index.authors'),     count: this.$store.state.sys.authors},
+            { icon: 'mdi-home-group',     href:'/publisher', text: this.$t('index.publishers'),   count: this.$store.state.sys.publishers},
+            { icon: 'mdi-tag-heart',      href:'/tag',       text: this.$t('index.tags'),     count: this.$store.state.sys.tags},
+            { icon: 'mdi-translate',      href:'/language',       text: this.$t('index.languages'),     count: this.$store.state.sys.languages},
             { icon: 'mdi-history',        href:'/recent',    text: this.$t('index.allBooks'), },
             ]
     },
