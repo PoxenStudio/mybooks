@@ -159,6 +159,30 @@ class BookTags(BaseHandler):
             return {"err": "internal", "msg": _(u"更新标签时发生错误，请稍后再试")}
 
 
+
+class BookCategory(BaseHandler):
+    @js
+    @auth
+    def post(self, id):
+        book_id = int(id)
+        book = self.get_book(book_id, raise_exception=False)
+        if not book:
+            return {"err": "params.book.invalid", "msg": _(u"书籍不存在")}
+
+        if not self.is_admin() and not self.is_book_owner(book_id, self.user_id()):
+            return {"err": "user.no_permission", "msg": _(u"无权限")}
+
+        data = tornado.escape.json_decode(self.request.body)
+        category = data.get("category", "").strip()
+        logging.info(f"Updating category for book {book_id}: {category}")
+        try:
+            self.calibre_db_cache.set_field('#category', {book_id: category})
+            return {"err": "ok", "msg": _(u"分类更新成功")}
+        except Exception as e:
+            logging.error(f"Error updating category for book {book_id}: {e}")
+            return {"err": "internal", "msg": _(u"更新分类失败")}
+
+
 class BookConverter(BaseHandler):
     @js
     @auth
@@ -2021,6 +2045,7 @@ def routes():
         (r"/api/reading/stats", BookReadingStats),
         (r"/api/library/stats", LibraryStats),
         (r"/api/book/([0-9]+)/tags", BookTags),
+        (r"/api/book/([0-9]+)/category", BookCategory),
         (r"/api/book/([0-9]+)/suggestion", BookSuggestion),
         (r"/api/book/([0-9]+)/separate", BookSperate),
         (r"/api/book/exchange_type", BookExchangeType),

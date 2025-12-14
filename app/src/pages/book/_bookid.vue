@@ -453,21 +453,30 @@
                                 </v-chip>
                             </div>
                             <div class="tag-chips">
-                                <v-chip rounded small color="green">
-                                    <v-icon>category</v-icon>
-                                    {{ book.category }}
-                                    <v-icon color="indigo">edit</v-icon>
-                                </v-chip>
+                                <v-menu offset-y>
+                                    <template v-slot:activator="{ on, attrs }">
+                                        <v-chip rounded small color="green" v-bind="attrs" v-on="on">
+                                            <v-icon>category</v-icon>
+                                            {{ book.category || '未分类' }}
+                                            <v-icon color="indigo" small class="ml-1">edit</v-icon>
+                                        </v-chip>
+                                    </template>
+                                    <v-list dense>
+                                        <v-list-item v-for="(cat, index) in categories" :key="index" @click="setCategory(cat)">
+                                            <v-list-item-title>{{ cat }}</v-list-item-title>
+                                        </v-list-item>
+                                    </v-list>
+                                </v-menu>
                             </div>
                             <div class="tag-chips">
-                                    <template v-for="author in book.authors" :key="'author-' + author">
-                                        <v-chip
-                                            rounded
-                                            smallF
-                                            dark
-                                            color="indigo"
-                                            :to="'/author/' + encodeURIComponent(author)"
-                                        >
+                                <template v-for="author in book.authors" :key="'author-' + author">
+                                    <v-chip
+                                        rounded
+                                        smallF
+                                        dark
+                                        color="indigo"
+                                        :to="'/author/' + encodeURIComponent(author)"
+                                    >
                                         <v-icon>face</v-icon>
                                         {{ author }}
                                     </v-chip>
@@ -1030,6 +1039,7 @@ export default {
     data: () => ({
         err: "",
         msg: "",
+        categories: [],
         book: {id: 0, title: "", files: [], tags: [], pubdate: "", state: {favorite: 0, wants: 0, read_state: 0}},
         audios: {count: 0, files: [], status: "ok"},
         suggestionBooks: [],
@@ -1186,7 +1196,7 @@ export default {
         this.mail_to = this.$store.state.user.kindle_email;
         this.get_txt_parse_status();
         // 先加载设备列表，等待完成后再加载设备偏好
-        await this.loadDevices();
+        await this.getSettings();
 
         if (process.client) {
             this.mail_to = this.$cookies.get("last_mailto");
@@ -2006,19 +2016,46 @@ export default {
             }
         },
 
-        // 加载设备列表
-        async loadDevices() {
+        // 加载设置（设备列表和分类列表）
+        async getSettings() {
             if (this.$store.state.user?.is_login !== true) {
                 this.devices = [];
+                this.categories = [];
                 return;
             }
             try {
                 const response = await this.$backend('/admin/settings');
-                if (response.err === 'ok' && response.settings && response.settings.DEVICES) {
-                    this.devices = response.settings.DEVICES;
+                if (response.err === 'ok' && response.settings) {
+                    if (response.settings.DEVICES) {
+                        this.devices = response.settings.DEVICES;
+                    }
+                    if (response.settings.BOOK_NAV) {
+                        this.categories = response.settings.BOOK_NAV.split('\n').map(line => {
+                            const parts = line.split('=');
+                            return parts[0].trim();
+                        }).filter(c => c);
+                    }
                 }
             } catch (error) {
-                console.error('加载设备列表失败:', error);
+                console.error('Failed to get settings:', error);
+            }
+        },
+
+        async setCategory(category) {
+            try {
+                const response = await this.$backend(`/book/${this.book.id}/category`, {
+                    method: 'POST',
+                    body: JSON.stringify({ category: category }),
+                });
+                if (response.err === 'ok') {
+                    this.book.category = category;
+                    this.$alert('success', '分类更新成功');
+                } else {
+                    this.$alert('error', response.msg || '更新失败');
+                }
+            } catch (error) {
+                console.error('更新分类失败:', error);
+                this.$alert('error', '网络错误，请稍后重试');
             }
         },
 

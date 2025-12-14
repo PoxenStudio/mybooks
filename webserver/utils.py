@@ -32,6 +32,9 @@ class SimpleBookFormatter:
     def format(self, include_comments=True):
         b = self.book
         b["ts"] = b["timestamp"].strftime("%s")
+        category = self.val('#category', '').strip()
+        if len(category) == 0:
+            category = _("无")
         return {
             "id": b["id"],
             "title": b["title"],
@@ -58,7 +61,7 @@ class SimpleBookFormatter:
             "book_type": self.book.get("book_type", 0),
             "book_count": self.book.get("book_count", 1),
             "state": self.book.get("state", {}),
-            'category': self.val('#category', '无'),
+            'category': category,
         }
 
 
