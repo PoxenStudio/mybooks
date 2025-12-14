@@ -365,7 +365,11 @@
         "device_type_dangdang": "Dangdang Reader",
         "ai_capability": "AI Assistant",
         "main_page_recent_count": "Main Page - Recent Updates Count",
-        "main_page_random_count": "Main Page - Random Recommendations Count"
+        "main_page_random_count": "Main Page - Random Recommendations Count",
+        "index_page_type": "Index Page Type",
+        "index_page_type_index": "Index Page",
+        "index_page_type_all": "All Books",
+        "index_page_type_categories": "Category Browse"
     },
     "book": {
         "edit": {

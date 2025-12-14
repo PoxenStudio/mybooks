@@ -229,6 +229,10 @@ export default {
           { icon: "mdi-copyright", key: "HEADER", label: "settings.site_header", type: 'textarea' },
           { icon: "mdi-copyright", key: "FOOTER", label: "settings.site_footer", type: 'textarea' },
           {
+            icon: "home", key:"INDEX_PAGE_TYPE", label: "settings.index_page_type", type: 'select',
+            items: [{ text: this.$t('settings.index_page_type_index'), value: "index" }, { text: this.$t('settings.index_page_type_all'), value: "all" }, { text: this.$t('settings.index_page_type_categories'), value: "categories" }]
+          },
+          {
             icon: "mdi-shuffle", key: "MAIN_PAGE_RANDOM_COUNT", label: "settings.main_page_random_count", type: 'select',
             items: [0, 12, 24, 48].map(v => ({ text: String(v), value: v }))
           },
