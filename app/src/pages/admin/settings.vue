@@ -483,6 +483,10 @@ export default {
             this.$alert('error', this.$t('settings.save_error'));
           } else {
             this.$alert('success', this.$t('settings.save_success'));
+            // Reload system info to update store (e.g. indexPage setting)
+            this.$backend("/user/info").then((rsp) => {
+              this.$store.commit("login", rsp);
+            });
           }
         });
     },
