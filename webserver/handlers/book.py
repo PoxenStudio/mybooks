@@ -2063,6 +2063,7 @@ def routes():
         (r"/api/index", Index),
         (r"/api/search", SearchBook),
         (r"/api/recent", RecentBook),
+        (r"/api/all", RecentBook),
         (r"/api/hot", HotBook),
         (r"/api/printbooks", PrintBooks),
         (r"/api/soledbooks", BookSoled),
