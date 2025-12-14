@@ -1122,9 +1122,8 @@ class SearchBook(ListHandler):
                 ids = ids.union(ids, ids2)
                 break
 
-        if exclude_id > 0:
-            # remove the exclude id from ids
-            ids.discard(exclude_id)
+        if exclude_id > 0 and exclude_id in ids:
+            ids.remove(exclude_id)
 
         return self.render_book_list([], ids=ids, title=title)
 

@@ -1989,7 +1989,7 @@ export default {
             if (!this.book || !this.book.id) return;
             this.sameNameBooksLoading = true;
             try {
-                const response = await this.$backend(`/search?title=${this.book.title.trim()}`);
+                const response = await this.$backend(`/search?title=${this.book.title.trim()}&exclude=${this.book.id}`);
                 if (response.err === 'ok' && response.books) {
                     this.sameNameBooks = response.books;
                 }
