@@ -207,6 +207,17 @@
                 </v-edit-dialog>
             </template>
 
+            <template v-slot:item.category="{ item }">
+                <v-edit-dialog large :return-value.sync="item.category" @save="save(item, 'category')" save-text="保存" cancel-text="取消">
+                    <span v-if="item.category != null">{{ item.category }}</span>
+                    <span v-else> - </span>
+                    <template v-slot:input>
+                        <div class="mt-4 text-h6">修改字段</div>
+                        <v-text-field :label="$t('admin.books.category')" v-model="item.category" color="yellow accent-4" length="10" dense></v-text-field>
+                    </template>
+                </v-edit-dialog>
+            </template>
+
             <template v-slot:item.publisher="{ item }">
                 <v-edit-dialog
                     large

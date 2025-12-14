@@ -157,6 +157,7 @@
             "bookEBook": "eBook",
             "bookPhysical": "Book",
             "search": "Search",
+            "category": "Category",
             "status": {
                 "ready": "Ready",
                 "exist": "Existed",

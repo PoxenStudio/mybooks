@@ -157,6 +157,7 @@
             "bookEBook": "电子书",
             "bookPhysical": "实体书",
             "search": "搜索",
+            "category": "分类",
             "status": {
                 "ready": "可导入",
                 "exist": "已存在",
