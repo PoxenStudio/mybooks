@@ -184,7 +184,6 @@ class BookCategory(BaseHandler):
             return {"err": "internal", "msg": _(u"更新分类失败")}
 
 
-
 class BookCategoryBatch(BaseHandler):
     @js
     @auth
