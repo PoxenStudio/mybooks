@@ -211,10 +211,12 @@ export default {
     init() {
       this.$store.commit('navbar', true)
       this.$backend('/user/info?detail=1').then(rsp => {
-        rsp.user.password0 = ''
-        rsp.user.password1 = ''
-        rsp.user.password2 = ''
-        this.user = rsp.user
+        if (rsp.user) {
+          rsp.user.password0 = ''
+          rsp.user.password1 = ''
+          rsp.user.password2 = ''
+          this.user = rsp.user
+        }
       })
     },
     async onAvatarChange(file) {

@@ -28,6 +28,10 @@ export default ({ app }, inject) => {
                     "X-Forwarded-Proto": headers["x-forwarded-proto"],
                     "X-Scheme": headers["x-scheme"],
                 }
+            } else {
+                // 在server端但没有req对象时，直接返回空对象，避免fetch失败
+                // 客户端会在mounted时重新请求数据
+                return Promise.resolve({});
             }
         } else {
             server = window.location.origin;
