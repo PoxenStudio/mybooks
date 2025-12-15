@@ -49,7 +49,7 @@
                     </v-col>
                   </v-row>
                   <div class="caption text-grey mt-2">
-                    Set category "{{ targetCategory || '...' }}" for all books by {{ currentAuthor }}?
+                    {{ $t('listBook.setCategoryForAuthorBooks', { category: targetCategory || '...', author: currentAuthor }) }}
                   </div>
                 </v-card-text>
               </div>

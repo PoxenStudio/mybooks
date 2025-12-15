@@ -69,7 +69,9 @@
         "batchSet": "批量设置",
         "confirmBatchUpdate": "确认批量更新",
         "confirmBatchUpdateContent": "确定要为所有带有标签 <b>{tag}</b> 的书籍设置分类 <b>{category}</b> 吗？这将更新大约 {total} 本书籍。",
-        "confirmBatchUpdateContentAuthor": "确定要为作者 <b>{author}</b> 的所有书籍设置分类 <b>{category}</b> 吗？这将更新大约 {total} 本书籍。"
+        "confirmBatchUpdateContentAuthor": "确定要为作者 <b>{author}</b> 的所有书籍设置分类 <b>{category}</b> 吗？这将更新大约 {total} 本书籍。",
+        "setCategoryForTagBooks": "为所有带有标签 \"{tag}\" 的书籍设置分类 \"{category}\"？",
+        "setCategoryForAuthorBooks": "为作者 {author} 的所有书籍设置分类 \"{category}\"？"
     },
     "listMeta": {
         "ratingSuffix": "星",

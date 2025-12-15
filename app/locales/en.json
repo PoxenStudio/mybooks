@@ -69,7 +69,9 @@
         "batchSet": "Batch Set",
         "confirmBatchUpdate": "Confirm Batch Update",
         "confirmBatchUpdateContent": "Are you sure you want to set category <b>{category}</b> for all books with tag <b>{tag}</b>? This will update approx. {total} books.",
-        "confirmBatchUpdateContentAuthor": "Are you sure you want to set category <b>{category}</b> for all books by <b>{author}</b>? This will update approx. {total} books."
+        "confirmBatchUpdateContentAuthor": "Are you sure you want to set category <b>{category}</b> for all books by <b>{author}</b>? This will update approx. {total} books.",
+        "setCategoryForTagBooks": "Set category \"{category}\" for all books with tag \"{tag}\"?",
+        "setCategoryForAuthorBooks": "Set category \"{category}\" for all books by {author}?"
     },
     "listMeta": {
         "ratingSuffix": " stars",

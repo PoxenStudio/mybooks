@@ -49,7 +49,7 @@
                     </v-col>
                   </v-row>
                   <div class="caption text-grey mt-2">
-                    Set category "{{ targetCategory || '...' }}" for all books with tag "{{ currentTag }}"?
+                    {{ $t('listBook.setCategoryForTagBooks', { category: targetCategory || '...', tag: currentTag }) }}
                   </div>
                 </v-card-text>
               </div>
@@ -156,7 +156,7 @@ export default {
         res.setHeader('Cache-Control', 'no-cache');
     }
     // Pre-load tag list if no specific tag selected
-    let name = route.query.name;
+    let name = route.query.name || route.params.name;
     if (!name) {
         let rsp = await app.$backend("/tag");
         return { items: rsp.items || [], total: rsp.total };
@@ -165,8 +165,9 @@ export default {
   },
   created() {
     this.init();
-    if (this.$route.query.name) {
-        this.selectTag(this.$route.query.name);
+    let name = this.$route.query.name || this.$route.params.name;
+    if (name) {
+        this.selectTag(name);
     }
   },
   watch: {
@@ -174,7 +175,24 @@ export default {
        if (newName) {
          this.selectTag(newName);
        } else {
-         this.clearTag();
+         let paramsName = this.$route.params.name;
+         if (paramsName) {
+           this.selectTag(paramsName);
+         } else {
+           this.clearTag();
+         }
+       }
+    },
+    '$route.params.name'(newName) {
+       if (newName) {
+         this.selectTag(newName);
+       } else {
+         let queryName = this.$route.query.name;
+         if (queryName) {
+           this.selectTag(queryName);
+         } else {
+           this.clearTag();
+         }
        }
     }
   },
