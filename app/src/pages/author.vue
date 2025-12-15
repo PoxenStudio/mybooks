@@ -10,7 +10,7 @@
         <!-- Batch Set Category Card -->
         <v-col cols="12">
           <v-card outlined class="mb-4">
-            <v-card-title class="py-2">
+            <v-card-title class="py-2" @click="showBatch = !showBatch">
               <span class="text-subtitle-1 font-weight-bold">{{ $t('listBook.batchSetCategory') }}</span>
               <v-spacer></v-spacer>
               <v-btn icon @click="showBatch = !showBatch">
@@ -128,7 +128,7 @@ export default {
     page_cnt: 0,
 
     // Batch Ops
-    showBatch: true,
+    showBatch: false,
     categories: [],
     targetCategory: "",
     batchLoading: false,
