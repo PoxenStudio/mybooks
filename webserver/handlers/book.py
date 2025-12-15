@@ -1021,9 +1021,11 @@ class BookEdit(BaseHandler):
 
         if "category" in data:
             category = data["category"].strip()
-            self.calibre_db_cache.set_field('#category', {bid: category})
-        else:
-            self.calibre_db.set_metadata(bid, mi)
+            if len(category) < 80:
+                self.calibre_db_cache.set_field('#category', {bid: category})
+            else:
+                logging.error("Too many characters in the category, ignore it!")
+        self.calibre_db.set_metadata(bid, mi)
         return True
 
     @js

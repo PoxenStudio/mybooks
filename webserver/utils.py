@@ -92,7 +92,7 @@ class MCPBookFormatter:
             "comments": self.val("comments", _(u"暂无简介")) if include_comments else "",
             "languages": self.val("languages", None),
             "isbn": self.val("isbn", None),
-            'category': self.val('#category', '无'),
+            'category': self.val('#category', ''),
         }
 
 

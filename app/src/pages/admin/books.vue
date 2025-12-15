@@ -209,7 +209,7 @@
 
             <template v-slot:item.category="{ item }">
                 <v-edit-dialog large :return-value.sync="item.category" @save="save(item, 'category')" save-text="保存" cancel-text="取消">
-                    <span v-if="item.category != null">{{ item.category }}</span>
+                    <span v-if="item.category != null">{{ item.category || '未分类'}}</span>
                     <span v-else> - </span>
                     <template v-slot:input>
                         <div class="mt-4 text-h6">修改分类</div>
