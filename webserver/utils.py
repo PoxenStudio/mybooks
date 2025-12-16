@@ -31,8 +31,6 @@ class SimpleBookFormatter:
         b = self.book
         b["ts"] = b["timestamp"].strftime("%s")
         category = self.val('#category', '').strip()
-        if len(category) == 0:
-            category = _("无")
         return {
             "id": b["id"],
             "title": b["title"],

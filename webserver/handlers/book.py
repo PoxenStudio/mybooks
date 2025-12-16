@@ -173,6 +173,8 @@ class BookCategory(BaseHandler):
 
         data = tornado.escape.json_decode(self.request.body)
         category = data.get("category", "").strip()
+        if category == '清除' or category.lower() == 'clear':
+            category = ''
         logging.info(f"Updating category for book {book_id}: {category}")
         try:
             # Use set_field directly on the cache to avoid Metadata object issues
@@ -1089,6 +1091,8 @@ class BookEdit(BaseHandler):
         if "category" in data:
             category = data["category"].strip()
             if len(category) < 80:
+                if category == '清除' or category.lower() == 'clear':
+                    category = ''
                 self.calibre_db_cache.set_field('#category', {bid: category})
             else:
                 logging.error("Too many characters in the category, ignore it!")

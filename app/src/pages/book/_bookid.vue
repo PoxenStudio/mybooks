@@ -403,7 +403,7 @@
                                         <v-icon>mdi-bookshelf</v-icon>{{ $t('book.bookPhysical') }}
                                     </v-chip>
                                 </span>
-                                <span v-if="book.book_type==this.BOOK_TYPE.PHYSICAL">{{ $t('book.bookCount')}}: {{book.book_count}}</span>
+                                <span v-if="book.book_type==this.BOOK_TYPE.PHYSICAL">{{ $t('book.bookCount') }}: {{book.book_count}}</span>
                                 <span
                                     v-if='book.files.length>0 && book.files[0].size >= 1048576'
                                     color="grey--text" style="font-weight: bold">&nbsp;&nbsp;&nbsp;[{{book.files[0].format}} - {{
@@ -455,15 +455,15 @@
                             <div class="tag-chips">
                                 <v-menu offset-y>
                                     <template v-slot:activator="{ on, attrs }">
-                                        <v-chip rounded small color="green" v-bind="attrs" v-on="on">
+                                        <v-chip rounded smallF color="green" class="white--text" v-bind="attrs" v-on="on">
                                             <v-icon>category</v-icon>
-                                            {{ book.category || '未分类' }}
-                                            <v-icon color="indigo" small class="ml-1">edit</v-icon>
+                                            {{ $t('book.category') }} : {{ book.category || '未分类' }}
+                                            <v-icon color="white" class="ml-1">edit</v-icon>
                                         </v-chip>
                                     </template>
                                     <v-list dense>
                                         <v-list-item v-for="(cat, index) in categories" :key="index" @click="setCategory(cat)">
-                                            <v-list-item-title>{{ cat }}</v-list-item-title>
+                                            <v-list-item-title :class="cat === $t('book.clearCategory') ? 'red--text' : ''">{{ cat }}</v-list-item-title>
                                         </v-list-item>
                                     </v-list>
                                 </v-menu>
@@ -475,7 +475,7 @@
                                         smallF
                                         dark
                                         color="indigo"
-                                        :to="'/author/' + encodeURIComponent(author)"
+                                        :to="{ path: '/author', query: { name: author } }"
                                     >
                                         <v-icon>face</v-icon>
                                         {{ author }}
@@ -2034,6 +2034,8 @@ export default {
                             const parts = line.split('=');
                             return parts[0].trim();
                         }).filter(c => c);
+                        // 添加国际化的"清除"选项
+                        this.categories.push(this.$t('book.clearCategory'));
                     }
                 }
             } catch (error) {
@@ -2043,12 +2045,18 @@ export default {
 
         async setCategory(category) {
             try {
+                // 如果category是国际化的"清除"选项，则传空值到接口
+                let categoryToSend = category;
+                if (categoryToSend === this.$t('book.clearCategory')) {
+                    categoryToSend = '';
+                }
+
                 const response = await this.$backend(`/book/${this.book.id}/category`, {
                     method: 'POST',
-                    body: JSON.stringify({ category: category }),
+                    body: JSON.stringify({ category: categoryToSend }),
                 });
                 if (response.err === 'ok') {
-                    this.book.category = category;
+                    this.book.category = categoryToSend;
                     this.$alert('success', '分类更新成功');
                 } else {
                     this.$alert('error', response.msg || '更新失败');

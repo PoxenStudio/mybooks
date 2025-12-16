@@ -480,7 +480,8 @@
         "devicePort": "Device port",
         "deviceTypeRequired": "Please select device type",
         "deviceIPRequired": "Please enter device IP address",
-        "devicePortRequired": "Please enter device port"
+        "devicePortRequired": "Please enter device port",
+        "clearCategory": "Clear"
     },
     "reader": {
         "tip": {

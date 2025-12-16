@@ -370,7 +370,8 @@
         "devicePort": "设备端口",
         "deviceTypeRequired": "请选择设备类型",
         "deviceIPRequired": "请输入设备IP地址",
-        "devicePortRequired": "请输入设备端口"
+        "devicePortRequired": "请输入设备端口",
+        "clearCategory": "清除"
     },
     "reader": {
         "tip": {
