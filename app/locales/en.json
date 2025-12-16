@@ -328,7 +328,7 @@
         "ssl_certificate_management": "SSL Certificate Management",
         "social_network_login": "Login via Social Account",
         "friend_links": "Links",
-        "book_tags": "Book Tags",
+        "book_tags": "Book Category",
         "book_tags_description": "Configure the preset categories on the 'Category Navigation' page. When adding a book, if the book title or author name appears in the following categories, the corresponding tag will be automatically added.",
         "email_service": "EMail",
         "email_service_description": "Required by email registration, sending to kindle.",
