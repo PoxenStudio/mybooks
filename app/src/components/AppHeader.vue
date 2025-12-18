@@ -367,14 +367,18 @@ export default {
             if (this.search.trim() != "") {
                 this.$router.push("/search?name=" + this.search.trim());
             } else {
-                this.$refs.mobile_search.focus();
+                if (this.$refs.mobile_search) {
+                    this.$refs.mobile_search.focus();
+                }
             }
         },
         do_search: function () {
             if (this.search.trim() != "") {
                 this.$router.push("/search?name=" + this.search.trim());
             } else {
-                this.$refs.search.focus();
+                if (this.$refs.search) {
+                    this.$refs.search.focus();
+                }
             }
         },
         hidemsg: function (idx, msgid) {

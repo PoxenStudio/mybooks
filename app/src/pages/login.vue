@@ -5,7 +5,7 @@
                 <v-toolbar dark color="primary">
                     <v-toolbar-title>{{ $t('login.welcome') }}</v-toolbar-title>
                     <v-spacer></v-spacer>
-                    <v-btn v-if="$store.state.sys.allow.register" rounded color="green" to="/signup">{{ $t('login.register') }}</v-btn>
+                    <v-btn v-if="$store.state.sys && $store.state.sys.allow && $store.state.sys.allow.register" rounded color="green" to="/signup">{{ $t('login.register') }}</v-btn>
                 </v-toolbar>
                 <v-card-text>
                     <v-form @submit.prevent="do_login">
@@ -80,27 +80,31 @@ export default {
         return { title: this.$t('login.login') };
     },
     created() {
-        // set the theme according to the local storage value
+        // Clear the username and password fields
+        this.username = "";
+        this.password = "";
+
+        this.$store.commit("navbar", false);
+
+        // 只在客户端执行DOM和localStorage操作
         if (process.client) {
+            // set the theme according to the local storage value
             const saved_theme = localStorage.getItem('site_theme');
             if (saved_theme === 'dark') {
                 this.$vuetify.theme.dark = true;
             } else {
                 this.$vuetify.theme.dark = false;
             }
-        }
 
-        // Clear the username and password fields
-        this.username = "";
-        this.password = "";
-
-        if (process.client) {
+            // 延迟执行focus，确保DOM已渲染
             this.$nextTick(() => {
-                this.$refs.usernameField.focus();
+                if (this.$refs.usernameField) {
+                    this.$refs.usernameField.focus();
+                }
             });
         }
 
-        this.$store.commit("navbar", false);
+        // API调用放在最后，确保状态管理稳定
         this.$backend("/user/info").then((rsp) => {
             this.$store.commit("login", rsp);
             // 更新页面标题模板
@@ -111,6 +115,9 @@ export default {
     },
     computed: {
         socials: function () {
+            if (!this.$store.state.sys || !this.$store.state.sys.socials) {
+                return [];
+            }
             return this.$store.state.sys.socials;
         },
     },

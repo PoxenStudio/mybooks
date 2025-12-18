@@ -4,7 +4,16 @@ export const state = () => ({
     }, alert: {
         to: "", msg: "", type: "", show: false,
     }, sys: {
-        socials: [], allow: {},
+        socials: [], allow: {
+            physical_books: false,
+            upload: false,
+            register: false,
+            guest_read: false,
+            guest_download: false,
+            guest_upload: false,
+            guest_push: false,
+            guest_register: false
+        },
     },
     site_title: "首页",
     site_title_template: "%s | talebook"
@@ -30,8 +39,12 @@ export const mutations = {
         state.count++
     }, login(state, data) {
         if (data != undefined) {
-            state.sys = data.sys;
-            state.user = data.user;
+            if (data.sys) {
+                state.sys = data.sys;
+            }
+            if (data.user) {
+                state.user = data.user;
+            }
         }
     }, alert(state, v) {
         state.alert.to = v.to;

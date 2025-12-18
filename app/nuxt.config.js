@@ -68,8 +68,9 @@ export default {
   },
 
   googleAnalytics: {
-    // Used as fallback if no runtime config is provided
-    id: 'G-LLF01B5ZZ8',
+    // Only enable if GA ID is provided via environment variable
+    id: '',
+    disabled: true,
   },
 
   publicRuntimeConfig: {
@@ -79,7 +80,12 @@ export default {
     },
     api_url: process.env.API_URL || "http://127.0.0.1:8000",
     googleAnalytics: {
-      id: process.env.GOOGLE_ANALYTICS_ID,
+      ...(process.env.GOOGLE_ANALYTICS_ID ? {
+        id: process.env.GOOGLE_ANALYTICS_ID,
+        disabled: false
+      } : {
+        disabled: true
+      }),
     }
   },
 

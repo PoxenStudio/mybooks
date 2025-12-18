@@ -49,16 +49,30 @@ export default {
       try {
         const response = await this.$backend("/categories");
         if (response.err === "ok") {
-          this.categories = response.categories;
+          this.categories = response.categories || [];
           if (this.categories.length > 0) {
             this.fetchBooks();
           }
         } else {
-          this.$alert("error", response.msg || "获取分类失败");
+          // 使用store.commit直接提交alert，避免$alert可能不存在的问题
+          if (this.$store) {
+            this.$store.commit('alert', {
+              type: 'error',
+              msg: response.msg || "获取分类失败",
+              to: ''
+            });
+          }
         }
       } catch (error) {
         console.error("Failed to fetch categories:", error);
-        this.$alert("error", "网络错误");
+        // 使用store.commit直接提交alert，避免$alert可能不存在的问题
+        if (this.$store) {
+          this.$store.commit('alert', {
+            type: 'error',
+            msg: "网络错误",
+            to: ''
+          });
+        }
       }
     },
     async fetchBooks() {
@@ -77,15 +91,29 @@ export default {
         const response = await this.$backend(`/search?name=${encodeURIComponent(query)}&start=${start}&size=${this.page_size}`);
 
         if (response.err === "ok") {
-          this.books = response.books;
-          this.total = response.total;
+          this.books = response.books || [];
+          this.total = response.total || 0;
           this.page_cnt = Math.max(1, Math.ceil(this.total / this.page_size));
         } else {
-          this.$alert("error", response.msg || "获取图书失败");
+          // 使用store.commit直接提交alert，避免$alert可能不存在的问题
+          if (this.$store) {
+            this.$store.commit('alert', {
+              type: 'error',
+              msg: response.msg || "获取图书失败",
+              to: ''
+            });
+          }
         }
       } catch (error) {
         console.error("Failed to fetch books:", error);
-        this.$alert("error", "网络错误");
+        // 使用store.commit直接提交alert，避免$alert可能不存在的问题
+        if (this.$store) {
+          this.$store.commit('alert', {
+            type: 'error',
+            msg: "网络错误",
+            to: ''
+          });
+        }
       } finally {
         this.loading = false;
       }

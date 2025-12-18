@@ -46,16 +46,19 @@ export default {
     },
     computed: {
         render_books: function() {
-            return this.books.map( b => {
+            return (this.books || []).map( b => {
+                // 确保b是一个对象
+                if (!b) return {};
+                
                 if ( b['href'] == undefined ) {
                     if (this.isAudioPage) {
-                        b['href'] = "/audio/" + b.id;
+                        b['href'] = "/audio/" + (b.id || '');
                     } else {
-                        b['href'] = "/book/" + b.id;
+                        b['href'] = "/book/" + (b.id || '');
                     }
                 }
                 return b;
-            });
+            }).filter(Boolean); // 过滤掉空对象
         },
     },
     data: () => {
