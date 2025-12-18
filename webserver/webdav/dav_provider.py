@@ -78,12 +78,12 @@ class TalebookResource(DAVNonCollection):
         if self.file_path and os.path.exists(self.file_path):
             try:
                 stat = os.stat(self.file_path)
-                # Use file size and modification time for ETag
-                return f'"{self.id}-{stat.st_size}-{int(stat.st_mtime)}"'
+                # Use file size and modification time for ETag (WsgiDAV will add quotes)
+                return f"{self.id}-{stat.st_size}-{int(stat.st_mtime)}"
             except:
                 pass
         # Fallback: use book ID
-        return f'"{self.id}"'
+        return f"{self.id}"
 
     def get_last_modified(self):
         """Return last modified time"""
@@ -313,13 +313,18 @@ class TalebookProvider(DAVProvider):
 
         elif len(parts) == 3:
             # Book file
-            # parts[2] is "ID. Title.ext"
+            # parts[2] is "ID.Title.ext"
             # We need to extract ID
             try:
                 book_id = int(parts[2].split(".")[0])
-                book = self.cache.get_data_as_dict(ids=[book_id])[0]
-                return TalebookResource(path, environ, book, self.cache)
-            except:
+                mi = self.cache.get_metadata(book_id, get_cover=False)
+                if not mi:
+                    return None
+
+                item = self._build_book_item(book_id, mi)
+                return TalebookResource(path, environ, item, self.cache)
+            except Exception as e:
+                logging.error(f"Error getting book {parts[2]}: {e}")
                 return None
 
         return None
@@ -346,9 +351,14 @@ class TalebookProvider(DAVProvider):
         elif len(parts) == 3:
             try:
                 book_id = int(parts[2].split(".")[0])
-                book = self.cache.get_data_as_dict(ids=[book_id])[0]
-                return TalebookResource(path, environ, book, self.cache)
-            except:
+                mi = self.cache.get_metadata(book_id, get_cover=False)
+                if not mi:
+                    return None
+
+                item = self._build_book_item(book_id, mi)
+                return TalebookResource(path, environ, item, self.cache)
+            except Exception as e:
+                logging.error(f"Error getting book {parts[2]}: {e}")
                 return None
         return None
 
@@ -375,10 +385,15 @@ class TalebookProvider(DAVProvider):
         elif len(parts) == 3:
             try:
                 book_id = int(parts[2].split(".")[0])
-                book = self.cache.get_data_as_dict(ids=[book_id])[0]
-                return TalebookResource(path, environ, book, self.cache)
-            except:
-                pass
+                mi = self.cache.get_metadata(book_id, get_cover=False)
+                if not mi:
+                    return None
+
+                item = self._build_book_item(book_id, mi)
+                return TalebookResource(path, environ, item, self.cache)
+            except Exception as e:
+                logging.error(f"Error getting book {parts[2]}: {e}")
+                return None
         return None
 
     def _get_user_id_from_environ(self, environ):
