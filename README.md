@@ -99,6 +99,8 @@ WebDAV URL地址: `http://<ip or domain>:<port>/books`
 ```
 然后通过`映射网络驱动器`连接到指定URL：
 ![WebDav_Windows](document/webdav_Windows.png)
+访问列表:
+![WebDAV_Windows_Explorer](document/webdav_Window_2.png)
 
 ## 使用MCP Service
 从v3.15.0开始，支持MCP服务，可以集成到AI工具中使用。现在使用流程会提示提供账号信息进行登录，然后才能正常使用。
