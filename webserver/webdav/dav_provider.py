@@ -209,6 +209,21 @@ class TalebookProvider(DAVProvider):
             "我的已读": "我的已读"
         }
 
+    def _parse_book_id_from_filename(self, filename):
+        """从文件名中解析book ID，过滤macOS隐藏文件"""
+        # 忽略以.开头的文件（macOS隐藏文件如._filename）
+        if filename.startswith('.'):
+            return None
+
+        try:
+            # 文件名格式: ID.Title.ext
+            book_id_str = filename.split('.')[0]
+            if not book_id_str:  # 空字符串
+                return None
+            return int(book_id_str)
+        except (ValueError, IndexError):
+            return None
+
     def get_resource_inst(self, path, environ):
         # Ensure path starts with /
         if not path.startswith("/"):
@@ -316,7 +331,9 @@ class TalebookProvider(DAVProvider):
             # parts[2] is "ID.Title.ext"
             # We need to extract ID
             try:
-                book_id = int(parts[2].split(".")[0])
+                book_id = self._parse_book_id_from_filename(parts[2])
+                if book_id is None:
+                    return None
                 mi = self.cache.get_metadata(book_id, get_cover=False)
                 if not mi:
                     return None
@@ -350,7 +367,9 @@ class TalebookProvider(DAVProvider):
                 return None
         elif len(parts) == 3:
             try:
-                book_id = int(parts[2].split(".")[0])
+                book_id = self._parse_book_id_from_filename(parts[2])
+                if book_id is None:
+                    return None
                 mi = self.cache.get_metadata(book_id, get_cover=False)
                 if not mi:
                     return None
@@ -384,7 +403,9 @@ class TalebookProvider(DAVProvider):
                 pass
         elif len(parts) == 3:
             try:
-                book_id = int(parts[2].split(".")[0])
+                book_id = self._parse_book_id_from_filename(parts[2])
+                if book_id is None:
+                    return None
                 mi = self.cache.get_metadata(book_id, get_cover=False)
                 if not mi:
                     return None
@@ -450,7 +471,9 @@ class TalebookProvider(DAVProvider):
         elif len(parts) == 2:
             # 直接是书籍文件
             try:
-                book_id = int(parts[1].split(".")[0])
+                book_id = self._parse_book_id_from_filename(parts[1])
+                if book_id is None:
+                    return None
                 mi = self.cache.get_metadata(book_id, get_cover=False)
                 if not mi:
                     return None
@@ -473,7 +496,9 @@ class TalebookProvider(DAVProvider):
             return BooksCollection(path, environ, "我的待读", self, book_ids)
         elif len(parts) == 2:
             try:
-                book_id = int(parts[1].split(".")[0])
+                book_id = self._parse_book_id_from_filename(parts[1])
+                if book_id is None:
+                    return None
                 mi = self.cache.get_metadata(book_id, get_cover=False)
                 if not mi:
                     return None
@@ -497,7 +522,9 @@ class TalebookProvider(DAVProvider):
             return BooksCollection(path, environ, "我的在读", self, book_ids)
         elif len(parts) == 2:
             try:
-                book_id = int(parts[1].split(".")[0])
+                book_id = self._parse_book_id_from_filename(parts[1])
+                if book_id is None:
+                    return None
                 mi = self.cache.get_metadata(book_id, get_cover=False)
                 if not mi:
                     return None
@@ -520,7 +547,9 @@ class TalebookProvider(DAVProvider):
             return BooksCollection(path, environ, "我的已读", self, book_ids)
         elif len(parts) == 2:
             try:
-                book_id = int(parts[1].split(".")[0])
+                book_id = self._parse_book_id_from_filename(parts[1])
+                if book_id is None:
+                    return None
                 mi = self.cache.get_metadata(book_id, get_cover=False)
                 if not mi:
                     return None
