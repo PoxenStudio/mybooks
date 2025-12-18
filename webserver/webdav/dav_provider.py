@@ -255,10 +255,10 @@ class TalebookProvider(DAVProvider):
         super(TalebookProvider, self).__init__()
         self.cache = cache
         self.sections = {
-            "Custom Categories": "Custom Categories",
-            "Tags": "Tags",
-            "Authors": "Authors",
-            "All Books": "All Books"
+            "分类": "分类",
+            "标签": "标签",
+            "作者": "作者",
+            "所有书籍": "所有书籍"
         }
 
     def get_resource_inst(self, path, environ):
@@ -282,13 +282,13 @@ class TalebookProvider(DAVProvider):
         parts = path.lstrip("/").split("/")
         section = parts[0]
 
-        if section == "Custom Categories":
+        if section == "分类":
             return self.handle_custom(path, environ, parts)
-        elif section == "Tags":
+        elif section == "标签":
             return self.handle_tags(path, environ, parts)
-        elif section == "Authors":
+        elif section == "作者":
             return self.handle_authors(path, environ, parts)
-        elif section == "All Books":
+        elif section == "所有书籍":
             return self.handle_all(path, environ, parts)
 
         return None
@@ -342,7 +342,7 @@ class TalebookProvider(DAVProvider):
                 import traceback
                 logging.error(traceback.format_exc())
 
-            return VirtualCollection(path, environ, "Custom Categories", self, children)
+            return VirtualCollection(path, environ, "分类", self, children)
 
         elif len(parts) == 2:
             # List books in category
@@ -381,7 +381,7 @@ class TalebookProvider(DAVProvider):
             except Exception as e:
                 logging.error(f"Error getting tags: {e}")
                 pass
-            return VirtualCollection(path, environ, "Tags", self, children)
+            return VirtualCollection(path, environ, "标签", self, children)
         elif len(parts) == 2:
             tag_name = parts[1]
             try:
@@ -410,7 +410,7 @@ class TalebookProvider(DAVProvider):
             except Exception as e:
                 logging.error(f"Error getting authors: {e}")
                 pass
-            return VirtualCollection(path, environ, "Authors", self, children)
+            return VirtualCollection(path, environ, "作者", self, children)
         elif len(parts) == 2:
             author_name = parts[1]
             try:
@@ -434,7 +434,7 @@ class TalebookProvider(DAVProvider):
             letters = string.ascii_uppercase
             base = path if path.endswith('/') else path + '/'
             children = [VirtualCollection(base + l, environ, l, self) for l in letters]
-            return VirtualCollection(path, environ, "All Books", self, children)
+            return VirtualCollection(path, environ, "所有书籍", self, children)
         elif len(parts) == 2:
             letter = parts[1]
             return LetterCollection(path, environ, letter, self)
