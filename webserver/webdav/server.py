@@ -15,8 +15,12 @@ def create_webdav_app(calibre_cache, sqlite_session):
         WsgiDAVApp instance configured for Talebook
     """
 
-    # Create the custom provider
-    provider = TalebookProvider(calibre_cache)
+    # Create a function to get session
+    def get_session():
+        return sqlite_session()
+
+    # Create the custom provider with session function
+    provider = TalebookProvider(calibre_cache, get_session_func=get_session)
 
 
     # Configure WsgiDAV with v4.x configuration format

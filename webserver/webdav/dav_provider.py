@@ -4,7 +4,10 @@ import re
 import logging
 from urllib.parse import unquote
 from wsgidav.dav_provider import DAVProvider, DAVCollection, DAVNonCollection
-from wsgidav.dav_error import DAVError, HTTP_NOT_FOUND, HTTP_FORBIDDEN
+
+
+SUPPORTED_FORMATS = ["epub", "azw3", "mobi", "pdf", "txt"]
+
 
 def safe_filename(filename):
     """Make filename safe for filesystem by removing/replacing special characters"""
@@ -22,7 +25,7 @@ class TalebookResource(DAVNonCollection):
         super(TalebookResource, self).__init__(path, environ)
         self.book = book
         self.cache = cache
-        self.formats = ["epub", "azw3", "mobi", "pdf"]
+        self.formats = SUPPORTED_FORMATS
         self.fmt = None
         self.file_path = None
 
@@ -56,6 +59,7 @@ class TalebookResource(DAVNonCollection):
             "azw3": "application/x-mobi8-ebook",
             "mobi": "application/x-mobipocket-ebook",
             "pdf": "application/pdf",
+            "txt": "text/plain",
         }
         return types.get(self.fmt, "application/octet-stream")
 
@@ -138,10 +142,11 @@ class BooksCollection(VirtualCollection):
             for book_id in self.book_ids:
                 try:
                     # Get metadata for this book
-                    mi = self.provider.cache.get_metadata(book_id, get_cover=False)
-                    if not mi:
+                    mi = self.provider.cache.get_metadata(book_id, get_cover=False, get_user_categories=False)
+                    if not mi or mi.is_null('title'):
                         continue
 
+                    logging.info(f"Fetching book ID {book_id}, title: {mi.title}, id:{mi.id}")
                     # Convert Metadata object to dict-like structure
                     item = {
                         'id': book_id,
@@ -159,19 +164,20 @@ class BooksCollection(VirtualCollection):
                     if formats:
                         for fmt in formats:
                             fmt_lower = fmt.lower()
-                            if fmt_lower in ['epub', 'azw3', 'mobi', 'pdf']:
+                            if fmt_lower in SUPPORTED_FORMATS:
                                 # Get the absolute path to the format file
                                 fmt_path = self.provider.cache.format_abspath(book_id, fmt)
                                 if fmt_path:
                                     item[f'fmt_{fmt_lower}'] = fmt_path
                                     # Use first available format in priority order
-                                    if not selected_fmt and fmt_lower in ['epub', 'azw3', 'mobi', 'pdf']:
+                                    if not selected_fmt and fmt_lower in SUPPORTED_FORMATS:
                                         selected_fmt = fmt_lower
 
                     # Build filename with extension
                     base = self.path if self.path.endswith('/') else self.path + '/'
                     ext = selected_fmt if selected_fmt else 'txt'
                     book_name = f"{item['id']}.{safe_filename(item['title'])}.{ext}"
+                    logging.info(f"Adding book resource: {book_name}")
                     books.append(TalebookResource(
                         base + book_name,
                         self.environ,
@@ -187,78 +193,20 @@ class BooksCollection(VirtualCollection):
 
         return books
 
-class LetterCollection(VirtualCollection):
-    def __init__(self, path, environ, letter, provider):
-        super(LetterCollection, self).__init__(path, environ, letter, provider)
-        self.letter = letter.upper()
-
-    def get_pinyin_initial(self, text):
-        """Get pinyin initial from Chinese text"""
-        import opencc
-
-        # Simple pinyin initial mapping for common Chinese characters
-        # This is a simplified approach. For production, consider using pypinyin library
-        try:
-            # Convert to simplified Chinese first
-            converter = opencc.OpenCC('t2s')  # Traditional to Simplified
-            text = converter.convert(text)
-
-            # For basic implementation, just check first character
-            if not text:
-                return 'A'
-
-            first_char = text[0].upper()
-            # If it's already ASCII, return it
-            if first_char.isalpha():
-                return first_char
-
-            # For Chinese characters, we need more sophisticated mapping
-            # This is a placeholder - in production you'd use pypinyin
-            # For now, return 'A' for non-ASCII
-            return 'A'
-        except:
-            return 'A'
-
-    def get_dynamic_members(self):
-        # For better performance, we'll just search books with title_sort starting with the letter
-        # title_sort is usually in ASCII format
-        try:
-            # Search by title_sort (which is ASCII)
-            query = f'title_sort:~^{self.letter}'
-            ids = self.provider.cache.search(query)
-
-            # If no results and letter is valid, try all books and filter
-            if not ids and len(self.letter) == 1 and self.letter.isalpha():
-                # Get all books and filter by first letter of title_sort
-                all_ids = list(self.provider.cache.all_book_ids())
-                filtered_ids = []
-
-                # Batch fetch to improve performance
-                for book_id in all_ids[:1000]:  # Limit for performance
-                    try:
-                        title_sort = self.provider.cache.field_for('title_sort', book_id)
-                        if title_sort and title_sort[0].upper() == self.letter:
-                            filtered_ids.append(book_id)
-                    except:
-                        continue
-
-                ids = filtered_ids
-
-            return BooksCollection(self.path, self.environ, self.letter, self.provider, ids).get_dynamic_members()
-        except Exception as e:
-            logging.error(f"Error searching books for letter {self.letter}: {e}")
-            return []
-
 
 class TalebookProvider(DAVProvider):
-    def __init__(self, cache):
+    def __init__(self, cache, get_session_func=None):
         super(TalebookProvider, self).__init__()
         self.cache = cache
+        self.get_session_func = get_session_func
         self.sections = {
             "分类": "分类",
             "标签": "标签",
             "作者": "作者",
-            "所有书籍": "所有书籍"
+            "我的收藏": "我的收藏",
+            "我的待读": "我的待读",
+            "我的在读": "我的在读",
+            "我的已读": "我的已读"
         }
 
     def get_resource_inst(self, path, environ):
@@ -288,8 +236,14 @@ class TalebookProvider(DAVProvider):
             return self.handle_tags(path, environ, parts)
         elif section == "作者":
             return self.handle_authors(path, environ, parts)
-        elif section == "所有书籍":
-            return self.handle_all(path, environ, parts)
+        elif section == "我的收藏":
+            return self.handle_favorite(path, environ, parts)
+        elif section == "我的待读":
+            return self.handle_wants(path, environ, parts)
+        elif section == "我的在读":
+            return self.handle_reading(path, environ, parts)
+        elif section == "我的已读":
+            return self.handle_read_done(path, environ, parts)
 
         return None
 
@@ -427,22 +381,162 @@ class TalebookProvider(DAVProvider):
                 pass
         return None
 
-    def handle_all(self, path, environ, parts):
+    def _get_user_id_from_environ(self, environ):
+        """从environ中获取用户ID"""
+        # WebDAV认证后，用户信息应该在environ中
+        # 这需要与auth.py中的认证逻辑配合
+        username = environ.get('wsgidav.auth.user_name', None)
+        if not username or not self.get_session_func:
+            return None
+
+        try:
+            # 获取数据库session
+            from webserver.models import Reader
+            session = self.get_session_func()
+            user = session.query(Reader).filter(Reader.username == username).first()
+            return user.id if user else None
+        except Exception as e:
+            logging.error(f"Error getting user ID: {e}")
+            return None
+
+    def _get_reading_state_books(self, environ, filter_func, title):
+        """获取符合条件的阅读状态书籍"""
+        user_id = self._get_user_id_from_environ(environ)
+        if not user_id:
+            logging.warning("No user ID found in environ for reading state")
+            return []
+
+        try:
+            from webserver.models import ReadingState
+            session = self.get_session_func()
+            reading_states = session.query(ReadingState).filter(
+                ReadingState.reader_id == user_id
+            ).all()
+
+            # 应用过滤条件
+            filtered_states = [state for state in reading_states if filter_func(state)]
+            book_ids = [state.book_id for state in filtered_states]
+
+            return book_ids
+        except Exception as e:
+            logging.error(f"Error getting reading state books: {e}")
+            return []
+
+    def handle_favorite(self, path, environ, parts):
+        """处理收藏书籍"""
         if len(parts) == 1:
-            # A-Z
-            import string
-            letters = string.ascii_uppercase
-            base = path if path.endswith('/') else path + '/'
-            children = [VirtualCollection(base + l, environ, l, self) for l in letters]
-            return VirtualCollection(path, environ, "所有书籍", self, children)
+            # 列出收藏的书籍
+            book_ids = self._get_reading_state_books(
+                environ,
+                lambda state: state.favorite == 1,
+                "我的收藏"
+            )
+            return BooksCollection(path, environ, "我的收藏", self, book_ids)
         elif len(parts) == 2:
-            letter = parts[1]
-            return LetterCollection(path, environ, letter, self)
-        elif len(parts) == 3:
+            # 直接是书籍文件
             try:
-                book_id = int(parts[2].split(".")[0])
-                book = self.cache.get_data_as_dict(ids=[book_id])[0]
-                return TalebookResource(path, environ, book, self.cache)
-            except:
-                pass
+                book_id = int(parts[1].split(".")[0])
+                mi = self.cache.get_metadata(book_id, get_cover=False)
+                if not mi:
+                    return None
+
+                item = self._build_book_item(book_id, mi)
+                return TalebookResource(path, environ, item, self.cache)
+            except Exception as e:
+                logging.error(f"Error getting book {parts[1]}: {e}")
+                return None
         return None
+
+    def handle_wants(self, path, environ, parts):
+        """处理待读书籍"""
+        if len(parts) == 1:
+            book_ids = self._get_reading_state_books(
+                environ,
+                lambda state: state.wants == 1,
+                "我的待读"
+            )
+            return BooksCollection(path, environ, "我的待读", self, book_ids)
+        elif len(parts) == 2:
+            try:
+                book_id = int(parts[1].split(".")[0])
+                mi = self.cache.get_metadata(book_id, get_cover=False)
+                if not mi:
+                    return None
+
+                item = self._build_book_item(book_id, mi)
+                return TalebookResource(path, environ, item, self.cache)
+            except Exception as e:
+                logging.error(f"Error getting book {parts[1]}: {e}")
+                return None
+        return None
+
+    def handle_reading(self, path, environ, parts):
+        """处理在读书籍"""
+        if len(parts) == 1:
+            book_ids = self._get_reading_state_books(
+                environ,
+                lambda state: state.read_state == 1,  # 在读状态
+                "我的在读"
+            )
+            logging.info(f"Handling '在读' books, ids: {book_ids}")
+            return BooksCollection(path, environ, "我的在读", self, book_ids)
+        elif len(parts) == 2:
+            try:
+                book_id = int(parts[1].split(".")[0])
+                mi = self.cache.get_metadata(book_id, get_cover=False)
+                if not mi:
+                    return None
+
+                item = self._build_book_item(book_id, mi)
+                return TalebookResource(path, environ, item, self.cache)
+            except Exception as e:
+                logging.error(f"Error getting book {parts[1]}: {e}")
+                return None
+        return None
+
+    def handle_read_done(self, path, environ, parts):
+        """处理已读完书籍"""
+        if len(parts) == 1:
+            book_ids = self._get_reading_state_books(
+                environ,
+                lambda state: state.read_state == 2,  # 已读完状态
+                "我的已读"
+            )
+            return BooksCollection(path, environ, "我的已读", self, book_ids)
+        elif len(parts) == 2:
+            try:
+                book_id = int(parts[1].split(".")[0])
+                mi = self.cache.get_metadata(book_id, get_cover=False)
+                if not mi:
+                    return None
+
+                item = self._build_book_item(book_id, mi)
+                return TalebookResource(path, environ, item, self.cache)
+            except Exception as e:
+                logging.error(f"Error getting book {parts[1]}: {e}")
+                return None
+        return None
+
+    def _build_book_item(self, book_id, mi):
+        """从Metadata对象构建book item字典"""
+        item = {
+            'id': book_id,
+            'title': mi.title or 'Unknown',
+            'authors': mi.authors or [],
+            'fmt_epub': None,
+            'fmt_azw3': None,
+            'fmt_mobi': None,
+            'fmt_pdf': None,
+        }
+
+        # Get format information
+        formats = self.cache.formats(book_id, verify_formats=False)
+        if formats:
+            for fmt in formats:
+                fmt_lower = fmt.lower()
+                if fmt_lower in SUPPORTED_FORMATS:
+                    fmt_path = self.cache.format_abspath(book_id, fmt)
+                    if fmt_path:
+                        item[f'fmt_{fmt_lower}'] = fmt_path
+
+        return item
