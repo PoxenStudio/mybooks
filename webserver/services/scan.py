@@ -13,6 +13,7 @@ from webserver import utils
 from webserver.models import Item, ScanFile
 from webserver.services import AsyncService
 from webserver.services.autofill import AutoFillService
+from webserver.constants import CALIBRE_ERROR_FLAG
 
 SCAN_EXT = ["azw", "azw3", "epub", "mobi", "pdf", "txt"]
 
@@ -187,6 +188,9 @@ class ScanService(AsyncService):
                                   use_libprs_metadata=True)
                 mi.title = utils.super_strip(mi.title)
                 mi.authors = [utils.super_strip(s) for s in mi.authors]
+            if mi.title and mi.title == CALIBRE_ERROR_FLAG:
+                logging.error("Failed to get metadata for %s, reason:%s", fpath, mi.comments)
+                continue
 
             row.title = mi.title
             row.author = mi.author_sort
@@ -264,6 +268,9 @@ class ScanService(AsyncService):
                                           use_libprs_metadata=True)
                         mi.title = utils.super_strip(mi.title)
                         mi.authors = [utils.super_strip(s) for s in mi.authors]
+                    if mi.title and mi.title == CALIBRE_ERROR_FLAG:
+                        logging.error("Failed to get metadata for %s, reason:%s", fpath, mi.comments)
+                        continue
 
                     # 非结构化的格式，calibre无法识别准确的信息，直接从文件名提取
                     if fmt in ["txt", "pdf"]:

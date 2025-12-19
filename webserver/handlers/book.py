@@ -4,6 +4,7 @@
 import datetime
 import json
 import logging
+from venv import logger
 import opencc
 import os
 import random
@@ -12,6 +13,7 @@ import shutil
 import time
 import traceback
 import urllib
+from pathlib import Path
 from gettext import gettext as _
 
 import tornado.escape
@@ -29,9 +31,9 @@ from webserver.plugins.meta import baike, douban, youshu
 from webserver.plugins.meta.bookbarn_tags import BookBarnTags
 from webserver.plugins.parser.txt import get_content_encoding
 from webserver.handlers.audio import AudioUtils
+from webserver.constants import ZLIBRARY_SUFFIX, CALIBRE_ERROR_FLAG
 
 CONF = loader.get_settings()
-ZLIBRARY_SUFFIX = "(Z-Library)"
 
 
 class Index(BaseHandler):
@@ -411,6 +413,8 @@ class BookRefer(BaseHandler):
             org_mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
             org_mi.title = utils.super_strip(org_mi.title)
             org_mi.authors = [utils.super_strip(org_mi.author_sort)]
+        if org_mi.title and org_mi.title == CALIBRE_ERROR_FLAG:
+            return {"err": "book.invalid", "msg": _(u"此书籍文件无法识别, 或者受DRM保护无法处理")}
 
         if fmt in ["txt", "pdf"]:
             org_mi.title = book_name.replace("." + fmt, "")
@@ -1408,13 +1412,21 @@ class BookUpload(BaseHandler):
         logging.debug("save upload file into [%s]", fpath)
 
         # read ebook meta
+        failed = False
         with open(fpath, "rb") as stream:
             mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
+            if mi.title and mi.title == CALIBRE_ERROR_FLAG:
+                logger.error("Failed to get metadata for %s, reason:%s", fpath, mi.comments)
+                failed = True
             mi.title = utils.super_strip(mi.title)
             if mi.author_sort == "Unknown" and mi.authors and len(mi.authors) > 0:
                 mi.authors = [utils.super_strip(a) for a in mi.authors]
             else:
                 mi.authors = [utils.super_strip(mi.author_sort)]
+
+        if failed:
+            Path(fpath).unlink(missing_ok=True)
+            return {"err": "book.invalid", "msg": _(u"此书籍文件无法识别, 或者受DRM保护无法导入")}
 
         # 非结构化的格式，calibre无法识别准确的信息，直接从文件名提取
         if fmt in ["txt", "pdf"]:
@@ -1556,13 +1568,20 @@ class BookUploadChunk(BaseHandler):
             logging.debug("Merged chunked upload file into [%s]", final_path)
 
             # Read ebook metadata (same logic as BookUpload)
+            failed = False
             with open(final_path, "rb") as stream:
                 mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
+                if mi.title and mi.title == CALIBRE_ERROR_FLAG:
+                    logger.error("Failed to get metadata for %s, reason:%s", final_path, mi.comments)
+                    failed = True
                 mi.title = utils.super_strip(mi.title)
                 if mi.author_sort == "Unknown" and mi.authors and len(mi.authors) > 0:
                     mi.authors = [utils.super_strip(a) for a in mi.authors]
                 else:
                     mi.authors = [utils.super_strip(mi.author_sort)]
+            if failed:
+                Path(final_path).unlink(missing_ok=True)
+                return {"err": "book.invalid", "msg": _(u"此书籍文件无法识别, 或者受DRM保护无法导入")}
 
             # Handle special formats like txt and pdf
             if fmt in ["txt", "pdf"]:
@@ -1982,13 +2001,20 @@ class BookSperate(BaseHandler):
             logging.info(f"[SEPARATE] Copied format file from {original_path} to {upload_path}")
 
             # 读取元数据
+            failed = False
             with open(upload_path, "rb") as stream:
                 mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
+                if mi.title and mi.title == CALIBRE_ERROR_FLAG:
+                    logger.error("Failed to get metadata for %s, reason:%s", upload_path, mi.comments)
+                    failed = True
                 mi.title = utils.super_strip(mi.title)
                 if mi.author_sort == "Unknown" and mi.authors and len(mi.authors) > 0:
                     mi.authors = [utils.super_strip(a) for a in mi.authors]
                 else:
                     mi.authors = [utils.super_strip(mi.author_sort)]
+
+            if failed:
+                return {"err": "book.invalid", "msg": _(u"此书籍文件无法识别, 或者受DRM保护无法处理")}
 
             # 对于txt和pdf格式，从文件名提取信息
             if fmt in ["txt", "pdf"]:
