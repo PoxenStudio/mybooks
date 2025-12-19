@@ -318,6 +318,8 @@ class UserMessages(BaseHandler):
         if not msg:
             return {"err": "params.not_found", "msg": _(u"查无此ID")}
 
+        # Ensure msg is in the current session to avoid "already attached to session" error
+        msg = self.sqlite_session.merge(msg)
         msg.unread = False
         msg.update_time = datetime.datetime.now()
         msg.save()
@@ -332,6 +334,8 @@ class UserMessagesClear(BaseHandler):
         if not user or not user.messages:
             return {"err": "ok"}
         for msg in user.messages:
+            # Ensure msg is in the current session to avoid "already attached to session" error
+            msg = self.sqlite_session.merge(msg)
             msg.unread = False
             msg.update_time = datetime.datetime.now()
             msg.save()
