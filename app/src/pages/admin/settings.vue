@@ -1,4 +1,6 @@
 <template>
+  <!-- 添加背景图容器 -->
+  <div class="background-container">
   <div>
     <v-card class="my-2 elevation-4" v-for="card in cards" :key="card.title">
       <v-card-title @click="card.show = !card.show">
@@ -37,13 +39,13 @@
                 type="text"></v-text-field>
             </template>
 
-            <template v-for="b in card.buttons" :key="b.label">
-              <v-btn @click="run(b.action)" color="primary"><v-icon>{{ b.icon }}</v-icon>{{ $t(b.label)
+            <template v-for="b in card.buttons">
+              <v-btn :key="b.label" @click="run(b.action)" color="primary"><v-icon>{{ b.icon }}</v-icon>{{ $t(b.label)
                 }}</v-btn>
             </template>
 
-            <template v-for="g in card.groups" :key="g.label">
-              <v-checkbox small hide-details v-model="settings[g.key]" :label="$t(g.label)"></v-checkbox>
+            <template v-for="g in card.groups">
+              <v-checkbox :key="g.label" small hide-details v-model="settings[g.key]" :label="$t(g.label)"></v-checkbox>
               <template v-if="settings[g.key]">
                 <template v-for="f in g.fields">
                   <v-textarea outlined v-if="f.type === 'textarea'" :prepend-icon="f.icon" v-model="settings[f.key]"
@@ -190,6 +192,7 @@
       <p>{{ $t('settings.save_hints')}}</p>
       <v-btn color="primary" @click="save_settings">{{ $t('settings.save') }}</v-btn>
     </div>
+  </div>
   </div>
 </template>
 
@@ -551,5 +554,34 @@ export default {
 <style>
 .cursor-pointer {
   cursor: pointer;
+}
+
+/* 全屏背景图样式 */
+.background-container {
+  position: relative;
+  min-height: 100vh;
+  background-image: url('/static/images/background.jpg');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  padding: 20px;
+}
+
+/* 背景图透明度叠加层 */
+.background-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(255, 255, 255, 0.7); /* 70%透明度的白色叠加层 */
+  z-index: 0;
+}
+
+/* 确保内容在背景图之上 */
+.background-container > div {
+  position: relative;
+  z-index: 1;
 }
 </style>

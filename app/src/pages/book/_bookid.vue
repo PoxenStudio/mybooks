@@ -469,8 +469,9 @@
                                 </v-menu>
                             </div>
                             <div class="tag-chips">
-                                <template v-for="author in book.authors" :key="'author-' + author">
+                                <template v-for="author in book.authors">
                                     <v-chip
+                                        :key="'author-' + author"
                                         rounded
                                         smallF
                                         dark
@@ -501,8 +502,9 @@
                                     <v-icon>explore</v-icon>
                                     ISBN：{{ book.isbn }}
                                 </v-chip>
-                                    <template v-for="tag in book.tags" :key="'tag-' + tag">
+                                    <template v-for="tag in book.tags">
                                         <v-chip
+                                            :key="'tag-' + tag"
                                             rounded
                                             small
                                             dark

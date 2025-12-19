@@ -1,63 +1,83 @@
-/* cyrillic-ext */
+/* SourceHanSansCN - 思源黑体 (中文) */
 @font-face {
-  font-family: 'Roboto';
+  font-family: 'SourceHanSansCN';
   font-style: normal;
-  font-weight: 100;
+  font-weight: 300;
   font-display: swap;
-  src: url('~assets/fonts/Roboto-100-cyrillic-ext1.woff2') format('woff2');
-  unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+  src: url('/static/fonts/SourceHanSansCN-Light.otf') format('opentype');
+  unicode-range: U+4E00-9FFF, U+3400-4DBF, U+20000-2A6DF, U+2A700-2B73F, U+2B740-2B81F, U+2B820-2CEAF, U+2CEB0-2EBEF, U+30000-3134F, U+F900-FAFF, U+2F800-2FA1F;
 }
-/* cyrillic */
+
 @font-face {
-  font-family: 'Roboto';
+  font-family: 'SourceHanSansCN';
   font-style: normal;
-  font-weight: 100;
+  font-weight: 400;
   font-display: swap;
-  src: url('~assets/fonts/Roboto-100-cyrillic2.woff2') format('woff2');
-  unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+  src: url('/static/fonts/SourceHanSansCN-Regular.otf') format('opentype');
+  unicode-range: U+4E00-9FFF, U+3400-4DBF, U+20000-2A6DF, U+2A700-2B73F, U+2B740-2B81F, U+2B820-2CEAF, U+2CEB0-2EBEF, U+30000-3134F, U+F900-FAFF, U+2F800-2FA1F;
 }
-/* greek-ext */
+
 @font-face {
-  font-family: 'Roboto';
+  font-family: 'SourceHanSansCN';
   font-style: normal;
-  font-weight: 100;
+  font-weight: 500;
   font-display: swap;
-  src: url('~assets/fonts/Roboto-100-greek-ext3.woff2') format('woff2');
-  unicode-range: U+1F00-1FFF;
+  src: url('/static/fonts/SourceHanSansCN-Medium.otf') format('opentype');
+  unicode-range: U+4E00-9FFF, U+3400-4DBF, U+20000-2A6DF, U+2A700-2B73F, U+2B740-2B81F, U+2B820-2CEAF, U+2CEB0-2EBEF, U+30000-3134F, U+F900-FAFF, U+2F800-2FA1F;
 }
-/* greek */
+
+/* Poppins - 英文 */
 @font-face {
-  font-family: 'Roboto';
+  font-family: 'Poppins';
   font-style: normal;
-  font-weight: 100;
+  font-weight: 300;
   font-display: swap;
-  src: url('~assets/fonts/Roboto-100-greek4.woff2') format('woff2');
-  unicode-range: U+0370-03FF;
-}
-/* vietnamese */
-@font-face {
-  font-family: 'Roboto';
-  font-style: normal;
-  font-weight: 100;
-  font-display: swap;
-  src: url('~assets/fonts/Roboto-100-vietnamese5.woff2') format('woff2');
-  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+1EA0-1EF9, U+20AB;
-}
-/* latin-ext */
-@font-face {
-  font-family: 'Roboto';
-  font-style: normal;
-  font-weight: 100;
-  font-display: swap;
-  src: url('~assets/fonts/Roboto-100-latin-ext6.woff2') format('woff2');
-  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
-}
-/* latin */
-@font-face {
-  font-family: 'Roboto';
-  font-style: normal;
-  font-weight: 100;
-  font-display: swap;
-  src: url('~assets/fonts/Roboto-100-latin7.woff2') format('woff2');
+  src: url('/static/fonts/Poppins-Light.ttf') format('truetype');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/static/fonts/Poppins-Regular.ttf') format('truetype');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/static/fonts/Poppins-Medium.ttf') format('truetype');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* 全局字体设置 */
+:root {
+  --font-family-sans-serif: 'Poppins', 'SourceHanSansCN', sans-serif;
+  --font-family-base: var(--font-family-sans-serif);
+}
+
+/* 应用到全局 */
+html,
+body,
+.v-application {
+  font-family: var(--font-family-base) !important;
+}
+
+/* 确保Vuetify组件使用自定义字体 */
+.v-btn,
+.v-chip,
+.v-card-title,
+.v-card-text,
+.v-list-item-title,
+.v-list-item-subtitle,
+.v-tab,
+.v-stepper-title,
+.v-expansion-panel-title,
+.v-expansion-panel-text {
+  font-family: var(--font-family-base) !important;
+}
+

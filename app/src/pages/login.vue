@@ -164,4 +164,38 @@ export default {
 .fill-center {
     margin-top: 6%;
 }
+
+/* 全屏背景图样式 */
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-image: url('/static/images/background.jpg');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    position: relative;
+}
+
+/* 背景图透明度叠加层 */
+body::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.7); /* 70%透明度的白色叠加层 */
+    z-index: 0;
+}
+
+/* 确保内容在背景图之上 */
+.v-application {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+}
 </style>
