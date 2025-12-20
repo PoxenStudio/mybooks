@@ -44,6 +44,7 @@ class TalebookResource(DAVNonCollection):
         self.title = safe_filename(self.book.get('title', 'Unknown'))
         self.id = self.book['id']
         self.ext = self.fmt or "txt"
+        logging.info(f"Initialized TalebookResource for book ID {self.id}, title: {self.title}, format: {self.fmt}, path: {self.file_path}")
 
     def get_display_name(self):
         # Format: ID.书名.ext
@@ -64,9 +65,12 @@ class TalebookResource(DAVNonCollection):
             "pdf": "application/pdf",
             "txt": "text/plain",
         }
-        return types.get(self.fmt, "application/octet-stream")
+        result = types.get(self.fmt, "application/octet-stream")
+        logging.info(f"****** Getting content type for format {self.fmt}: {result} for source path: {self.file_path}")
+        return result
 
     def get_content(self):
+        logging.info(f"****** Getting content for book ID {self.id}, path: {self.file_path}")
         if self.file_path and os.path.exists(self.file_path):
             return open(self.file_path, "rb")
         # Return an empty BytesIO object instead of raw bytes
@@ -174,7 +178,6 @@ class BooksCollection(VirtualCollection):
 
                     # Get format information
                     formats = self.provider.cache.formats(book_id, verify_formats=False)
-                    selected_fmt = None
                     if formats:
                         for fmt in formats:
                             fmt_lower = fmt.lower()
@@ -183,9 +186,13 @@ class BooksCollection(VirtualCollection):
                                 fmt_path = self.provider.cache.format_abspath(book_id, fmt)
                                 if fmt_path:
                                     item[f'fmt_{fmt_lower}'] = fmt_path
-                                    # Use first available format in priority order
-                                    if not selected_fmt and fmt_lower in SUPPORTED_FORMATS:
-                                        selected_fmt = fmt_lower
+                    # Choose selected_fmt using SUPPORTED_FORMATS priority so
+                    # display name extension and TalebookResource selection match.
+                    selected_fmt = None
+                    for f in SUPPORTED_FORMATS:
+                        if item.get(f'fmt_{f}'):
+                            selected_fmt = f
+                            break
 
                     if not selected_fmt:
                         # No supported format found, skip this book
