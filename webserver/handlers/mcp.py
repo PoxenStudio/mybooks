@@ -48,8 +48,7 @@ class MCPHandler(ListHandler):
             "version": VERSION,
             "settings": {
                 "base_url": CONF.get("base_url", ""),
-                "mcp_enabled": CONF.get("mcp_enabled", False),
-                "mcp_version": CONF.get("mcp_version", "1.0"),
+                "mcp_version": CONF.get("mcp_version", VERSION),
             },
             "timestamp": datetime.datetime.now().isoformat(),
         }
