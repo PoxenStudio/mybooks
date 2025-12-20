@@ -44,7 +44,6 @@ class TalebookResource(DAVNonCollection):
         self.title = safe_filename(self.book.get('title', 'Unknown'))
         self.id = self.book['id']
         self.ext = self.fmt or "txt"
-        logging.info(f"Initialized TalebookResource for book ID {self.id}, title: {self.title}, format: {self.fmt}, path: {self.file_path}")
 
     def get_display_name(self):
         # Format: ID.书名.ext
@@ -66,7 +65,6 @@ class TalebookResource(DAVNonCollection):
             "txt": "text/plain",
         }
         result = types.get(self.fmt, "application/octet-stream")
-        logging.info(f"****** Getting content type for format {self.fmt}: {result} for source path: {self.file_path}")
         return result
 
     def get_content(self):

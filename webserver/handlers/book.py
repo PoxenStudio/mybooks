@@ -596,13 +596,21 @@ class BookFavorite(BaseHandler):
             ReadingState.reader_id == user_id,
             ReadingState.favorite == 1
         ).order_by(ReadingState.favorite_date.desc()).all()
+
+        # 批量获取所有书籍
+        book_ids = [state.book_id for state in reading_states]
+        books_dict = {book['id']: book for book in self.get_books(ids=book_ids)}
+
+        # 构建书籍状态字典
+        state_dict = {state.book_id: state for state in reading_states}
+
         favorite_books = []
-        for state in reading_states:
-            book = self.get_book(state.book_id, raise_exception=False)
+        for book_id in book_ids:
+            book = books_dict.get(book_id)
             if not book:
                 continue
             book_data = utils.BookFormatter(self, book).format()
-            book_data["state"] = utils.ReadingStateFormatter.format_reading_state(state)
+            book_data["state"] = utils.ReadingStateFormatter.format_reading_state(state_dict[book_id])
             favorite_books.append(book_data)
 
         return {"err": "ok",
@@ -652,13 +660,21 @@ class BookWantToRead(BaseHandler):
             ReadingState.reader_id == user_id,
             ReadingState.wants == 1
         ).order_by(ReadingState.wants_date.desc()).all()
+
+        # 批量获取所有书籍
+        book_ids = [state.book_id for state in reading_states]
+        books_dict = {book['id']: book for book in self.get_books(ids=book_ids)}
+
+        # 构建书籍状态字典
+        state_dict = {state.book_id: state for state in reading_states}
+
         favorite_books = []
-        for state in reading_states:
-            book = self.get_book(state.book_id, raise_exception=False)
+        for book_id in book_ids:
+            book = books_dict.get(book_id)
             if not book:
                 continue
             book_data = utils.BookFormatter(self, book).format()
-            book_data["state"] = utils.ReadingStateFormatter.format_reading_state(state)
+            book_data["state"] = utils.ReadingStateFormatter.format_reading_state(state_dict[book_id])
             favorite_books.append(book_data)
 
         return {"err": "ok",
@@ -678,13 +694,21 @@ class BookReading(BaseHandler):
             ReadingState.reader_id == user_id,
             ReadingState.read_state == 1  # 在读状态
         ).order_by(ReadingState.read_date.desc()).all()
+
+        # 批量获取所有书籍
+        book_ids = [state.book_id for state in reading_states]
+        books_dict = {book['id']: book for book in self.get_books(ids=book_ids)}
+
+        # 构建书籍状态字典
+        state_dict = {state.book_id: state for state in reading_states}
+
         reading_books = []
-        for state in reading_states:
-            book = self.get_book(state.book_id, raise_exception=False)
+        for book_id in book_ids:
+            book = books_dict.get(book_id)
             if not book:
                 continue
             book_data = utils.BookFormatter(self, book).format()
-            book_data["state"] = utils.ReadingStateFormatter.format_reading_state(state)
+            book_data["state"] = utils.ReadingStateFormatter.format_reading_state(state_dict[book_id])
             reading_books.append(book_data)
 
         return {"err": "ok",
@@ -792,13 +816,21 @@ class BookReadDone(BaseHandler):
             ReadingState.reader_id == user_id,
             ReadingState.read_state == 2  # 已读完状态
         ).order_by(ReadingState.read_date.desc()).all()
+
+        # 批量获取所有书籍
+        book_ids = [state.book_id for state in reading_states]
+        books_dict = {book['id']: book for book in self.get_books(ids=book_ids)}
+
+        # 构建书籍状态字典
+        state_dict = {state.book_id: state for state in reading_states}
+
         read_done_books = []
-        for state in reading_states:
-            book = self.get_book(state.book_id, raise_exception=False)
+        for book_id in book_ids:
+            book = books_dict.get(book_id)
             if not book:
                 continue
             book_data = utils.BookFormatter(self, book).format()
-            book_data["state"] = utils.ReadingStateFormatter.format_reading_state(state)
+            book_data["state"] = utils.ReadingStateFormatter.format_reading_state(state_dict[book_id])
             read_done_books.append(book_data)
 
         return {"err": "ok",
