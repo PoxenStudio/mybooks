@@ -67,6 +67,7 @@ settings = {
     "ALLOW_GUEST_UPLOAD": False,
     "AI_MODEL": "qwen3:0.6b",
     "AI_MCP_TOKEN": "",
+    "AI_DEEPSEEK_API_KEY": "",
     "MAIN_PAGE_RANDOM_COUNT": 12,
     "MAIN_PAGE_RECENT_COUNT": 12,
 

@@ -128,12 +128,22 @@
 
             <template v-if="card.show_ai_capabilities">
               <p>{{ $t('settings.ai_capabilities_description') }}</p>
-              <v-text-field
+              <v-text-field hidden
                 :prepend-icon="'mdi-robot'"
                 v-model="settings['AI_MODEL']"
                 :label="$t('settings.ai_model')"
                 type="text"
                 placeholder="qwen3:0.6b"
+                :maxlength="64"
+              ></v-text-field>
+              <v-text-field
+                :prepend-icon="'mdi-key'"
+                v-model="settings['AI_DEEPSEEK_API_KEY']"
+                :label="$t('settings.ai_deepseek_api_key')"
+                :placeholder="$t('settings.ai_deepseek_api_key_description')"
+                type="text"
+                :rules="tokenRules"
+                :maxlength="128"
               ></v-text-field>
               <v-text-field
                 :prepend-icon="'mdi-key'"

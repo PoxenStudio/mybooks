@@ -366,6 +366,8 @@
         "ai_mcp_token": "MCP Access Token",
         "ai_mcp_token_generated": "MCP token has been generated",
         "ai_mcp_token_generate_failed": "Failed to generate MCP token",
+        "ai_deepseek_api_key": "DeepSeek API Key",
+        "ai_deepseek_api_key_description": "Register an account and obtain an API key at https://platform.deepseek.com",
         "device_type_duokan": "Duokan Reader",
         "device_type_ireader": "iReader",
         "device_type_hanwang": "Hanwang Reader",

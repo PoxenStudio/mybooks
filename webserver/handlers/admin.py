@@ -327,6 +327,7 @@ class AdminSettings(BaseHandler):
             "DEVICES",
             "AI_MODEL",
             "AI_MCP_TOKEN",
+            "AI_DEEPSEEK_API_KEY",
             "MAIN_PAGE_RANDOM_COUNT",
             "MAIN_PAGE_RECENT_COUNT",
             "INDEX_PAGE_TYPE"

@@ -12,7 +12,7 @@ from webserver import loader
 from mcp_client import MCPStreamClient
 
 CONF = loader.get_settings()
-DEEPSEEK_API_KEY = CONF.get("DEEPSEEK_API_KEY", "")
+DEEPSEEK_API_KEY = CONF.get("AI_DEEPSEEK_API_KEY", "")
 MCP_TOKEN = CONF.get("MCP_TOKEN", "")
 
 DEEPSEEK_API_BASE = "https://api.deepseek.com"
