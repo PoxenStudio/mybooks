@@ -435,7 +435,7 @@
                             <div v-if="book.state && book.state.read_state === this.READING_STATE.READING" class="mt-2">
                                 <v-chip
                                     small
-                                    color="green"
+                                    color="indigo"
                                     text-color="white"
                                 >
                                     <v-icon small left>mdi-book-open</v-icon>
@@ -452,7 +452,7 @@
                                     {{ completedReadingText }}
                                 </v-chip>
                             </div>
-                            <div class="tag-chips">
+                            <div class="tag-chips" style="margin-top: 5px;">
                                 <v-menu offset-y>
                                     <template v-slot:activator="{ on, attrs }">
                                         <v-chip rounded smallF color="green" class="white--text" v-bind="attrs" v-on="on" :disabled="categories.length === 0">

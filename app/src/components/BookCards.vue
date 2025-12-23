@@ -19,6 +19,9 @@
                     <v-col cols=9 class='col-book-info'>
                         <v-card-text class="pb-0" align-left>
                             <div class="book-title">{{book.title}}</div>
+                            <v-chip rounded x-small color="green" class="white--text" v-if="book.category">
+                                {{ book.category }}
+                            </v-chip>
                             <slot name="introduce" :book="book"></slot>
                             <div class="book-comments">
                                 <p v-if="book.comments" v-html="book.comments"></p>
@@ -49,7 +52,7 @@ export default {
             return (this.books || []).map( b => {
                 // 确保b是一个对象
                 if (!b) return {};
-                
+
                 if ( b['href'] == undefined ) {
                     if (this.isAudioPage) {
                         b['href'] = "/audio/" + (b.id || '');
