@@ -65,6 +65,7 @@ settings = {
     "BOOK2AUDIO_PROXY": "",
     "ENABLE_PHYSICAL_BOOKS": True,
     "ALLOW_GUEST_UPLOAD": False,
+    "AI_ENABLED": False,
     "AI_MODEL": "qwen3:0.6b",
     "AI_MCP_TOKEN": "",
     "AI_DEEPSEEK_API_KEY": "",

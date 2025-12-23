@@ -382,7 +382,8 @@ class UserInfo(BaseHandler):
                 "physical_books": CONF.get("ENABLE_PHYSICAL_BOOKS", True),
                 "upload": CONF.get("ALLOW_GUEST_UPLOAD", False),
             },
-            "indexPage": CONF.get("INDEX_PAGE_TYPE", "index")
+            "indexPage": CONF.get("INDEX_PAGE_TYPE", "index"),
+            "aiEnabled": CONF.get("AI_ENABLED", False)
         }
 
     def get_user_info(self, detail):

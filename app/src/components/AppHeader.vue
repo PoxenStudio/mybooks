@@ -118,7 +118,7 @@
                     :disabled="ai_thinking"
                 >
                     <template #append>
-                        <v-btn :color="isFocused ? (ai_enabled ? 'orange' : 'grey') : 'transparent'" class="black--text" rounded @click="toggle_ai">AI</v-btn>
+                        <v-btn v-if="isAiFeatureEnabled" :color="isFocused ? (ai_enabled ? 'orange' : 'grey') : 'transparent'" class="black--text" rounded @click="toggle_ai">AI</v-btn>
                     </template>
                 </v-text-field>
                 <v-spacer></v-spacer>
@@ -285,6 +285,12 @@ export default {
         appBarColor() {
             return this.$vuetify.theme.dark ? 'dark' : 'blue';
         },
+        isAiFeatureEnabled() {
+            if (process.client) {
+                return localStorage.getItem('aiEnabled') === 'true';
+            }
+            return false;
+        },
         items: function () {
             var home_links = [
                 // home
@@ -364,6 +370,7 @@ export default {
             this.$store.commit("login", rsp);
             this.$store.commit("set_title", rsp.sys.title);
             this.$store.state.site_title_template = "%s | " + rsp.sys.title;
+            this.$store.state.ai_enabled = rsp.sys.ai_enabled;
             if (rsp.sys.language !== '') {
                 this.$i18n.locale = rsp.sys.language;
             }

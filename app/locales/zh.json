@@ -497,6 +497,7 @@
         "device_type_hanwang": "汉王",
         "device_type_boox": "文石Boox",
         "device_type_dangdang": "当当",
+        "ai_enabled": "启用AI助手(Beta)",
         "ai_capabilities_description": "配置AI助手相关功能",
         "ai_capability": "AI助手",
         "ai_model": "AI模型",

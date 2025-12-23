@@ -325,6 +325,7 @@ class AdminSettings(BaseHandler):
             "BOOK2AUDIO_PROXY",
             "LAST_REVISION",
             "DEVICES",
+            "AI_ENABLED",
             "AI_MODEL",
             "AI_MCP_TOKEN",
             "AI_DEEPSEEK_API_KEY",

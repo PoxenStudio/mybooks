@@ -361,6 +361,7 @@
         "device_type": "Type",
         "device_schema": "Schema",
         "default_reader_name": "Reader",
+        "ai_enabled": "Enable AI assistant(Beta)",
         "ai_capabilities_description": "Configure AI assistant features",
         "ai_model": "AI Model",
         "ai_mcp_token": "MCP Access Token",

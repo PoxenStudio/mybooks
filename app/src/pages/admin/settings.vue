@@ -128,7 +128,8 @@
 
             <template v-if="card.show_ai_capabilities">
               <p>{{ $t('settings.ai_capabilities_description') }}</p>
-              <v-text-field hidden
+              <v-checkbox small hide-details v-model="settings['AI_ENABLED']" :key="'AI_ENABLED'" :label="$t('settings.ai_enabled')"></v-checkbox>
+              <v-text-field :disabled="!settings['AI_ENABLED']"
                 :prepend-icon="'mdi-robot'"
                 v-model="settings['AI_MODEL']"
                 :label="$t('settings.ai_model')"
@@ -136,16 +137,16 @@
                 placeholder="qwen3:0.6b"
                 :maxlength="64"
               ></v-text-field>
-              <v-text-field
+              <v-text-field :disabled="!settings['AI_ENABLED']"
                 :prepend-icon="'mdi-key'"
                 v-model="settings['AI_DEEPSEEK_API_KEY']"
                 :label="$t('settings.ai_deepseek_api_key')"
                 :placeholder="$t('settings.ai_deepseek_api_key_description')"
                 type="text"
-                :rules="tokenRules"
+                :rules="apiKeyRules"
                 :maxlength="128"
               ></v-text-field>
-              <v-text-field
+              <v-text-field :disabled="!settings['AI_ENABLED']"
                 :prepend-icon="'mdi-key'"
                 v-model="settings['AI_MCP_TOKEN']"
                 :label="$t('settings.ai_mcp_token')"
@@ -153,7 +154,6 @@
                 :append-icon="'mdi-refresh'"
                 @click:append="generateMCPToken"
                 readonly
-                :rules="tokenRules"
               ></v-text-field>
             </template>
 
@@ -453,9 +453,9 @@ export default {
       const pattern = /^https?:\/\/.+/;
       return pattern.test(v) || 'Must be a valid HTTP/HTTPS URL';
     },
-    tokenRules: [
-      v => !v || /^[a-zA-Z0-9]*$/.test(v) || 'Only alphanumeric characters allowed',
-      v => !v || (v.length >= 16 && v.length <= 32) || 'Length must be between 16 and 32 characters'
+    apiKeyRules: [
+      v => !v || /^[a-zA-Z0-9-]*$/.test(v) || 'Only alphanumeric characters allowed',
+      v => !v || (v.length >= 16 && v.length <= 128) || 'Length must be between 16 and 128 characters'
     ],
   }),
   beforeDestroy() {
@@ -484,6 +484,7 @@ export default {
         }
 
         localStorage.setItem('indexPage', this.settings['INDEX_PAGE_TYPE']);
+        localStorage.setItem('aiEnabled', this.settings['AI_ENABLED']);
 
         if (this.settings['site_theme'] !== '') {
           localStorage.setItem('site_theme', this.settings['site_theme']);
