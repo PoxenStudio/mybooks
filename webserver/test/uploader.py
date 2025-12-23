@@ -165,10 +165,10 @@ class DangdangUploader(BaseUploader):
 
     def upload(self, server_url):
         try:
-            upload_url = self.get_upload_url(server_url)            
+            upload_url = self.get_upload_url(server_url)
             with open(self.file_path, 'rb') as file:
                 files = {
-                    'file': (self.filename, file, self.content_type)
+                    'files[]': (self.filename, file, self.content_type)
                 }
                 response = requests.post(upload_url, files=files, timeout=self.timeout)
                 response.raise_for_status()
