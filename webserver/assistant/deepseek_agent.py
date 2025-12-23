@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 from openai import OpenAI
 from webserver import loader
 
-from mcp_client import MCPStreamClient
+from webserver.assistant.mcp_client import MCPStreamClient
 
 CONF = loader.get_settings()
 DEEPSEEK_API_KEY = CONF.get("AI_DEEPSEEK_API_KEY", "")

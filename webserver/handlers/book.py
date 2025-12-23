@@ -50,7 +50,13 @@ class Index(BaseHandler):
 
         ids = list(self.calibre_db_cache.all_book_ids())
         if not ids:
-            raise web.HTTPError(404, reason=_(u"本书库暂无藏书"))
+            return {
+                "err": "nobooks",
+                "random_books_count": 0,
+                "new_books_count": 0,
+                "random_books": [],
+                "new_books": []
+            }
 
         cnt_recent = min(cnt_recent, len(ids))
         cnt_random = min(cnt_random, len(ids))
@@ -64,6 +70,7 @@ class Index(BaseHandler):
         new_books.sort(key=lambda x: x["id"], reverse=True)
 
         return {
+            "err": "ok",
             "random_books_count": len(random_books),
             "new_books_count": len(new_books),
             "random_books": [self.fmt(b) for b in random_books],
