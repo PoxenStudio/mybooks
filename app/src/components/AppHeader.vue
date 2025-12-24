@@ -420,10 +420,22 @@ export default {
             }
         },
         connect_ai() {
-            if (this.ai_ws) return;
+            if (this.ai_ws) {
+                console.log('WebSocket already connected');
+                return;
+            }
+            
+            // Use window.location to build WebSocket URL
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const ws_url = `${protocol}//${window.location.host}/api/assistant/ws`;
+            const host = window.location.host;
+            const ws_url = `${protocol}//${host}/api/assistant/ws`;
+            
+            console.log(`Connecting to AI WebSocket: ${ws_url}`);
             this.ai_ws = new WebSocket(ws_url);
+
+            this.ai_ws.onopen = () => {
+                console.log('AI WebSocket connected successfully');
+            };
 
             this.ai_ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
@@ -432,29 +444,50 @@ export default {
                     this.ai_messages.push({ role: 'assistant', content: '', status: '正在思考...', streaming: true });
                 } else if (data.type === 'content') {
                     const lastMsg = this.ai_messages[this.ai_messages.length - 1];
-                    lastMsg.content += data.content;
-                    this.scroll_ai_bottom();
+                    if (lastMsg) {
+                        lastMsg.content += data.content;
+                        this.scroll_ai_bottom();
+                    }
                 } else if (data.type === 'status') {
-                    const lastMsg = this.ai_messages[this.ai_messages.length - 1];
-                    lastMsg.status = data.content;
+                    // 状态消息可能在没有消息时到达（如连接成功），只在有消息时更新
+                    if (this.ai_messages.length > 0) {
+                        const lastMsg = this.ai_messages[this.ai_messages.length - 1];
+                        lastMsg.status = data.content;
+                    } else {
+                        // 连接成功的状态消息，可以在控制台显示
+                        console.log('AI Status:', data.content);
+                    }
                 } else if (data.type === 'end') {
                     this.ai_thinking = false;
                     const lastMsg = this.ai_messages[this.ai_messages.length - 1];
-                    lastMsg.streaming = false;
-                    lastMsg.status = '';
+                    if (lastMsg) {
+                        lastMsg.streaming = false;
+                        lastMsg.status = '';
+                    }
                 } else if (data.type === 'error') {
                     this.ai_thinking = false;
                     this.ai_messages.push({ role: 'assistant', content: '出错了: ' + data.content, status: 'error' });
                 }
             };
 
-            this.ai_ws.onclose = () => {
+            this.ai_ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                console.error('Failed to connect to:', ws_url);
+                alert('AI连接失败，请检查服务器配置或登录状态');
+                this.ai_ws = null;
+                this.ai_enabled = false;
+                this.ai_thinking = false;
+            };
+
+            this.ai_ws.onclose = (event) => {
+                console.log('AI WebSocket closed', event.code, event.reason);
                 this.ai_ws = null;
                 this.ai_thinking = false;
             };
         },
         close_ai() {
             if (this.ai_ws) {
+                console.log('Closing AI WebSocket');
                 this.ai_ws.close();
                 this.ai_ws = null;
             }

@@ -13,10 +13,10 @@ from webserver.assistant.mcp_client import MCPStreamClient
 
 CONF = loader.get_settings()
 DEEPSEEK_API_KEY = CONF.get("AI_DEEPSEEK_API_KEY", "")
-MCP_TOKEN = CONF.get("MCP_TOKEN", "")
+MCP_TOKEN = CONF.get("AI_MCP_TOKEN", "")
 
 DEEPSEEK_API_BASE = "https://api.deepseek.com"
-MCP_SERVER_URL = "http://127.0.0.1:8082/api/mcp/stream"
+MCP_SERVER_URL = "http://127.0.0.1:80/api/mcp/stream"
 
 
 class DeepSeekMCPAgent:
