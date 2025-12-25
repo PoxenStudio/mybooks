@@ -601,7 +601,11 @@
         "reading": "在读",
         "readDone": "已读",
         "gongzhonghao": "关注公众号",
-        "soledBooks": "私藏书籍"
+        "soledBooks": "私藏书籍",
+        "aiAssistant": "AI助手",
+        "aiChatWelcome": "您好！我是AI助手，有什么可以帮助您的吗？",
+        "aiInputPlaceholder": "请输入您的问题...",
+        "aiThinking": "思考中..."
     },
     "bookCards": {
         "browseDetails": "点击浏览详情"

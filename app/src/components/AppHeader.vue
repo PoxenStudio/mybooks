@@ -218,28 +218,82 @@
             </template>
         </v-app-bar>
 
-        <!-- AI Response Panel -->
-        <v-expand-transition>
-            <div v-if="ai_enabled && ai_messages.length > 0" class="ai-overlay">
-                <v-card class="ai-card mx-auto" width="600" max-height="400">
-                    <v-card-title class="headline py-2">
-                        <v-icon left color="orange">mdi-robot</v-icon> AI Assistant
-                        <v-spacer></v-spacer>
-                        <v-btn icon small @click="ai_messages = []"><v-icon small>mdi-delete-sweep</v-icon></v-btn>
-                    </v-card-title>
-                    <v-divider></v-divider>
-                    <v-card-text id="ai-messages-container" class="overflow-y-auto" style="height: 300px;">
-                        <div v-for="(msg, index) in ai_messages" :key="index" :class="['mb-2', msg.role === 'user' ? 'text-right' : 'text-left']">
-                            <v-chip v-if="msg.role === 'user'" color="primary" label small dark>{{ msg.content }}</v-chip>
-                            <div v-else class="ai-bubble pa-2 rounded-lg elevation-1" :style="{ backgroundColor: 'rgba(255, 165, 0, 0.1)', border: '1px solid rgba(255, 165, 0, 0.3)' }">
-                                <div v-if="msg.status" class="caption grey--text italic mb-1">{{ msg.status }}</div>
-                                <div style="white-space: pre-wrap; word-break: break-word;">{{ msg.content }}<span v-if="msg.streaming" class="ai-typing">|</span></div>
+        <!-- AI对话窗口 -->
+        <v-dialog v-model="ai_enabled" persistent max-width="700" scrollable>
+            <v-card class="dialog-border d-flex flex-column" style="height: 600px;">
+                <v-card-title class="primary white--text py-3">
+                    <v-icon left color="white">mdi-robot</v-icon>
+                    {{ $t('appHeader.aiAssistant') }}
+                    <v-spacer></v-spacer>
+                    <v-btn icon dark @click="close_ai">
+                        <v-icon>mdi-close</v-icon>
+                    </v-btn>
+                </v-card-title>
+                
+                <v-card-text class="flex-grow-1 pa-0" style="overflow-y: auto; height: 100%;">
+                    <div class="chat-messages pa-4" ref="chatMessages">
+                        <div v-if="ai_messages.length === 0" class="text-center grey--text py-8">
+                            <v-icon size="64" color="grey lighten-1">mdi-chat-outline</v-icon>
+                            <p class="mt-4">{{ $t('appHeader.aiChatWelcome') }}</p>
+                        </div>
+                        <div v-for="(message, index) in ai_messages" :key="index" 
+                             :class="['message-item', 'mb-4']">
+                            <div class="d-flex" :class="message.role === 'user' ? 'justify-end' : 'justify-start'">
+                                <v-avatar v-if="message.role === 'assistant'" size="32" color="primary" class="mr-2">
+                                    <v-icon dark small>mdi-robot</v-icon>
+                                </v-avatar>
+                                <div :class="['message-bubble', 'pa-3', message.role === 'user' ? 'primary white--text' : 'grey lighten-4']" 
+                                     style="max-width: 70%; border-radius: 12px; word-break: break-word; white-space: pre-wrap;">
+                                    <div v-if="message.status" class="caption grey--text italic mb-1">{{ message.status }}</div>
+                                    <div>{{ message.content }}<span v-if="message.streaming" class="ai-typing">|</span></div>
+                                </div>
+                                <v-avatar v-if="message.role === 'user'" size="32" color="secondary" class="ml-2">
+                                    <v-icon dark small>mdi-account</v-icon>
+                                </v-avatar>
                             </div>
                         </div>
-                    </v-card-text>
-                </v-card>
-            </div>
-        </v-expand-transition>
+                        <div v-if="ai_thinking && ai_messages.length > 0 && ai_messages[ai_messages.length - 1].role === 'user'" class="message-item mb-4">
+                            <div class="d-flex justify-start">
+                                <v-avatar size="32" color="primary" class="mr-2">
+                                    <v-icon dark small>mdi-robot</v-icon>
+                                </v-avatar>
+                                <div class="message-bubble grey lighten-4 pa-3" style="border-radius: 12px;">
+                                    <v-progress-circular indeterminate size="20" width="2" color="primary"></v-progress-circular>
+                                    <span class="ml-2 grey--text">{{ $t('appHeader.aiThinking') }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </v-card-text>
+                
+                <v-divider></v-divider>
+                
+                <v-card-actions class="pa-4">
+                    <v-text-field
+                        v-model="ai_input"
+                        :placeholder="$t('appHeader.aiInputPlaceholder')"
+                        outlined
+                        dense
+                        hide-details
+                        :disabled="ai_thinking"
+                        @keyup.enter="send_ai_message"
+                        class="mr-2"
+                        ref="aiInput"
+                    >
+                    </v-text-field>
+                    <v-btn
+                        icon
+                        color="primary"
+                        :loading="ai_thinking"
+                        :disabled="!ai_input.trim() || ai_thinking"
+                        @click="send_ai_message"
+                        large
+                    >
+                        <v-icon>mdi-send</v-icon>
+                    </v-btn>
+                </v-card-actions>
+            </v-card>
+        </v-dialog>
     </div>
 </template>
 
@@ -257,6 +311,7 @@ export default {
         ai_thinking: false,
         ai_messages: [],
         ai_ws: null,
+        ai_input: '',
         user: {},
         sys: {
             books: 0,
@@ -415,6 +470,12 @@ export default {
             this.ai_enabled = !this.ai_enabled;
             if (this.ai_enabled) {
                 this.connect_ai();
+                // 聚焦输入框
+                this.$nextTick(() => {
+                    if (this.$refs.aiInput) {
+                        this.$refs.aiInput.focus();
+                    }
+                });
             } else {
                 this.close_ai();
             }
@@ -491,10 +552,26 @@ export default {
                 this.ai_ws.close();
                 this.ai_ws = null;
             }
+            this.ai_enabled = false;
+        },
+        send_ai_message() {
+            if (!this.ai_input.trim() || this.ai_thinking || !this.ai_ws) return;
+            
+            const message = this.ai_input.trim();
+            this.ai_input = '';
+            
+            // 添加用户消息
+            this.ai_messages.push({ role: 'user', content: message });
+            
+            // 发送到WebSocket
+            this.ai_ws.send(JSON.stringify({ type: 'query', content: message }));
+            
+            // 滚动到底部
+            this.scroll_ai_bottom();
         },
         scroll_ai_bottom() {
             this.$nextTick(() => {
-                const container = document.getElementById('ai-messages-container');
+                const container = this.$refs.chatMessages;
                 if (container) {
                     container.scrollTop = container.scrollHeight;
                 }
@@ -511,11 +588,7 @@ export default {
         },
         do_mobile_search: function () {
             if (this.search.trim() != "") {
-                if (this.ai_enabled) {
-                    this.send_ai_query();
-                } else {
-                    this.$router.push("/search?name=" + this.search.trim());
-                }
+                this.$router.push("/search?name=" + this.search.trim());
             } else {
                 if (this.$refs.mobile_search) {
                     this.$refs.mobile_search.focus();
@@ -524,24 +597,12 @@ export default {
         },
         do_search: function () {
             if (this.search.trim() != "") {
-                if (this.ai_enabled) {
-                    this.send_ai_query();
-                } else {
-                    this.$router.push("/search?name=" + this.search.trim());
-                }
+                this.$router.push("/search?name=" + this.search.trim());
             } else {
                 if (this.$refs.search) {
                     this.$refs.search.focus();
                 }
             }
-        },
-        send_ai_query() {
-            if (!this.ai_ws || this.ai_thinking) return;
-            const query = this.search.trim();
-            this.ai_messages.push({ role: 'user', content: query });
-            this.ai_ws.send(JSON.stringify({ type: 'query', content: query }));
-            this.search = "";
-            this.scroll_ai_bottom();
         },
         hidemsg: function (idx, msgid) {
             this.$backend("/user/messages", {
@@ -607,26 +668,58 @@ export default {
   appearance: none !important;
 }
 
-.ai-overlay {
-    position: fixed;
-    top: 64px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 100;
-    width: 100%;
-    pointer-events: none;
+/* Dialog border styles */
+.dialog-border {
+    border: 2px solid #e0e0e0 !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    border-radius: 8px !important;
 }
 
-.ai-card {
-    pointer-events: auto;
-    background-color: rgba(var(--v-theme-surface), 0.9) !important;
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 165, 0, 0.2);
+.dialog-border .v-card__title {
+    border-bottom: 1px solid #e0e0e0;
 }
 
-.ai-bubble {
-    display: inline-block;
-    max-width: 90%;
+/* AI Chat styles */
+.chat-messages {
+    overflow-y: auto;
+    scroll-behavior: smooth;
+}
+
+.chat-messages::-webkit-scrollbar {
+    width: 8px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background: #cccccc;
+    border-radius: 4px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background: #999999;
+}
+
+.message-item {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.message-bubble {
+    line-height: 1.6;
+    font-size: 14px;
 }
 
 .ai-typing {

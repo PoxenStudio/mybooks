@@ -600,7 +600,11 @@
         "reading": "Reading",
         "readDone": "Read",
         "gongzhonghao": "WeiChat",
-        "soledBooks": "Private Books"
+        "soledBooks": "Private Books",
+        "aiAssistant": "AI Assistant",
+        "aiChatWelcome": "Hello! I'm your AI assistant. How can I help you?",
+        "aiInputPlaceholder": "Type your message here...",
+        "aiThinking": "Thinking..."
     },
     "bookCards": {
         "browseDetails": "Click to browse details"
