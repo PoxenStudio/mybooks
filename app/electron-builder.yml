@@ -1,0 +1,116 @@
+# Electron Builder配置文件
+
+# 应用基本信息
+appId: com.talebook.app
+productName: Talebook
+copyright: Copyright © 2025 Talebook
+
+# 目录配置
+directories:
+  output: electron-dist
+  app: .
+  buildResources: electron-resources
+
+# 文件配置
+files:
+  - dist/**/*
+  - electron/**/*
+  - package.json
+
+# ASAR打包
+asar: true
+
+# 重建配置
+rebuildDependencies: false
+
+# 打包选项
+packagerConfig:
+  ignore:
+    - '^/node_modules/fsevents'
+    - '^/node_modules/watchpack-chokidar2'
+    - '^/node_modules/.pnpm/fsevents'
+    - '^/node_modules/.pnpm/watchpack-chokidar2'
+    - '^/node_modules/watchpack-chokidar2/node_modules/fsevents'
+    - '^/node_modules/.pnpm/watchpack-chokidar2/node_modules/fsevents'
+
+# 构建选项
+electronRebuild: false
+npmRebuild: false
+skipBuildDependenciesFromSource: true
+
+# macOS配置
+mac:
+  target:
+    - dmg
+    - zip
+  icon: electron-resources/icons/icon.icns
+  category: public.app-category.productivity
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: electron-resources/entitlements.mac.plist
+  entitlementsInherit: electron-resources/entitlements.mac.plist
+
+# Windows配置
+win:
+  target:
+    - nsis
+    - zip
+  icon: electron-resources/icons/icon.ico
+  publisherName: Talebook
+
+# Linux配置
+linux:
+  target:
+    - AppImage
+    - deb
+    - rpm
+  icon: electron-resources/icons/icon.png
+  category: Office
+  desktop: electron-resources/talebook.desktop
+
+# NSIS安装程序配置
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Talebook
+  installerIcon: electron-resources/icons/icon.ico
+  uninstallerIcon: electron-resources/icons/icon.ico
+  installerHeaderIcon: electron-resources/icons/icon.ico
+  license: electron-resources/LICENSE.txt
+
+# AppImage配置
+appImage:
+  category: Office
+  desktopFileName: talebook
+
+# Debian包配置
+deb:
+  category: office
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+
+# RPM包配置
+rpm:
+  category: Office
+  depends:
+    - gtk3
+    - libnotify
+    - nss
+    - libXss
+    - libXtst
+    - xdg-utils
+    - at-spi2-core
+    - libuuid
+
+# 开发服务器配置（可选）
+devServer:
+  port: 9000

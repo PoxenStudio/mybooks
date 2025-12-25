@@ -2,12 +2,18 @@
   "name": "talebook",
   "version": "3.12.2",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "nuxt",
     "build": "nuxt build",
     "build-spa": "nuxt build --spa",
     "start": "nuxt start",
-    "generate": "nuxt generate"
+    "generate": "nuxt generate",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:9000 && NODE_ENV=development electron .\"",
+    "electron:build": "npm run build-spa && electron-packager . Talebook --platform=all --arch=all --out=electron-dist --electron-version=28.3.3 --no-prune --ignore=node_modules/watchpack-chokidar2/node_modules/fsevents --ignore=node_modules/fsevents",
+    "electron:build:mac": "npm run build-spa && electron-packager . Talebook --platform=darwin --arch=arm64 --out=electron-dist --electron-version=28.3.3 --no-prune --ignore=node_modules/watchpack-chokidar2/node_modules/fsevents --ignore=node_modules/fsevents",
+    "electron:build:win": "npm run build-spa && electron-packager . Talebook --platform=win32 --arch=x64 --out=electron-dist --electron-version=28.3.3 --no-prune --ignore=node_modules/watchpack-chokidar2/node_modules/fsevents --ignore=node_modules/fsevents",
+    "electron:build:linux": "npm run build-spa && electron-packager . Talebook --platform=linux --arch=x64 --out=electron-dist --electron-version=28.3.3 --no-prune --ignore=node_modules/watchpack-chokidar2/node_modules/fsevents --ignore=node_modules/fsevents"
   },
   "dependencies": {
     "core-js": "^3.19.3",
@@ -29,8 +35,57 @@
     "@nuxtjs/vuetify": "^1.12.3",
     "@tailwindcss/postcss": "^4.1.10",
     "autoprefixer": "^10.4.21",
+    "concurrently": "^9.2.1",
     "connect-logger": "^0.0.1",
-    "material-design-icons-iconfont": "^6.4.1"
+    "electron": "^28.3.3",
+    "electron-builder": "^26.0.12",
+    "electron-packager": "^17.1.2",
+    "material-design-icons-iconfont": "^6.4.1",
+    "wait-on": "^9.0.3"
   },
-  "packageManager": "pnpm@10.12.1+sha512.f0dda8580f0ee9481c5c79a1d927b9164f2c478e90992ad268bbb2465a736984391d6333d2c327913578b2804af33474ca554ba29c04a8b13060a717675ae3ac"
+  "packageManager": "pnpm@10.12.1+sha512.f0dda8580f0ee9481c5c79a1d927b9164f2c478e90992ad268bbb2465a736984391d6333d2c327913578b2804af33474ca554ba29c04a8b13060a717675ae3ac",
+  "build": {
+    "appId": "com.talebook.app",
+    "productName": "Talebook",
+    "copyright": "Copyright © 2025 Talebook",
+    "directories": {
+      "output": "electron-dist",
+      "app": ".",
+      "buildResources": "electron-resources"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "electron-resources/icons/icon.icns"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ],
+      "icon": "electron-resources/icons/icon.ico"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "icon": "electron-resources/icons/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
 }

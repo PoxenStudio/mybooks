@@ -96,7 +96,18 @@ export default {
     host: '0.0.0.0' // default: localhost
   },
 
+  // Router Configuration: https://go.nuxtjs.dev/config-router
+  router: {
+    // 确保在Electron的file://协议下能正确加载资源
+    base: './'
+  },
+
   // Build Configuration: https://go.nuxtjs.dev/config-build
   build: {
+    // 优化构建，适合Electron环境
+    extractCSS: true,
+    optimizeCSS: true,
+    // 禁用source map以减小打包体积
+    productionSourceMap: false
   }
 }
