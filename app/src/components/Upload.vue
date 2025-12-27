@@ -304,7 +304,8 @@ export default {
                 this.dialog = false;
                 this.handleUploadResponse(rsp);
             } catch (error) {
-                this.$alert("error", "上传失败: " + error.message);
+                const msg = error.message ? "上传失败: " + error.message : "上传失败， 请检查是否文件过大或者已被删除！";
+                this.$alert("error", msg);
             } finally {
                 this.loading = false;
             }
@@ -348,7 +349,8 @@ export default {
                     }
                 }
             } catch (error) {
-                this.$alert("error", "分片上传失败: " + error.message);
+                const msg = error.message ? "分片上传失败: " + error.message : "上传失败， 请检查是否文件过大或者已被删除！";
+                this.$alert("error", msg);
             } finally {
                 this.loading = false;
             }
@@ -458,7 +460,8 @@ export default {
                     }
                 })
                 .catch((error) => {
-                    this.$alert("error", "添加图书时发生错误: " + error.message);
+                    const msg = error.message ? "添加图书时发生错误: " + error.message : "上传失败， 请检查是否文件过大或者已被删除！";
+                    this.$alert("error", msg);
                 })
                 .finally(() => {
                     this.adding_book = false;
