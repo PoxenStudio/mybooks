@@ -239,6 +239,8 @@ class AdminSettings(BaseHandler):
             CONF["MAIN_PAGE_RECENT_COUNT"] = 12
         if CONF.get("INDEX_PAGE_TYPE", -1) == -1:
             CONF["INDEX_PAGE_TYPE"] = "index"  # 默认首页, 可能的值包括index, all, categories三类
+        if CONF.get("DEFAULT_PAGE_SIZE", -1) == -1:
+            CONF["DEFAULT_PAGE_SIZE"] = 60  # 默认每页显示60本书
 
         CONF["site_icon"] = "favicon_0"  # default icon, means use current favicon.ico
 
@@ -331,7 +333,8 @@ class AdminSettings(BaseHandler):
             "AI_DEEPSEEK_API_KEY",
             "MAIN_PAGE_RANDOM_COUNT",
             "MAIN_PAGE_RECENT_COUNT",
-            "INDEX_PAGE_TYPE"
+            "INDEX_PAGE_TYPE",
+            "DEFAULT_PAGE_SIZE"
         ]
 
         current_icon = CONF.get("site_icon", "favicon_0")  # favicon_0 means use current icon

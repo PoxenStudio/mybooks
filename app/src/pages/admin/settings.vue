@@ -146,7 +146,7 @@
                 :rules="apiKeyRules"
                 :maxlength="128"
               ></v-text-field>
-              <v-text-field :disabled="!settings['AI_ENABLED']"
+              <v-text-field
                 :prepend-icon="'mdi-key'"
                 v-model="settings['AI_MCP_TOKEN']"
                 :label="$t('settings.ai_mcp_token')"
@@ -254,6 +254,10 @@ export default {
           {
             icon: "mdi-book-multiple", key: "MAIN_PAGE_RECENT_COUNT", label: "settings.main_page_recent_count", type: 'select',
             items: [12, 24, 48, 96, 192].map(v => ({ text: String(v), value: v }))
+          },
+          {
+            icon: "mdi-book-multiple", key: "DEFAULT_PAGE_SIZE", label: "settings.default_page_size", type: 'select',
+            items: [60, 100, 200, 500, 1000].map(v => ({ text: String(v), value: v }))
           },
         ],
         groups: [
@@ -422,7 +426,6 @@ export default {
         if (process.client && this.settings['CHUNK_UPLOAD_SIZE'] !== '') {
           localStorage.setItem('chunk_upload_size', this.settings['CHUNK_UPLOAD_SIZE']);
         }
-        console.log("Loaded settings:", this.settings);
         var m = {}
         rsp.sns.forEach(function (ele) {
           m[ele.value] = ele;
@@ -485,6 +488,7 @@ export default {
 
         localStorage.setItem('indexPage', this.settings['INDEX_PAGE_TYPE']);
         localStorage.setItem('aiEnabled', this.settings['AI_ENABLED']);
+        localStorage.setItem('defaultPageSize', this.settings['DEFAULT_PAGE_SIZE']);
 
         if (this.settings['site_theme'] !== '') {
           localStorage.setItem('site_theme', this.settings['site_theme']);

@@ -425,7 +425,9 @@ export default {
             this.$store.commit("login", rsp);
             this.$store.commit("set_title", rsp.sys.title);
             this.$store.state.site_title_template = "%s | " + rsp.sys.title;
-            this.$store.state.ai_enabled = rsp.sys.ai_enabled;
+            this.$store.state.ai_enabled = rsp.sys.aiEnabled;
+            this.$store.state.default_page_size = rsp.sys.defaultPageSize;
+            this.$store.state.index_page = rsp.sys.indexPage;
             if (rsp.sys.language !== '') {
                 this.$i18n.locale = rsp.sys.language;
             }

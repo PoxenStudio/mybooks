@@ -383,6 +383,7 @@ class UserInfo(BaseHandler):
                 "upload": CONF.get("ALLOW_GUEST_UPLOAD", False),
             },
             "indexPage": CONF.get("INDEX_PAGE_TYPE", "index"),
+            "defaultPageSize": CONF.get("DEFAULT_PAGE_SIZE", 60),
             "aiEnabled": CONF.get("AI_ENABLED", False)
         }
 

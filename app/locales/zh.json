@@ -512,7 +512,8 @@
         "index_page_type": "首页类型",
         "index_page_type_index": "默认首页",
         "index_page_type_all": "所有图书",
-        "index_page_type_categories": "分类浏览"
+        "index_page_type_categories": "分类浏览",
+        "default_page_size": "书籍列表中分页大小 (默认为60)"
     },
     "user": {
         "avatar": "头像",

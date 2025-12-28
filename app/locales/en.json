@@ -380,7 +380,8 @@
         "index_page_type": "Index Page Type",
         "index_page_type_index": "Default Home Page",
         "index_page_type_all": "All Books",
-        "index_page_type_categories": "Category Browse"
+        "index_page_type_categories": "Category Browse",
+        "default_page_size": "Page size in book list (default is 60)"
     },
     "book": {
         "edit": {

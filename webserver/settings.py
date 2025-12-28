@@ -71,6 +71,7 @@ settings = {
     "AI_DEEPSEEK_API_KEY": "",
     "MAIN_PAGE_RANDOM_COUNT": 12,
     "MAIN_PAGE_RECENT_COUNT": 12,
+    "DEFAULT_PAGE_SIZE": 60,
 
     "EPUB_VIEWER": "epubjs.html",
     "CANDLE_READER_SERVER": "https://brs.talebook.org",

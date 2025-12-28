@@ -29,14 +29,24 @@ export default {
   components: {
     BookCards,
   },
-  computed: {},
+  computed: {
+    page_size() {
+      // 客户端环境下才能访问 localStorage
+      if (process.client) {
+        const stored = localStorage.getItem('defaultPageSize');
+        if (stored) {
+          return parseInt(stored);
+        }
+      }
+      return this.$store?.state?.default_page_size || 60;
+    }
+  },
   data: () => ({
     title: "",
     pageDisplayTitle: "", // 用于页面显示的标题
     page: 1,
     books: [],
     total: 0,
-    page_size: 60,
     page_cnt: 0,
     inited: false,
     isAudioPage: false, // 标识是否为音频页面
