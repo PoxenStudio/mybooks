@@ -1855,7 +1855,7 @@ class BookSuggestion(ListHandler):
         if not similar_books:
             # 如果没有标签或没有找到匹配的书籍，则使用作者查询
             authors = book.get("authors", [])
-            if authors:
+            if authors and authors[0] not in ("佚名", "Unknown"):
                 similar_books = self.get_item_books("authors", authors[0], max_count=12)
         # 移除结果中的当前书籍
         similar_books = [b for b in similar_books if b["id"] != book["id"]]
