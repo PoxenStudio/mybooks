@@ -1301,13 +1301,21 @@ class SearchBook(ListHandler):
             name = book_title
 
         title = _(u"搜索：%(name)s") % {"name": name}
-        ids = self.calibre_db_cache.search(f'title:={name}' if title_search else name)
+        try:
+            ids = self.calibre_db_cache.search(f'title:={name}' if title_search else name)
+        except Exception as e:
+            logging.error("Search book failed: %s" % e)
+            ids = set()
 
         for profile in {'s2t', "t2s"}:
             converted_name = opencc.OpenCC(profile).convert(name)
             if converted_name == name:
                 continue
-            ids2 = self.calibre_db_cache.search(f'title:={converted_name}' if title_search else converted_name)
+            try:
+                ids2 = self.calibre_db_cache.search(f'title:={converted_name}' if title_search else converted_name)
+            except Exception as e:
+                logging.error("Search book failed: %s" % e)
+                ids2 = set()
             if len(ids2) > 0:
                 ids = ids.union(ids, ids2)
                 break
