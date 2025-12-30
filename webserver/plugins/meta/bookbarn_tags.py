@@ -20,9 +20,9 @@ class BookBarnTags:
         if not title:
             return ""
 
-        clean = title.replace("\r", "").replace("】", "").replace("【", "").strip()
+        clean = title.replace("\r", "").replace("】", "").strip()
         cut_index = len(clean)
-        for marker in ("(", "（"):
+        for marker in ("(", "（", "【"):
             idx = clean.find(marker)
             if idx != -1 and idx < cut_index:
                 cut_index = idx
