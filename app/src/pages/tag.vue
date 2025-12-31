@@ -42,6 +42,14 @@
                       >
                         {{ $t('listBook.batchSet') }}
                       </v-btn>
+                      <v-btn
+                        color="error"
+                        class="ml-2"
+                        @click="confirmUpdateTags"
+                        :loading="updateLoading"
+                      >
+                        {{ $t('listBook.updateTags') }}
+                      </v-btn>
                     </v-col>
                   </v-row>
                   <div class="caption text-grey mt-2" v-if="targetCategory">
@@ -103,6 +111,30 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- Update Tags Confirmation Dialog -->
+    <v-dialog v-model="updateDialog" max-width="500">
+      <v-card>
+        <v-card-title class="headline">{{ $t('listBook.confirmUpdateTags') }}</v-card-title>
+        <v-card-text>
+          <div v-html="$t('listBook.confirmUpdateTagsContent', { tag: currentTag })"></div>
+          <div class="mt-2" v-html="$t('listBook.confirmUpdateTagsCount', { total: total })"></div>
+          <div class="mt-2 error--text" v-if="total > 300">
+            <v-icon color="error" small>mdi-alert</v-icon>
+            {{ $t('listBook.confirmUpdateTagsLimit') }}
+          </div>
+          <div class="mt-2 warning--text">
+            <v-icon color="warning" small>mdi-clock-alert</v-icon>
+            {{ $t('listBook.confirmUpdateTagsWarning') }}
+          </div>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn color="grey darken-1" text @click="updateDialog = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn color="error" text @click="doUpdateTags">{{ $t('listBook.confirmUpdateTagsButton') }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -132,6 +164,8 @@ export default {
     targetCategory: "",
     batchLoading: false,
     dialog: false,
+    updateLoading: false,
+    updateDialog: false,
   }),
   computed: {
     visibleMetaItems() {
@@ -298,6 +332,31 @@ export default {
             this.$alert("error", "Batch update failed");
         } finally {
             this.batchLoading = false;
+        }
+    },
+    confirmUpdateTags() {
+        this.updateDialog = true;
+    },
+    async doUpdateTags() {
+        this.updateDialog = false;
+        this.updateLoading = true;
+        try {
+            const rsp = await this.$backend(`/book/update_tags?tag=${encodeURIComponent(this.currentTag)}`, {
+                method: "POST",
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            if (rsp.err === 'ok') {
+                this.$alert("success", rsp.msg);
+                this.fetchBooks();
+            } else {
+                this.$alert("error", rsp.msg);
+            }
+        } catch (e) {
+            this.$alert("error", this.$t('listBook.updateTagsFailed'));
+        } finally {
+            this.updateLoading = false;
         }
     }
   }

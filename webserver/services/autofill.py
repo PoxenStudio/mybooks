@@ -12,7 +12,6 @@ from webserver.plugins.meta.bookbarn_tags import BookBarnTags
 from webserver.services import AsyncService
 
 CONF = loader.get_settings()
-UPDATE_TAGS_ONLY = False
 
 
 class AutoFillService(AsyncService):
@@ -39,7 +38,7 @@ class AutoFillService(AsyncService):
         }
 
     @AsyncService.register_service
-    def auto_fill_all(self, idlist: list, qpm=60):
+    def auto_fill_all(self, idlist: list, onlyTags=False, qpm=60):
         # 根据qpm，计算更新的间隔，避免刷爆豆瓣等服务
         sleep_seconds = 60.0 / qpm
         batch_size = 10  # 每批处理的书籍数量
@@ -63,7 +62,7 @@ class AutoFillService(AsyncService):
                 self.current_book_id = book_id
                 try:
                     mi = self.db.get_metadata(book_id, index_is_id=True)
-                    if self.should_update(mi) or UPDATE_TAGS_ONLY:
+                    if self.should_update(mi) or onlyTags:
                         books_to_update.append((book_id, mi))
                     else:
                         logging.info(_("忽略更新书籍 id=%d : 无需更新"), book_id)
@@ -77,7 +76,7 @@ class AutoFillService(AsyncService):
             for book_id, mi in books_to_update:
                 time.sleep(sleep_seconds)
                 try:
-                    if UPDATE_TAGS_ONLY:
+                    if onlyTags:
                         refer_mi = mi
                     else:
                         refer_mi = self.plugin_search_best_book_info(mi)
