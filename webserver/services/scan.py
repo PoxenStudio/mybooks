@@ -148,10 +148,29 @@ class ScanService(AsyncService):
 
             # 读取文件，计算哈希值
             sha256 = hashlib.sha256()
-            with open(fpath, "rb") as f:
-                # Read and update hash string value in blocks of 4K
-                for byte_block in iter(lambda: f.read(4096), b""):
-                    sha256.update(byte_block)
+            try:
+                with open(fpath, "rb") as f:
+                    # Read and update hash string value in blocks of 4K
+                    for byte_block in iter(lambda: f.read(4096), b""):
+                        sha256.update(byte_block)
+            except FileNotFoundError:
+                row.status = ScanFile.MISSED
+                logging.error("File not found when calculating hash: %s", fpath)
+                if not self.save_or_rollback(row):
+                    logging.error("Failed to save row status: %s", fpath)
+                continue
+            except PermissionError:
+                row.status = ScanFile.DROP
+                logging.error("Permission denied when reading file: %s", fpath)
+                if not self.save_or_rollback(row):
+                    logging.error("Failed to save row status: %s", fpath)
+                continue
+            except Exception as e:
+                row.status = ScanFile.DROP
+                logging.error("Error reading file %s: %s", fpath, e)
+                if not self.save_or_rollback(row):
+                    logging.error("Failed to save row status: %s", fpath)
+                continue
 
             hash = "sha256:" + sha256.hexdigest()
             should_drop = hash in inserted_hash
@@ -183,11 +202,16 @@ class ScanService(AsyncService):
 
             # 尝试解析metadata
             fmt = fpath.split(".")[-1].lower()
-            with open(fpath, "rb") as stream:
-                mi = get_metadata(stream, stream_type=fmt,
-                                  use_libprs_metadata=True)
-                mi.title = utils.super_strip(mi.title)
-                mi.authors = [utils.super_strip(s) for s in mi.authors]
+            try:
+                with open(fpath, "rb") as stream:
+                    mi = get_metadata(stream, stream_type=fmt,
+                                      use_libprs_metadata=True)
+                    mi.title = utils.super_strip(mi.title)
+                    mi.authors = [utils.super_strip(s) for s in mi.authors]
+            except Exception as e:
+                logging.error("Error reading metadata from file %s: %s", fpath, e)
+                continue
+                
             if mi.title and mi.title == CALIBRE_ERROR_FLAG:
                 logging.error("Failed to get metadata for %s, reason:%s", fpath, mi.comments)
                 continue
