@@ -199,7 +199,7 @@ class BookUpdateTags(BaseHandler):
                 logging.info(f"Limiting tag update to first 300 books out of {total_count}")
 
             # Call AutoFillService to update tags in background
-            AutoFillService().auto_fill_all(book_ids, onlyTags=True)
+            AutoFillService().auto_fill_all(book_ids, only_tags=True)
 
             msg = _(u"已提交 %d 本书籍的标签更新任务，正在后台处理, 请稍后刷新查看结果") % len(book_ids)
             if total_count > 300:

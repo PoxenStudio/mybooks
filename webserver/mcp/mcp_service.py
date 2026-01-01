@@ -537,6 +537,7 @@ class MCPService:
         try:
             book_ids = arguments.get("book_ids")
             title = arguments.get("title", "").strip()
+            only_tags = arguments.get("only_tags", False)
 
             # 如果提供了title，先搜索对应的书籍
             if title and not book_ids:
@@ -635,7 +636,7 @@ class MCPService:
                         continue
 
                     # 执行自动填充
-                    success = autofill_service.auto_fill(book_id)
+                    success = autofill_service.auto_fill(book_id, only_tags=only_tags)
 
                     if success:
                         results.append({
@@ -776,6 +777,7 @@ class MCPService:
                             "- comments: Book description (if include_comments=True)\n"
                             "- publisher: Publisher\n"
                             "- tags: List of tags\n"
+                            "- category: Category of book\n"
                             "- rating: Rating (0-10)\n"
                             "- pubdate: Publication date\n",
                 inputSchema={
@@ -917,6 +919,11 @@ class MCPService:
                             "type": "string",
                             "description": "Book title to search for. If one book found, auto-update."
                                            "If multiple found, return list for selection."
+                        },
+                        "only_tags": {
+                            "type": "boolean",
+                            "description": "Whether to only update tags without changing other metadata.",
+                            "default": False
                         }
                     },
                     "anyOf": [
