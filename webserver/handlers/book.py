@@ -2168,35 +2168,51 @@ class ClearRareTags(ListHandler):
             return {"err": "ok", "msg": _(u"书籍数量较少，无需清理标签")}
 
         try:
-            # 获取所有标签及其书籍数量
-            tag_list = self.get_category_with_count("tag")
+            # 使用SQL直接批量查询：找出所有count < 3的tag对应的所有书籍ID
+            sql = """
+                SELECT DISTINCT l.book
+                FROM books_tags_link l
+                INNER JOIN (
+                    SELECT A.id, COUNT(DISTINCT B.book) as book_count
+                    FROM tags A
+                    LEFT JOIN books_tags_link B ON A.id = B.value
+                    GROUP BY A.id
+                    HAVING COUNT(DISTINCT B.book) < 3 AND COUNT(DISTINCT B.book) > 0
+                ) rare_tag_ids ON l.value = rare_tag_ids.id
+            """
 
-            # 筛选出少于3本书的标签
-            rare_tags = [tag for tag in tag_list if tag["count"] < 3]
+            with self.db_lock:
+                rows = self.calibre_db_cache.backend.conn.get(sql)
 
-            if not rare_tags:
-                return {"err": "ok", "msg": _(u"没有找到稀少标签")}
+            if not rows:
+                return {"err": "ok", "msg": _(u"没有找到稀少标签对应的书籍")}
 
-            # 收集所有稀少标签对应的书籍ID
-            book_ids = set()
-            for tag in rare_tags:
-                tag_name = tag["name"]
-                books = self.get_item_books("tags", tag_name)
-                for book in books:
-                    book_ids.add(book["id"])
+            book_ids = [row[0] for row in rows]
+
+            # 同时获取稀少标签的数量用于返回信息
+            count_sql = """
+                SELECT COUNT(DISTINCT A.id)
+                FROM tags A
+                LEFT JOIN books_tags_link B ON A.id = B.value
+                GROUP BY A.id
+                HAVING COUNT(DISTINCT B.book) < 3 AND COUNT(DISTINCT B.book) > 0
+            """
+            with self.db_lock:
+                tag_count_rows = self.calibre_db_cache.backend.conn.get(count_sql)
+            rare_tag_count = len(tag_count_rows) if tag_count_rows else 0
 
             if not book_ids:
                 return {"err": "ok", "msg": _(u"没有找到需要更新的书籍")}
 
             # 调用自动填充服务，只更新标签
             service = AutoFillService()
-            service.auto_fill_all(list(book_ids), only_tags=True)
+            service.auto_fill_all(book_ids, only_tags=True)
 
             return {
                 "err": "ok",
-                "msg": _(u"开始更新 %d 本书的标签，涉及 %d 个稀少标签") % (len(book_ids), len(rare_tags)),
+                "msg": _(u"开始更新 %d 本书的标签，涉及 %d 个稀少标签") % (len(book_ids), rare_tag_count),
                 "book_count": len(book_ids),
-                "tag_count": len(rare_tags)
+                "tag_count": rare_tag_count
             }
 
         except Exception as e:
