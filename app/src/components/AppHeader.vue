@@ -229,20 +229,20 @@
                         <v-icon>mdi-close</v-icon>
                     </v-btn>
                 </v-card-title>
-                
+
                 <v-card-text class="flex-grow-1 pa-0" style="overflow-y: auto; height: 100%;">
                     <div class="chat-messages pa-4" ref="chatMessages">
                         <div v-if="ai_messages.length === 0" class="text-center grey--text py-8">
                             <v-icon size="64" color="grey lighten-1">mdi-chat-outline</v-icon>
                             <p class="mt-4">{{ $t('appHeader.aiChatWelcome') }}</p>
                         </div>
-                        <div v-for="(message, index) in ai_messages" :key="index" 
+                        <div v-for="(message, index) in ai_messages" :key="index"
                              :class="['message-item', 'mb-4']">
                             <div class="d-flex" :class="message.role === 'user' ? 'justify-end' : 'justify-start'">
                                 <v-avatar v-if="message.role === 'assistant'" size="32" color="primary" class="mr-2">
                                     <v-icon dark small>mdi-robot</v-icon>
                                 </v-avatar>
-                                <div :class="['message-bubble', 'pa-3', message.role === 'user' ? 'primary white--text' : 'grey lighten-4']" 
+                                <div :class="['message-bubble', 'pa-3', message.role === 'user' ? 'primary white--text' : 'grey lighten-4']"
                                      style="max-width: 70%; border-radius: 12px; word-break: break-word; white-space: pre-wrap;">
                                     <div v-if="message.status" class="caption grey--text italic mb-1">{{ message.status }}</div>
                                     <div>{{ message.content }}<span v-if="message.streaming" class="ai-typing">|</span></div>
@@ -265,9 +265,9 @@
                         </div>
                     </div>
                 </v-card-text>
-                
+
                 <v-divider></v-divider>
-                
+
                 <v-card-actions class="pa-4">
                     <v-text-field
                         v-model="ai_input"
@@ -488,12 +488,12 @@ export default {
                 console.log('WebSocket already connected');
                 return;
             }
-            
+
             // Use window.location to build WebSocket URL
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const host = window.location.host;
             const ws_url = `${protocol}//${host}/api/assistant/ws`;
-            
+
             console.log(`Connecting to AI WebSocket: ${ws_url}`);
             this.ai_ws = new WebSocket(ws_url);
 
@@ -562,18 +562,18 @@ export default {
         },
         send_ai_message() {
             if (!this.ai_input.trim() || this.ai_thinking || !this.ai_ws) return;
-            
+
             const message = this.ai_input.trim();
             this.ai_input = '';
-            
+
             // 添加用户消息
             this.ai_messages.push({ role: 'user', content: message });
-            
+
             // 立即滚动到底部显示用户消息
             this.$nextTick(() => {
                 this.scroll_ai_bottom();
             });
-            
+
             // 发送到WebSocket
             this.ai_ws.send(JSON.stringify({ type: 'query', content: message }));
         },
@@ -647,10 +647,12 @@ export default {
 
 @keyframes breathing {
   0%, 100% {
+    color: white;
     opacity: 0.3;
     transform: scale(1);
   }
   50% {
+    color: white;
     opacity: 1;
     transform: scale(1.2);
   }
