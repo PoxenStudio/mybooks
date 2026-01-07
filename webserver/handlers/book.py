@@ -2159,7 +2159,7 @@ class ClearRareTags(ListHandler):
     @js
     @auth
     def post(self):
-        """清理稀少标签：对少于3本书的标签所对应的书籍重新更新标签"""
+        """清理稀少标签, 对少于3本书的标签所对应的书籍重新更新标签"""
         if not self.is_admin():
             return {"err": "user.not_admin", "msg": _(u"无权限")}
 
@@ -2175,10 +2175,10 @@ class ClearRareTags(ListHandler):
                 INNER JOIN (
                     SELECT A.id, COUNT(DISTINCT B.book) as book_count
                     FROM tags A
-                    LEFT JOIN books_tags_link B ON A.id = B.value
+                    LEFT JOIN books_tags_link B ON A.id = B.tag
                     GROUP BY A.id
                     HAVING COUNT(DISTINCT B.book) < 3 AND COUNT(DISTINCT B.book) > 0
-                ) rare_tag_ids ON l.value = rare_tag_ids.id
+                ) rare_tag_ids ON l.tag = rare_tag_ids.id
             """
 
             with self.db_lock:
@@ -2191,15 +2191,18 @@ class ClearRareTags(ListHandler):
 
             # 同时获取稀少标签的数量用于返回信息
             count_sql = """
-                SELECT COUNT(DISTINCT A.id)
-                FROM tags A
-                LEFT JOIN books_tags_link B ON A.id = B.value
-                GROUP BY A.id
-                HAVING COUNT(DISTINCT B.book) < 3 AND COUNT(DISTINCT B.book) > 0
+                SELECT COUNT(*)
+                FROM (
+                    SELECT A.id
+                    FROM tags A
+                    LEFT JOIN books_tags_link B ON A.id = B.tag
+                    GROUP BY A.id
+                    HAVING COUNT(DISTINCT B.book) < 3 AND COUNT(DISTINCT B.book) > 0
+                )
             """
             with self.db_lock:
                 tag_count_rows = self.calibre_db_cache.backend.conn.get(count_sql)
-            rare_tag_count = len(tag_count_rows) if tag_count_rows else 0
+            rare_tag_count = tag_count_rows[0][0] if tag_count_rows else 0
 
             if not book_ids:
                 return {"err": "ok", "msg": _(u"没有找到需要更新的书籍")}
@@ -2224,7 +2227,7 @@ class BookExchangeType(BaseHandler):
     @js
     @auth
     def post(self):
-        """批量转换书籍类型：电子书 <-> 实体书"""
+        """批量转换书籍类型, 电子书与实体书互转"""
         if not self.is_admin():
             return {"err": "user.no_permission", "msg": _(u"无权限")}
 
