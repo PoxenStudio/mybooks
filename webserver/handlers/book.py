@@ -1367,7 +1367,7 @@ class SearchBook(ListHandler):
                         self._add_books(and_ids, ids, seen)
                         logging.info(f"Found {len(and_ids)} books for AND of segmented words: {filtered_words}")
                 except Exception as e:
-                    logging.error(f"Search book by AND segmented words failed: %s" % e)
+                    logging.error("Search book by AND segmented words failed: %s" % e)
                 # 2. 再查只含其中一个分词的书（OR查询）
                 try:
                     or_query = " OR ".join([f'title:"{word}"' for word in filtered_words])
@@ -1376,7 +1376,7 @@ class SearchBook(ListHandler):
                         self._add_books(or_ids, ids, seen)
                         logging.info(f"Found {len(or_ids)} books for OR of segmented words: {filtered_words}")
                 except Exception as e:
-                    logging.error(f"Search book by OR segmented words failed: %s" % e)
+                    logging.error("Search book by OR segmented words failed: %s" % e)
         except Exception as e:
             logging.error(f"Word segmentation failed for '{name}': %s" % e)
 
@@ -2427,4 +2427,3 @@ def routes():
         (r"/api/book/exchange_type", BookExchangeType),
         (r"/api/clear_rare_tags", ClearRareTags),
     ]
-
