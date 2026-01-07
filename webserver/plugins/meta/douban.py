@@ -13,15 +13,10 @@ import sys
 from gettext import gettext as _
 from urllib.parse import urlparse
 from pathlib import Path
+from webserver.constants import CHROME_HEADERS
 
 import requests
 
-CHROME_HEADERS = {
-    "Accept-Language": "zh-CN,zh;q=0.8,zh-TW;q=0.6",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko)"
-    + "Chrome/66.0.3359.139 Safari/537.36",
-}
 
 DEFAULT_COVER_SUFFIX = "/book-default-"
 UPDATE_IMAGE_SUFFIX = "/update_image"
@@ -164,7 +159,9 @@ class DoubanBookApi(object):
         img_fmt = get_extension_from_url(cover_url)
         if not img_fmt:
             return None
-        response = requests.get(cover_url, headers=CHROME_HEADERS)
+        headers = dict(CHROME_HEADERS)
+        headers["Referer"] = cover_url
+        response = requests.get(cover_url, headers=headers, verify=False)
         if response.status_code != 200:
             logging.error("Get cover fail, status_code[%s] != 200 OK", response.status_code)
             return None

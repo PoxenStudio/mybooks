@@ -547,9 +547,9 @@ class BookRefer(BaseHandler):
             return self.reset_book_meta(book_id)
 
         if not provider_key:
-            return {"err": "params.provider_key.invalid", "msg": _(u"provider_key参数错误")}
+            return {"err": "params.provider_key.invalid", "msg": _(u"请求参数错误")}
         if not provider_value:
-            return {"err": "params.provider_key.invalid", "msg": _(u"provider_value参数错误")}
+            return {"err": "params.provider_key.invalid", "msg": _(u"请求参数错误")}
         if only_meta == "yes" and only_cover == "yes":
             return {"err": "params.conflict", "msg": _(u"参数冲突")}
 
