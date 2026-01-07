@@ -71,7 +71,7 @@ class Index(BaseHandler):
         random_books.sort(key=lambda x: x["id"], reverse=True)
 
         ids.sort(reverse=True)
-        new_ids = random.sample(ids[0:200], min(cnt_recent, len(ids)))
+        new_ids = random.sample(ids[0:800], min(cnt_recent, len(ids)))
         new_books = [b for b in self.get_books(ids=new_ids)]
         new_books.sort(key=lambda x: x["id"], reverse=True)
 
