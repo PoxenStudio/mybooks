@@ -534,9 +534,6 @@ class BaseHandler(web.RequestHandler):
             "[%5d ms] select books from library (count = %d)" % (int(1000 * (time.time() - _ts)), len(books))
         )
 
-        if len(books) > 0:
-            logging.info(books[0])
-
         item = Item()
         empty_item = item.to_dict()
         empty_item["collector"] = self.sqlite_session.query(Reader).order_by(Reader.id).first()
