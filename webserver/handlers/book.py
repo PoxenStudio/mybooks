@@ -16,6 +16,12 @@ import urllib
 from pathlib import Path
 from gettext import gettext as _
 
+try:
+    import jieba
+    JIEBA_AVAILABLE = True
+except ImportError:
+    JIEBA_AVAILABLE = False
+
 import tornado.escape
 from tornado import web
 
@@ -1345,11 +1351,56 @@ class SearchBook(ListHandler):
             name = book_title
 
         title = _(u"搜索：%(name)s") % {"name": name}
+        ids = []
+        seen = set()
+
+        # 分词搜索：当name长度在2-10之间且jieba可用时
+        if JIEBA_AVAILABLE and not title_search and 2 < len(name) < 10:
+            try:
+                # 对name进行分词
+                words = jieba.cut(name)
+                # 过滤分词结果：排除等于name本身的词和长度为1的词，并去重
+                filtered_words = list({w for w in words if w != name and len(w) > 1})
+
+                if filtered_words:
+                    logging.info(f"Word segmentation for '{name}': {filtered_words}")
+                    # 1. 先查所有分词都包含的书（AND查询）
+                    try:
+                        and_query = " AND ".join([f'title:"{word}"' for word in filtered_words])
+                        and_ids = self.calibre_db_cache.search(and_query)
+                        if and_ids:
+                            for bid in and_ids:
+                                if bid not in seen:
+                                    ids.append(bid)
+                                    seen.add(bid)
+                            logging.info(f"Found {len(and_ids)} books for AND of segmented words: {filtered_words}")
+                    except Exception as e:
+                        logging.error(f"Search book by AND segmented words failed: %s" % e)
+                    # 2. 再查只含其中一个分词的书（OR查询）
+                    try:
+                        or_query = " OR ".join([f'title:"{word}"' for word in filtered_words])
+                        or_ids = self.calibre_db_cache.search(or_query)
+                        if or_ids:
+                            for bid in or_ids:
+                                if bid not in seen:
+                                    ids.append(bid)
+                                    seen.add(bid)
+                            logging.info(f"Found {len(or_ids)} books for OR of segmented words: {filtered_words}")
+                    except Exception as e:
+                        logging.error(f"Search book by OR segmented words failed: %s" % e)
+            except Exception as e:
+                logging.error(f"Word segmentation failed for '{name}': %s" % e)
+
+        # 继续进行原有的搜索
         try:
-            ids = self.calibre_db_cache.search(f'title:={name}' if title_search else name)
+            main_ids = self.calibre_db_cache.search(f'title:={name}' if title_search else name)
+            if main_ids:
+                for bid in main_ids:
+                    if bid not in seen:
+                        ids.append(bid)
+                        seen.add(bid)
         except Exception as e:
             logging.error("Search book failed: %s" % e)
-            ids = set()
 
         for profile in {'s2t', "t2s"}:
             converted_name = opencc.OpenCC(profile).convert(name)
@@ -1361,12 +1412,16 @@ class SearchBook(ListHandler):
                 logging.error("Search book failed: %s" % e)
                 ids2 = set()
             if len(ids2) > 0:
-                ids = ids.union(ids, ids2)
+                for bid in ids2:
+                    if bid not in seen:
+                        ids.append(bid)
+                        seen.add(bid)
                 break
 
-        if exclude_id > 0 and exclude_id in ids:
-            ids.remove(exclude_id)
-
+        if exclude_id > 0 and exclude_id in seen:
+            if exclude_id in ids:
+                ids.remove(exclude_id)
+        logging.info("SearchBook: found %d books for name=%s, first book id:%s" % (len(ids), name, ids[0] if ids else 'None'))
         return self.render_book_list([], ids=ids, title=title)
 
 
@@ -2363,3 +2418,4 @@ def routes():
         (r"/api/book/exchange_type", BookExchangeType),
         (r"/api/clear_rare_tags", ClearRareTags),
     ]
+
