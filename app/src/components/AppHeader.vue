@@ -424,12 +424,12 @@ export default {
                 console.log('WebSocket already connected');
                 return;
             }
-            
+
             // Use window.location to build WebSocket URL
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const host = window.location.host;
             const ws_url = `${protocol}//${host}/api/assistant/ws`;
-            
+
             console.log(`Connecting to AI WebSocket: ${ws_url}`);
             this.ai_ws = new WebSocket(ws_url);
 
@@ -511,11 +511,7 @@ export default {
         },
         do_mobile_search: function () {
             if (this.search.trim() != "") {
-                if (this.ai_enabled) {
-                    this.send_ai_query();
-                } else {
-                    this.$router.push("/search?name=" + this.search.trim());
-                }
+                this.$router.push("/search?name=" + this.search.trim());
             } else {
                 if (this.$refs.mobile_search) {
                     this.$refs.mobile_search.focus();
@@ -524,11 +520,7 @@ export default {
         },
         do_search: function () {
             if (this.search.trim() != "") {
-                if (this.ai_enabled) {
-                    this.send_ai_query();
-                } else {
-                    this.$router.push("/search?name=" + this.search.trim());
-                }
+                this.$router.push("/search?name=" + this.search.trim());
             } else {
                 if (this.$refs.search) {
                     this.$refs.search.focus();
