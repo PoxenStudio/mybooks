@@ -1406,15 +1406,24 @@ class SearchBook(ListHandler):
         except Exception as e:
             logging.error("Search book failed: %s" % e)
 
-        for profile in {'s2t', "t2s"}:
+        # 简繁体转换搜索（合并为一次查询）
+        converted_names = []
+        for profile in ['s2t', 't2s']:
             converted_name = opencc.OpenCC(profile).convert(name)
-            if converted_name == name:
-                continue
+            if converted_name != name:
+                converted_names.append(converted_name)
+
+        if converted_names:
             try:
-                ids2 = self.calibre_db_cache.search(f'title:={converted_name}' if title_search else converted_name)
+                if title_search:
+                    # 对于精确标题搜索，构建OR查询
+                    query = " OR ".join([f'title:={cn}' for cn in converted_names])
+                else:
+                    # 对于普通搜索，构建OR查询
+                    query = " OR ".join(converted_names)
+                ids2 = self.calibre_db_cache.search(query)
                 if ids2:
                     self._add_books(ids2, ids, seen)
-                    break
             except Exception as e:
                 logging.error("Search book failed: %s" % e)
 
