@@ -2017,11 +2017,10 @@ class BookSendToDevice(BaseHandler):
         if device_type not in supported_types:
             return {"err": "device.unsupported", "msg": _(u"不支持的设备类型: %s") % device_type}
 
-        # 查找合适的文件格式（优先级：epub > azw3 > pdf）
+        # 查找合适的文件格式（优先级：epub > azw3 > pdf > txt）
         file_path = None
         file_format = None
-        format_priority = ["epub", "azw3", "pdf"]
-
+        format_priority = ["epub", "azw3", "pdf", "txt"]
         for fmt in format_priority:
             fmt_key = "fmt_%s" % fmt
             if fmt_key in book:
@@ -2030,7 +2029,7 @@ class BookSendToDevice(BaseHandler):
                 break
 
         if not file_path:
-            return {"err": "file.not_found", "msg": _(u"书籍没有支持的文件格式（epub/azw3/pdf）")}
+            return {"err": "file.not_found", "msg": _(u"书籍没有支持的文件格式（epub/azw3/pdf/txt）")}
 
         # 检查文件是否存在
         if not os.path.exists(file_path):

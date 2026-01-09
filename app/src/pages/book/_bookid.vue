@@ -979,7 +979,7 @@ export default {
         // 检查是否有兼容的文件格式
         hasCompatibleFormats: function() {
             if (!this.book || !this.book.files) return false;
-            const supportedFormats = ['epub', 'azw3', 'pdf'];
+            const supportedFormats = ['epub', 'azw3', 'pdf', 'txt'];
             return this.book.files.some(file =>
                 supportedFormats.includes(file.format.toLowerCase())
             );
