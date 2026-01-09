@@ -14,7 +14,7 @@ class BaseUploader:
     def _check_file(self):
         if not self.file_path.exists():
             raise FileNotFoundError(f"文件不存在: {self.file_path}")
-        if self.file_extension not in ['.epub', '.azw3', '.pdf']:
+        if self.file_extension not in ['.epub', '.azw3', '.pdf', '.txt']:
             raise ValueError(f"不支持的文件格式: {self.file_extension}, 只支持epub, azw3和pdf文件")
 
     def _get_content_type(self):
