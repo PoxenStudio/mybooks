@@ -13,7 +13,7 @@ $ npm run dev
 
 NodeJS 17+需要设置以下环境变量
 ```
-export NODE_OPTIONS=--openssl-legacy-provider 
+export NODE_OPTIONS=--openssl-legacy-provider
 ```
 
 因为前端访问的后端地址是固化的（强制为浏览器URL下的/api/地址），所以要调试后台时，需要一些技巧进行设置。
@@ -114,7 +114,7 @@ mkdir -p /data/books/{library,extract,upload,convert,progress,settings}
 ### 拉取代码
 ```
 cd /var/www/
-git clone https://github.com/talebook/talebook.git
+git clone https://github.com/PoxenStudio/talebook.git
 cd talebook
 ```
 
@@ -151,7 +151,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
 RUN apt-get install -y nodejs
 ```
 ### 安装其他工具（可选）
-建议参考：[本仓库的Dockerfile](https://github.com/talebook/talebook/blob/master/Dockerfile)
+建议参考：[本仓库的Dockerfile](https://github.com/PoxenStudio/talebook/blob/master/Dockerfile)
 envsubst命令是用来生成nginx.conf配置的；如果你手动配置nginx，那么可以不安装此工具
 ```
 # 安装 envsubst 命令
