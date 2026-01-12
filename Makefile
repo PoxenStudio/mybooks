@@ -26,6 +26,28 @@ push:
 	docker push $(IMAGE)
 	docker push $(REPO1)
 
+# 构建并推送多架构镜像（同时支持 amd64 和 arm64）
+build-multiarch: test
+	docker buildx build --platform=linux/amd64,linux/arm64 \
+		--build-arg BUILD_COUNTRY=CN --build-arg GIT_VERSION=$(VER) \
+		-f Dockerfile -t $(IMAGE) -t $(REPO1) \
+		--target production --push .
+	docker buildx build --platform=linux/amd64,linux/arm64 \
+		--build-arg BUILD_COUNTRY=CN --build-arg GIT_VERSION=$(VER) \
+		-f Dockerfile -t $(TAG1) -t $(TAG2) \
+		--target production-ssr --push .
+
+# 仅构建多架构镜像到本地缓存（不推送）
+build-multiarch-local: test
+	docker buildx build --platform=linux/amd64,linux/arm64 \
+		--build-arg BUILD_COUNTRY=CN --build-arg GIT_VERSION=$(VER) \
+		-f Dockerfile -t $(IMAGE) -t $(REPO1) \
+		--target production --load .
+	docker buildx build --platform=linux/amd64,linux/arm64 \
+		--build-arg BUILD_COUNTRY=CN --build-arg GIT_VERSION=$(VER) \
+		-f Dockerfile -t $(TAG1) -t $(TAG2) \
+		--target production-ssr --load .
+
 test: lint
 	rm -f unittest.log
 	# docker build --platform=$(PLATFORM) --build-arg BUILD_COUNTRY=CN -t talebook/test --target test -f Dockerfile .
