@@ -846,8 +846,16 @@
                         v-for="(device, idx) in devices"
                         :key="'device-' + idx"
                         :value="'saved-' + idx"
-                        :label="`${device.name} (${getDeviceTypeText(device.type)}) - ${device.ip}:${device.port}`"
-                    ></v-radio>
+                    >
+                        <template v-slot:label>
+                            <span v-if="device.type === 'kindle'">
+                                {{ device.name }} ({{ getDeviceTypeText(device.type) }}) - {{ device.mailbox }}
+                            </span>
+                            <span v-else>
+                                {{ device.name }} ({{ getDeviceTypeText(device.type) }}) - {{ device.ip }}:{{ device.port }}
+                            </span>
+                        </template>
+                    </v-radio>
                     <v-radio
                         value="temporary"
                         :label="$t('book.temporaryDevice')"
@@ -881,6 +889,9 @@
                         :rules="[v => !!v || $t('book.devicePortRequired')]"
                         placeholder="8080"
                     ></v-text-field>
+                    <v-alert v-if="tempDevice.type === 'kindle'" type="info" dense outlined class="mt-2">
+                        {{ $t('book.kindleNotSupportTemporary') }}
+                    </v-alert>
                 </div>
 
                 <div v-if="devices.length === 0 && selectedDeviceOption !== 'temporary'" class="text-center py-4">
@@ -1030,6 +1041,8 @@ export default {
             if (!this.selectedDeviceOption) return false;
 
             if (this.selectedDeviceOption === 'temporary') {
+                // Kindle不支持临时设备
+                if (this.tempDevice.type === 'kindle') return false;
                 // 临时设备需要验证所有字段
                 return this.tempDevice.type && this.tempDevice.ip && this.tempDevice.port;
             } else {
@@ -2140,7 +2153,8 @@ export default {
                 'ireader': '掌阅',
                 'hanwang': '汉王',
                 'boox':    '文石Boox',
-                'dangdang': '当当阅读器'
+                'dangdang': '当当阅读器',
+                'kindle':  'Kindle'
             };
             return typeMap[type] || type;
         },
@@ -2173,13 +2187,24 @@ export default {
                     deviceName = deviceInfo.name;
                 }
 
-                const url = `${deviceInfo.schema || 'http'}://${deviceInfo.ip}:${deviceInfo.port}`;
-                const response = await this.$backend(`/book/${this.book.id}/send_to_device`, {
-                    method: 'POST',
-                    body: JSON.stringify({
+                // 为Kindle设备构造请求参数
+                let requestBody;
+                if (deviceInfo.type === 'kindle') {
+                    requestBody = {
+                        device_type: deviceInfo.type,
+                        mailbox: deviceInfo.mailbox
+                    };
+                } else {
+                    const url = `${deviceInfo.schema || 'http'}://${deviceInfo.ip}:${deviceInfo.port}`;
+                    requestBody = {
                         device_type: deviceInfo.type,
                         device_url: url
-                    })
+                    };
+                }
+
+                const response = await this.$backend(`/book/${this.book.id}/send_to_device`, {
+                    method: 'POST',
+                    body: JSON.stringify(requestBody)
                 });
 
                 if (response.err === 'ok') {

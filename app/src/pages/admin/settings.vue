@@ -83,18 +83,26 @@
                   <v-select flat small hide-details single-line v-model="device.type" :items="deviceTypes" :label="$t('settings.device_type')">
                   </v-select>
                 </v-col>
-                <v-col class='py-0' cols=2>
-                  <v-text-field flat small hide-details single-line v-model="device.ip" :label="$t('settings.device_ip')"
-                    type="text"></v-text-field>
-                </v-col>
-                <v-col class='py-0' cols=2>
-                  <v-text-field flat small hide-details single-line v-model.number="device.port" :label="$t('settings.device_port')"
-                    type="number"></v-text-field>
-                </v-col>
-                <v-col class='py-0' cols=2>
-                  <v-select flat small hide-details single-line v-model="device.schema" :items="deviceSchemas" :label="$t('settings.device_schema')">
-                  </v-select>
-                </v-col>
+                <template v-if="device.type === 'kindle'">
+                  <v-col class='py-0' cols=6>
+                    <v-text-field flat small hide-details single-line v-model="device.mailbox" :label="$t('settings.device_mailbox')"
+                      type="email" placeholder="user@kindle.com"></v-text-field>
+                  </v-col>
+                </template>
+                <template v-else>
+                  <v-col class='py-0' cols=2>
+                    <v-text-field flat small hide-details single-line v-model="device.ip" :label="$t('settings.device_ip')"
+                      type="text"></v-text-field>
+                  </v-col>
+                  <v-col class='py-0' cols=2>
+                    <v-text-field flat small hide-details single-line v-model.number="device.port" :label="$t('settings.device_port')"
+                      type="number"></v-text-field>
+                  </v-col>
+                  <v-col class='py-0' cols=2>
+                    <v-select flat small hide-details single-line v-model="device.schema" :items="deviceSchemas" :label="$t('settings.device_schema')">
+                    </v-select>
+                  </v-col>
+                </template>
                 <v-col class='py-0' cols=1 align-self="end">
                   <v-btn icon small @click="settings.DEVICES.splice(idx, 1)">
                     <v-icon>delete</v-icon>
@@ -213,7 +221,8 @@ export default {
       { text: this.$t('settings.device_type_ireader'), value: "ireader" },
       { text: this.$t('settings.device_type_hanwang'), value: "hanwang" },
       { text: this.$t('settings.device_type_boox'), value: "boox" },
-      { text: this.$t('settings.device_type_dangdang'), value: "dangdang" }
+      { text: this.$t('settings.device_type_dangdang'), value: "dangdang" },
+      { text: "Kindle", value: "kindle" }
     ];
 
     this.cards = [

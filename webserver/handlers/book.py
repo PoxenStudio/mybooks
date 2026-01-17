@@ -2006,16 +2006,66 @@ class BookSendToDevice(BaseHandler):
             data = tornado.escape.json_decode(self.request.body)
             device_type = data.get("device_type", "").lower()
             device_url = data.get("device_url", "")
+            mailbox = data.get("mailbox", "")
         except:
             return {"err": "params.invalid", "msg": _(u"请求参数格式错误")}
 
-        if not device_type or not device_url:
-            return {"err": "params.missing", "msg": _(u"设备类型和设备地址不能为空")}
+        # Kindle设备使用邮箱地址，其他设备使用device_url
+        if device_type == "kindle":
+            if not mailbox:
+                return {"err": "params.missing", "msg": _(u"Kindle设备需要提供邮箱地址")}
+        else:
+            if not device_type or not device_url:
+                return {"err": "params.missing", "msg": _(u"设备类型和设备地址不能为空")}
 
         # 支持的设备类型
-        supported_types = ["duokan", "ireader", "hanwang", "boox", "dangdang"]
+        supported_types = ["duokan", "ireader", "hanwang", "boox", "dangdang", "kindle"]
         if device_type not in supported_types:
             return {"err": "device.unsupported", "msg": _(u"不支持的设备类型: %s") % device_type}
+
+        # Kindle设备通过邮件发送
+        if device_type == "kindle":
+            return self._send_to_kindle(book, book_id, mailbox)
+        else:
+            return self._send_to_other_device(book, book_id, device_type, device_url)
+
+    def _send_to_kindle(self, book, book_id, mail_to):
+        """通过邮件发送书籍到Kindle设备"""
+        self.user_history("push_history", book)
+        self.count_increase(book_id, count_download=1, count_visit=1)
+
+        # epub、pdf、txt格式可以直接发送，不需要转换
+        for fmt in ["epub", "pdf", "txt"]:
+            fmt_key = "fmt_%s" % fmt
+            if fmt_key in book:
+                fpath = book[fmt_key]
+                logging.info(f"[SEND_TO_KINDLE] 找到可直接发送的格式: {fmt}, 路径: {fpath}")
+                MailService().send_book(self.user_id(), self.site_url, book, mail_to, fmt, fpath)
+                self.add_msg(
+                    "success",
+                    _(u"服务器正在推送《%(title)s》到%(email)s") % {"title": book["title"], "email": mail_to},
+                )
+                return {"err": "ok", "msg": _(u"服务器后台正在推送。您可关闭此窗口，继续浏览其他书籍。")}
+
+        # 如果没有可直接发送的格式，检查是否有azw3或mobi格式需要转换
+        if "fmt_azw3" in book or "fmt_mobi" in book:
+            fmt = "azw3" if "fmt_azw3" in book else "mobi"
+            logging.info(f"[SEND_TO_KINDLE] 找到{fmt}格式，需要转换为epub后发送")
+            ConvertService().convert_and_send(self.user_id(), self.site_url, book, mail_to)
+            self.add_msg(
+                "success",
+                _(u"服务器正在推送《%(title)s》到%(email)s") % {"title": book["title"], "email": mail_to},
+            )
+            return {"err": "ok", "msg": _(u"服务器正在转换格式，稍后将自动推送。您可关闭此窗口，继续浏览其他书籍。")}
+
+        # 没有Kindle支持的格式
+        return {
+            "err": "format.not_supported",
+            "msg": _(u"书籍没有Kindle支持的格式!")
+        }
+
+    def _send_to_other_device(self, book, book_id, device_type, device_url):
+        """通过WiFi上传发送书籍到其他设备"""
 
         # 查找合适的文件格式（优先级：epub > azw3 > pdf > txt）
         file_path = None

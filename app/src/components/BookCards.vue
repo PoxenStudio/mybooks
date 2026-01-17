@@ -120,10 +120,6 @@ export default {
     font-weight: bold;
     text-align: left;
 }
-.new-legend {
-    margin-top: 30px;
-    margin-bottom: 20px;
-}
 .col-book-img {
     padding: 6px 0 0 3px;
     display: flex;
