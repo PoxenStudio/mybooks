@@ -1908,52 +1908,6 @@ class BookTxtInit(BaseHandler):
         }}
 
 
-class BookPush(BaseHandler):
-    @js
-    def post(self, id):
-        if not CONF["ALLOW_GUEST_PUSH"]:
-            if not self.current_user:
-                return {"err": "user.need_login", "msg": _(u"请先登录")}
-            else:
-                if not self.current_user.can_push():
-                    return {"err": "permission", "msg": _(u"无权操作")}
-                elif not self.current_user.is_active():
-                    return {"err": "permission", "msg": _(u"无权操作，请先激活账号。")}
-
-        mail_to = self.get_argument("mail_to", None)
-        if not mail_to:
-            return {"err": "params.error", "msg": _(u"参数错误")}
-
-        book = self.get_book(id, raise_exception=False)
-        if not book:
-            return {"err": "params.book.invalid", "msg": _(u"书籍已不存在")}
-        book_id = book["id"]
-
-        self.user_history("push_history", book)
-        self.count_increase(book_id, count_download=1, count_visit=1)
-
-        # https://www.amazon.cn/gp/help/customer/display.html?ref_=hp_left_v4_sib&nodeId=G5WYD9SAF7PGXRNA
-        for fmt in ["epub", "pdf"]:
-            fpath = book.get("fmt_%s" % fmt, None)
-            if fpath:
-                MailService().send_book(self.user_id(), self.site_url, book, mail_to, fmt, fpath)
-                return {"err": "ok", "msg": _(u"服务器后台正在推送了。您可关闭此窗口，继续浏览其他书籍。")}
-
-        # we do no have formats for kindle
-        if "fmt_azw3" not in book and "fmt_txt" not in book:
-            return {
-                "err": "book.no_format_for_kindle",
-                "msg": _(u"抱歉，该书无可用于kindle阅读的格式"),
-            }
-
-        ConvertService().convert_and_send(self.user_id(), self.site_url, book, mail_to)
-        self.add_msg(
-            "success",
-            _(u"服务器正在推送《%(title)s》到%(email)s") % {"title": book["title"], "email": mail_to},
-        )
-        return {"err": "ok", "msg": _(u"服务器正在转换格式，稍后将自动推送。您可关闭此窗口，继续浏览其他书籍。")}
-
-
 class BookSuggestion(ListHandler):
     @js
     def get(self, id):
@@ -2448,7 +2402,6 @@ def routes():
         (r"/api/book/([0-9]+)/delete", BookDelete),
         (r"/api/book/([0-9]+)/edit", BookEdit),
         (r"/api/book/([0-9]+\..+)", BookDownload),
-        (r"/api/book/([0-9]+)/push", BookPush),
         (r"/api/book/([0-9]+)/refer", BookRefer),
         (r"/api/book/([0-9]+)/send_to_device", BookSendToDevice),
         (r"/read/([0-9]+)", BookRead),
