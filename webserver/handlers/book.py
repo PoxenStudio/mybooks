@@ -2258,7 +2258,7 @@ class BookSaveMeta(BaseHandler):
 
         try:
             from calibre.ebooks.metadata.meta import set_metadata
-            
+
             # 获取当前书籍的元数据
             mi = self.calibre_db.get_metadata(book_id, index_is_id=True)
             if not mi:
@@ -2284,7 +2284,7 @@ class BookSaveMeta(BaseHandler):
                     # 将元数据写入文件（包含封面）
                     with open(file_path, "r+b") as stream:
                         set_metadata(stream, mi, stream_type=fmt)
-                    
+
                     logging.info(f"[SAVE_META] Successfully saved metadata to {fmt.upper()} file for book {book_id}")
                     success_formats.append(fmt.upper())
                 except Exception as e:
