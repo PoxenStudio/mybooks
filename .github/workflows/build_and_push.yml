@@ -3,10 +3,6 @@ name: Build and Push Docker Image
 on:
   workflow_dispatch:
     inputs:
-      branch:
-        description: 'Choose the branch to build from'
-        required: true
-        type: string
       push_latest:
         description: 'Push to latest and master tags'
         required: false
@@ -25,15 +21,18 @@ jobs:
       packages: write
 
     steps:
-      - name: Validate branch name
-        run: |
-          if [[ ! "${{ github.event.inputs.branch }}" =~ ^v ]]; then
-            echo "Error: Branch name must start with 'v'"
-            exit 1
-          fi
-
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Validate branch name
+        run: |
+          REF_NAME="${GITHUB_REF#refs/heads/}"
+          REF_NAME="${REF_NAME#refs/tags/}"
+          if [[ ! "$REF_NAME" =~ ^v ]]; then
+            echo "Error: Branch or tag name must start with 'v', got: $REF_NAME"
+            exit 1
+          fi
+          echo "Valid branch/tag name: $REF_NAME"
 
       - name: Set lowercase image name
         run: echo "IMAGE_NAME=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
