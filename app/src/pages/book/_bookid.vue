@@ -506,18 +506,18 @@
                                     <v-icon>explore</v-icon>
                                     ISBN：{{ book.isbn }}
                                 </v-chip>
-                                    <template v-for="tag in book.tags">
-                                        <v-chip
-                                            :key="'tag-' + tag"
-                                            rounded
-                                            small
-                                            dark
-                                            color="grey"
-                                            v-if="tag"
-                                            :to="{ path: '/tag', query: { name: encodeURIComponent(tag) } }"
-                                        >
-                                        <v-icon>loyalty</v-icon>
-                                        {{ tag }}
+                                <template v-for="tag in book.tags">
+                                    <v-chip
+                                        :key="'tag-' + tag"
+                                        rounded
+                                        small
+                                        dark
+                                        color="grey"
+                                        v-if="tag"
+                                        :to="{ path: '/tag', query: { name: encodeURIComponent(tag) } }"
+                                    >
+                                    <v-icon>loyalty</v-icon>
+                                    {{ tag }}
                                     </v-chip>
                                 </template>
                             </div>
