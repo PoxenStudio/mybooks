@@ -508,6 +508,7 @@
         "device_type": "类型",
         "device_schema": "访问协议",
         "default_reader_name": "阅读器",
+        "device_mailbox": "邮箱地址(注意应当以@kindle.com结尾,可以在Kindle上设置-账号中查看。)",
         "device_type_duokan": "多看阅读器",
         "device_type_ireader": "掌阅",
         "device_type_hanwang": "汉王",

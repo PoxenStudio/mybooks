@@ -1,7 +1,7 @@
 
 # ----------------------------------------
 # 第一阶段，拉取 node 基础镜像并安装依赖，执行构建
-FROM node:16-alpine AS builder
+FROM docker.1ms.run/library/node:16-alpine AS builder
 ARG BUILD_COUNTRY=""
 
 WORKDIR /build
@@ -26,7 +26,7 @@ RUN mkdir -p /app-ssr/ /app-static/ && \
 # ----------------------------------------
 # 第二阶段，构建环境
 # FROM linuxserver/calibre AS server
-FROM ubuntu:24.04 AS server
+FROM docker.1ms.run/library/ubuntu:24.04 AS server
 ARG BUILD_COUNTRY="CN"
 
 # Set mirrors in china
