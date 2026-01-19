@@ -303,6 +303,12 @@ class TalebookProvider(DAVProvider):
         try:
             from webserver.settings import settings
             self.enable_sync_folder = settings.get("WEBDAV_SYNC_FOLDER", False)
+            # Allow custom sync folder name from settings
+            custom_sync_name = settings.get("WEBDAV_SYNC_FOLDER_NAME")
+            if custom_sync_name:
+                self.sync_folder_name = custom_sync_name
+                self.sync_folder_path = f"/data/{custom_sync_name}"
+
             if self.enable_sync_folder:
                 # 确保sync目录存在
                 self._ensure_sync_folder()
@@ -412,8 +418,22 @@ class TalebookProvider(DAVProvider):
             return self.handle_reading(path, environ, parts)
         elif section == "我的已读":
             return self.handle_read_done(path, environ, parts)
-
-        return None
+        else:
+            # Unknown section - check if it might be a misconfigured sync folder
+            # or if sync folder is enabled but section doesn't match
+            logging.warning(f"Unknown section '{section}' in path '{path}'")
+            if self.enable_sync_folder and self.fs_provider:
+                # Try to handle as filesystem path anyway (might be custom folder name)
+                logging.info(f"Attempting to handle '{section}' as filesystem path")
+                prefix_len = len(section) + 1
+                fs_path = path[prefix_len:] if len(path) > prefix_len else "/"
+                if not fs_path:
+                    fs_path = "/"
+                try:
+                    return self.fs_provider.get_resource_inst(fs_path, environ)
+                except Exception as e:
+                    logging.error(f"Failed to handle as filesystem path: {e}")
+            return None
 
     def handle_custom(self, path, environ, parts):
         if len(parts) == 1:
