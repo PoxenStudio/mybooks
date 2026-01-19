@@ -217,7 +217,7 @@ class ScanService(AsyncService):
                 continue
 
             row.title = mi.title
-            row.author = mi.author_sort
+            row.author = mi.authors[0] if mi.authors else mi.author_sort
             row.publisher = mi.publisher
             row.tags = ", ".join(mi.tags)
             row.status = ScanFile.READY  # 设置为可处理

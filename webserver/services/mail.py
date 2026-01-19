@@ -44,9 +44,12 @@ class MailService(AsyncService):
         from calibre.utils.smtp import sendmail
 
         smtp_port = 465
-        relay = kwargs.get("relay", CONF["smtp_server"])
-        if ':' in relay:
-            relay, smtp_port = relay.split(":")
+        relay = kwargs.get("relay", CONF.get("smtp_server", ""))
+        if relay and ":" in relay:
+            host, _, port = relay.rpartition(":")
+            if port.isdigit() and (not relay.startswith("[") or host.endswith("]")):
+                relay = host
+                smtp_port = int(port)
         username = kwargs.get("username", CONF["smtp_username"])
         password = kwargs.get("password", CONF["smtp_password"])
         enc = kwargs.get("encryption", CONF["smtp_encryption"])
