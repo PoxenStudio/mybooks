@@ -3,10 +3,17 @@ import os
 import re
 import logging
 import time
+import pwd
 from io import BytesIO
 from urllib.parse import unquote
 from wsgidav.dav_provider import DAVProvider, DAVCollection, DAVNonCollection
+from wsgidav.fs_dav_provider import FilesystemProvider
+from wsgidav.dav_error import DAVError
 
+
+# WebDAV sync folder configuration
+SYNC_FOLDER_NAME = "reader"  # WebDAV显示的目录名
+SYNC_FOLDER_PATH = f"/data/{SYNC_FOLDER_NAME}"  # 实际文件系统路径
 
 SUPPORTED_FORMATS = ["epub", "azw3", "mobi", "pdf", "txt"]
 INVALID_TAG_CHARS = ("#", "!", "@", "&", "$", "%", "^", "=", "+", "?", ";",
@@ -112,6 +119,18 @@ class TalebookResource(DAVNonCollection):
                 pass
         return None
 
+    def delete(self):
+        raise DAVError(403, "Book resources are read-only")
+
+    def copy_move_single(self, dest_path, is_move):
+        raise DAVError(403, "Book resources are read-only")
+
+    def set_last_modified(self, dest_path, time_stamp, dry_run):
+        raise DAVError(403, "Book resources are read-only")
+
+    def begin_write(self, content_type=None):
+        raise DAVError(403, "Book resources are read-only")
+
 
 class VirtualCollection(DAVCollection):
     def __init__(self, path, environ, title, provider, children=None):
@@ -122,6 +141,34 @@ class VirtualCollection(DAVCollection):
 
     def get_display_name(self):
         return self.title
+
+    def support_recursive_move(self, dest_path):
+        """Virtual collections do not support move operations"""
+        return False
+
+    def support_recursive_delete(self):
+        """Virtual collections do not support delete operations"""
+        return False
+
+    def create_empty_resource(self, name):
+        """Virtual collections do not support file creation"""
+        raise DAVError(403, "Virtual collections are read-only")
+
+    def create_collection(self, name):
+        """Virtual collections do not support creating subcollections"""
+        raise DAVError(403, "Virtual collections are read-only")
+
+    def delete(self):
+        """Virtual collections cannot be deleted"""
+        raise DAVError(403, "Virtual collections are read-only")
+
+    def copy_move_single(self, dest_path, is_move):
+        """Virtual collections do not support copy/move"""
+        raise DAVError(403, "Virtual collections are read-only")
+
+    def set_last_modified(self, dest_path, time_stamp, dry_run):
+        """Virtual collections do not support property modification"""
+        raise DAVError(403, "Virtual collections are read-only")
 
     def get_member_list(self):
         if self.fixed_children is not None:
@@ -246,6 +293,45 @@ class TalebookProvider(DAVProvider):
             "我的已读": "我的已读"
         }
 
+        # 读取WEBDAV_SYNC_FOLDER配置
+        self.enable_sync_folder = False
+        self.sync_folder_path = SYNC_FOLDER_PATH
+        self.sync_folder_name = SYNC_FOLDER_NAME
+        self.fs_provider = None
+
+        try:
+            from webserver.settings import settings
+            self.enable_sync_folder = settings.get("WEBDAV_SYNC_FOLDER", False)
+            if self.enable_sync_folder:
+                # 确保sync目录存在
+                self._ensure_sync_folder()
+                # 创建FilesystemProvider实例用于处理sync目录
+                self.fs_provider = FilesystemProvider(self.sync_folder_path)
+                logging.info(f"WebDAV sync folder enabled: {self.sync_folder_path}")
+        except Exception as e:
+            logging.error(f"Error initializing sync folder: {e}")
+            self.enable_sync_folder = False
+
+    def _ensure_sync_folder(self):
+        """确保sync目录存在并设置正确的权限"""
+        try:
+            if not os.path.exists(self.sync_folder_path):
+                os.makedirs(self.sync_folder_path, mode=0o755, exist_ok=True)
+                logging.info(f"Created sync folder: {self.sync_folder_path}")
+
+                # 设置目录所有者为当前用户
+                try:
+                    current_user = pwd.getpwuid(os.getuid())
+                    os.chown(self.sync_folder_path, current_user.pw_uid, current_user.pw_gid)
+                    logging.info(f"Set owner of sync folder to: {current_user.pw_name}")
+                except Exception as e:
+                    logging.warning(f"Could not set owner of sync folder: {e}")
+            else:
+                logging.info(f"Sync folder already exists: {self.sync_folder_path}")
+        except Exception as e:
+            logging.error(f"Error ensuring sync folder exists: {e}")
+            raise
+
     def _parse_book_id_from_filename(self, filename):
         """从文件名中解析book ID，过滤macOS隐藏文件"""
         # 忽略以.开头的文件（macOS隐藏文件如._filename）
@@ -285,13 +371,31 @@ class TalebookProvider(DAVProvider):
             logging.info(f"Path decoded: '{original_path}' -> '{path}'")
 
         if path == "/":
-            return VirtualCollection("/", environ, "root", self, [
-                VirtualCollection("/" + s, environ, s, self) for s in self.sections.keys()
-            ])
+            children = [VirtualCollection("/" + s, environ, s, self) for s in self.sections.keys()]
+            # 如果启用了sync文件夹，添加到根目录
+            # sync目录直接使用FilesystemProvider返回的资源
+            if self.enable_sync_folder and self.fs_provider:
+                sync_resource = self.fs_provider.get_resource_inst("/", environ)
+                if sync_resource:
+                    # 修改path为/sync以便正确路由
+                    sync_resource.path = "/sync"
+                    children.append(sync_resource)
+            return VirtualCollection("/", environ, "root", self, children)
 
         parts = path.lstrip("/").split("/")
         section = parts[0]
         logging.debug(f"Processing path: {path}, section: {section}, parts: {parts}")
+
+        # 处理sync目录（唯一支持读写的目录）
+        if section == self.sync_folder_name and self.enable_sync_folder and self.fs_provider:
+            # 将路径映射到文件系统
+            # 从/sync/... 映射到实际文件系统路径
+            prefix_len = len(self.sync_folder_name) + 1  # +1 for leading /
+            fs_path = path[prefix_len:] if len(path) > prefix_len else "/"
+            if not fs_path:
+                fs_path = "/"
+            logging.debug(f"Mapping WebDAV path {path} to filesystem path: {fs_path}")
+            return self.fs_provider.get_resource_inst(fs_path, environ)
 
         if section == "分类":
             return self.handle_custom(path, environ, parts)
@@ -311,29 +415,7 @@ class TalebookProvider(DAVProvider):
         return None
 
     def handle_custom(self, path, environ, parts):
-        # Custom Categories generally refers to User Categories (tags) or #category column
-        # The prompt says: "From custom category... show system category list... click to show books"
-        # Since 'category' is a custom column usually in Talebook (#category)
         if len(parts) == 1:
-            # List categories
-            # Metadata for #category
-            try:
-                # We need to find if #category exists and list values.
-                # cache.get_categories() returns a dict of categories.
-                # Custom columns are usually keys like '#category'
-                # In helper: self.calibre_db_cache.get_field_unique_values('#category')? Wait, check methods.
-                pass
-            except:
-                pass
-
-            # For now, let's assume we use what OPDS does or similar.
-            # But specific Requirement: "Custom Category" -> "Classification List"
-            # It implies the '#category' user column.
-
-            # Let's try to get all values for '#category'.
-            # cache.get_categories() should contain it if it's a category.
-            # or getAllCategories()
-
             children = []
             try:
                 # Check if #category exists

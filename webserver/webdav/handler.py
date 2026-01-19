@@ -7,12 +7,13 @@ from tornado.wsgi import WSGIContainer
 class WebDAVHandler(RequestHandler):
     """
     Tornado request handler to bridge WebDAV WSGI app.
-    只读WebDAV服务，仅支持查询和下载操作。
+    支持WebDAV查询、下载和写入操作（sync目录可写）。
     """
 
-    # Add WebDAV methods to supported methods list (read-only)
+    # Add WebDAV methods to supported methods list
     SUPPORTED_METHODS = RequestHandler.SUPPORTED_METHODS + (
-        'PROPFIND',  # 查询文件/目录属性
+        'PROPFIND',    # 查询文件/目录属性
+        'MKCOL',       # 创建目录
     )
 
     def initialize(self, wsgi_app):
@@ -66,6 +67,18 @@ class WebDAVHandler(RequestHandler):
 
     def propfind(self, *args, **kwargs):
         """WebDAV PROPFIND method - 查询文件/目录属性"""
+        pass
+
+    def mkcol(self, *args, **kwargs):
+        """WebDAV MKCOL method - 创建目录"""
+        pass
+
+    def put(self, *args, **kwargs):
+        """HTTP PUT method - 上传文件"""
+        pass
+
+    def delete(self, *args, **kwargs):
+        """HTTP DELETE method - 删除文件/目录"""
         pass
 
 
