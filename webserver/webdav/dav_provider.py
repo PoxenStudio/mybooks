@@ -283,6 +283,7 @@ class TalebookProvider(DAVProvider):
         super(TalebookProvider, self).__init__()
         self.cache = cache
         self.get_session_func = get_session_func
+        self.readonly = False  # Allow read-write for sync folder
         self.sections = {
             "分类": "分类",
             "标签": "标签",
@@ -377,8 +378,8 @@ class TalebookProvider(DAVProvider):
             if self.enable_sync_folder and self.fs_provider:
                 sync_resource = self.fs_provider.get_resource_inst("/", environ)
                 if sync_resource:
-                    # 修改path为/sync以便正确路由
-                    sync_resource.path = "/sync"
+                    # 修改path为folder name以便正确路由
+                    sync_resource.path = f"/{self.sync_folder_name}"
                     children.append(sync_resource)
             return VirtualCollection("/", environ, "root", self, children)
 
@@ -389,7 +390,7 @@ class TalebookProvider(DAVProvider):
         # 处理sync目录（唯一支持读写的目录）
         if section == self.sync_folder_name and self.enable_sync_folder and self.fs_provider:
             # 将路径映射到文件系统
-            # 从/sync/... 映射到实际文件系统路径
+            # 从/reader/... 映射到实际文件系统路径
             prefix_len = len(self.sync_folder_name) + 1  # +1 for leading /
             fs_path = path[prefix_len:] if len(path) > prefix_len else "/"
             if not fs_path:
@@ -721,3 +722,18 @@ class TalebookProvider(DAVProvider):
                         item[f'fmt_{fmt_lower}'] = fmt_path
 
         return item
+
+    def _loc_to_file_path(self, path, environ=None):
+        """Convert WebDAV path to filesystem path (for sync folder only)"""
+        if not self.enable_sync_folder or not self.fs_provider:
+            raise DAVError(403, "Filesystem operations not supported")
+
+        # Remove the sync folder prefix from the path
+        if path.startswith("/" + self.sync_folder_name):
+            prefix_len = len(self.sync_folder_name) + 1  # +1 for leading /
+            fs_path = path[prefix_len:] if len(path) > prefix_len else "/"
+        else:
+            fs_path = path
+
+        # Delegate to the filesystem provider
+        return self.fs_provider._loc_to_file_path(fs_path, environ)
