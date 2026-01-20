@@ -9,6 +9,9 @@ from urllib.parse import unquote
 from wsgidav.dav_provider import DAVProvider, DAVCollection, DAVNonCollection
 from wsgidav.fs_dav_provider import FilesystemProvider, FolderResource, FileResource
 from wsgidav.dav_error import DAVError
+from webserver import loader
+
+CONF = loader.get_settings()
 
 
 # WebDAV sync folder configuration
@@ -320,10 +323,9 @@ class TalebookProvider(DAVProvider):
         self.fs_provider = None
 
         try:
-            from webserver.settings import settings
-            self.enable_sync_folder = settings.get("WEBDAV_SYNC_FOLDER", False)
+            self.enable_sync_folder = CONF.get("WEBDAV_SYNC_FOLDER", False)
             # Allow custom sync folder name from settings
-            custom_sync_name = settings.get("WEBDAV_SYNC_FOLDER_NAME")
+            custom_sync_name = CONF.get("WEBDAV_SYNC_FOLDER_NAME")
             if custom_sync_name:
                 self.sync_folder_name = custom_sync_name
                 self.sync_folder_path = f"/data/{custom_sync_name}"
