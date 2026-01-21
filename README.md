@@ -15,8 +15,9 @@ An enhanced personal books management webserver built on Calibre + Vue, beautifu
 
 ### 项目介绍
 poxenstudio/talebook增加的特性包括:
-* 支持以WebDAV连接
-* 支持推送到支持Wifi传书的设备上
+* 支持以WebDAV连接及数据同步
+* 支持推送到支持Wifi传书的设备及Kindle上
+* 支持自定义分类
 * 支持添加实体书
 * 支持阅读管理
 * 集成epub2audio将epub转换有声书
