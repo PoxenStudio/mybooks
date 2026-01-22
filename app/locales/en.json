@@ -427,7 +427,7 @@
         "emailLabel": "Email*",
         "kindleSenderNote": "* Please add this site's email to Kindle sender list:",
         "convertToAudio": "Convert to Audiobook",
-        "convertToAudioNote": "Converting to audiobook may take some time, please be patient. If you cannot access the external audio service, you can set it to delegate to the book stack processing in the system settings.",
+        "convertToAudioNote": "Converting to audiobook may take some time, please be patient.",
         "audioGenerated": "Audiobook generated successfully, please refresh the page to view",
         "audioList": "Audio List",
         "conversionFailed": "Conversion Failed:",

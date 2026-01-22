@@ -315,7 +315,7 @@
         "emailLabel": "Email*",
         "kindleSenderNote": "* 请先将本站邮箱加入到Kindle发件人中:",
         "convertToAudio": "有声书",
-        "convertToAudioNote": "转换为有声书需要花费一段时间，请耐心等待。如果无法访问音频服务，可以在系统设置中书栈服务中设置代理服务器地址。",
+        "convertToAudioNote": "转换为有声书需要花费一段时间，请耐心等待。",
         "audioGenerated": "开始转换，请稍后刷新页面查看",
         "audioList": "有声书音频列表",
         "conversionFailed": "前一次转换失败:",
