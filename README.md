@@ -1,4 +1,4 @@
-[![GitHub License](https://img.shields.io/github/license/talebook/talebook?style=flat-square)](https://github.com/talebook/talebook/blob/master/LICENSE)
+[![GitHub License](https://img.shields.io/github/license/poxenstudio/talebook?style=flat-square)](https://github.com/poxenstudio/talebook/blob/master/LICENSE)
 [![Docker Pulls](https://img.shields.io/docker/pulls/poxenstudio/talebook.svg)](https://hub.docker.com/r/poxenstudio/talebook)
 
 
