@@ -1,0 +1,8 @@
+[MASTER]
+# Project-wide pylint configuration
+
+[FORMAT]
+max-line-length=140
+
+[MESSAGES CONTROL]
+disable=W1203,W0718,W1201,C0209

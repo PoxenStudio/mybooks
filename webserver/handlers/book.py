@@ -1382,7 +1382,7 @@ class SearchBook(ListHandler):
 
     def get(self):
         name = self.get_argument("name", "").strip()
-        book_title = self.get_argument("title", "").strip()
+        book_title = self.get_argument("title", "").strip()  # 传入此参数代表只按名称搜索
         exclude_id = int(self.get_argument("exclude", "0").strip())
         if not name and not book_title:
             return self.write({"err": "params.invalid", "msg": _(u"请输入搜索关键字")})
@@ -1395,24 +1395,18 @@ class SearchBook(ListHandler):
         ids = []
         seen = set()
 
-        # 分词搜索：当name长度在2-10之间且jieba可用时
         if not title_search:
+            # 分词搜索：当name长度在2-10之间且jieba可用时
             self._search_by_segmentation(name, ids, seen)
 
-        # 继续进行原有的搜索
-        try:
-            main_ids = self.calibre_db_cache.search(f'title:={name}' if title_search else name)
-            self._add_books(main_ids, ids, seen)
-        except Exception as e:
-            logging.error("Search book failed: %s" % e)
-
         # 简繁体转换搜索（合并为一次查询）
-        converted_names = []
+        converted_names = [name]
         for profile in ['s2t', 't2s']:
             converted_name = opencc.OpenCC(profile).convert(name)
             if converted_name != name:
                 converted_names.append(converted_name)
 
+        logging.info(f"Converted names for '{name}': {converted_names}")
         if converted_names:
             try:
                 if title_search:
