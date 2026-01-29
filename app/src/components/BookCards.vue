@@ -19,14 +19,16 @@
                     <v-col cols=9 class='col-book-info'>
                         <v-card-text class="pb-0 d-flex flex-column" align-left>
                             <div class="book-title">{{book.title}}</div>
-                            <v-chip rounded x-small color="green" class="white--text" v-if="book.category">
-                                {{ book.category }}
-                            </v-chip>
-                            <template v-for="(file, index) in book.files?.slice(0, 2)" :key="'file-size-' + index">
-                                <v-chip rounded x-small class="ma-1"
-                                    color="grey--text"
-                                >{{ file.format }}</v-chip>
-                            </template>
+                            <div class="d-flex flex-wrap align-center">
+                                <v-chip rounded x-small color="green" class="white--text ma-1" v-if="book.category">
+                                    {{ book.category }}
+                                </v-chip>
+                                <template v-for="(file, index) in book.files?.slice(0, 2)" :key="'file-size-' + index">
+                                    <v-chip rounded x-small class="ma-1"
+                                        color="grey--text"
+                                    >{{ file.format }}</v-chip>
+                                </template>
+                            </div>
                             <slot name="introduce" :book="book"></slot>
                             <div class="book-comments flex-grow-1">
                                 <p v-if="book.comments" v-html="book.comments"></p>
