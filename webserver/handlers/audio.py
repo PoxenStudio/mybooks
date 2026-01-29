@@ -400,6 +400,25 @@ class AudioConversion(BaseHandler):
 
             AudioBooksCache.async_update()
 
+            # 创建后台任务
+            from webserver.services.background_service import background_service, BackgroundTask
+            task_id = None
+            try:
+                service_item = f"{book.get('title', f'Book {book_id}')}"
+                task = background_service.update_task(
+                    service_type=BackgroundTask.SERVICE_TYPE_AUDIO,
+                    service_item=service_item,
+                    progress=0,
+                    progress_data={
+                        "book_id": book_id,
+                        "voice": voice_name,
+                        "language": language
+                    }
+                )
+                task_id = task.id
+            except Exception as e:
+                logging.error(f"Failed to create background task: {e}")
+
             # Start conversion in background thread
             def start_conversion():
                 logging.info(f"Starting conversion for book {book_id} in background thread")
@@ -419,15 +438,33 @@ class AudioConversion(BaseHandler):
                     )
                     if result['success']:
                         worker.progress_data["status"] = EpubToAudioWorker.STATUS_PROCESSING
+                        # 更新任务为完成
+                        if task_id:
+                            try:
+                                background_service.complete_task(task_id=task_id)
+                            except Exception as e:
+                                logging.error(f"Failed to complete task: {e}")
                     else:
                         logging.error(f"Conversion failed for book {book_id}: {result.get('error', 'Unknown error')}")
                         worker.progress_data["status"] = EpubToAudioWorker.STATUS_FAILED
                         worker.progress_data["error_message"] = result.get('error', 'Unknown error')
+                        # 更新任务为失败
+                        if task_id:
+                            try:
+                                background_service.complete_task(task_id=task_id, error_message=result.get('error', 'Unknown error'))
+                            except Exception as e:
+                                logging.error(f"Failed to complete task: {e}")
                 except Exception as e:
                     logging.error(f"Exception during conversion for book {book_id}: {e}")
                     # Mark worker as failed and clean up
                     worker.progress_data["status"] = EpubToAudioWorker.STATUS_FAILED
                     worker.progress_data["error_message"] = str(e)
+                    # 更新任务为失败
+                    if task_id:
+                        try:
+                            background_service.complete_task(task_id=task_id, error_message=str(e))
+                        except Exception as e:
+                            logging.error(f"Failed to complete task: {e}")
                 finally:
                     # Clean up completed or failed workers after some time
                     def cleanup_worker():
@@ -446,11 +483,11 @@ class AudioConversion(BaseHandler):
             logging.info(f"Conversion started for book {book_id} in background thread")
             worker_checker = ConversionWorkerMap.get(book_id)
             if worker_checker:
-                return {"err": "ok", "msg": _(u"开始转换"), "data": worker_checker.get_progress()}
+                return {"err": "ok", "msg": _(u"开始转换"), "data": worker_checker.get_progress(), "task_id": task_id}
             else:
                 logging.error(f"Worker for book {book_id} not found after starting conversion")
 
-            return {"err": "ok", "msg": _(u"开始转换")}
+            return {"err": "ok", "msg": _(u"开始转换"), "task_id": task_id}
 
         except ValueError:
             return {"err": "params.invalid", "msg": _(u"无效的书籍ID")}

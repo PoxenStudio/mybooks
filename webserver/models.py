@@ -527,3 +527,4 @@ class ReadingState(Base, SQLAlchemyMixin):
 
 def user_syncdb(engine):
     Base.metadata.create_all(engine)
+

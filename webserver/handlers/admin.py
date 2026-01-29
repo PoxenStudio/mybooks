@@ -709,6 +709,24 @@ class AdminTokenHandler(BaseHandler):
         return {"err": "ok", "token": token}
 
 
+class AdminRunningTasks(BaseHandler):
+    @js
+    @auth
+    def get(self):
+        """Get all running background tasks"""
+        # If not admin user, return empty list
+        if not self.admin_user:
+            return {"err": "ok", "tasks": []}
+
+        from webserver.services.background_service import BackgroundService
+
+        # Get all running tasks
+        all_tasks = BackgroundService().get_all_tasks()
+        running_tasks = [task.to_dict() for task in all_tasks if task.status == "running"]
+
+        return {"err": "ok", "tasks": running_tasks}
+
+
 def routes():
     return [
         (r"/api/admin/ssl", AdminSSL),
@@ -723,4 +741,5 @@ def routes():
         (r"/api/admin/audio/test", AudioTestConnection),
         (r"/api/admin/release/notes", ReleaseNotes),
         (r"/api/admin/token", AdminTokenHandler),
+        (r"/api/admin/tasks/running", AdminRunningTasks),
     ]

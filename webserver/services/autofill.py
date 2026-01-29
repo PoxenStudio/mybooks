@@ -25,6 +25,7 @@ class AutoFillService(AsyncService):
         self.is_running = False
         self.current_book_id = None
         self.start_time = None
+        self.task_id = None
 
     def status(self):
         """获取运行状态及处理的进度信息"""
@@ -36,6 +37,7 @@ class AutoFillService(AsyncService):
             "count_skip": self.count_skip,
             "count_done": self.count_done,
             "count_fail": self.count_fail,
+            "task_id": self.task_id,
         }
 
     @AsyncService.register_service
@@ -51,6 +53,26 @@ class AutoFillService(AsyncService):
         self.count_skip = 0
         self.count_done = 0
         self.count_fail = 0
+
+        # 创建后台任务
+        from webserver.services.background_service import background_service, BackgroundTask
+        try:
+            service_item = _("图书信息刮削")
+            task = background_service.update_task(
+                service_type=BackgroundTask.SERVICE_TYPE_AUTOFILL,
+                service_item=service_item,
+                progress=0,
+                progress_data={
+                    "total": self.count_total,
+                    "done": 0,
+                    "skip": 0,
+                    "fail": 0
+                }
+            )
+            self.task_id = task.id
+        except Exception as e:
+            logging.error(f"Failed to create background task: {e}")
+            self.task_id = None
 
         # 分批处理，减少长时间持有数据库锁
         for batch_start in range(0, len(idlist), batch_size):
@@ -112,9 +134,35 @@ class AutoFillService(AsyncService):
                     self.count_fail += 1
                     logging.error(_("更新书籍元数据失败 id=%d: %s"), book_id, err)
 
+            # 更新任务进度
+            if self.task_id:
+                try:
+                    progress = int((self.count_done + self.count_skip + self.count_fail) * 100 / self.count_total)
+                    background_service.update_progress(
+                        task_id=self.task_id,
+                        progress=progress,
+                        progress_data={
+                            "total": self.count_total,
+                            "done": self.count_done,
+                            "skip": self.count_skip,
+                            "fail": self.count_fail,
+                            "current_book_id": self.current_book_id
+                        }
+                    )
+                except Exception as e:
+                    logging.error(f"Failed to update task progress: {e}")
+
+        # 完成任务
+        if self.task_id:
+            try:
+                background_service.complete_task(task_id=self.task_id)
+            except Exception as e:
+                logging.error(f"Failed to complete task: {e}")
+
         # 重置运行状态
         self.is_running = False
         self.current_book_id = None
+        self.task_id = None
 
     @AsyncService.register_function
     def auto_fill(self, book_id, only_tags=False):

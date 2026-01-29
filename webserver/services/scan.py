@@ -62,15 +62,36 @@ class ScanService(AsyncService):
             return
 
         ScanService.static_is_scanning = True
+
+        # 创建后台任务
+        from webserver.services.background_service import background_service, BackgroundTask
+        task_id = None
         try:
-            self.do_scan_internal(path_dir)
+            service_item = _("扫描: ") + path_dir
+            task = background_service.update_task(
+                service_type=BackgroundTask.SERVICE_TYPE_SCAN,
+                service_item=service_item,
+                progress=0,
+                progress_data={"stage": "scanning", "path": path_dir}
+            )
+            task_id = task.id
+        except Exception as e:
+            logging.error(f"Failed to create background task: {e}")
+
+        try:
+            self.do_scan_internal(path_dir, task_id)
+            if task_id:
+                background_service.complete_task(task_id=task_id)
             logging.info("Scanning completed")
         except Exception as err:
+            if task_id:
+                background_service.complete_task(task_id=task_id, error_message=str(err))
             logging.error(f"Scanning failed: {err}")
         ScanService.static_is_scanning = False
 
-    def do_scan_internal(self, path_dir):
+    def do_scan_internal(self, path_dir, task_id=None):
         from calibre.ebooks.metadata.meta import get_metadata
+        from webserver.services.background_service import background_service
 
         logging.info("<%s> we are: db=%s, session=%s",
                      self, self.db, self.session)
@@ -233,6 +254,18 @@ class ScanService(AsyncService):
             if not self.save_or_rollback(row):
                 continue
             pass
+
+        # 更新任务进度到100%
+        if task_id:
+            try:
+                background_service.update_progress(
+                    task_id=task_id,
+                    progress=100,
+                    progress_data={"stage": "completed", "path": path_dir}
+                )
+            except Exception as e:
+                logging.error(f"Failed to update task progress: {e}")
+
         ScanService.static_is_scanning = False
         logging.info("scan task %d completed.", scan_id)
 
@@ -243,15 +276,35 @@ class ScanService(AsyncService):
             return
         ScanService.static_is_importing = True
 
+        # 创建后台任务
+        from webserver.services.background_service import background_service, BackgroundTask
+        task_id = None
         try:
-            self.do_import_internal(hashlist, user_id)
+            service_item = _("导入图书")
+            task = background_service.update_task(
+                service_type=BackgroundTask.SERVICE_TYPE_SCAN,
+                service_item=service_item,
+                progress=0,
+                progress_data={"stage": "importing", "total": 0, "imported": 0}
+            )
+            task_id = task.id
+        except Exception as e:
+            logging.error(f"Failed to create background task: {e}")
+
+        try:
+            self.do_import_internal(hashlist, user_id, task_id)
+            if task_id:
+                background_service.complete_task(task_id=task_id)
             logging.info("Importing completed")
         except Exception as err:
+            if task_id:
+                background_service.complete_task(task_id=task_id, error_message=str(err))
             logging.error(f"Importing failed: {err}")
         ScanService.static_is_importing = False
 
-    def do_import_internal(self, hashlist, user_id):
+    def do_import_internal(self, hashlist, user_id, task_id=None):
         from calibre.ebooks.metadata.meta import get_metadata
+        from webserver.services.background_service import background_service
 
         # 生成任务ID
         import_id = int(time.time())
@@ -267,6 +320,17 @@ class ScanService(AsyncService):
         all_rows = query.all()
         total_count = len(all_rows)
         logging.info("Total files to import: %d", total_count)
+
+        # 更新任务进度数据
+        if task_id:
+            try:
+                background_service.update_progress(
+                    task_id=task_id,
+                    progress=0,
+                    progress_data={"stage": "importing", "total": total_count, "imported": 0}
+                )
+            except Exception as e:
+                logging.error(f"Failed to update task progress: {e}")
 
         # 分批处理，避免长时间持有数据库连接
         for batch_start in range(0, total_count, batch_size):
@@ -340,6 +404,18 @@ class ScanService(AsyncService):
             except Exception as err:
                 logging.error("Batch commit error: %s", err)
                 self.session.rollback()
+
+            # 更新任务进度
+            if task_id:
+                try:
+                    progress = int(batch_end * 100 / total_count)
+                    background_service.update_progress(
+                        task_id=task_id,
+                        progress=progress,
+                        progress_data={"stage": "importing", "total": total_count, "imported": len(imported)}
+                    )
+                except Exception as e:
+                    logging.error(f"Failed to update task progress: {e}")
 
             # 批次之间短暂休息，让其他进程有机会访问数据库
             if batch_end < total_count:
