@@ -11,8 +11,8 @@
                         </p>
                     </v-card-text>
                     <v-card-text>
-                        <p>{{ $t('book.convertToAudioNote') }}</p>
-                        <v-select
+                        <p style="margin: 3px 0 10px 0;">{{ $t('book.convertToAudioNote') }}</p>
+                        <v-select style="margin-top: 3px;"
                             :items="voice_options"
                             outlined
                             dense
