@@ -129,10 +129,10 @@
             <template v-if="err == 'ok'">
                 <template v-if="user.is_login">
                     <!-- Running Tasks Indicator -->
-                    <v-menu offset-y right :close-on-content-click="false" v-if="runningTasks.length > 0">
+                    <v-menu offset-y right :close-on-content-click="false" v-if="runningTasks.length >= 0">
                         <template v-slot:activator="{ on }">
-                            <v-btn v-on="on" icon>
-                                <v-img src="/icons/running.svg" width="24" height="24"></v-img>
+                            <v-btn v-on="on" icon class="mr-2" width="48px" height="48px">
+                                <v-img src="/icons/running.svg" style="margin:8px 8px;" width="32px" height="32px"></v-img>
                             </v-btn>
                         </template>
                         <v-card width="380">
