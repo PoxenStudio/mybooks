@@ -14,6 +14,8 @@ from webserver.models import Item, ScanFile
 from webserver.services import AsyncService
 from webserver.services.autofill import AutoFillService
 from webserver.constants import CALIBRE_ERROR_FLAG
+from webserver.services.background_service import BackgroundService, BackgroundTask
+
 
 SCAN_EXT = ["azw", "azw3", "epub", "mobi", "pdf", "txt"]
 
@@ -64,11 +66,10 @@ class ScanService(AsyncService):
         ScanService.static_is_scanning = True
 
         # 创建后台任务
-        from webserver.services.background_service import background_service, BackgroundTask
         task_id = None
         try:
             service_item = _("扫描: ") + path_dir
-            task = background_service.update_task(
+            task = BackgroundService().update_task(
                 service_type=BackgroundTask.SERVICE_TYPE_SCAN,
                 service_item=service_item,
                 progress=0,
@@ -81,17 +82,16 @@ class ScanService(AsyncService):
         try:
             self.do_scan_internal(path_dir, task_id)
             if task_id:
-                background_service.complete_task(task_id=task_id)
+                BackgroundService().complete_task(task_id=task_id)
             logging.info("Scanning completed")
         except Exception as err:
             if task_id:
-                background_service.complete_task(task_id=task_id, error_message=str(err))
+                BackgroundService().complete_task(task_id=task_id, error_message=str(err))
             logging.error(f"Scanning failed: {err}")
         ScanService.static_is_scanning = False
 
     def do_scan_internal(self, path_dir, task_id=None):
         from calibre.ebooks.metadata.meta import get_metadata
-        from webserver.services.background_service import background_service
 
         logging.info("<%s> we are: db=%s, session=%s",
                      self, self.db, self.session)
@@ -276,8 +276,6 @@ class ScanService(AsyncService):
             return
         ScanService.static_is_importing = True
 
-        # 创建后台任务
-        from webserver.services.background_service import background_service, BackgroundTask
         task_id = None
         try:
             service_item = _("导入图书")
@@ -304,7 +302,6 @@ class ScanService(AsyncService):
 
     def do_import_internal(self, hashlist, user_id, task_id=None):
         from calibre.ebooks.metadata.meta import get_metadata
-        from webserver.services.background_service import background_service
 
         # 生成任务ID
         import_id = int(time.time())

@@ -677,7 +677,7 @@ export default {
             });
         },
         loadRunningTasks() {
-            this.$backend("/api/admin/tasks/running").then((rsp) => {
+            this.$backend("/admin/tasks/running").then((rsp) => {
                 if (rsp.err == "ok") {
                     this.runningTasks = rsp.tasks || [];
                 }

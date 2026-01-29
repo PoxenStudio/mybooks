@@ -23,6 +23,7 @@ from webserver.handlers.base import BaseHandler, auth, js, is_admin
 from webserver.models import BizKey, ReaderPaidBook, ReaderLog
 from webserver.worker.epub2audio_worker import EpubToAudioWorker
 from webserver.constants import ENABLE_VIP_QUOTA_KEY
+from webserver.services.background_service import BackgroundService, BackgroundTask
 
 
 CONF = loader.get_settings()
@@ -401,11 +402,10 @@ class AudioConversion(BaseHandler):
             AudioBooksCache.async_update()
 
             # 创建后台任务
-            from webserver.services.background_service import background_service, BackgroundTask
             task_id = None
             try:
                 service_item = f"{book.get('title', f'Book {book_id}')}"
-                task = background_service.update_task(
+                task = BackgroundService().update_task(
                     service_type=BackgroundTask.SERVICE_TYPE_AUDIO,
                     service_item=service_item,
                     progress=0,

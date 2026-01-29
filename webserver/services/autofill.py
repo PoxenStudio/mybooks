@@ -11,6 +11,7 @@ from webserver.plugins.meta import baike, douban
 from webserver.plugins.meta.bookbarn_tags import BookBarnTags
 from webserver.services import AsyncService
 from webserver.constants import ZLIBRARY_SUFFIX
+from webserver.services.background_service import BackgroundService, BackgroundTask
 
 CONF = loader.get_settings()
 
@@ -55,10 +56,9 @@ class AutoFillService(AsyncService):
         self.count_fail = 0
 
         # 创建后台任务
-        from webserver.services.background_service import background_service, BackgroundTask
         try:
             service_item = _("图书信息刮削")
-            task = background_service.update_task(
+            task = BackgroundService().update_task(
                 service_type=BackgroundTask.SERVICE_TYPE_AUTOFILL,
                 service_item=service_item,
                 progress=0,
@@ -138,7 +138,7 @@ class AutoFillService(AsyncService):
             if self.task_id:
                 try:
                     progress = int((self.count_done + self.count_skip + self.count_fail) * 100 / self.count_total)
-                    background_service.update_progress(
+                    BackgroundService().update_progress(
                         task_id=self.task_id,
                         progress=progress,
                         progress_data={
@@ -155,7 +155,7 @@ class AutoFillService(AsyncService):
         # 完成任务
         if self.task_id:
             try:
-                background_service.complete_task(task_id=self.task_id)
+                BackgroundService().complete_task(task_id=self.task_id)
             except Exception as e:
                 logging.error(f"Failed to complete task: {e}")
 

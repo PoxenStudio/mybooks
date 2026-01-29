@@ -20,6 +20,7 @@ from webserver import loader
 from webserver.services.autofill import AutoFillService
 from webserver.services.mail import MailService
 from webserver.services.book_barn import BookBarnClient
+from webserver.services.background_service import BackgroundService, BackgroundTask
 from webserver.handlers.base import BaseHandler, auth, js, is_admin
 from webserver.models import Reader
 from webserver.utils import SimpleBookFormatter
@@ -711,19 +712,17 @@ class AdminTokenHandler(BaseHandler):
 
 class AdminRunningTasks(BaseHandler):
     @js
-    @auth
     def get(self):
-        """Get all running background tasks"""
+        if not self.current_user:
+            return {"err": "ok", "tasks": [], "msg": _("未登录")}
+
         # If not admin user, return empty list
         if not self.admin_user:
-            return {"err": "ok", "tasks": []}
-
-        from webserver.services.background_service import BackgroundService
+            return {"err": "ok", "tasks": [], "msg": _("非管理员用户")}
 
         # Get all running tasks
-        all_tasks = BackgroundService().get_all_tasks()
-        running_tasks = [task.to_dict() for task in all_tasks if task.status == "running"]
-
+        all_tasks = BackgroundService().get_running_tasks()
+        running_tasks = [task for task in all_tasks if task["status"] == BackgroundTask.STATUS_RUNNING]
         return {"err": "ok", "tasks": running_tasks}
 
 
