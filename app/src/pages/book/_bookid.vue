@@ -408,30 +408,12 @@
                                     </v-chip>
                                 </span>
                                 <span v-if="book.book_type==this.BOOK_TYPE.PHYSICAL">{{ $t('book.bookCount') }}: {{book.book_count}}</span>
-                                <span
-                                    v-if='book.files.length>0 && book.files[0].size >= 1048576'
-                                    color="grey--text" style="font-weight: bold">&nbsp;&nbsp;&nbsp;[{{book.files[0].format}} - {{
-                                        parseInt(book.files[0].size / 1048576)
-                                    }}MB]
-                                </span>
-                                <span
-                                    v-else-if='book.files.length>0 && book.files[0].size < 1048576'
-                                    color="grey--text" style="font-weight: bold">&nbsp;&nbsp;&nbsp;[{{book.files[0].format}} - {{
-                                        parseInt(book.files[0].size / 1024)
-                                    }}KB]
-                                </span>
-                                <span
-                                    v-if='book.files.length>1 && book.files[1].size >= 1048576'
-                                    color="grey--text" style="font-weight: bold">&nbsp;[{{book.files[1].format}} - {{
-                                        parseInt(book.files[1].size / 1048576)
-                                    }}MB]
-                                </span>
-                                <span
-                                    v-else-if='book.files.length>1 && book.files[1].size < 1048576'
-                                    color="grey--text" style="font-weight: bold">&nbsp;[{{book.files[1].format}} - {{
-                                        parseInt(book.files[1].size / 1024)
-                                    }}KB]
-                                </span>
+                                <template v-for="(file, index) in book.files.slice(0, 2)" :key="'file-size-' + index">
+                                    <span
+                                        color="grey--text"
+                                        style="font-weight: bold"
+                                    >{{ '&nbsp;&nbsp;' }}[{{ file.format }} - {{ file.size >= 1048576 ? parseInt(file.size / 1048576) + 'MB' : parseInt(file.size / 1024) + 'KB' }}]</span>
+                                </template>
                             </div>
                             <v-rating v-model="book.rating" color="yellow accent-4" length="10" readonly dense
                                       small></v-rating>

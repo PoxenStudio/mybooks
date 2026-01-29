@@ -22,6 +22,11 @@
                             <v-chip rounded x-small color="green" class="white--text" v-if="book.category">
                                 {{ book.category }}
                             </v-chip>
+                            <template v-for="(file, index) in book.files?.slice(0, 2)" :key="'file-size-' + index">
+                                <v-chip rounded x-small class="ma-1"
+                                    color="grey--text"
+                                >{{ file.format }}</v-chip>
+                            </template>
                             <slot name="introduce" :book="book"></slot>
                             <div class="book-comments flex-grow-1">
                                 <p v-if="book.comments" v-html="book.comments"></p>

@@ -27,6 +27,16 @@ class SimpleBookFormatter:
             return f'{v.year:04}-{v.month:02}-{v.day:02}'
         return v
 
+    def get_files(self):
+        files = []
+        for fmt in self.book.get("available_formats", []):
+            item = {
+                "format": fmt,
+                "size": 0
+            }
+            files.append(item)
+        return files
+
     def format(self, include_comments=True):
         b = self.book
         b["ts"] = b["timestamp"].strftime("%s")
@@ -59,6 +69,7 @@ class SimpleBookFormatter:
             "book_count": self.book.get("book_count", 1),
             "state": self.book.get("state", {}),
             'category': category,
+            'files': self.get_files()
         }
 
 
@@ -106,7 +117,7 @@ class BookFormatter:
     def get_files(self):
         files = []
         book_id = self.book["id"]
-        for fmt in self.book.get("available_formats", ""):
+        for fmt in self.book.get("available_formats", []):
             try:
                 filesize = self.db.sizeof_format(book_id, fmt, index_is_id=True)
             except:
