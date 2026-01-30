@@ -157,6 +157,7 @@ export default {
     page_size: 60,
     total: 0,
     page_cnt: 0,
+    isFetching: false,  // Prevent duplicate fetching
 
     // Batch Ops
     showBatch: false,
@@ -196,40 +197,42 @@ export default {
   },
   created() {
     this.init();
-    let name = this.$route.query.name || this.$route.params.name;
-    if (name) {
-        name = decodeURIComponent(name);
-        this.selectTag(name);
-    }
+    // Watch will handle the initial name param, no need to call selectTag here
   },
   watch: {
-    '$route.query.name'(newName) {
-       if (newName) {
-         newName = decodeURIComponent(newName);
-         this.selectTag(newName);
-       } else {
-         let paramsName = this.$route.params.name;
-         if (paramsName) {
-           paramsName = decodeURIComponent(paramsName);
-           this.selectTag(paramsName);
-         } else {
-           this.clearTag();
-         }
-       }
+    '$route.query.name': {
+      handler(newName) {
+        if (newName) {
+          newName = decodeURIComponent(newName);
+          this.selectTag(newName);
+        } else {
+          let paramsName = this.$route.params.name;
+          if (paramsName) {
+            paramsName = decodeURIComponent(paramsName);
+            this.selectTag(paramsName);
+          } else {
+            this.clearTag();
+          }
+        }
+      },
+      immediate: true
     },
-    '$route.params.name'(newName) {
-       if (newName) {
-         newName = decodeURIComponent(newName);
-         this.selectTag(newName);
-       } else {
-         let queryName = this.$route.query.name;
-         if (queryName) {
-           queryName = decodeURIComponent(queryName);
-           this.selectTag(queryName);
-         } else {
-           this.clearTag();
-         }
-       }
+    '$route.params.name': {
+      handler(newName) {
+        if (newName) {
+          newName = decodeURIComponent(newName);
+          this.selectTag(newName);
+        } else {
+          let queryName = this.$route.query.name;
+          if (queryName) {
+            queryName = decodeURIComponent(queryName);
+            this.selectTag(queryName);
+          } else {
+            this.clearTag();
+          }
+        }
+      },
+      immediate: true
     }
   },
   methods: {
@@ -266,6 +269,10 @@ export default {
         this.items = rsp.items;
     },
     selectTag(name) {
+        // Avoid duplicate calls if already showing this tag and fetching or has data
+        if (this.currentTag === name && (this.isFetching || this.books.length > 0)) {
+            return;
+        }
         this.currentTag = name;
         this.page = 1;
         // 如果当前路由有params.name，说明是通过/tag/:name访问的，需要转换为query参数并清除params
@@ -287,6 +294,10 @@ export default {
     },
     async fetchBooks() {
         if (!this.currentTag) return;
+        if (this.isFetching) {
+            return;
+        }
+        this.isFetching = true;
         const start = (this.page - 1) * this.page_size;
         // Search by tag
         const query = `tags:="${this.currentTag}"`;
@@ -299,6 +310,8 @@ export default {
             }
         } catch (e) {
             this.$alert("error", "Failed to load books");
+        } finally {
+            this.isFetching = false;
         }
     },
     change_page() {

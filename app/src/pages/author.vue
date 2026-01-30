@@ -125,6 +125,7 @@ export default {
     page_size: 60,
     total: 0,
     page_cnt: 0,
+    isFetching: false,  // Prevent duplicate fetching
 
     // Batch Ops
     showBatch: false,
@@ -158,22 +159,26 @@ export default {
     return {};
   },
   created() {
+    console.log('[author.vue] created, route.query.name:', this.$route.query.name);
     this.init();
-    if (this.$route.query.name) {
-        this.selectAuthor(this.$route.query.name);
-    }
+    // Watch will handle the initial name param, no need to call selectAuthor here
   },
   watch: {
-    '$route.query.name'(newName) {
-       if (newName) {
-         this.selectAuthor(newName);
-       } else {
-         this.clearAuthor();
-       }
+    '$route.query.name': {
+      handler(newName) {
+        console.log('[author.vue] watch $route.query.name triggered, newName:', newName, ', currentAuthor:', this.currentAuthor);
+        if (newName) {
+          this.selectAuthor(newName);
+        } else {
+          this.clearAuthor();
+        }
+      },
+      immediate: true  // Handle initial route query on mount
     }
   },
   methods: {
     async init() {
+        console.log('[author.vue] init, currentAuthor:', this.currentAuthor, ', items.length:', this.items.length);
         this.$store.commit('navbar', true);
         if (this.items.length === 0 && !this.currentAuthor) {
             let rsp = await this.$backend("/author" + (this.show_all ? "?show=all" : ""));
@@ -206,10 +211,17 @@ export default {
         this.items = rsp.items;
     },
     selectAuthor(name) {
+        console.log('[author.vue] selectAuthor called, name:', name, ', currentAuthor:', this.currentAuthor, ', books.length:', this.books.length, ', isFetching:', this.isFetching);
+        // Avoid duplicate calls if already showing this author and fetching or has data
+        if (this.currentAuthor === name && (this.isFetching || this.books.length > 0)) {
+            console.log('[author.vue] selectAuthor - skipping duplicate call');
+            return;
+        }
         this.currentAuthor = name;
         this.page = 1;
         // Update URL without navigation if needed, but better to use router push
         if (this.$route.query.name !== name) {
+            console.log('[author.vue] selectAuthor - pushing route with name:', name);
             this.$router.push({ query: { ...this.$route.query, name: name } });
         }
         this.fetchBooks();
@@ -225,21 +237,32 @@ export default {
     },
     async fetchBooks() {
         if (!this.currentAuthor) return;
+        if (this.isFetching) {
+            console.log('[author.vue] fetchBooks - already fetching, skipping');
+            return;
+        }
+        console.log('[author.vue] fetchBooks called, currentAuthor:', this.currentAuthor, ', page:', this.page);
+        this.isFetching = true;
         const start = (this.page - 1) * this.page_size;
         // Use search API for author books
         // Need to construct search query similar to ListBook logic
         // For authors, we can use the 'author' parameter if search supports it,
         // or authors:"=Name"
         const query = `authors:="${this.currentAuthor}"`;
+        console.log('[author.vue] fetchBooks - calling /search with query:', query);
         try {
             const rsp = await this.$backend(`/search?name=${encodeURIComponent(query)}&start=${start}&size=${this.page_size}&order=title`);
+            console.log('[author.vue] fetchBooks - response received, books count:', rsp.books?.length);
             if (rsp.err === 'ok') {
                 this.books = rsp.books;
                 this.total = rsp.total;
                 this.page_cnt = Math.max(1, Math.ceil(this.total / this.page_size));
             }
         } catch (e) {
+            console.error('[author.vue] fetchBooks - error:', e);
             this.$alert("error", "Failed to load books");
+        } finally {
+            this.isFetching = false;
         }
     },
     change_page() {

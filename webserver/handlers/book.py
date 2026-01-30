@@ -1408,8 +1408,6 @@ class SearchBook(ListHandler):
             converted_name = opencc.OpenCC(profile).convert(name)
             if converted_name != name:
                 converted_names.append(converted_name)
-
-        logging.info(f"Converted names for '{name}': {converted_names}")
         if converted_names:
             try:
                 if title_search:
