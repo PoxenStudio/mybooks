@@ -1336,7 +1336,7 @@ class RecentBook(ListHandler):
     def get(self):
         title = _(u"新书推荐")
         ids = self.books_by_id()
-        return self.render_book_list([], ids=ids, title=title, sort_by_id=True)
+        return self.render_book_list([], ids=ids, title=title, sort_fields="id")
 
 
 class SearchBook(ListHandler):
@@ -1385,6 +1385,8 @@ class SearchBook(ListHandler):
         name = self.get_argument("name", "").strip()
         book_title = self.get_argument("title", "").strip()  # 传入此参数代表只按名称搜索
         exclude_id = int(self.get_argument("exclude", "0").strip())
+        order_by = self.get_argument("order", "").strip()
+
         if not name and not book_title:
             return self.write({"err": "params.invalid", "msg": _(u"请输入搜索关键字")})
 
@@ -1425,8 +1427,7 @@ class SearchBook(ListHandler):
         if exclude_id > 0 and exclude_id in seen:
             if exclude_id in ids:
                 ids.remove(exclude_id)
-        logging.info("SearchBook: found %d books for name=%s, first book id:%s" % (len(ids), name, ids[0] if ids else 'None'))
-        return self.render_book_list([], ids=ids, title=title)
+        return self.render_book_list([], ids=ids, title=title, sort_fields=order_by)
 
 
 class HotBook(ListHandler):
@@ -1437,7 +1438,7 @@ class HotBook(ListHandler):
         delta = 60
         items = db_items.limit(delta).offset(start).all()
         ids = [item.book_id for item in items]
-        return self.render_book_list([], ids=ids, title=title, sort_by_id=False)
+        return self.render_book_list([], ids=ids, title=title)
 
 
 # 通ISBN添加实体图书

@@ -232,7 +232,7 @@ export default {
         // or authors:"=Name"
         const query = `authors:="${this.currentAuthor}"`;
         try {
-            const rsp = await this.$backend(`/search?name=${encodeURIComponent(query)}&start=${start}&size=${this.page_size}`);
+            const rsp = await this.$backend(`/search?name=${encodeURIComponent(query)}&start=${start}&size=${this.page_size}&order=title`);
             if (rsp.err === 'ok') {
                 this.books = rsp.books;
                 this.total = rsp.total;

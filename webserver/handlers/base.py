@@ -732,7 +732,7 @@ class ListHandler(BaseHandler):
             self.do_sort(items, "id", False)
         return None
 
-    def get_book_list(self, all_books, ids=None, title=None, sort_by_id=False, include_comments=True):
+    def get_book_list(self, all_books, ids=None, title=None, sort_fields=None, include_comments=True):
         """Get a list of books."""
         start = self.get_argument_start()
         try:
@@ -745,9 +745,12 @@ class ListHandler(BaseHandler):
             ids = list(ids)
             count = len(ids)
             books = self.get_books(ids=ids[start : start + delta])
-            if sort_by_id:
-                # 归一化，按照id从大到小排列。
+            if sort_fields == "id":
+                # 按照id从大到小排列（降序）
                 self.do_sort(books, "id", False)
+            elif sort_fields == "title":
+                # 按照title从小到大排列（升序）
+                self.do_sort(books, "title", True)
             else:
                 # 按照输入的ids顺序排序
                 books = sorted(books, key=lambda x: ids.index(x["id"]) if x["id"] in ids else -1)
@@ -762,8 +765,8 @@ class ListHandler(BaseHandler):
         }
 
     @js
-    def render_book_list(self, all_books, ids=None, title=None, sort_by_id=False):
-        return self.get_book_list(all_books, ids, title, sort_by_id)
+    def render_book_list(self, all_books, ids=None, title=None, sort_fields=None):
+        return self.get_book_list(all_books, ids, title, sort_fields)
 
     def fmt(self, b, include_comments=True):
         return utils.BookFormatter(self, b).format(include_comments=include_comments)
