@@ -68,7 +68,7 @@ class ScanService(AsyncService):
         # 创建后台任务
         task_id = None
         try:
-            service_item = _("扫描: ") + path_dir
+            service_item = _("扫描导入目录")
             task = BackgroundService().update_task(
                 service_type=BackgroundTask.SERVICE_TYPE_SCAN,
                 service_item=service_item,
@@ -161,7 +161,21 @@ class ScanService(AsyncService):
 
         logging.info("========== start to check files hash & meta ============")
         # 检查文件哈希值，检查DB重复情况
+        scanning_index = 0
         for row in rows:
+            scanning_index += 1
+            # 更新任务进度数据
+            if task_id:
+                try:
+                    progress = int(scanning_index * 100 / len(rows))
+                    BackgroundService().update_progress(
+                        task_id=task_id,
+                        progress=progress,
+                        progress_data={"stage": "scanning", "path": path_dir}
+                    )
+                except Exception as e:
+                    logging.error(f"Failed to update task progress: {e}")
+
             if row.status == ScanFile.DROP:
                 continue
 
@@ -258,7 +272,7 @@ class ScanService(AsyncService):
         # 更新任务进度到100%
         if task_id:
             try:
-                background_service.update_progress(
+                BackgroundService().update_progress(
                     task_id=task_id,
                     progress=100,
                     progress_data={"stage": "completed", "path": path_dir}
@@ -279,7 +293,7 @@ class ScanService(AsyncService):
         task_id = None
         try:
             service_item = _("导入图书")
-            task = background_service.update_task(
+            task = BackgroundService().update_task(
                 service_type=BackgroundTask.SERVICE_TYPE_SCAN,
                 service_item=service_item,
                 progress=0,
@@ -292,11 +306,11 @@ class ScanService(AsyncService):
         try:
             self.do_import_internal(hashlist, user_id, task_id)
             if task_id:
-                background_service.complete_task(task_id=task_id)
+                BackgroundService().complete_task(task_id=task_id)
             logging.info("Importing completed")
         except Exception as err:
             if task_id:
-                background_service.complete_task(task_id=task_id, error_message=str(err))
+                BackgroundService().complete_task(task_id=task_id, error_message=str(err))
             logging.error(f"Importing failed: {err}")
         ScanService.static_is_importing = False
 
@@ -321,7 +335,7 @@ class ScanService(AsyncService):
         # 更新任务进度数据
         if task_id:
             try:
-                background_service.update_progress(
+                BackgroundService().update_progress(
                     task_id=task_id,
                     progress=0,
                     progress_data={"stage": "importing", "total": total_count, "imported": 0}
@@ -406,7 +420,7 @@ class ScanService(AsyncService):
             if task_id:
                 try:
                     progress = int(batch_end * 100 / total_count)
-                    background_service.update_progress(
+                    BackgroundService().update_progress(
                         task_id=task_id,
                         progress=progress,
                         progress_data={"stage": "importing", "total": total_count, "imported": len(imported)}
@@ -427,6 +441,15 @@ class ScanService(AsyncService):
             self.session.rollback()
 
         ScanService.static_is_importing = False
+        if task_id:
+            try:
+                BackgroundService().update_progress(
+                    task_id=task_id,
+                    progress=100,
+                    progress_data={"stage": "completed", "total": total_count, "imported": len(imported)}
+                )
+            except Exception as e:
+                logging.error(f"Failed to update task progress: {e}")
 
         # 全部导入完毕后，开始拉取书籍信息
         # 这个操作可能需要很长时间，在此之前已经释放了数据库连接

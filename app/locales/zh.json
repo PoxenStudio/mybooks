@@ -633,7 +633,7 @@
         "aiThinking": "思考中...",
         "backgroundTasks": "后台任务",
         "taskProgress": "进度",
-        "taskTypeAutofill": "自动填充元数据",
+        "taskTypeAutofill": "图书信息更新",
         "taskTypeScan": "批量导入图书",
         "taskTypeAudio": "音频转换"
     },
