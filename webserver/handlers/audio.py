@@ -368,6 +368,11 @@ class AudioConversion(BaseHandler):
         if not self.is_admin():
             return {"err": "permission.not_admin", "msg": _(u"只有管理员可以进行有声书转换")}
 
+        # 获取当前用户，用于后续消息发送
+        user = self.get_current_user()
+        if not user:
+            return {"err": "auth.required", "msg": _(u"需要登录")}
+
         try:
             if AudioUtils.get_running_worker_count() >= ALLOW_MAX_RUNNING_WORKERS:
                 return {"err": "audio.too_many_conversions", "msg": _(u"当前转换任务超过2项, 请稍后再试")}
