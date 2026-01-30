@@ -20,7 +20,7 @@ from tornado import web
 
 from webserver import loader, utils
 from webserver.handlers.base import BaseHandler, auth, js, is_admin
-from webserver.models import BizKey, ReaderPaidBook, ReaderLog
+from webserver.models import BizKey, ReaderPaidBook, ReaderLog, Message
 from webserver.worker.epub2audio_worker import EpubToAudioWorker
 from webserver.constants import ENABLE_VIP_QUOTA_KEY
 from webserver.services.background_service import BackgroundService, BackgroundTask
@@ -416,7 +416,7 @@ class AudioConversion(BaseHandler):
             # 创建后台任务
             task_id = None
             try:
-                service_item = f"{book.get('title', f'Book {book_id}')}"
+                service_item = f"[{book_id}]{book.get('title', f'Book {book_id}')}"
                 task = BackgroundService().update_task(
                     service_type=BackgroundTask.SERVICE_TYPE_AUDIO,
                     service_item=service_item,
@@ -457,6 +457,16 @@ class AudioConversion(BaseHandler):
                                 BackgroundService().complete_task(task_id=task_id)
                             except Exception as e:
                                 logging.error(f"Failed to complete task: {e}")
+                        # 发送成功消息给用户
+                        try:
+                            book_title = book.get('title', f'书籍{book_id}')
+                            success_msg = _(f"《{book_title}》的音频转换已完成")
+                            Message.cleanup_messages(user.id, success_msg)
+                            msg = Message(user.id, "audio.conversion.success", success_msg)
+                            msg.save()
+                            logging.info(f"Sent success message to user {user.id} for book {book_id}")
+                        except Exception as e:
+                            logging.error(f"Failed to send success message: {e}")
                     else:
                         logging.error(f"Conversion failed for book {book_id}: {result.get('error', 'Unknown error')}")
                         worker.progress_data["status"] = EpubToAudioWorker.STATUS_FAILED
@@ -467,6 +477,16 @@ class AudioConversion(BaseHandler):
                                 BackgroundService().complete_task(task_id=task_id, error_message=result.get('error', 'Unknown error'))
                             except Exception as e:
                                 logging.error(f"Failed to complete task: {e}")
+                        # 发送失败消息给用户
+                        try:
+                            book_title = book.get('title', f'书籍{book_id}')
+                            error_msg = _(f"《{book_title}》的音频转换失败：{result.get('error', 'Unknown error')}")
+                            Message.cleanup_messages(user.id, error_msg)
+                            msg = Message(user.id, "audio.conversion.failed", error_msg)
+                            msg.save()
+                            logging.info(f"Sent failure message to user {user.id} for book {book_id}")
+                        except Exception as e:
+                            logging.error(f"Failed to send failure message: {e}")
                 except Exception as e:
                     logging.error(f"Exception during conversion for book {book_id}: {e}")
                     # Mark worker as failed and clean up
@@ -478,6 +498,16 @@ class AudioConversion(BaseHandler):
                             BackgroundService().complete_task(task_id=task_id, error_message=str(e))
                         except Exception as e:
                             logging.error(f"Failed to complete task: {e}")
+                    # 发送异常消息给用户
+                    try:
+                        book_title = book.get('title', f'书籍{book_id}')
+                        error_msg = _(f"《{book_title}》的音频转换出现异常：{str(e)}")
+                        Message.cleanup_messages(user.id, error_msg)
+                        msg = Message(user.id, "audio.conversion.error", error_msg)
+                        msg.save()
+                        logging.info(f"Sent error message to user {user.id} for book {book_id}")
+                    except Exception as msg_error:
+                        logging.error(f"Failed to send error message: {msg_error}")
                 finally:
                     # Clean up completed or failed workers after some time
                     def cleanup_worker():
