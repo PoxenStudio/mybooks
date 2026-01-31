@@ -1155,8 +1155,9 @@ class BookEdit(BaseHandler):
             "languages"
         ]
         for key, val in data.items():
-            if key in KEYS:
-                mi.set(key, val)
+            if key not in KEYS:
+                continue
+            mi.set(key, val)
 
         if data.get("pubdate", None):
             content = douban.str2date(data["pubdate"])
@@ -1193,7 +1194,7 @@ class BookEdit(BaseHandler):
                 self.calibre_db_cache.set_field(CALIBRE_COLUMN_CATEGORY, {bid: category})
             else:
                 logging.error("Too many characters in the category, ignore it!")
-        self.calibre_db.set_metadata(bid, mi)
+        self.calibre_db.set_metadata(bid, mi, force_changes=True)
         return True
 
     @js
