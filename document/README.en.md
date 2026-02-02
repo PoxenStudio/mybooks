@@ -74,10 +74,4 @@ Refer to the following user posts:
 [![](https://contrib.rocks/image?repo=PoxenStudio/talebook)](https://github.com/PoxenStudio/talebook/graphs/contributors)
 
 ## Demonstration
-
 [Demo site (password: admin/demodemo)](http://demo.talebook.org)
-
-[Video introduction (thanks to @Pan06da)](https://player.bilibili.com/player.html?aid=482258810&bvid=BV1AT411S7c3&cid=1018595245&page=1)
-
-Screenshots of the project demonstration:
-![](document/screenshot.png)
