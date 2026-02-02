@@ -136,11 +136,4 @@ NAS安装指南：请参考网友们的帖子：[帖子1](https://post.smzdm.com
 
 
 ## 演示
-
 [Demo站点（密码 admin/demodemo ）](http://demo.talebook.org)
-
-[视频简介（感谢@Pan06da的制作）](https://player.bilibili.com/player.html?aid=482258810&bvid=BV1AT411S7c3&cid=1018595245&page=1)
-
-
-项目演示截图如下：
-![](document/screenshot.png)
