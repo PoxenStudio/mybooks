@@ -47,14 +47,8 @@ poxenstudio/talebook增加的特性包括:
 [Web API文档](document/WebAPI.md)
 
 ### 关注项目
-
-公众号```talebook```
-
-![talebook](document/gongzhonghao_talebook.jpg)
-
-微信扫码加好友, 备注```talebook```
-
-![微信号PoxenStudio](document/weichat_poxenstudio.jpg)
+公众号```Talebook```
+![Talebook](document/gongzhonghao_talebook.jpg)
 
 
 ## 版本
@@ -120,7 +114,7 @@ WebDAV URL地址: `http://<ip or domain>:<port>/books`
 
 ## 常见问题
 
-常见问题请参阅[使用指南](document/UserGuide.zh_CN.md)，无法解决的话，提个ISSUE, 或进入公众私信。
+常见问题请参阅[使用指南](document/UserGuide.zh_CN.md)，无法解决的话，提个ISSUE, 或进入公众号私信。
 
 手动安装请参考[开发者指南](document/Development.zh_CN.md)
 
@@ -137,3 +131,6 @@ NAS安装指南：请参考网友们的帖子：[帖子1](https://post.smzdm.com
 
 ## 演示
 [Demo站点（密码 admin/demodemo ）](http://demo.talebook.org)
+
+## 项目首页
+[PoxenStudio Talebook](https://mybooks.top)
