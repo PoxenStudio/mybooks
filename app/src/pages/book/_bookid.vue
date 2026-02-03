@@ -225,19 +225,13 @@
                     <v-btn icon small fab @click="dialog_download = true">
                         <v-icon>get_app</v-icon>
                     </v-btn>
-                    <v-btn class="d-none" icon small fab>
-                        <v-icon>thumb_up</v-icon>
-                    </v-btn>
-                    <v-btn class="d-none" icon small fab>
-                        <v-icon>share</v-icon>
-                    </v-btn>
-
                     <v-spacer></v-spacer>
                     <v-btn
                         :small="tiny"
                         dark
                         color="primary"
                         class="mx-2 d-flex d-sm-flex"
+                        :style="tiny ? { padding: '0px 2px', margin: '0px 3px !important' } : {}"
                         @click="handleReadingStateChange"
                         :loading="readingStateLoading"
                     >
@@ -248,10 +242,11 @@
                         dark
                         color="primary"
                         class="mx-2 d-flex d-sm-flex"
+                        :style="tiny ? { padding: '0px 2px', margin: '0px 3px !important' } : {}"
                         @click="switch_to_audio_player"
                         v-if="book.book_type != this.BOOK_TYPE.PHYSICAL"
                     >
-                        <v-icon dark>{{ audios.status === AUDIO_STATUS.FAILED ? 'error' : 'audiotrack' }}</v-icon>
+                        <v-icon dark v-if="!tiny">{{ audios.status === AUDIO_STATUS.FAILED ? 'error' : 'audiotrack' }}</v-icon>
                         {{ $t('book.convertToAudio') }}
                         <span v-if="audios.status === AUDIO_STATUS.PROCESSING && audios.progress && audios.progress.converted_chapters !== undefined"
                               class="ml-1">
@@ -262,7 +257,8 @@
                             ({{ audios.count }})
                         </span>
                     </v-btn>
-                    <v-btn :small="tiny" dark color="primary" class="mx-2 d-flex d-sm-flex" :href="'/read/' + book.id"
+                    <v-btn :small="tiny" dark color="primary" class="mx-2 d-flex d-sm-flex" :style="tiny ? { padding: '0px 2px', margin: '0px 3px !important' } : {}"
+                           :href="'/read/' + book.id"
                            target="_blank">
                         <v-icon left v-if="!tiny">import_contacts</v-icon>
                         {{ $t('book.read') }}
@@ -270,8 +266,8 @@
                     <template v-if="book.is_owner">
                         <v-menu offset-y>
                             <template v-slot:activator="{ on }">
-                                <v-btn v-on="on" dark color="primary" class="ml-2" :small="tiny"
-                                >{{ $t('book.manage') }}
+                                <v-btn v-on="on" dark color="primary" class="mx-2 ml-2" :small="tiny" :style="tiny ? { padding: '0px 2px', margin: '0px 3px !important' } : {}">
+                                    {{ $t('book.manage') }}
                                     <v-icon small>more_vert</v-icon>
                                 </v-btn>
                             </template>
@@ -309,8 +305,8 @@
                         <template v-if="book.is_owner">
                         <v-menu offset-y>
                             <template v-slot:activator="{ on }">
-                                <v-btn v-on="on" dark color="primary" class="ml-2" :small="tiny"
-                                >{{ $t('book.process') }}
+                                <v-btn v-on="on" dark color="primary" class="ml-2" :small="tiny" :style="tiny ? { padding: '0px 2px',  margin: '0px 3px !important' } : {}">
+                                    {{ $t('book.process') }}
                                     <v-icon small>more_vert</v-icon>
                                 </v-btn>
                             </template>
