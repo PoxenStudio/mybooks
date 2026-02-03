@@ -1488,11 +1488,9 @@ class SearchBook(ListHandler):
         ids = []
         seen = set()
 
-        if not title_search:
+        if not title_search and name.find(":") == -1:
             # 分词搜索：当name长度在2-10之间且jieba可用时
             self._search_by_segmentation(name, ids, seen)
-
-        logging.info(f"Searching books for name: '{name}', title_search: {title_search}")
 
         # 简繁体转换搜索（合并为一次查询）
         converted_names = [name]
@@ -1508,7 +1506,6 @@ class SearchBook(ListHandler):
                 else:
                     # 对于普通搜索，构建OR查询
                     query = " OR ".join(converted_names)
-                logging.info(f"Converted names for search: {converted_names}, query: {query}")
                 ids2 = self.calibre_db_cache.search(query)
                 if ids2:
                     self._add_books(ids2, ids, seen)
