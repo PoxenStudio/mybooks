@@ -125,12 +125,12 @@ class ConvertService(AsyncService):
         if task:
             BackgroundService().complete_task(task.id)
         if not ok:
-            self.add_msg(user_id, "danger", u"文件格式转换失败！请查看日志，或到公众号上私信联系")
+            self.add_msg(user_id, "danger", u"[%s]文件格式转换失败！请查看日志，或到公众号上私信联系" % service_item)
             return
 
         with open(new_path, "rb") as f:
             self.db.add_format(book["id"], new_fmt, f, index_is_id=True)
             logging.info("added new book: %s", new_path)
-
+        self.add_msg(user_id, "success", _(u"[%s]文件格式转换成功" % service_item))
         # 清理临时文件
         os.remove(new_path)

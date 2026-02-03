@@ -694,6 +694,7 @@ export default {
                 'autofill': this.$t('appHeader.taskTypeAutofill'),
                 'scan': this.$t('appHeader.taskTypeScan'),
                 'audio': this.$t('appHeader.taskTypeAudio'),
+                'convert': this.$t('appHeader.taskTypeConvert'),
             };
             return typeMap[serviceType] || serviceType;
         },

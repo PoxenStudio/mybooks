@@ -1272,6 +1272,7 @@ class BookDelete(BaseHandler):
     def post(self, bid):
         book = self.get_book(bid)
         bid = book["id"]
+
         if isinstance(book["collector"], dict):
             cid = book["collector"]["id"]
         else:
@@ -1282,6 +1283,7 @@ class BookDelete(BaseHandler):
         if not self.current_user.can_delete() or not (self.is_admin() or self.is_book_owner(bid, cid)):
             return {"err": "permission", "msg": _(u"无权操作")}
 
+        # 删除整本书
         AudioUtils.clear_audio(bid)
 
         try:
@@ -1291,6 +1293,53 @@ class BookDelete(BaseHandler):
         except Exception as e:
             logging.error(f"删除书籍《{book['title']}》失败: {e}")
             return {"err": "fail", "msg": _(u"删除失败, 请查看日志。如果一直出错，请联系管理员。")}
+
+
+class BookDeleteFormat(BaseHandler):
+    @js
+    @auth
+    def post(self, bid):
+        book = self.get_book(bid, raise_exception=False)
+        if not book:
+            return {"err": "params.book.invalid", "msg": _(u"书籍已不存在")}
+        bid = book["id"]
+
+        if isinstance(book["collector"], dict):
+            cid = book["collector"]["id"]
+        else:
+            cid = book["collector"].id
+        if not self.current_user.can_edit() or not (self.is_admin() or self.is_book_owner(bid, cid)):
+            return {"err": "permission", "msg": _(u"无权操作")}
+
+        if not self.current_user.can_delete() or not (self.is_admin() or self.is_book_owner(bid, cid)):
+            return {"err": "permission", "msg": _(u"无权操作")}
+
+        try:
+            data = tornado.escape.json_decode(self.request.body)
+            fmt = data.get("format", "").strip().lower()
+        except:
+            return {"err": "params.invalid", "msg": _(u"请求参数格式错误")}
+
+        if not fmt:
+            return {"err": "params.missing", "msg": _(u"格式参数不能为空")}
+
+        fmt_key = "fmt_%s" % fmt
+        if fmt_key not in book:
+            return {"err": "format.not_found", "msg": _(u"书籍不包含 %s 格式") % fmt.upper()}
+
+        # 检查书籍是否只有一个格式
+        available_formats = book.get("available_formats", "")
+        available_formats = [f.strip() for f in available_formats if f.strip()]
+        if len(available_formats) <= 1:
+            return {"err": "last.format", "msg": _(u"书籍只有一个格式，无法刪除")}
+
+        try:
+            self.calibre_db_cache.remove_formats({bid: [fmt.upper()]})
+            self.add_msg("success", _(u"删除书籍《%s》的%s格式") % (book["title"], fmt))
+            return {"err": "ok", "msg": _(u"删除%s格式成功" % fmt)}
+        except Exception as e:
+            logging.error(f"删除书籍《{book['title']}》的{fmt}格式失败: {e}")
+            return {"err": "fail", "msg": _(u"删除%s格式失败, 请查看日志。如果一直出错，请联系管理员。" % fmt)}
 
 
 class BookDownload(BaseHandler, web.StaticFileHandler):
@@ -2521,6 +2570,7 @@ def routes():
         (r"/api/book/upload/chunk", BookUploadChunk),
         (r"/api/book/([0-9]+)", BookDetail),
         (r"/api/book/([0-9]+)/delete", BookDelete),
+        (r"/api/book/([0-9]+)/delete_format", BookDeleteFormat),
         (r"/api/book/([0-9]+)/edit", BookEdit),
         (r"/api/book/([0-9]+\..+)", BookDownload),
         (r"/api/book/([0-9]+)/refer", BookRefer),
