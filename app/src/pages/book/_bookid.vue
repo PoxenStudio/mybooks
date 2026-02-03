@@ -266,6 +266,38 @@
                     <template v-if="book.is_owner">
                         <v-menu offset-y>
                             <template v-slot:activator="{ on }">
+                                <v-btn v-on="on" dark color="primary" class="mx-2 ml-2" :small="tiny" :style="tiny ? { padding: '0px 2px',  margin: '0px 3px !important' } : {}">
+                                    {{ $t('book.process') }}
+                                    <v-icon small>more_vert</v-icon>
+                                </v-btn>
+                            </template>
+                            <v-list>
+                                <v-list-item @click="save_meta_to_file" :disabled="!hasEpubOrAzw3">
+                                    <v-icon>mdi-file-sync</v-icon>
+                                    {{ $t('book.saveMetaToFile') }}
+                                </v-list-item>
+                                <v-list-item @click="convert_book" :enabled="hasEpubOrKindleFormats">
+                                    <v-icon>mdi-swap-horizontal</v-icon>
+                                    {{ $t('book.convert') }}
+                                </v-list-item>
+                                <v-list-item @click="convert_to_pdf" :enabled="!hasPDF">
+                                    <v-icon>mdi-swap-horizontal</v-icon>
+                                    {{ $t('book.convert_to_pdf') }}
+                                </v-list-item>
+                                <v-list-item @click="seperate_book" :disabled="book.files.length <= 1">
+                                    <v-icon>mdi-content-copy</v-icon>
+                                    {{ $t('book.seperate') }}
+                                </v-list-item>
+                                <v-list-item @click="show_delete_format_dialog" :disabled="book.files.length <= 1">
+                                    <v-icon>mdi-file-document-remove-outline</v-icon>
+                                    {{ $t('book.deleteFormat') }}
+                                </v-list-item>
+                            </v-list>
+                        </v-menu>
+                    </template>
+                    <template v-if="book.is_owner">
+                        <v-menu offset-y>
+                            <template v-slot:activator="{ on }">
                                 <v-btn v-on="on" dark color="primary" class="mx-2 ml-2" :small="tiny" :style="tiny ? { padding: '0px 2px', margin: '0px 3px !important' } : {}">
                                     {{ $t('book.manage') }}
                                     <v-icon small>more_vert</v-icon>
@@ -299,37 +331,6 @@
                                 <v-list-item @click="delete_book">
                                     <v-icon>delete_forever</v-icon>
                                     {{ $t('book.deleteBook') }}
-                                </v-list-item>
-                            </v-list>
-                        </v-menu>
-                        <template v-if="book.is_owner">
-                        <v-menu offset-y>
-                            <template v-slot:activator="{ on }">
-                                <v-btn v-on="on" dark color="primary" class="ml-2" :small="tiny" :style="tiny ? { padding: '0px 2px',  margin: '0px 3px !important' } : {}">
-                                    {{ $t('book.process') }}
-                                    <v-icon small>more_vert</v-icon>
-                                </v-btn>
-                            </template>
-                            <v-list>
-                                <v-list-item @click="save_meta_to_file" :disabled="!hasEpubOrAzw3">
-                                    <v-icon>mdi-file-sync</v-icon>
-                                    {{ $t('book.saveMetaToFile') }}
-                                </v-list-item>
-                                <v-list-item @click="convert_book" :enabled="hasEpubOrKindleFormats">
-                                    <v-icon>mdi-swap-horizontal</v-icon>
-                                    {{ $t('book.convert') }}
-                                </v-list-item>
-                                <v-list-item @click="convert_to_pdf" :enabled="!hasPDF">
-                                    <v-icon>mdi-swap-horizontal</v-icon>
-                                    {{ $t('book.convert_to_pdf') }}
-                                </v-list-item>
-                                <v-list-item @click="seperate_book" :disabled="book.files.length <= 1">
-                                    <v-icon>mdi-content-copy</v-icon>
-                                    {{ $t('book.seperate') }}
-                                </v-list-item>
-                                <v-list-item @click="show_delete_format_dialog" :disabled="book.files.length <= 1">
-                                    <v-icon>mdi-file-document-remove-outline</v-icon>
-                                    {{ $t('book.deleteFormat') }}
                                 </v-list-item>
                             </v-list>
                         </v-menu>
