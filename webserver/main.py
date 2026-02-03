@@ -352,7 +352,7 @@ def setup_logging():
     if options.log_file_prefix:
         file_handler = RotatingFileHandler(
             options.log_file_prefix,
-            maxBytes=5*1024*1024,
+            maxBytes=5 * 1024 * 1024,
             backupCount=5
         )
         file_handler.setLevel(logging.INFO)

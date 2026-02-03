@@ -125,7 +125,7 @@ class ConvertService(AsyncService):
         progress_file = ConvertService().get_path_progress(book["id"])
         logging.info("convert book: %s => %s, progress: %s" % (fpath, new_path, progress_file))
 
-        title = book.get("title", f"Unknown Title")
+        title = book.get("title", "Unknown Title")
         if len(title) > 20:
             title = title[0:19] + "..."
         service_item = f"[{book['id']}]{title}"
