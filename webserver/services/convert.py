@@ -56,11 +56,17 @@ class ConvertService(AsyncService):
             args += ["--embed-font-family", "Lato"]
             args += ["--enable-heuristics", "--output-profile", "kindle"]
         elif new_path.lower().endswith(".pdf"):
-            args += ["--paper-size", "a5"]
-            args += ["--margin-left", "15"]
-            args += ["--margin-top", "15"]
-            args += ["--margin-right", "15"]
-            args += ["--margin-bottom", "15"]
+            cn_font_name = "\"WenQuanYi Micro Hei,文泉驛微米黑,文泉驿微米黑\""
+            args += ["--paper-size=a5"]
+            args += ["--pdf-page-margin-left=15"]
+            args += ["--pdf-page-margin-top=15"]
+            args += ["--pdf-page-margin-right=15"]
+            args += ["--pdf-page-margin-bottom=15"]
+            args += ["--no-chapters-in-toc"]
+            args += ["--base-font-size=12"]
+            args += ["--filter-css=font-family"]
+            args += [f"--pdf-sans-family=\"{cn_font_name}\""]
+            args += [f"--pdf-serif-family=\"{cn_font_name}\""]
 
         timeout = DEFAULT_CONVERT_TIMEOUT
         try:
