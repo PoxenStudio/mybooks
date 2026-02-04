@@ -670,6 +670,10 @@ export default {
             });
         },
         loadRunningTasks() {
+            if (!this.user.is_login || !this.user.is_admin) {
+                this.runningTasks = [];
+                return;
+            }
             this.$backend("/admin/tasks/running").then((rsp) => {
                 if (rsp.err == "ok") {
                     this.runningTasks = rsp.tasks || [];
