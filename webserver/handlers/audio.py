@@ -579,19 +579,7 @@ class AudioConversionCancel(BaseHandler):
                 ConversionWorkerMap.pop(book_id, None)
 
                 time.sleep(1)  # Give some time for the worker to stop
-
-                audio_dir = os.path.join(AUDIO_OUTPUT_FOLDER, str(book_id))
-                if os.path.exists(audio_dir):
-                    try:
-                        shutil.rmtree(audio_dir)
-                        # Async update cache after deletion
-                        AudioBooksCache.async_update()
-                        return {"err": "ok", "msg": _(u"转换已取消, 生成的音频文件已删除成功")}
-                    except OSError as e:
-                        logging.error(f"Error deleting audio directory {audio_dir}: {e}")
-                        return {"err": "server.error", "msg": f"转换已取消，清理音频文件遇到错误: {e}"}
-
-                return {"err": "ok", "msg": _(u"转换已取消")}
+                return {"err": "ok", "msg": _(u"转换已取消, 可以使用恢复转换功能继续转换")}
             else:
                 return {"err": "audio.no_conversion", "msg": _(u"没有发现转换任务"), "data": None}
         except ValueError:
