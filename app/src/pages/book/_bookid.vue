@@ -1955,6 +1955,7 @@ export default {
             try {
                 let endpoint;
                 let successMessage;
+                let is_delete = false;
 
                 if (this.audios.status === this.AUDIO_STATUS.PROCESSING) {
                     // Cancel the conversion
@@ -1964,6 +1965,7 @@ export default {
                     // Delete the audio files
                     endpoint = `/audio/${this.book.id}/delete`;
                     successMessage = this.$t('book.audioFilesDeleted');
+                    is_delete = true;
                 } else {
                     return; // No action needed for other statuses
                 }
@@ -1978,8 +1980,10 @@ export default {
                     this.stop_audio_progress_polling();
                     // Close the dialog
                     this.dialog_audiolist = false;
-                    // Reset audio status
-                    this.audios = {count: 0, files: [], status: "unavailable"};
+                    if (is_delete) {
+                        // Reset audio status
+                        this.audios = {count: 0, files: [], status: "unavailable"};
+                    }
                 } else {
                     this.$alert("error", response.msg || "操作失败");
                 }
