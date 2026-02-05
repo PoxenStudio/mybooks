@@ -6,6 +6,7 @@ import os
 import re
 import sys
 from gettext import gettext as _
+from logging.handlers import RotatingFileHandler
 import traceback
 
 import tornado.httpserver
@@ -349,6 +350,16 @@ def setup_logging():
     # 创建控制台处理程序并设置格式
     logger = logging.getLogger()
     if options.log_file_prefix:
+        file_handler = RotatingFileHandler(
+            options.log_file_prefix,
+            maxBytes=5 * 1024 * 1024,
+            backupCount=5
+        )
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(tornado.log.LogFormatter())
+        logger.addHandler(file_handler)
+
+        # 添加控制台处理程序
         console_handler = logging.StreamHandler()
         console_handler.setLevel(logging.INFO)
         console_handler.setFormatter(tornado.log.LogFormatter())

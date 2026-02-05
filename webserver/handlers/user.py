@@ -231,8 +231,10 @@ class SignIn(BaseHandler):
             return {"err": "params.no_user", "msg": _(u"无此用户")}
         if user.get_secure_password(password) != user.password:
             return {"err": "params.invalid", "msg": _(u"用户名或密码错误")}
+        if not user.is_active():
+            return {"err": "permission.inactive", "msg": _(u"用户未激活！请检查注册邮箱以完成激活或者联系管理员在用户管理中激活")}
         if not user.can_login():
-            return {"err": "permission", "msg": _(u"无权登录")}
+            return {"err": "permission", "msg": _(u"目前无权登录！请联系管理员在用户管理中检查登录权限")}
         logging.debug("PERM = %s", user.permission)
 
         self.login_user(user)

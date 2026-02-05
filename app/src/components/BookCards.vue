@@ -3,7 +3,7 @@
         <v-col cols=12 xs=12 sm=6 md=4 lg=3 v-for="(book,idx) in render_books" :key="idx+'-books-'+book.id" class="book-list-card d-flex">
             <v-card :to="book.href" class="flex-grow-1" >
                 <v-row>
-                    <v-col cols=3 class='col-book-img'>
+                    <v-col cols=4 xs=4 sm=4 md=4 lg=4 class='col-book-img'>
                         <div class="book-img-container">
                             <v-img :src="book.img" :aspect-ratio="11/15" style="border-radius: 12px;" class="book-img-hover"></v-img>
                             <!-- 实体书角标 -->
@@ -16,17 +16,18 @@
                             </div>
                         </div>
                     </v-col>
-                    <v-col cols=9 class='col-book-info'>
+                    <v-col cols=8 xs=8 sm=8 md=8 lg=8 class='col-book-info'>
                         <v-card-text class="pb-0 d-flex flex-column" align-left>
                             <div class="book-title">{{book.title}}</div>
                             <div class="d-flex flex-wrap align-center">
                                 <v-chip rounded x-small color="green" class="white--text ma-1" v-if="book.category">
                                     {{ book.category }}
                                 </v-chip>
-                                <template v-for="(file, index) in book.files?.slice(0, 2)" :key="'file-size-' + index">
+                                <template v-for="(file, index) in book.files?.slice(0, 2)" :key="'format-' + index">
                                     <v-chip rounded x-small class="ma-1"
                                         color="cyan"
                                         text-color="white"
+                                        style="padding: 0px 2px; font-weight: bold; margin: 1px !important;"
                                     >{{ file.format }}</v-chip>
                                 </template>
                             </div>
@@ -114,7 +115,8 @@ export default {
     line-clamp: 3;
     -webkit-box-orient: vertical;
     text-overflow: clip;
-    margin-top: 6px;
+    margin-top: 3px;
+    margin-bottom: 3px;
     text-align: left;
 }
 .book-comments p {

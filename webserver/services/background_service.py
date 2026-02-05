@@ -13,6 +13,7 @@ class BackgroundTask:
     SERVICE_TYPE_AUTOFILL = "autofill"  # 图书信息刮削
     SERVICE_TYPE_SCAN = "scan"  # 批量图书导入
     SERVICE_TYPE_AUDIO = "audio"  # 音频转换
+    SERVICE_TYPE_CONVERT = "convert"  # 图书转换
 
     # 任务状态
     STATUS_RUNNING = "running"  # 运行中
@@ -70,6 +71,24 @@ class BackgroundService:
             self._tasks = {}  # task_id -> BackgroundTask
             self._tasks_lock = threading.Lock()
             self._initialized = True
+
+    def add_task(self, service_type: str, service_item: str, book_id: int = 0):
+        try:
+            task = self.update_task(
+                service_type=service_type,
+                service_item=service_item,
+                book_id=book_id,
+                progress=0,
+                progress_data={
+                    "total": 1,
+                    "done": 0
+                }
+            )
+            logging.info(f"Added background task: {service_item}")
+            return task
+        except Exception as e:
+            logging.error(f"Failed to add background task: {service_item}, error: {e}")
+            return None
 
     def update_task(self, service_type: str, service_item: str, book_id: int = 0,
                     progress: int = 0, progress_data: Optional[Dict] = None,

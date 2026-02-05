@@ -51,7 +51,7 @@ export default {
   buildModules: [
     '@nuxtjs/vuetify',
     '@nuxtjs/google-fonts',
-    '@nuxtjs/google-analytics',
+    ...(process.env.GOOGLE_ANALYTICS_ID ? ['@nuxtjs/google-analytics'] : []),
   ],
 
   // Modules: https://go.nuxtjs.dev/config-modules
@@ -71,14 +71,14 @@ export default {
 
   googleAnalytics: {
     // Only enable if GA ID is provided via environment variable
-    id: '',
-    disabled: true,
+    id: process.env.GOOGLE_ANALYTICS_ID || 'G-NONE',
+    disabled: !process.env.GOOGLE_ANALYTICS_ID,
   },
 
   publicRuntimeConfig: {
     head: {
-        title: process.env.TITLE || "talebook",
-        titleTemplate: process.env.TITLE_TEMPLATE || " %s | poxenstudio/talebook",
+        title: process.env.TITLE || "Talebook",
+        titleTemplate: process.env.TITLE_TEMPLATE || " %s | PoxenStudio/Talebook",
     },
     api_url: process.env.API_URL || "http://127.0.0.1:8000",
     googleAnalytics: {

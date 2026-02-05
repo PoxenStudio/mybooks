@@ -225,19 +225,13 @@
                     <v-btn icon small fab @click="dialog_download = true">
                         <v-icon>get_app</v-icon>
                     </v-btn>
-                    <v-btn class="d-none" icon small fab>
-                        <v-icon>thumb_up</v-icon>
-                    </v-btn>
-                    <v-btn class="d-none" icon small fab>
-                        <v-icon>share</v-icon>
-                    </v-btn>
-
                     <v-spacer></v-spacer>
                     <v-btn
                         :small="tiny"
                         dark
                         color="primary"
                         class="mx-2 d-flex d-sm-flex"
+                        :style="tiny ? { padding: '0px 2px', margin: '0px 3px !important' } : {}"
                         @click="handleReadingStateChange"
                         :loading="readingStateLoading"
                     >
@@ -248,10 +242,11 @@
                         dark
                         color="primary"
                         class="mx-2 d-flex d-sm-flex"
+                        :style="tiny ? { padding: '0px 2px', margin: '0px 3px !important' } : {}"
                         @click="switch_to_audio_player"
                         v-if="book.book_type != this.BOOK_TYPE.PHYSICAL"
                     >
-                        <v-icon dark>{{ audios.status === AUDIO_STATUS.FAILED ? 'error' : 'audiotrack' }}</v-icon>
+                        <v-icon dark v-if="!tiny">{{ audios.status === AUDIO_STATUS.FAILED ? 'error' : 'audiotrack' }}</v-icon>
                         {{ $t('book.convertToAudio') }}
                         <span v-if="audios.status === AUDIO_STATUS.PROCESSING && audios.progress && audios.progress.converted_chapters !== undefined"
                               class="ml-1">
@@ -262,7 +257,8 @@
                             ({{ audios.count }})
                         </span>
                     </v-btn>
-                    <v-btn :small="tiny" dark color="primary" class="mx-2 d-flex d-sm-flex" :href="'/read/' + book.id"
+                    <v-btn :small="tiny" dark color="primary" class="mx-2 d-flex d-sm-flex" :style="tiny ? { padding: '0px 2px', margin: '0px 3px !important' } : {}"
+                           :href="'/read/' + book.id"
                            target="_blank">
                         <v-icon left v-if="!tiny">import_contacts</v-icon>
                         {{ $t('book.read') }}
@@ -270,8 +266,40 @@
                     <template v-if="book.is_owner">
                         <v-menu offset-y>
                             <template v-slot:activator="{ on }">
-                                <v-btn v-on="on" dark color="primary" class="ml-2" :small="tiny"
-                                >{{ $t('book.manage') }}
+                                <v-btn v-on="on" dark color="primary" class="mx-2 ml-2" :small="tiny" :style="tiny ? { padding: '0px 2px',  margin: '0px 3px !important' } : {}">
+                                    {{ $t('book.process') }}
+                                    <v-icon small>more_vert</v-icon>
+                                </v-btn>
+                            </template>
+                            <v-list>
+                                <v-list-item @click="save_meta_to_file" :disabled="!hasEpubOrAzw3">
+                                    <v-icon>mdi-file-sync</v-icon>
+                                    {{ $t('book.saveMetaToFile') }}
+                                </v-list-item>
+                                <v-list-item @click="convert_book" :enabled="hasEpubOrKindleFormats">
+                                    <v-icon>mdi-swap-horizontal</v-icon>
+                                    {{ $t('book.convert') }}
+                                </v-list-item>
+                                <v-list-item @click="convert_to_pdf" :enabled="!hasPDF">
+                                    <v-icon>mdi-swap-horizontal</v-icon>
+                                    {{ $t('book.convert_to_pdf') }}
+                                </v-list-item>
+                                <v-list-item @click="seperate_book" :disabled="book.files.length <= 1">
+                                    <v-icon>mdi-content-copy</v-icon>
+                                    {{ $t('book.seperate') }}
+                                </v-list-item>
+                                <v-list-item @click="show_delete_format_dialog" :disabled="book.files.length <= 1">
+                                    <v-icon>mdi-file-document-remove-outline</v-icon>
+                                    {{ $t('book.deleteFormat') }}
+                                </v-list-item>
+                            </v-list>
+                        </v-menu>
+                    </template>
+                    <template v-if="book.is_owner">
+                        <v-menu offset-y>
+                            <template v-slot:activator="{ on }">
+                                <v-btn v-on="on" dark color="primary" class="mx-2 ml-2" :small="tiny" :style="tiny ? { padding: '0px 2px', margin: '0px 3px !important' } : {}">
+                                    {{ $t('book.manage') }}
                                     <v-icon small>more_vert</v-icon>
                                 </v-btn>
                             </template>
@@ -295,19 +323,6 @@
                                 <v-list-item @click="dialog_set_cover = true">
                                     <v-icon>photo</v-icon>
                                     {{ $t('book.setCover') }}
-                                </v-list-item>
-                                <v-list-item @click="convert_book">
-                                    <v-icon>mdi-swap-horizontal</v-icon>
-                                    {{ $t('book.convert') }}
-                                </v-list-item>
-                                <v-divider></v-divider>
-                                <v-list-item @click="seperate_book" :disabled="book.files.length <= 1">
-                                    <v-icon>mdi-content-copy</v-icon>
-                                    {{ $t('book.seperate') }}
-                                </v-list-item>
-                                <v-list-item @click="save_meta_to_file" :disabled="!hasEpubOrAzw3">
-                                    <v-icon>mdi-file-sync</v-icon>
-                                    {{ $t('book.saveMetaToFile') }}
                                 </v-list-item>
                                 <v-list-item @click="set_sole">
                                     <v-icon>{{ book.sole ? 'public_off' : 'public' }}</v-icon>
@@ -821,6 +836,44 @@
         </v-card>
     </v-dialog>
 
+    <!-- 删除格式对话框 -->
+    <v-dialog v-model="dialog_delete_format" persistent max-width="500">
+        <v-card>
+            <v-card-title class="headline">
+                <v-icon class="mr-2">mdi-content-copy</v-icon>
+                {{ $t('book.deleteFormat') }}
+            </v-card-title>
+            <v-card-text>
+                <p class="mb-4">{{ $t('book.selectFormatToDelete') }}</p>
+                <v-radio-group v-model="selectedDeletedFormat">
+                    <v-radio
+                        v-for="file in book.files"
+                        :key="'del-' + file.format"
+                        :value="file.format.toLowerCase()"
+                        :label="`${file.format} - ${formatFileSize(file.size)}`"
+                    ></v-radio>
+                </v-radio-group>
+                <v-alert type="info" text dense class="mt-4">
+                    {{ $t('book.deleteFormatHint') }}
+                </v-alert>
+            </v-card-text>
+            <v-card-actions>
+                <v-spacer></v-spacer>
+                <v-btn text @click="dialog_delete_format = false">
+                    {{ $t('common.cancel') }}
+                </v-btn>
+                <v-btn
+                    color="primary"
+                    :loading="deleting_format"
+                    @click="confirmDeleteFormat"
+                    :disabled="!selectedDeletedFormat"
+                >
+                    {{ $t('common.ok') }}
+                </v-btn>
+            </v-card-actions>
+        </v-card>
+    </v-dialog>
+
     <!-- 发送到设备对话框 -->
     <v-dialog v-model="dialog_send_to_device" persistent max-width="600">
         <v-card>
@@ -1052,6 +1105,19 @@ export default {
                 const format = file.format.toLowerCase();
                 return format === 'epub' || format === 'azw3';
             });
+        },
+
+        hasEpubOrKindleFormats() {
+            if (!this.book || !this.book.files) return false;
+            return this.book.files.some(file => {
+                const format = file.format.toLowerCase();
+                return format === 'epub' || format === 'azw3' || format === 'mobi' || format === 'txt';
+            });
+        },
+
+        hasPDF() {
+            if (!this.book || !this.book.files) return false;
+            return this.book.files.some(file => file.format.toLowerCase() === 'pdf');
         }
     },
     data: () => ({
@@ -1100,6 +1166,10 @@ export default {
         dialog_separate: false,
         selectedSeparateFormat: null,
         separating_book: false,
+        // 删除格式对话框
+        dialog_delete_format: false,
+        selectedDeletedFormat: null,
+        deleting_format: false,
         // 添加实体书对话框
         isbn_dialog: false,
         // 发送到设备对话框
@@ -1601,6 +1671,19 @@ export default {
                 }
             });
         },
+        convert_to_pdf() {
+            // 转换为PDF
+            this.$backend("/book/" + this.book.id + "/topdf", {
+                method: "POST",
+                body: new URLSearchParams({reset: "yes"}),
+            }).then((rsp) => {
+                if (rsp.err === "ok") {
+                    this.$alert("success", this.$t('book.convertSuccessful'));
+                } else {
+                    this.$alert("error", rsp.msg);
+                }
+            });
+        },
         set_sole() {
             // 设置为私藏
             this.$backend("/book/" + this.book.id + "/setsole", {
@@ -1645,6 +1728,17 @@ export default {
                 this.$alert("error", this.$t('book.saveMetaFailed'));
             });
         },
+        show_delete_format_dialog() {
+            // 检查是否有多个格式
+            if (!this.book.files || this.book.files.length <= 1) {
+                this.$alert("error", this.$t('book.needMultipleFormats'));
+                return;
+            }
+            // 默认选择第一个格式
+            this.selectedDeletedFormat = this.book.files[0].format.toLowerCase();
+            this.dialog_delete_format = true;
+            console.log("show delete format dialog");
+        },
         confirmSeparate() {
             if (!this.selectedSeparateFormat) {
                 this.$alert("error", this.$t('book.selectFormat'));
@@ -1669,7 +1763,7 @@ export default {
                         // 如果没有返回新书ID，则刷新当前页面
                         setTimeout(() => {
                             location.reload();
-                        }, 1500);
+                        }, 1000);
                     }
                 } else {
                     this.$alert("error", rsp.msg || this.$t('book.separateFailed'));
@@ -1677,6 +1771,33 @@ export default {
             }).catch((err) => {
                 this.separating_book = false;
                 this.$alert("error", this.$t('book.separateFailed'));
+            });
+        },
+        confirmDeleteFormat() {
+            if (!this.selectedDeletedFormat) {
+                this.$alert("error", this.$t('book.selectFormat'));
+                return;
+            }
+
+            this.deleting_format = true;
+            this.$backend("/book/" + this.book.id + "/delete_format", {
+                method: "POST",
+                body: JSON.stringify({ format: this.selectedDeletedFormat }),
+            }).then((rsp) => {
+                this.deleting_format = false;
+                if (rsp.err === "ok") {
+                    this.dialog_delete_format = false;
+                    this.$alert("success", rsp.msg || this.$t('book.deleteFormatSuccess'));
+                    // 刷新当前页面
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                } else {
+                    this.$alert("error", rsp.msg || this.$t('book.deleteFormatFailed'));
+                }
+            }).catch((err) => {
+                this.deleting_format = false;
+                this.$alert("error", this.$t('book.deleteFormatFailed'));
             });
         },
         formatFileSize(size) {

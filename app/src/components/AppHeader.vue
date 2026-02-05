@@ -165,7 +165,7 @@
                         <template v-slot:activator="{ on }">
                             <v-btn v-on="on" icon color="yellow"> <v-icon class="blink">notifications</v-icon> </v-btn>
                         </template>
-                        <v-card width="380">
+                        <v-card :width="$vuetify.breakpoint.smAndUp ? 400 : 300">
                             <v-card-title class="py-2">
                                 <span>{{ $t('appHeader.message_notification') }}</span>
                                 <v-spacer></v-spacer>
@@ -174,7 +174,7 @@
                                     {{ $t('appHeader.clear_messages') }}
                                 </v-btn>
                             </v-card-title>
-                            <v-list three-line dense width="380">
+                            <v-list three-line dense max-width="400" min-width="300">
                                 <v-list-item v-for="(msg, idx) in messages" :key="msg.id">
                                     <v-list-item-avatar>
                                         <v-icon large color="green" v-if="msg.status == 'success'">mdi-information</v-icon>
@@ -477,7 +477,7 @@ export default {
                 }
             }
             if (rsp.sys.footer === '') {
-                rsp.sys.footer = this.$t('appHeader.defaultFooter');
+                rsp.sys.footer = this.$t('footer.base_message');
                 this.$store.commit("set_footer", rsp.sys.footer);
             }
             if (rsp.sys.header === '') {
@@ -670,6 +670,10 @@ export default {
             });
         },
         loadRunningTasks() {
+            if (!this.user.is_login || !this.user.is_admin) {
+                this.runningTasks = [];
+                return;
+            }
             this.$backend("/admin/tasks/running").then((rsp) => {
                 if (rsp.err == "ok") {
                     this.runningTasks = rsp.tasks || [];
@@ -694,6 +698,7 @@ export default {
                 'autofill': this.$t('appHeader.taskTypeAutofill'),
                 'scan': this.$t('appHeader.taskTypeScan'),
                 'audio': this.$t('appHeader.taskTypeAudio'),
+                'convert': this.$t('appHeader.taskTypeConvert'),
             };
             return typeMap[serviceType] || serviceType;
         },

@@ -381,6 +381,44 @@ class BookConverter(BaseHandler):
         return {"err": "ok", "content": "%s" % _(u"转换成功，请稍后刷新页面查看")}
 
 
+class BookToPDF(BaseHandler):
+    @js
+    @auth
+    def post(self, id):
+        book_id = int(id)
+        book = self.get_book(book_id, raise_exception=False)
+        if not book:
+            return {"err": "params.book.invalid", "msg": _(u"书籍不存在")}
+
+        if not self.is_admin() and not self.is_book_owner(book_id, self.user_id()):
+            return {"err": "user.no_permission", "msg": _(u"无权限")}
+
+        fmts = []
+        paths = []
+        has_pdf = False
+        for fmt in ["epub", "azw3", "mobi", "azw", "pdf"]:
+            book_path = book.get("fmt_%s" % fmt, None)
+            if not book_path:
+                continue
+            if fmt == "pdf":
+                has_pdf = True
+                continue
+            fmts.append(fmt)
+            paths.append(book_path)
+
+        if has_pdf:
+            return {"err": "params.book.invalid", "msg": _(u"本书已有PDF版本, 不需要转换")}
+        if len(fmts) == 0:
+            return {"err": "params.book.invalid", "msg": _(u"本书不支持转换，仅支持EPUB及Kindle使用的格式转换为PDF")}
+
+        fpath = paths[0]
+        service = ConvertService()
+        if service.is_book_converting(book):
+            return {"err": "params.book.converting", "msg": _(u"本书正在转换中，请稍后再试")}
+        service.convert_and_save(self.user_id(), book, fpath, "pdf")
+        return {"err": "ok", "content": "%s" % _(u"转换成功，请稍后刷新页面查看")}
+
+
 class BookSetSole(BaseHandler):
     @js
     @auth
@@ -1234,6 +1272,7 @@ class BookDelete(BaseHandler):
     def post(self, bid):
         book = self.get_book(bid)
         bid = book["id"]
+
         if isinstance(book["collector"], dict):
             cid = book["collector"]["id"]
         else:
@@ -1244,6 +1283,7 @@ class BookDelete(BaseHandler):
         if not self.current_user.can_delete() or not (self.is_admin() or self.is_book_owner(bid, cid)):
             return {"err": "permission", "msg": _(u"无权操作")}
 
+        # 删除整本书
         AudioUtils.clear_audio(bid)
 
         try:
@@ -1253,6 +1293,53 @@ class BookDelete(BaseHandler):
         except Exception as e:
             logging.error(f"删除书籍《{book['title']}》失败: {e}")
             return {"err": "fail", "msg": _(u"删除失败, 请查看日志。如果一直出错，请联系管理员。")}
+
+
+class BookDeleteFormat(BaseHandler):
+    @js
+    @auth
+    def post(self, bid):
+        book = self.get_book(bid, raise_exception=False)
+        if not book:
+            return {"err": "params.book.invalid", "msg": _(u"书籍已不存在")}
+        bid = book["id"]
+
+        if isinstance(book["collector"], dict):
+            cid = book["collector"]["id"]
+        else:
+            cid = book["collector"].id
+        if not self.current_user.can_edit() or not (self.is_admin() or self.is_book_owner(bid, cid)):
+            return {"err": "permission", "msg": _(u"无权操作")}
+
+        if not self.current_user.can_delete() or not (self.is_admin() or self.is_book_owner(bid, cid)):
+            return {"err": "permission", "msg": _(u"无权操作")}
+
+        try:
+            data = tornado.escape.json_decode(self.request.body)
+            fmt = data.get("format", "").strip().lower()
+        except:
+            return {"err": "params.invalid", "msg": _(u"请求参数格式错误")}
+
+        if not fmt:
+            return {"err": "params.missing", "msg": _(u"格式参数不能为空")}
+
+        fmt_key = "fmt_%s" % fmt
+        if fmt_key not in book:
+            return {"err": "format.not_found", "msg": _(u"书籍不包含 %s 格式") % fmt.upper()}
+
+        # 检查书籍是否只有一个格式
+        available_formats = book.get("available_formats", "")
+        available_formats = [f.strip() for f in available_formats if f.strip()]
+        if len(available_formats) <= 1:
+            return {"err": "last.format", "msg": _(u"书籍只有一个格式，无法刪除")}
+
+        try:
+            self.calibre_db_cache.remove_formats({bid: [fmt.upper()]})
+            self.add_msg("success", _(u"删除书籍《%s》的%s格式") % (book["title"], fmt))
+            return {"err": "ok", "msg": _(u"删除%s格式成功" % fmt)}
+        except Exception as e:
+            logging.error(f"删除书籍《{book['title']}》的{fmt}格式失败: {e}")
+            return {"err": "fail", "msg": _(u"删除%s格式失败, 请查看日志。如果一直出错，请联系管理员。" % fmt)}
 
 
 class BookDownload(BaseHandler, web.StaticFileHandler):
@@ -1401,11 +1488,9 @@ class SearchBook(ListHandler):
         ids = []
         seen = set()
 
-        if not title_search:
+        if not title_search and name.find(":") == -1:
             # 分词搜索：当name长度在2-10之间且jieba可用时
             self._search_by_segmentation(name, ids, seen)
-
-        logging.info(f"Searching books for name: '{name}', title_search: {title_search}")
 
         # 简繁体转换搜索（合并为一次查询）
         converted_names = [name]
@@ -1421,7 +1506,6 @@ class SearchBook(ListHandler):
                 else:
                     # 对于普通搜索，构建OR查询
                     query = " OR ".join(converted_names)
-                logging.info(f"Converted names for search: {converted_names}, query: {query}")
                 ids2 = self.calibre_db_cache.search(query)
                 if ids2:
                     self._add_books(ids2, ids, seen)
@@ -2483,6 +2567,7 @@ def routes():
         (r"/api/book/upload/chunk", BookUploadChunk),
         (r"/api/book/([0-9]+)", BookDetail),
         (r"/api/book/([0-9]+)/delete", BookDelete),
+        (r"/api/book/([0-9]+)/delete_format", BookDeleteFormat),
         (r"/api/book/([0-9]+)/edit", BookEdit),
         (r"/api/book/([0-9]+\..+)", BookDownload),
         (r"/api/book/([0-9]+)/refer", BookRefer),
@@ -2491,6 +2576,7 @@ def routes():
         (r"/api/read/txt", TxtRead),
         (r"/api/book/txt/init", BookTxtInit),
         (r"/api/book/([0-9]+)/convert", BookConverter),
+        (r"/api/book/([0-9]+)/topdf", BookToPDF),
         (r"/api/book/([0-9]+)/setsole", BookSetSole),
         (r"/api/book/([0-9]+)/cover", BookCover),
         (r"/api/book/([0-9]+)/favorite", BookFavorite),

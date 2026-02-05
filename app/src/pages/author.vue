@@ -248,7 +248,7 @@ export default {
         // Need to construct search query similar to ListBook logic
         // For authors, we can use the 'author' parameter if search supports it,
         // or authors:"=Name"
-        const query = `authors:="${this.currentAuthor}"`;
+        const query = `authors:"=${this.currentAuthor}"`;
         console.log('[author.vue] fetchBooks - calling /search with query:', query);
         try {
             const rsp = await this.$backend(`/search?name=${encodeURIComponent(query)}&start=${start}&size=${this.page_size}&order=title`);

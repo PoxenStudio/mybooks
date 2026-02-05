@@ -12,6 +12,7 @@ import psutil
 from webserver import loader
 from webserver.services import AsyncService
 from webserver.services.mail import MailService
+from webserver.services.background_service import BackgroundService, BackgroundTask
 
 EBOOK_CONVERT_CMD = "ebook-convert"
 DEFAULT_CONVERT_TIMEOUT = 3000
@@ -48,11 +49,24 @@ class ConvertService(AsyncService):
     def do_ebook_convert(self, old_path, new_path, log_path):
         """convert book, and block, and wait"""
         args = [EBOOK_CONVERT_CMD, old_path, new_path]
+        args += ["--book-producer", "PoxenStudio/Talebook"]
         if new_path.lower().endswith(".epub"):
             args += ["--flow-size", "0"]
-        if new_path.lower().endswith(".azw3"):
+        elif new_path.lower().endswith(".azw3"):
             args += ["--embed-font-family", "Lato"]
             args += ["--enable-heuristics", "--output-profile", "kindle"]
+        elif new_path.lower().endswith(".pdf"):
+            cn_font_name = "\"WenQuanYi Micro Hei,文泉驛微米黑,文泉驿微米黑\""
+            args += ["--paper-size=a5"]
+            args += ["--pdf-page-margin-left=15"]
+            args += ["--pdf-page-margin-top=15"]
+            args += ["--pdf-page-margin-right=15"]
+            args += ["--pdf-page-margin-bottom=15"]
+            args += ["--no-chapters-in-toc"]
+            args += ["--base-font-size=12"]
+            args += ["--filter-css=font-family"]
+            args += [f"--pdf-sans-family=\"{cn_font_name}\""]
+            args += [f"--pdf-serif-family=\"{cn_font_name}\""]
 
         timeout = DEFAULT_CONVERT_TIMEOUT
         try:
@@ -84,7 +98,6 @@ class ConvertService(AsyncService):
         for f in ["txt", "azw3"]:
             old_path = book.get("fmt_%s" % f, old_path)
 
-        logging.debug("convert book from [%s] to [%s]", old_path, new_path)
         ok = self.do_ebook_convert(old_path, new_path, progress_file)
         if not ok:
             return None
@@ -100,27 +113,33 @@ class ConvertService(AsyncService):
         if fpath:
             MailService().send_book(user_id, site_url, book, mail_to, fmt, fpath)
         else:
-            self.add_msg(user_id, "danger", _(u"文件格式转换失败，请在QQ群里联系管理员."))
+            self.add_msg(user_id, "danger", _(u"文件格式转换失败，请到公众号上私信联系"))
 
     @AsyncService.register_service
     def convert_and_save(self, user_id, book, fpath, new_fmt):
         if new_fmt == "":
             new_fmt = "epub"
         new_path = os.path.join(
-            CONF["convert_path"],
-            "book-%s-%s.%s" % (book["id"], int(time.time()), new_fmt),
+            CONF["convert_path"], "book-%s-%s.%s" % (book["id"], int(time.time()), new_fmt),
         )
         progress_file = ConvertService().get_path_progress(book["id"])
         logging.info("convert book: %s => %s, progress: %s" % (fpath, new_path, progress_file))
 
+        title = book.get("title", "Unknown Title")
+        if len(title) > 20:
+            title = title[0:19] + "..."
+        service_item = f"[{book['id']}]{title}"
+        task = BackgroundService().add_task(BackgroundTask.SERVICE_TYPE_CONVERT, service_item, book_id=book["id"])
         ok = ConvertService().do_ebook_convert(fpath, new_path, progress_file)
+        if task:
+            BackgroundService().complete_task(task.id)
         if not ok:
-            self.add_msg(user_id, "danger", u"文件格式转换失败！请重试，或到Github上提交问题报告")
+            self.add_msg(user_id, "danger", u"[%s]文件格式转换失败！请查看日志，或到公众号上私信联系" % service_item)
             return
 
         with open(new_path, "rb") as f:
             self.db.add_format(book["id"], new_fmt, f, index_is_id=True)
-            logging.info("add new book: %s", new_path)
-
+            logging.info("added new book: %s", new_path)
+        self.add_msg(user_id, "success", _(u"[%s]文件格式转换成功" % service_item))
         # 清理临时文件
         os.remove(new_path)
