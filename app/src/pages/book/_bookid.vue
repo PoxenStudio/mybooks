@@ -1571,6 +1571,7 @@ export default {
                 if (rsp.err === "ok") {
                     this.epub2audio_processing = true;
                     this.dialog_epub2audio = false;
+                    this.dialog_audiolist = false;
                     this.start_audio_progress_polling();
                     this.$alert("success", this.$t('book.audioGenerated'));
                 } else {
