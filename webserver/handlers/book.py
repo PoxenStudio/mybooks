@@ -1440,7 +1440,10 @@ class SearchBook(ListHandler):
 
     def _search_by_segmentation(self, name, ids, seen):
         if not JIEBA_AVAILABLE or not (2 < len(name) < 10):
-            return
+            return None
+
+        start = time.time()
+        or_query = None
 
         try:
             # 对name进行分词
@@ -1459,17 +1462,13 @@ class SearchBook(ListHandler):
                         logging.info(f"Found {len(and_ids)} books for AND of segmented words: {filtered_words}")
                 except Exception as e:
                     logging.error("Search book by AND segmented words failed: %s" % e)
-                # 2. 再查只含其中一个分词的书（OR查询）
-                try:
-                    or_query = " OR ".join([f'title:"{word}"' for word in filtered_words])
-                    or_ids = self.calibre_db_cache.search(or_query)
-                    if or_ids:
-                        self._add_books(or_ids, ids, seen)
-                        logging.info(f"Found {len(or_ids)} books for OR of segmented words: {filtered_words}")
-                except Exception as e:
-                    logging.error("Search book by OR segmented words failed: %s" % e)
+
+                # OR查询放到后面与其他查询合并
+                or_query = " OR ".join([f'title:"{word}"' for word in filtered_words])
         except Exception as e:
             logging.error(f"Word segmentation failed for '{name}': %s" % e)
+        logging.debug(f"[TRACE]Word segmentation search took {time.time() - start:.2f} seconds.")
+        return or_query
 
     def get(self):
         name = self.get_argument("name", "").strip()
@@ -1488,11 +1487,13 @@ class SearchBook(ListHandler):
         ids = []
         seen = set()
 
+        seg_or_query = None
         if not title_search and name.find(":") == -1:
             # 分词搜索：当name长度在2-10之间且jieba可用时
-            self._search_by_segmentation(name, ids, seen)
+            seg_or_query = self._search_by_segmentation(name, ids, seen)
 
         # 简繁体转换搜索（合并为一次查询）
+        start = time.time()
         converted_names = [name]
         for profile in ['s2t', 't2s']:
             converted_name = opencc.OpenCC(profile).convert(name)
@@ -1504,13 +1505,17 @@ class SearchBook(ListHandler):
                     # 对于精确标题搜索，构建OR查询
                     query = " OR ".join([f'title:={cn}' for cn in converted_names])
                 else:
-                    # 对于普通搜索，构建OR查询
+                    # 主要是comments字段的搜索比较耗时
                     query = " OR ".join(converted_names)
+                if seg_or_query:
+                    query = f"({query}) OR ({seg_or_query})"
+                logging.debug(f"Searching books with query: {query}")
                 ids2 = self.calibre_db_cache.search(query)
                 if ids2:
                     self._add_books(ids2, ids, seen)
             except Exception as e:
                 logging.error("Search book failed: %s" % e)
+        logging.debug(f"[TRACE] search took {time.time() - start:.2f} seconds.")
 
         if exclude_id > 0 and exclude_id in seen:
             if exclude_id in ids:
