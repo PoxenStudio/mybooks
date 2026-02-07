@@ -239,7 +239,6 @@ class BookCategory(BaseHandler):
         try:
             # Use set_field directly on the cache to avoid Metadata object issues
             self.calibre_db_cache.set_field(CALIBRE_COLUMN_CATEGORY, {book_id: category})
-
             return {"err": "ok", "msg": _(u"分类更新成功")}
         except Exception as e:
             logging.error(f"Error updating category for book {book_id}: {e}")
@@ -1229,7 +1228,7 @@ class BookEdit(BaseHandler):
             if len(category) < 80:
                 if category == '清除' or category.lower() == 'clear':
                     category = ''
-                self.calibre_db_cache.set_field(CALIBRE_COLUMN_CATEGORY, {bid: category})
+                mi.set(CALIBRE_COLUMN_CATEGORY, category)
             else:
                 logging.error("Too many characters in the category, ignore it!")
         self.calibre_db.set_metadata(bid, mi, force_changes=True)
