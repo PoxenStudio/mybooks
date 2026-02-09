@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.DEBUG)
 def test_baike_api():
     print("Testing Baidu Baike API...")
     api = BaiduBaikeApi()
-    data = api.get_book(u"宛平南路600号：我做精神科医生的60年")
+    data = api.get_book(u"3100_宛平南路600号：我做精神科医生的60年")
     print(data)
     print(data.website)
     print(data.cover_url)

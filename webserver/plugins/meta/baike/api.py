@@ -25,7 +25,10 @@ class BaiduBaikeApi:
 
     def get_book(self, title):
         logging.debug(f"BaiduBaikeApi.get_book called with title: {repr(title)}")
-        logging.debug(f"Title type: {type(title)}, length: {len(title)}")
+        # Check if the title is start with *[0-9][_-] then remote the prefix
+        if re.match(r"^\d*+[_-]", title):
+            title = re.sub(r"^\d*+[_-]", "", title)
+            logging.debug(f"Stripped title prefix, new title: {repr(title)}")
         baike = self._baike(title)
         if not baike:
             return None
