@@ -12,17 +12,11 @@ import requests
 from gettext import gettext as _
 
 from webserver.plugins.meta.douban import str2date
+from webserver.constants import CHROME_MOBILE_HEADERS
 from .baidubaike.baidubaike import Page
 
 BAIKE_ISBN = "0000000000001"
 KEY = "BaiduBaike"
-
-CHROME_HEADERS = {
-    "Accept-Language": "zh-CN,zh;q=0.8,zh-TW;q=0.6",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko)"
-                  + "Chrome/66.0.3359.139 Safari/537.36",
-}
 
 
 class BaiduBaikeApi:
@@ -50,13 +44,16 @@ class BaiduBaikeApi:
         logging.debug("\n" + "\n".join("%s:\t%s" % v for v in info.items()))
 
         # 使用 info.get() 获取字段，如果不存在则使用备选字段或默认值
-        title = info.get(u"中文名", info.get("title", u"未知书名"))
+        title = info.get(u"中文名", info.get("title", ""))
+        if not title:
+            logging.debug("No title found in info, means not a valid Baidu Baike page")
+            return None
         mi = Metadata(title)
         mi.publisher = info.get(u"出版社", "")
         mi.authors = [info.get(u"作者", u"佚名")]
         mi.author_sort = mi.authors[0]
         mi.isbn = info.get("ISBN", BAIKE_ISBN)
-        mi.tags = baike.get_tags()
+        mi.tags = []
         pd = str2date(info.get(u"出版时间"))
         if pd is None:
             pd = utcnow()
@@ -74,8 +71,8 @@ class BaiduBaikeApi:
     def get_cover(self, cover_url):
         if not self.copy_image or not cover_url:
             return None
-        img = requests.get(cover_url, timeout=10, headers=CHROME_HEADERS).content
-        img_fmt = cover_url.split(".")[-1]
+        img = requests.get(cover_url, timeout=10, headers=CHROME_MOBILE_HEADERS).content
+        img_fmt = 'jpg' if cover_url.lower().endswith('.jpeg') else 'webp'
         return (img_fmt, img)
 
 

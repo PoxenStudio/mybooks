@@ -597,7 +597,7 @@ class BookRefer(BaseHandler):
             return e.args[0]
 
         if not refer_mi:
-            return {"err": "plugin.fail", "msg": _(u"插件拉取信息异常，请重试")}
+            return {"err": "plugin.fail", "msg": _(u"拉取图书信息异常，请重试")}
 
         if only_cover == "yes":
             # just set cover

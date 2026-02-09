@@ -147,7 +147,7 @@ class Page(object):
 
     def get_tags(self):
         """Get tags of the page"""
-        if not self.valid:
+        if not self.valid or len(CLASS_TAG) == 0:
             return []
         tags = []
         for tag in self.soup.find_all(class_=CLASS_TAG):

@@ -22,6 +22,13 @@ def test_baike_api():
     print(data)
     print(data.website)
     print(data.cover_url)
+    print(data.tags)
+    # Write cover data to temp file for verification
+    if data.cover_data:
+        img_fmt, img_data = data.cover_data
+        with open(f"test_cover.{img_fmt}", "wb") as f:
+            f.write(img_data)
+        print(f"Cover image saved as test_cover.{img_fmt}")
 
 
 if __name__ == "__main__":
