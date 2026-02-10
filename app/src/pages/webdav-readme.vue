@@ -1,6 +1,7 @@
 <template>
   <div class="webdav-page">
     <h1>{{ $t('webdav.introduction') }}</h1>
+    <img class="webdav-icon" src="/icons/webdav.svg" alt="WebDAV Icon" />
     <section>
       <h2>{{ $t('webdav.link') }}</h2>
       <p>{{ $t('webdav.linkDescription') }}<code>{{ opdsUrl }}</code></p>
@@ -37,7 +38,13 @@ export default {
 
 h1 {
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 10px;
+}
+
+.webdav-icon {
+  display: block;
+  margin: 0 auto 24px;
+  width: 72px;
 }
 
 section {

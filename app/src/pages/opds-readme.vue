@@ -1,6 +1,7 @@
 <template>
   <div class="opds-page">
     <h1>{{ $t('opds.introduction') }}</h1>
+    <img class="opds-icon" src="/icons/opds.svg" alt="OPDS Icon" />
     <section>
       <h2>{{ $t('opds.link') }}</h2>
       <p>{{ $t('opds.linkDescription') }}<code>{{ opdsUrl }}</code></p>
@@ -50,7 +51,13 @@ export default {
 
 h1 {
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 10px;
+}
+
+.opds-icon {
+  display: block;
+  margin: 0 auto 24px;
+  width: 72px;
 }
 
 section {
