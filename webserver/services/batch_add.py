@@ -12,6 +12,7 @@ from webserver import loader
 from webserver.models import Item, ScanFile, BOOK_TYPE_PHYSICAL
 from webserver.services import AsyncService
 from webserver.plugins.meta import douban
+from webserver.plugins.meta import xhsd
 
 CONF = loader.get_settings()
 
@@ -217,15 +218,29 @@ class BatchAddService(AsyncService):
                 self._record_scan_file(csv_filename, isbn, title, author, ScanFile.DROP, book_id)
                 return None
 
-            api = douban.DoubanBookApi(
-                CONF["douban_apikey"],
-                CONF["douban_baseurl"],
-                copy_image=True,
-                maxCount=1
-            )
+            try:
+                api = douban.DoubanBookApi(
+                    CONF["douban_apikey"],
+                    CONF["douban_baseurl"],
+                    copy_image=True,
+                    maxCount=1
+                )
 
-            md = douban.SimpleMetaData(isbn=isbn)
-            book_data = api.get_book(md)
+                md = douban.SimpleMetaData(isbn=isbn)
+                book_data = api.get_book(md)
+            except Exception as e:
+                logging.error(f"Douban API error for ISBN {isbn}: {e}")
+                book_data = None
+
+            if not book_data:
+                # 尝试使用XhsdBookApi
+                try:
+                    logging.info(f"Trying Xhsd API for ISBN {isbn}")
+                    xhsd_api = xhsd.XhsdBookApi()
+                    book_data = xhsd_api.get_book_by_isbn(isbn)
+                except Exception as e:
+                    logging.error(f"Xhsd API error for ISBN {isbn}: {e}")
+                    book_data = None
 
             if not book_data:
                 logging.error("No book data found for ISBN: %s", isbn)

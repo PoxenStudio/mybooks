@@ -33,7 +33,7 @@ from webserver.services.extract import ExtractService
 from webserver.services.mail import MailService
 from webserver.handlers.base import BaseHandler, ListHandler, auth, js
 from webserver.models import Item, BOOK_TYPE_PHYSICAL, BOOK_TYPE_EBOOK, ReadingState
-from webserver.plugins.meta import baike, douban, youshu
+from webserver.plugins.meta import baike, douban, youshu, xhsd
 from webserver.plugins.meta.bookbarn_tags import BookBarnTags
 from webserver.plugins.parser.txt import get_content_encoding
 from webserver.handlers.audio import AudioUtils
@@ -1584,8 +1584,23 @@ class BookAddByISBN(BaseHandler):
             maxCount=1
         )
         try:
-            md = douban.SimpleMetaData(isbn=isbn)
-            book_data = douban_api.get_book(md)
+            try:
+                md = douban.SimpleMetaData(isbn=isbn)
+                book_data = douban_api.get_book(md)
+            except Exception as e:
+                logging.error(f"Douban API error for ISBN {isbn}: {e}")
+                book_data = None
+
+            if not book_data:
+                # 尝试使用XhsdBookApi
+                try:
+                    logging.info(f"Trying Xhsd API for ISBN {isbn}")
+                    xhsd_api = xhsd.XhsdBookApi()
+                    book_data = xhsd_api.get_book_by_isbn(isbn)
+                except Exception as e:
+                    logging.error(f"Xhsd API error for ISBN {isbn}: {e}")
+                    book_data = None
+
             if not book_data:
                 return {"err": "book.notfound", "msg": _(u"未找到该ISBN号对应的图书")}
 

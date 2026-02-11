@@ -4,9 +4,8 @@ from urllib.parse import urljoin
 import re
 from typing import Dict, Optional
 
-class XHSDBookApi:
-    """新华书店图书信息查询API（增强容错版）"""
 
+class XHSDBookApi:
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
@@ -45,7 +44,6 @@ class XHSDBookApi:
                 relative_url = a_tag['href']
                 detail_url = 'https:' + relative_url if relative_url.startswith('//') else urljoin(self.base_detail_url, relative_url)
 
-                # ---------- 关键修正：直接匹配13位ISBN，不再依赖特定class ----------
                 if self._isbn_exists_in_page(detail_url, isbn):
                     print(f"找到匹配ISBN的图书，详情页: {detail_url}")
                     return detail_url
@@ -89,21 +87,12 @@ class XHSDBookApi:
                 return None
 
             data = json.loads(data_item_str)
-
-            # 提取书名
             title = data.get('name')
-
-            # 提取封面
             cover = data.get('mainImage')
             if cover and cover.startswith('//'):
                 cover = 'https:' + cover
-
-            # 提取作者和出版社
             author = None
             publisher = None
-
-            # 尝试从 otherAttributes (或 otherAttrs) 中提取
-            # 结构可能是 list[dict] -> group -> otherAttributes list[dict]
             attr_groups = data.get('otherAttributes') or data.get('otherAttrs') or []
 
             for group in attr_groups:
@@ -116,12 +105,11 @@ class XHSDBookApi:
                         elif key == '出版社':
                             publisher = val
 
-            # 如果没找到，尝试从 extra 字段提取（备用）
+            # 如果没找到，尝试从 extra 字段提取
             if not author or not publisher:
                 extra = data.get('extra', {})
                 if not author:
                     author = extra.get('author')
-                # extra中通常没有直接的出版社名称，只有ID
 
             # ---------- 2. 内容简介 ----------
             # 数据隐藏在 <div class="spu-tab-item-detail" data-detail="..."> 中
@@ -139,9 +127,7 @@ class XHSDBookApi:
                             introduction = intro_soup.get_text(separator='\n', strip=True)
 
                             # 清理数据：去除首尾引号、空白、以及“【内容简介】：”前缀
-                            # 1. 替换所有不可见字符为空格
                             introduction = re.sub(r'[\u200b\u200c\u200d\ufeff]', '', introduction)
-                            # 2. 清理首尾引号和【内容简介】前缀
                             introduction = introduction.strip().strip('"').strip()
                             introduction = re.sub(r'^【内容简介】[：:]\s*', '', introduction)
                             introduction = introduction.strip()
@@ -170,7 +156,7 @@ if __name__ == '__main__':
     book = api.get_book_by_isbn(test_isbn)
 
     if book:
-        print("\n✅ 图书信息查询成功 ==========")
+        print("\n 图书信息查询成功 ==========")
         print(f"封面图片: {book['cover']}")
         print(f"书名: {book['title']}")
         print(f"出版社: {book['publisher']}")
@@ -179,4 +165,4 @@ if __name__ == '__main__':
         print(f"内容简介:\n{book['introduction']}")
         print("==============================\n")
     else:
-        print("❌ 未查询到图书信息")
+        print(" 未查询到图书信息")
