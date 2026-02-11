@@ -890,12 +890,12 @@ export default {
 
     /* 封面图片 */
     .v-data-table__mobile-row:nth-child(2) .v-data-table__mobile-row__cell .v-image {
-        min-width: 60px !important;
-        max-width: 60px !important;
-        width: 60px !important;
-        min-height: 80px !important;
-        max-height: 80px !important;
-        height: 80px !important;
+        min-width: 75px !important;
+        max-width: 75px !important;
+        width: 75px !important;
+        min-height: 100px !important;
+        max-height: 100px !important;
+        height: 100px !important;
         margin: 0 !important;
     }
 
@@ -903,14 +903,14 @@ export default {
     .v-data-table__mobile-row:nth-child(2) {
         width: 100% !important;
         min-width: 100% !important;
-        min-height: 80px !important;
+        min-height: 100px !important;
         align-items: flex-start !important;
         padding: 12px !important;
     }
 
     /* 确保图片单元格有足够的高度 */
     .v-data-table__mobile-row:nth-child(2) .v-data-table__mobile-row__cell {
-        min-height: 80px !important;
+        min-height: 100px !important;
         align-items: flex-start !important;
     }
 
