@@ -504,27 +504,39 @@ export default {
                     this.loading = false;
                 });
         },
-        deleteSelectedBooks() {
+        // 通用方法：获取选中书籍的ID列表
+        getSelectedBookIds() {
             if (this.books_selected.length == 0) {
                 this.$alert("info", this.$t("admin.books.noSelectedBook"));
-                return;
+                return null;
             }
+            return this.books_selected.map((book) => book.id);
+        },
+
+        // 通用方法：处理API响应
+        handleApiResponse(rsp, successMessage = null) {
+            if (rsp.err != "ok") {
+                this.$alert("error", rsp.msg);
+                return false;
+            } else if (successMessage) {
+                this.snack = true;
+                this.snackColor = "success";
+                this.snackText = successMessage || rsp.msg;
+            }
+            return true;
+        },
+
+        deleteSelectedBooks() {
+            const books_ids = this.getSelectedBookIds();
+            if (!books_ids) return;
+
             this.loading = true;
-            const books_ids = this.books_selected.map((book) => {
-                return book.id;
-            });
             this.$backend("/admin/books/delete", {
                 method: "POST",
                 body: JSON.stringify({"idlist": books_ids}),
             })
                 .then((rsp) => {
-                    if (rsp.err != "ok") {
-                        this.$alert("error", rsp.msg);
-                    } else {
-                        this.snack = true;
-                        this.snackColor = "success";
-                        this.snackText = rsp.msg;
-                    }
+                    this.handleApiResponse(rsp);
                     this.books_selected = [];
                     this.getDataFromApi();
                 })
@@ -532,15 +544,19 @@ export default {
                     this.loading = false;
                 });
         },
+
         show_dialog_auto_file() {
             this.meta_dialog = true;
         },
+
         show_exchange_type_dialog() {
             this.exchange_type_dialog = true;
         },
+
         show_clear_rare_tags_dialog() {
             this.clear_rare_tags_dialog = true;
         },
+
         clearRareTags() {
             this.loading = true;
             this.clear_rare_tags_dialog = false;
@@ -549,13 +565,7 @@ export default {
                 body: JSON.stringify({}),
             })
                 .then((rsp) => {
-                    if (rsp.err != "ok") {
-                        this.$alert("error", rsp.msg);
-                    } else {
-                        this.snack = false;
-                        this.snackColor = "success";
-                        this.snackText = rsp.msg;
-                        // Start checking status
+                    if (this.handleApiResponse(rsp)) {
                         this.checkCurrentState();
                     }
                     this.getDataFromApi();
@@ -564,28 +574,19 @@ export default {
                     this.loading = false;
                 });
         },
+
         exchangeBookType() {
-            if (this.books_selected.length == 0) {
-                this.$alert("info", this.$t("admin.books.noSelectedBook"));
-                return;
-            }
+            const books_ids = this.getSelectedBookIds();
+            if (!books_ids) return;
+
             this.loading = true;
             this.exchange_type_dialog = false;
-            const books_ids = this.books_selected.map((book) => {
-                return book.id;
-            });
             this.$backend("/book/exchange_type", {
                 method: "POST",
                 body: JSON.stringify({"idlist": books_ids}),
             })
                 .then((rsp) => {
-                    if (rsp.err != "ok") {
-                        this.$alert("error", rsp.msg);
-                    } else {
-                        this.snack = true;
-                        this.snackColor = "success";
-                        this.snackText = rsp.msg;
-                    }
+                    this.handleApiResponse(rsp);
                     this.books_selected = [];
                     this.getDataFromApi();
                 })
@@ -609,6 +610,7 @@ export default {
                 this.checkCurrentState();
             })
         },
+
         delete_book(book) {
             this.loading = true;
             this.$backend("/book/" + book.id + "/delete", {
@@ -616,37 +618,27 @@ export default {
                 body: "",
             })
                 .then((rsp) => {
-                    if (rsp.err != "ok") {
-                        this.$alert("error", rsp.msg);
-                    }
-                    this.snack = true;
-                    this.snackColor = "success";
-                    this.snackText = rsp.msg;
-
+                    this.handleApiResponse(rsp);
                     this.getDataFromApi();
                 })
                 .finally(() => {
                     this.loading = false;
                 });
         },
+
         save(book, field) {
             var edit = {};
             edit[field] = book[field];
             // If books_selected is more than 1 means batch update
             if (this.books_selected.length > 1) {
-                edit['ids'] = this.books_selected.map((book) => {
-                    return book.id;
-                });
+                edit['ids'] = this.books_selected.map((book) => book.id);
             }
             this.saving = true;
             this.$backend("/book/" + book.id + "/edit", {
                 method: "POST",
                 body: JSON.stringify(edit),
             }).then((rsp) => {
-                if (rsp.err == "ok") {
-                    this.snack = true;
-                    this.snackColor = "success";
-                    this.snackText = rsp.msg;
+                if (this.handleApiResponse(rsp)) {
                     // Update the updated books in the response
                     if (this.books_selected.length > 1 && rsp.books?.length > 0) {
                         this.books_selected.forEach((book) => {
@@ -655,8 +647,6 @@ export default {
                             }
                         });
                     }
-                } else {
-                    this.$alert("error", rsp.msg);
                 }
             });
         },
@@ -866,11 +856,9 @@ export default {
     .v-data-table__mobile-row:nth-child(2) {
         width: 100% !important;
         min-width: 100% !important;
-    }
-
-    /* 封面图片所在行的标题 */
-    .v-data-table__mobile-row:nth-child(2) .v-data-table__mobile-row__header {
-        min-width: 70px !important;
+        min-height: 100px !important;
+        align-items: flex-start !important;
+        padding: 12px !important;
     }
 
     /* 封面图片所在行的内容 */
@@ -878,14 +866,8 @@ export default {
         flex: 1 !important;
         display: flex !important;
         justify-content: flex-start !important;
-        align-items: center !important;
-    }
-
-    /* 封面图片链接 */
-    .v-data-table__mobile-row:nth-child(2) .v-data-table__mobile-row__cell a {
-        display: inline-flex !important;
-        justify-content: flex-start !important;
-        align-items: center !important;
+        align-items: flex-start !important;
+        min-height: 100px !important;
     }
 
     /* 封面图片 */
@@ -897,21 +879,6 @@ export default {
         max-height: 100px !important;
         height: 100px !important;
         margin: 0 !important;
-    }
-
-    /* 封面图片所在行的特殊处理 */
-    .v-data-table__mobile-row:nth-child(2) {
-        width: 100% !important;
-        min-width: 100% !important;
-        min-height: 100px !important;
-        align-items: flex-start !important;
-        padding: 12px !important;
-    }
-
-    /* 确保图片单元格有足够的高度 */
-    .v-data-table__mobile-row:nth-child(2) .v-data-table__mobile-row__cell {
-        min-height: 100px !important;
-        align-items: flex-start !important;
     }
 
     /* 为不同类型的字段设置不同的最小宽度 */
