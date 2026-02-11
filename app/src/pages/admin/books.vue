@@ -116,14 +116,9 @@
                 <v-chip small v-else class="info">{{ item.status }}</v-chip>
             </template>
             <template v-slot:item.img="{ item }">
-                <a target="_blank" :href="item.img" class="book-cover-link">
+                <a target="_blank" :href="item.img">
                     <v-img
                         :src="item.thumb"
-                        class="my-1 book-cover-img"
-                        :max-height="$vuetify.breakpoint.xs ? 100 : 80"
-                        :min-height="$vuetify.breakpoint.xs ? 80 : 60"
-                        :max-width="$vuetify.breakpoint.xs ? 80 : 60"
-                        :min-width="$vuetify.breakpoint.xs ? 60 : 45"
                         :aspect-ratio="3/4"
                     />
                 </a>
@@ -895,13 +890,28 @@ export default {
 
     /* 封面图片 */
     .v-data-table__mobile-row:nth-child(2) .v-data-table__mobile-row__cell .v-image {
-        min-width: 30px !important;
-        max-width: 30px !important;
-        width: 30px !important;
-        min-height: 40px !important;
-        max-height: 40px !important;
-        height: 40px !important;
+        min-width: 60px !important;
+        max-width: 60px !important;
+        width: 60px !important;
+        min-height: 80px !important;
+        max-height: 80px !important;
+        height: 80px !important;
         margin: 0 !important;
+    }
+
+    /* 封面图片所在行的特殊处理 */
+    .v-data-table__mobile-row:nth-child(2) {
+        width: 100% !important;
+        min-width: 100% !important;
+        min-height: 80px !important;
+        align-items: flex-start !important;
+        padding: 12px !important;
+    }
+
+    /* 确保图片单元格有足够的高度 */
+    .v-data-table__mobile-row:nth-child(2) .v-data-table__mobile-row__cell {
+        min-height: 80px !important;
+        align-items: flex-start !important;
     }
 
     /* 为不同类型的字段设置不同的最小宽度 */
