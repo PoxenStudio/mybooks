@@ -120,10 +120,10 @@
                     <v-img
                         :src="item.thumb"
                         class="my-1 book-cover-img"
-                        :max-height="$vuetify.breakpoint.xs ? 40 : 80"
-                        :min-height="$vuetify.breakpoint.xs ? 40 : 60"
-                        :max-width="$vuetify.breakpoint.xs ? 30 : 60"
-                        :min-width="$vuetify.breakpoint.xs ? 30 : 45"
+                        :max-height="$vuetify.breakpoint.xs ? 100 : 80"
+                        :min-height="$vuetify.breakpoint.xs ? 80 : 60"
+                        :max-width="$vuetify.breakpoint.xs ? 80 : 60"
+                        :min-width="$vuetify.breakpoint.xs ? 60 : 45"
                         :aspect-ratio="3/4"
                     />
                 </a>
@@ -784,13 +784,13 @@ export default {
 
     /* 表格在小屏幕上的优化 */
     .v-data-table {
-        font-size: 12px !important;
+        font-size: 14px !important;
     }
 
     .v-data-table th,
     .v-data-table td {
-        padding: 0 4px !important;
-        font-size: 11px !important;
+        padding: 6px 8px !important;
+        font-size: 14px !important;
     }
 
     /* 表格标题在小屏幕上隐藏或缩短 */
@@ -798,7 +798,7 @@ export default {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-width: 80px;
+        max-width: 100px;
     }
 
     /* 封面图片在小屏幕上保持30x40的固定尺寸 */
@@ -817,7 +817,7 @@ export default {
     .v-data-table td:has(.v-image) {
         width: 40px !important;
         min-width: 40px !important;
-        padding: 2px !important;
+        padding: 6px !important;
         text-align: right !important;
     }
 
@@ -829,40 +829,107 @@ export default {
     }
 
     /* 移动端表格整体布局 */
-    .v-data-table--mobile {
-        font-size: 12px !important;
+    .v-data-table__mobile-table-row {
+        font-size: 14px !important;
+        margin-bottom: 16px !important;
+        border-bottom: 1px solid rgba(0,0,0,0.1) !important;
+        padding-bottom: 12px !important;
     }
 
     /* 移动端表格行 */
-    .v-data-table--mobile .v-data-table__mobile-row {
-        display: block !important;
-    }
-
-    /* 移动端表格行单元格 - 默认左对齐 */
-    .v-data-table--mobile .v-data-table__mobile-row .v-data-table__mobile-row__cell {
-        text-align: left !important;
+    .v-data-table__mobile-row {
         display: flex !important;
+        flex-direction: row !important;
         align-items: center !important;
-        padding: 4px 8px !important;
+        padding: 8px 12px !important;
+        margin-bottom: 0 !important;
+        border-bottom: none !important;
+        width: 100% !important;
+        min-width: auto !important;
     }
 
-    /* 移动端表格中包含图片的单元格 - 右对齐 */
-    .v-data-table--mobile .v-data-table__mobile-row .v-data-table__mobile-row__cell:has(a > .v-image),
-    .v-data-table--mobile .v-data-table__mobile-row .v-data-table__mobile-row__cell:has(.v-image) {
-        justify-content: flex-end !important;
+    /* 移动端表格标题 */
+    .v-data-table__mobile-row__header {
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        margin-right: 12px !important;
+        min-width: 70px !important;
+        color: rgba(0,0,0,0.7) !important;
+        flex-shrink: 0 !important;
     }
 
-    /* 移动端表格中图片的链接容器 */
-    .v-data-table--mobile .v-data-table__mobile-row .v-data-table__mobile-row__cell a {
+    /* 移动端表格单元格内容 */
+    .v-data-table__mobile-row__cell {
+        font-size: 14px !important;
+        flex: 1 !important;
+        word-break: break-word !important;
+        min-width: 0 !important;
+        padding: 0 !important;
+    }
+
+    /* 封面图片所在行的特殊处理 */
+    .v-data-table__mobile-row:nth-child(2) {
+        width: 100% !important;
+        min-width: 100% !important;
+    }
+
+    /* 封面图片所在行的标题 */
+    .v-data-table__mobile-row:nth-child(2) .v-data-table__mobile-row__header {
+        min-width: 70px !important;
+    }
+
+    /* 封面图片所在行的内容 */
+    .v-data-table__mobile-row:nth-child(2) .v-data-table__mobile-row__cell {
+        flex: 1 !important;
+        display: flex !important;
+        justify-content: flex-start !important;
+        align-items: center !important;
+    }
+
+    /* 封面图片链接 */
+    .v-data-table__mobile-row:nth-child(2) .v-data-table__mobile-row__cell a {
         display: inline-flex !important;
-        justify-content: center !important;
+        justify-content: flex-start !important;
         align-items: center !important;
     }
 
-    /* Chip组件在小屏幕上更小 */
+    /* 封面图片 */
+    .v-data-table__mobile-row:nth-child(2) .v-data-table__mobile-row__cell .v-image {
+        min-width: 30px !important;
+        max-width: 30px !important;
+        width: 30px !important;
+        min-height: 40px !important;
+        max-height: 40px !important;
+        height: 40px !important;
+        margin: 0 !important;
+    }
+
+    /* 为不同类型的字段设置不同的最小宽度 */
+    .v-data-table__mobile-row:nth-child(1) .v-data-table__mobile-row__header {
+        min-width: 50px !important;
+    }
+
+    .v-data-table__mobile-row:nth-child(3) .v-data-table__mobile-row__header {
+        min-width: 40px !important;
+    }
+
+    .v-data-table__mobile-row:nth-child(4) .v-data-table__mobile-row__header {
+        min-width: 60px !important;
+    }
+
+    .v-data-table__mobile-row:nth-child(5) .v-data-table__mobile-row__header {
+        min-width: 60px !important;
+    }
+
+    .v-data-table__mobile-row:nth-child(6) .v-data-table__mobile-row__header {
+        min-width: 60px !important;
+    }
+
+    /* Chip组件在小屏幕上保持合适大小 */
     .v-chip {
-        font-size: 10px !important;
-        height: 20px !important;
+        font-size: 12px !important;
+        height: 24px !important;
+        padding: 0 8px !important;
     }
 }
 
