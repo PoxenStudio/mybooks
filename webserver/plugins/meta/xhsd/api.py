@@ -210,24 +210,23 @@ class XhsdBookApi:
             img = self.session.get(cover_url, timeout=10).content
             img_fmt = 'jpg' if cover_url.lower().endswith('.jpeg') else 'png'
             if img_fmt == 'png' or cover_url.lower().endswith('.png'):
-                 # Simple check, real implementation might need PIL to convert if strictly needed
-                 # Baike implementation converted PNG to JPEG. Let's assume we might need it too if we want to be safe,
-                 # but for now let's just return what we get unless it's strictly required by Calibre to be JPG.
-                 # Baike implementation logic:
-                 try:
-                     from PIL import Image
-                     from io import BytesIO
-                     image = Image.open(BytesIO(img))
-                     if image.mode in ("RGBA", "P"):
-                         image = image.convert("RGB")
-                     output = BytesIO()
-                     image.save(output, format='JPEG')
-                     img = output.getvalue()
-                     img_fmt = 'jpg'
-                 except ImportError:
-                     logging.warning("PIL not found, skipping PNG to JPEG conversion")
+                # Simple check, real implementation might need PIL to convert if strictly needed
+                # Baike implementation converted PNG to JPEG. Let's assume we might need it too if we want to be safe,
+                # but for now let's just return what we get unless it's strictly required by Calibre to be JPG.
+                # Baike implementation logic:
+                try:
+                    from PIL import Image
+                    from io import BytesIO
+                    image = Image.open(BytesIO(img))
+                    if image.mode in ("RGBA", "P"):
+                        image = image.convert("RGB")
+                    output = BytesIO()
+                    image.save(output, format='JPEG')
+                    img = output.getvalue()
+                    img_fmt = 'jpg'
+                except ImportError:
+                    logging.warning("PIL not found, skipping PNG to JPEG conversion")
             return (img_fmt, img)
         except Exception as e:
             logging.error(f"Get cover error: {e}")
             return None
-
