@@ -2,7 +2,8 @@
 # -*- coding: UTF-8 -*-
 import datetime
 from gettext import gettext as _
-
+from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT, CALIBRE_COLUMN_CATEGORY
+from webserver.constants import BOOK_TYPE_EBOOK
 
 class SimpleBookFormatter:
     """格式化calibre book的字段"""
@@ -40,7 +41,9 @@ class SimpleBookFormatter:
     def format(self, include_comments=True):
         b = self.book
         b["ts"] = b["timestamp"].strftime("%s")
-        category = self.val('#category', '').strip()
+        category = self.val(CALIBRE_COLUMN_CATEGORY, '').strip()
+        book_type = self.val(CALIBRE_COLUMN_BOOK_TYPE, self.book.get("book_type", BOOK_TYPE_EBOOK))
+        book_count = self.val(CALIBRE_COLUMN_PHY_COUNT, self.book.get("book_count", 1))
         return {
             "id": b["id"],
             "title": b["title"],
@@ -65,8 +68,8 @@ class SimpleBookFormatter:
             "count_download": self.val("count_download", 0),
             "sole": self.val("sole", False),
             "has_audio": self.val("has_audio", 0),
-            "book_type": self.book.get("book_type", 0),
-            "book_count": self.book.get("book_count", 1),
+            "book_type": self.book.get("book_type", book_type),
+            "book_count": self.book.get("book_count", book_count),
             "state": self.book.get("state", {}),
             'category': category,
             'files': self.get_files()

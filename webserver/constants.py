@@ -21,6 +21,16 @@ SUPPORTED_EBOOK_FORMATS = ["azw3", "epub", "mobi", "pdf", "txt"]
 COLUMN_CATEGORY = "category"
 CALIBRE_COLUMN_CATEGORY = "#category"
 
+# 书籍来源
+COLUMN_BOOK_TYPE = "book_type"
+CALIBRE_COLUMN_BOOK_TYPE = "#book_type"
+BOOK_TYPE_EBOOK = 0  # 电子书
+BOOK_TYPE_PHYSICAL = 1  # 实体书
+
+# 物理书籍数量
+COLUMN_PHY_COUNT = "book_count"
+CALIBRE_COLUMN_PHY_COUNT = "#book_count"
+
 # Audio related constants
 ENABLE_VIP_QUOTA_KEY = "ENABLE_VIP_QUOTA"
 ENABLE_AUDIO_CONVERSION_LOG = "ENABLE_AUDIO_CONVERSION_LOG"

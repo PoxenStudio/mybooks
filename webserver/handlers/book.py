@@ -32,13 +32,16 @@ from webserver.services.convert import ConvertService
 from webserver.services.extract import ExtractService
 from webserver.services.mail import MailService
 from webserver.handlers.base import BaseHandler, ListHandler, auth, js
-from webserver.models import Item, BOOK_TYPE_PHYSICAL, BOOK_TYPE_EBOOK, ReadingState
+from webserver.models import Item, ReadingState
 from webserver.plugins.meta import baike, douban, youshu, xhsd
 from webserver.plugins.meta.bookbarn_tags import BookBarnTags
 from webserver.plugins.parser.txt import get_content_encoding
 from webserver.handlers.audio import AudioUtils
 from webserver.constants import COLUMN_CATEGORY, CALIBRE_COLUMN_CATEGORY, ZLIBRARY_SUFFIX
 from webserver.constants import CALIBRE_ERROR_FLAG, SUPPORTED_EBOOK_FORMATS
+from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT
+from webserver.constants import BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL
+
 
 CONF = loader.get_settings()
 
@@ -1204,7 +1207,7 @@ class BookEdit(BaseHandler):
 
         if data.get("book_count", None):
             book_cnt = data.get("book_count", 0)
-            mi.set("real_book_cnt", book_cnt)
+            mi.set(CALIBRE_COLUMN_PHY_COUNT, book_cnt)
             # Need to update the item too
             existing_item = self.sqlite_session.query(Item).filter(Item.book_id == bid).first()
             if existing_item:
@@ -1284,6 +1287,15 @@ class BookDelete(BaseHandler):
 
         # 删除整本书
         AudioUtils.clear_audio(bid)
+
+        # 对应删除Item
+        try:
+            item = self.sqlite_session.query(Item).filter(Item.book_id == bid).first()
+            if item:
+                self.sqlite_session.delete(item)
+                self.sqlite_session.commit()
+        except Exception as e:
+            logging.error(f"删除书籍《{book['title']}》的Item记录失败: {e}")
 
         try:
             self.calibre_db.delete_book(bid)
@@ -1571,8 +1583,9 @@ class BookAddByISBN(BaseHandler):
                 self.sqlite_session.add(item)
                 self.sqlite_session.commit()
 
-            # 更新calibre custom data中的real_book_cnt
-            self.calibre_db.add_custom_book_data(book_id, "real_book_cnt", book_count)
+            # 更新calibre custom data
+            self.calibre_db_cache.set_field(CALIBRE_COLUMN_PHY_COUNT, {book_id: book_count})
+            self.calibre_db_cache.set_field(CALIBRE_COLUMN_BOOK_TYPE, {book_id: BOOK_TYPE_PHYSICAL})
             return {"err": "ok", "msg": _(u"实体书数量已更新，当前数量：%d") % book_count, "book_id": book_id}
 
         logging.info("Adding new book by ISBN: %s" % isbn)
@@ -1610,7 +1623,8 @@ class BookAddByISBN(BaseHandler):
                 return {"err": "book.duplicate", "msg": _(u"该图书已存在或创建失败")}
 
             # 添加自定义数据
-            self.calibre_db.add_custom_book_data(book_id, "real_book_cnt", 1)
+            self.calibre_db_cache.set_field(CALIBRE_COLUMN_PHY_COUNT, {book_id: book_count})
+            self.calibre_db_cache.set_field(CALIBRE_COLUMN_BOOK_TYPE, {book_id: BOOK_TYPE_PHYSICAL})
 
             # 创建Item记录
             item = Item()

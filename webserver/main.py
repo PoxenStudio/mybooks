@@ -22,6 +22,7 @@ from webserver import loader, models, social_routes
 from webserver.services import AsyncService
 from webserver.services.book_barn import BookBarnService
 from webserver.services.item_sync import ItemSyncService
+from webserver.constants import COLUMN_CATEGORY, COLUMN_PHY_COUNT, COLUMN_BOOK_TYPE
 
 CONF = loader.get_settings()
 define("host", default="", type=str, help=_("The host address on which to listen"))
@@ -34,23 +35,22 @@ define("with-library", default=CONF["with_library"], type=str, help=_("Path to t
 define("syncdb", default=False, type=bool, help=_("Create all tables"))
 define("update-config", default=False, type=bool, help=_("update config when system upgrade"))
 
-CATEGORY_KEY = "category"
 
-
-def add_category_meta_in_calibre(calibre_db):
+def add_meta_in_calibre(calibre_db, key, name, datatype):
     found = False
-    for key, meta in calibre_db.field_metadata.items():
-        if key.startswith('#') and key.lstrip('#') == CATEGORY_KEY:
+    for k, _ in calibre_db.field_metadata.items():
+        if k.startswith('#') and k.lstrip('#') == key:
             found = True
             break
     if found:
-        logging.info("No need to create category key")
+        logging.info("No need to create key: [%s] in calibre, already exists." % key)
         return False
     try:
         calibre_db.create_custom_column(
-            label=CATEGORY_KEY,
-            name='Book Category',
-            datatype='text',
+            label=key,
+            name=name,
+            datatype=datatype,
+
             is_multiple=False
         )
     except Exception as e:
@@ -202,12 +202,18 @@ def make_app():
 
     from calibre.db.legacy import LibraryDatabase
     from calibre.utils.date import fromtimestamp
-
+    need_sync_item_to_calibre = False
     try:
         logging.info("Initializing library database...")
         book_db = LibraryDatabase(os.path.expanduser(options.with_library))
         cache = book_db.new_api
-        if add_category_meta_in_calibre(cache):
+
+        added_category = add_meta_in_calibre(cache, COLUMN_CATEGORY, "Book Category", "text")
+        added_phy_count = add_meta_in_calibre(cache, COLUMN_PHY_COUNT, "Physical Book Count", "int")
+        added_source = add_meta_in_calibre(cache, COLUMN_BOOK_TYPE, "Book Type", "int")
+        if added_source or added_category or added_phy_count:
+            need_sync_item_to_calibre = True
+            # reload the db to make the new columns take effect
             book_db = LibraryDatabase(os.path.expanduser(options.with_library))
             cache = book_db.new_api
     except Exception as e:
@@ -325,6 +331,9 @@ def make_app():
     if need_sync_item_time:
         logging.info("Starting item create_time sync service")
         ItemSyncService().sync_item_create_time()
+    if need_sync_item_to_calibre:
+        logging.info("Starting item to calibre sync service")
+        ItemSyncService().sync_items_to_calibre()
 
     return app
 

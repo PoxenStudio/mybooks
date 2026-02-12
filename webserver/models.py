@@ -13,10 +13,8 @@ from social_sqlalchemy.storage import JSONType, SQLAlchemyMixin
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.ext.mutable import Mutable
 from sqlalchemy.orm import relationship, declarative_base
+from webserver.constants import BOOK_TYPE_EBOOK
 
-
-BOOK_TYPE_EBOOK = 0  # 电子书
-BOOK_TYPE_PHYSICAL = 1  # 实体书
 
 # 阅读状态常量
 READ_STATE_UNREAD = 0      # 未读

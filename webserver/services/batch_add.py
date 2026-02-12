@@ -9,7 +9,8 @@ import os
 import requests
 
 from webserver import loader
-from webserver.models import Item, ScanFile, BOOK_TYPE_PHYSICAL
+from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT, BOOK_TYPE_PHYSICAL
+from webserver.models import Item, ScanFile
 from webserver.services import AsyncService
 from webserver.plugins.meta import douban
 from webserver.plugins.meta import xhsd
@@ -162,7 +163,7 @@ class BatchAddService(AsyncService):
             books = set()
 
             # 搜索ISBN
-            ids = self.db.search(f'isbn:{isbn}', return_matches=True)
+            ids = self.db.search(f'isbn:{isbn} AND {CALIBRE_COLUMN_BOOK_TYPE}:={SOURCE_PHYSICAL}', return_matches=True)
             if ids:
                 books.update(ids)
 
@@ -328,7 +329,8 @@ class BatchAddService(AsyncService):
 
             # 添加自定义数据
             try:
-                self.db.add_custom_book_data(book_id, "real_book_cnt", 1)
+                self.db.set_field(CALIBRE_COLUMN_PHY_COUNT, {book_id: 1})
+                self.db.set_field(CALIBRE_COLUMN_BOOK_TYPE, {book_id: BOOK_TYPE_PHYSICAL})
             except:
                 pass
 
