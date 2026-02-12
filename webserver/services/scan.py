@@ -389,6 +389,7 @@ class ScanService(AsyncService):
 
                     # 再次检查是否有重复书籍
                     ids = self.db.books_with_same_title(mi)
+                    existed_ebook = False
                     if ids:
                         row.book_id = ids.pop()
                         for bid in ids:
@@ -396,15 +397,18 @@ class ScanService(AsyncService):
                             # 如果是实体书，则跳过
                             if b.get(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK) == BOOK_TYPE_PHYSICAL:
                                 continue
+                            existed_ebook = True
                             if fmt.upper() in b.formats:
                                 row.status = ScanFile.EXIST
                                 break
-                        if row.status != ScanFile.EXIST:
+                        if existed_ebook and row.status != ScanFile.EXIST:
+                            # 找到电子书，但没有当前格式，添加格式
                             logging.info(
                                 "import [%s] from %s with format %s", repr(mi.title), fpath, fmt)
                             self.db.add_format(row.book_id, fmt.upper(), fpath, True)
                             row.status = ScanFile.IMPORTED
-                    else:
+                    if not existed_ebook:
+                        # 未找到重复电子书时，导入新书
                         logging.info("import [%s] from %s", repr(mi.title), fpath)
                         row.book_id = self.db.import_book(mi, [fpath])
                         row.status = ScanFile.IMPORTED
