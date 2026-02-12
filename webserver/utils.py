@@ -5,6 +5,7 @@ from gettext import gettext as _
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT, CALIBRE_COLUMN_CATEGORY
 from webserver.constants import BOOK_TYPE_EBOOK
 
+
 class SimpleBookFormatter:
     """格式化calibre book的字段"""
 

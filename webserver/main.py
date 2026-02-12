@@ -38,7 +38,7 @@ define("update-config", default=False, type=bool, help=_("update config when sys
 
 def add_meta_in_calibre(calibre_db, key, name, datatype):
     found = False
-    for k, _ in calibre_db.field_metadata.items():
+    for k, v in calibre_db.field_metadata.items():
         if k.startswith('#') and k.lstrip('#') == key:
             found = True
             break

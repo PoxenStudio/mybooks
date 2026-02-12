@@ -11,8 +11,7 @@ from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COU
 
 
 class ItemSyncService(AsyncService):
-    """Items的create_time同步服务"""
-
+    """Items的同步服务"""
 
     @AsyncService.register_service
     def sync_item_create_time(self):
