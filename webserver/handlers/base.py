@@ -104,11 +104,9 @@ class BaseHandler(web.RequestHandler):
         return BaseHandler.site_url
 
     def _request_summary(self) -> str:
-        userid = 0
-        username = "-"
-        if self.current_user:
-            userid = self.current_user.id
-            username = self.current_user.username
+        # Use cached values to avoid detached instance errors after session closes
+        userid = self._cached_user_id or 0
+        username = self._cached_username or "-"
 
         return '%s %s (%s) "%d %s"' % (
             self.request.method,
@@ -265,6 +263,8 @@ class BaseHandler(web.RequestHandler):
         self.default_cover = self.settings["default_cover"]
         self.admin_user = None
         self.cookies_cache = {}
+        self._cached_user_id = None
+        self._cached_username = None
 
     def on_finish(self):
         ScopedSession = self.settings["ScopedSession"]
@@ -295,6 +295,11 @@ class BaseHandler(web.RequestHandler):
         if user_id:
             user_id = int(user_id)
         user = self.sqlite_session.get(Reader, user_id) if user_id else None
+
+        # Cache user id and username for logging to avoid detached instance errors
+        if user:
+            self._cached_user_id = user.id
+            self._cached_username = user.username
 
         admin_id = self.get_secure_cookie("admin_id")
         if admin_id:
