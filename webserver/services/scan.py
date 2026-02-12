@@ -13,7 +13,7 @@ from webserver import utils
 from webserver.models import Item, ScanFile
 from webserver.services import AsyncService
 from webserver.services.autofill import AutoFillService
-from webserver.constants import CALIBRE_ERROR_FLAG
+from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_ERROR_FLAG, BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL
 from webserver.services.background_service import BackgroundService, BackgroundTask
 
 
@@ -260,8 +260,12 @@ class ScanService(AsyncService):
             # TODO calibre提供的书籍重复接口只有对比title；应当提前对整个书库的文件做哈希，才能准确去重
             ids = self.db.books_with_same_title(mi)
             if ids:
-                for b in self.db.get_data_as_dict(ids=list(ids)):
-                    if fmt.upper() in b.get("available_formats", ""):
+                for bid in ids:
+                    b = self.db.get_metadata(bid, index_is_id=True)
+                    # 如果是实体书，则跳过
+                    if b.get(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK) == BOOK_TYPE_PHYSICAL:
+                        continue
+                    if fmt.upper() in b.formats:
                         row.book_id = b['id']
                         row.status = ScanFile.EXIST
                         break
@@ -380,8 +384,12 @@ class ScanService(AsyncService):
                     ids = self.db.books_with_same_title(mi)
                     if ids:
                         row.book_id = ids.pop()
-                        for b in self.db.get_data_as_dict(ids=ids):
-                            if fmt.upper() in b.get("available_formats", ""):
+                        for bid in ids:
+                            b = self.db.get_metadata(bid, index_is_id=True)
+                            # 如果是实体书，则跳过
+                            if b.get(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK) == BOOK_TYPE_PHYSICAL:
+                                continue
+                            if fmt.upper() in b.formats:
                                 row.status = ScanFile.EXIST
                                 break
                         if row.status != ScanFile.EXIST:

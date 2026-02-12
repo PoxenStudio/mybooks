@@ -1618,13 +1618,11 @@ class BookAddByISBN(BaseHandler):
                 return {"err": "book.notfound", "msg": _(u"未找到该ISBN号对应的图书")}
 
             # 通过上面返回的book metadata, 添加图书到calibre中（不需要文件，仅metadata）
+            book_data.set(CALIBRE_COLUMN_PHY_COUNT, 1)
+            book_data.set(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_PHYSICAL)
             book_id = self.calibre_db.create_book_entry(book_data)
             if book_id is None:
                 return {"err": "book.duplicate", "msg": _(u"该图书已存在或创建失败")}
-
-            # 添加自定义数据
-            self.calibre_db_cache.set_field(CALIBRE_COLUMN_PHY_COUNT, {book_id: book_count})
-            self.calibre_db_cache.set_field(CALIBRE_COLUMN_BOOK_TYPE, {book_id: BOOK_TYPE_PHYSICAL})
 
             # 创建Item记录
             item = Item()
@@ -1727,6 +1725,7 @@ class BookUpload(BaseHandler):
             for id in books:
                 b = self.calibre_db.get_metadata(id, index_is_id=True)
                 logging.debug(f"book id:{id}, book_type:{b.get(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK)}")
+                logging.debug(f"  existed formats: {b.formats}")
                 # 如果是实体书，则跳过
                 if b.get(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK) == BOOK_TYPE_PHYSICAL:
                     continue
@@ -1734,7 +1733,7 @@ class BookUpload(BaseHandler):
                     book_id = b.get("id")
                 if b.get("authors", "") != mi.authors:
                     continue
-                if fmt.upper() in b.get("available_formats", ""):
+                if fmt.upper() in b.formats:
                     return {
                         "err": "samebook",
                         "msg": _(u"同名书籍《%s》已存在这一图书格式 %s") % (mi.title, fmt),
@@ -1911,7 +1910,7 @@ class BookUploadChunk(BaseHandler):
                         book_id = b.get("id")
                     if b.get("authors", "") != mi.authors:
                         continue
-                    if fmt.upper() in b.get("available_formats", ""):
+                    if fmt.upper() in b.formats:
                         return {
                             "err": "samebook",
                             "msg": _(u"同名书籍《%s》已存在这一图书格式 %s") % (mi.title, fmt),
