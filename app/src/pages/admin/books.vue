@@ -68,6 +68,20 @@
                         <v-icon>mdi-swap-horizontal</v-icon>
                         <span v-if="!$vuetify.breakpoint.xs">{{ $t('admin.books.exchangeType') }}</span>
                     </v-btn>
+                    <v-select
+                        dense
+                        v-model="book_type_filter"
+                        :items="[
+                            { text: $t('admin.books.allBooks'), value: -1 },
+                            { text: $t('admin.books.bookEBook'), value: 0 },
+                            { text: $t('admin.books.bookPhysical'), value: 1 }
+                        ]"
+                        :label="$t('admin.books.bookTypeFilter')"
+                        outlined
+                        hide-details
+                        class="flex-shrink-0"
+                        style="max-width: 200px; min-width: 150px;"
+                    ></v-select>
                     <v-text-field
                         dense
                         @keyup.enter="getDataFromApi"
@@ -387,6 +401,7 @@ export default {
         books_selected: [],
         tag_input: null,
         search: "",
+        book_type_filter: -1,
         page: 1,
         items: [],
         total: 0,
@@ -426,6 +441,9 @@ export default {
                 this.getDataFromApi();
             },
             deep: true,
+        },
+        book_type_filter() {
+            this.getDataFromApi();
         },
     },
     computed: {
@@ -488,6 +506,9 @@ export default {
             }
             if (this.search != undefined) {
                 data.append("search", this.search);
+            }
+            if (this.book_type_filter != undefined && this.book_type_filter != -1) {
+                data.append("type", this.book_type_filter);
             }
             this.$backend("/admin/book/list?" + data.toString())
                 .then((rsp) => {

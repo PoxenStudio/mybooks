@@ -177,6 +177,8 @@
             "exchangeTypeConfirm": "会将所选电子书的图书类型进行切换，电子书转为实体书，实体书则转为电子书。如当前无有效ISBN或已有电子书格式的文件，则忽略。",
             "noSelectedBook": "请先选择要删除的图书",
             "addByIsbn": "添加实体书",
+            "bookTypeFilter": "类别",
+            "allBooks": "所有书籍",
             "bookEBook": "电子书",
             "bookPhysical": "实体书",
             "search": "搜索",

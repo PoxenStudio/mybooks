@@ -26,6 +26,7 @@ from webserver.models import Reader
 from webserver.utils import SimpleBookFormatter
 from webserver.version import VERSION
 from webserver.handlers.audio import AudioUtils
+from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_PHYSICAL, BOOK_TYPE_EBOOK
 
 CONF = loader.get_settings()
 USER_UPDATE_TS_MAP = {}
@@ -551,9 +552,16 @@ class AdminBookList(BaseHandler):
         page = max(0, int(self.get_argument("page", 1)) - 1)
         sort = self.get_argument("sort", "id")
         desc = self.get_argument("desc", "desc") == "true"
-        search = self.get_argument("search", "")
-        logging.debug("num=%d, page=%d, sort=%s, desc=%s" % (num, page, sort, desc))
-
+        search = self.get_argument("search", "").strip()
+        book_type = int(self.get_argument("type", -1))
+        logging.debug("num=%d, page=%d, sort=%s, desc=%s, book_type=%d" % (num, page, sort, desc, book_type))
+        if book_type >= 0 and book_type <= BOOK_TYPE_PHYSICAL:
+            book_type_query = f"{"not" if book_type == BOOK_TYPE_EBOOK else ""} {CALIBRE_COLUMN_BOOK_TYPE}:={BOOK_TYPE_PHYSICAL}"
+            if search:
+                search = f"({search}) AND {book_type_query}"
+            else:
+                search = book_type_query
+            logging.debug("Adjusted search query: %s" % search)
         self.calibre_db.sort(field=sort, ascending=(not desc))
         start = page * num
         end = start + num
