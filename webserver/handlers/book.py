@@ -1648,6 +1648,17 @@ class BookUpload(BaseHandler):
         except:
             return s.group(0)
 
+    def _add_new_book(self, mi, fpaths):
+        book_id = self.calibre_db.import_book(mi, fpaths)
+        self.increase_history_count("upload_history")
+        item = Item()
+        item.book_id = book_id
+        item.collector_id = self.user_id()
+        self.sqlite_session.add(item)
+        self.sqlite_session.commit()
+        AutoFillService().auto_fill(book_id)
+        return book_id
+
     def get_upload_file(self):
         # for unittest mock
         if "ebook" not in self.request.files:
@@ -1713,7 +1724,12 @@ class BookUpload(BaseHandler):
         books = self.calibre_db.books_with_same_title(mi)
         if books:
             book_id = None
-            for b in self.calibre_db.get_data_as_dict(ids=books):
+            for id in books:
+                b = self.calibre_db.get_metadata(id, index_is_id=True)
+                logging.debug(f"book id:{id}, book_type:{b.get(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK)}")
+                # 如果是实体书，则跳过
+                if b.get(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK) == BOOK_TYPE_PHYSICAL:
+                    continue
                 if book_id is None:
                     book_id = b.get("id")
                 if b.get("authors", "") != mi.authors:
@@ -1724,25 +1740,32 @@ class BookUpload(BaseHandler):
                         "msg": _(u"同名书籍《%s》已存在这一图书格式 %s") % (mi.title, fmt),
                         "book_id": b.get("id")
                     }
-            logging.info(
-                "import [%s] from %s with format %s", repr(mi.title), fpath, fmt)
-            self.calibre_db.add_format(book_id, fmt.upper(), fpath, True)
+            logging.debug("import [%s] from %s with format %s", repr(mi.title), fpath, fmt)
+            if book_id is None:
+                # New EBOOK
+                book_id = self._add_new_book(mi, [fpath])
+            else:
+                self.calibre_db.add_format(book_id, fmt.upper(), fpath, True)
         else:
             fpaths = [fpath]
-            book_id = self.calibre_db.import_book(mi, fpaths)
-            self.increase_history_count("upload_history")
-            item = Item()
-            item.book_id = book_id
-            item.collector_id = self.user_id()
-            self.sqlite_session.add(item)
-            self.sqlite_session.commit()
+            book_id = self._add_new_book(mi, fpaths)
         self.add_msg("success", _(u"导入书籍成功！"))
-        AutoFillService().auto_fill(book_id)
         return {"err": "ok", "book_id": book_id}
 
 
 class BookUploadChunk(BaseHandler):
     """Handler for chunked file upload"""
+
+    def _add_new_book(self, mi, fpaths):
+        book_id = self.calibre_db.import_book(mi, fpaths)
+        self.increase_history_count("upload_history")
+        item = Item()
+        item.book_id = book_id
+        item.collector_id = self.user_id()
+        self.sqlite_session.add(item)
+        self.sqlite_session.commit()
+        AutoFillService().auto_fill(book_id)
+        return book_id
 
     @staticmethod
     def get_chunk_size():
@@ -1879,7 +1902,11 @@ class BookUploadChunk(BaseHandler):
             books = self.calibre_db.books_with_same_title(mi)
             if books:
                 book_id = None
-                for b in self.calibre_db.get_data_as_dict(ids=books):
+                for id in books:
+                    b = self.calibre_db.get_metadata(id, index_is_id=True)
+                    # 如果是实体书，则跳过
+                    if b.get(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK) == BOOK_TYPE_PHYSICAL:
+                        continue
                     if book_id is None:
                         book_id = b.get("id")
                     if b.get("authors", "") != mi.authors:
@@ -1891,19 +1918,15 @@ class BookUploadChunk(BaseHandler):
                             "book_id": b.get("id")
                         }
                 logging.info("import [%s] from %s with format %s", repr(mi.title), final_path, fmt)
-                self.calibre_db.add_format(book_id, fmt.upper(), final_path, True)
+                if book_id is None:
+                    # New EBOOK
+                    book_id = self._add_new_book(mi, [final_path])
+                else:
+                    self.calibre_db.add_format(book_id, fmt.upper(), final_path, True)
             else:
-                fpaths = [final_path]
-                book_id = self.calibre_db.import_book(mi, fpaths)
-                self.increase_history_count("upload_history")
-                item = Item()
-                item.book_id = book_id
-                item.collector_id = self.user_id()
-                self.sqlite_session.add(item)
-                self.sqlite_session.commit()
+                book_id = self._add_new_book(mi, [final_path])
 
             self.add_msg("success", _(u"导入书籍成功！"))
-            AutoFillService().auto_fill(book_id)
             return {"err": "ok", "book_id": book_id}
 
         except Exception as e:
