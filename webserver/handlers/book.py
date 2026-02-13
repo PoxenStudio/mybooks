@@ -1477,7 +1477,7 @@ class SearchBook(ListHandler):
             # 过滤分词结果：排除等于name本身的词和长度为1的词，并去重
             filtered_words = list({w for w in words if w != name and len(w) > 1})
 
-            if filtered_words:
+            if filtered_words and len(filtered_words) > 1:
                 logging.info(f"Word segmentation for '{name}': {filtered_words}")
                 # 1. 先查所有分词都包含的书（AND查询）
                 try:
