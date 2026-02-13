@@ -16,6 +16,7 @@ from typing import Any, Sequence, Dict, Optional
 
 from mcp.server import Server
 from mcp.types import Tool, TextContent
+from webserver.constants import CALIBRE_COLUMN_CATEGORY, COLUMN_CATEGORY
 from webserver.handlers.base import BaseHandler
 from webserver.utils import MCPBookFormatter
 from webserver.services.book_search import BookSearch
@@ -414,6 +415,8 @@ class MCPService:
                     elif key in ("authors", "tags") and isinstance(val, list):
                         # 确保authors&tags列表中的每个元素都是字符串
                         val = [str(author).strip() for author in val if str(author).strip()]
+                    elif key == COLUMN_CATEGORY:
+                        val = str(val).strip()
 
                     mi.set(key, val)
                     updated_fields.append(f"{key}: {val}")
@@ -423,7 +426,11 @@ class MCPService:
                                                                   "message": "No valid fields to update"}))]
 
             # 保存元数据
-            self.base_handler.calibre_db.set_metadata(bid, mi)
+            self.base_handler.calibre_db.set_metadata(bid, mi, force_changes=True)
+            if COLUMN_CATEGORY in arguments:
+                # 同步更新calibre的category列（如果有传入category参数）
+                category_val = arguments[COLUMN_CATEGORY]
+                self.base_handler.calibre_db_cache.set_field(CALIBRE_COLUMN_CATEGORY, {book_id: category_val})
 
             result = {
                 "status": "success",
@@ -820,7 +827,7 @@ class MCPService:
             ),
             Tool(
                 name="update_book_info",
-                description="Update book information including title, authors, ISBN, and comments." + self.need_login_prompt,
+                description="Update book information including title, authors, ISBN, comments, and category." + self.need_login_prompt,
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -854,6 +861,10 @@ class MCPService:
                                 "type": "string"
                             }
                         },
+                        "category": {
+                            "type": "string",
+                            "description": "Category of the book. It is a free text field and can be used for any categorization purpose."
+                        }
                     },
                     "required": ["book_id"]
                 }
