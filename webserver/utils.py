@@ -1,9 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 import datetime
+import re
 from gettext import gettext as _
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT, CALIBRE_COLUMN_CATEGORY
 from webserver.constants import BOOK_TYPE_EBOOK
+
+
+# 匹配包含z-library的括号内容，例如 (z-library.sk, 1lib.sk, z-lib.sk)
+ZLIBRARY_PATTERN = re.compile(r'\([^)]*?(?:z-?lib(?:rary)?|1lib)[^)]*?\)', re.IGNORECASE)
+
+
+def remove_zlibrary_suffix(text):
+    """移除文件名中包含z-library的括号内容"""
+    if not text:
+        return text
+    return ZLIBRARY_PATTERN.sub('', text).strip()
 
 
 class SimpleBookFormatter:

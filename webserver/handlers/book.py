@@ -37,7 +37,7 @@ from webserver.plugins.meta import baike, douban, youshu, xhsd
 from webserver.plugins.meta.bookbarn_tags import BookBarnTags
 from webserver.plugins.parser.txt import get_content_encoding
 from webserver.handlers.audio import AudioUtils
-from webserver.constants import COLUMN_CATEGORY, CALIBRE_COLUMN_CATEGORY, ZLIBRARY_SUFFIX
+from webserver.constants import COLUMN_CATEGORY, CALIBRE_COLUMN_CATEGORY
 from webserver.constants import CALIBRE_ERROR_FLAG, SUPPORTED_EBOOK_FORMATS
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT
 from webserver.constants import BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL
@@ -1732,9 +1732,7 @@ class BookUpload(BaseHandler):
 
         # 非结构化的格式，calibre无法识别准确的信息，直接从文件名提取
         if fmt in ["txt", "pdf"]:
-            mi.title = name.replace("." + fmt, "")
-            if mi.title.endswith(ZLIBRARY_SUFFIX):
-                mi.title = mi.title[:-len(ZLIBRARY_SUFFIX)]
+            mi.title = utils.remove_zlibrary_suffix(name.replace("." + fmt, ""))
             mi.authors = [_(u"佚名")]
 
         logging.info("upload mi.title = " + repr(mi.title))
@@ -1909,9 +1907,7 @@ class BookUploadChunk(BaseHandler):
 
             # Handle special formats like txt and pdf
             if fmt in ["txt", "pdf"]:
-                mi.title = filename.replace("." + fmt, "")
-                if mi.title.endswith(ZLIBRARY_SUFFIX):
-                    mi.title = mi.title[:-len(ZLIBRARY_SUFFIX)]
+                mi.title = utils.remove_zlibrary_suffix(filename.replace("." + fmt, ""))
                 mi.authors = [_(u"佚名")]
 
             logging.info("chunked upload mi.title = " + repr(mi.title))
@@ -2345,9 +2341,7 @@ class BookSperate(BaseHandler):
 
             # 对于txt和pdf格式，从文件名提取信息
             if fmt in ["txt", "pdf"]:
-                mi.title = filename.replace("." + fmt, "")
-                if mi.title.endswith(ZLIBRARY_SUFFIX):
-                    mi.title = mi.title[:-len(ZLIBRARY_SUFFIX)]
+                mi.title = utils.remove_zlibrary_suffix(filename.replace("." + fmt, ""))
                 mi.authors = [_(u"佚名")]
 
             # 创建新书籍
