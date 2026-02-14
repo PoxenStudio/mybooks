@@ -81,17 +81,15 @@
         <v-col>
           <!-- Pinned Tags -->
           <div v-if="pins && pins.length > 0" class="mb-2">
-            <div class="text-caption text--secondary mb-1">{{ $t('listMeta.pinnedItems') || 'Pinned' }}</div>
             <v-chip
               small
               class="ma-1"
               v-for="pin in pins"
               :key="'pin-' + pin.name"
-              color="primary"
+              color="#299075"
               @click="selectTag(pin.name)"
               style="cursor: pointer"
             >
-              <v-icon small left>mdi-pin</v-icon>
               {{ pin.name }}
               <span v-if="pin.count">&nbsp;({{ pin.count }})</span>
               <v-icon
@@ -101,7 +99,7 @@
                 @click.stop="unpinTag(pin.name)"
                 class="ml-1"
               >
-                mdi-pin-off
+                mdi-pin-off-outline
               </v-icon>
             </v-chip>
           </div>
@@ -432,7 +430,6 @@ export default {
                 }
             });
             if (rsp.err === 'ok') {
-                this.$alert("success", rsp.msg);
                 // Refresh the list
                 let listRsp = await this.$backend("/tag" + (this.show_all ? "?show=all" : ""));
                 this.items = listRsp.items;
@@ -462,7 +459,6 @@ export default {
                 }
             });
             if (rsp.err === 'ok') {
-                this.$alert("success", rsp.msg);
                 // Refresh the list
                 let listRsp = await this.$backend("/tag" + (this.show_all ? "?show=all" : ""));
                 this.items = listRsp.items;
