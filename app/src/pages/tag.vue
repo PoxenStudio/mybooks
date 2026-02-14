@@ -91,7 +91,6 @@
               style="cursor: pointer"
             >
               {{ pin.name }}
-              <span v-if="pin.count">&nbsp;({{ pin.count }})</span>
               <v-icon
                 v-if="isLoggedIn"
                 small
