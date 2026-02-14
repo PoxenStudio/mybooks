@@ -247,7 +247,8 @@
                     save-text="保存"
                     cancel-text="取消"
                 >
-                    {{ item.publisher }}
+                    <span v-if="item.publisher != null" class="three-lines" style="max-width: 110px; min-width: 60px; ">{{ item.publisher }}</span>
+                    <span v-else> - </span>
                     <template v-slot:input>
                         <div class="mt-4 text-h6">修改字段</div>
                         <v-text-field v-model="item.publisher" label="出版社" counter></v-text-field>
