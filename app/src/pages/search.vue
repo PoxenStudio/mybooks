@@ -38,7 +38,6 @@ export default {
   },
   computed: {
     page_size() {
-      // 客户端环境下才能访问 localStorage
       if (process.client) {
         const stored = localStorage.getItem('defaultPageSize');
         if (stored) {
@@ -46,20 +45,25 @@ export default {
         }
       }
       return this.$store?.state?.default_page_size || 60;
+    },
+    max_search_size() {
+      // 搜索时一次性获取的最大书籍数量，避免数据量过大
+      return 10000;
     }
   },
   data: () => ({
     title: "",
-    pageDisplayTitle: "", // 用于页面显示的标题
+    pageDisplayTitle: "",
     page: 1,
     books: [],
-    allBooks: [], // 存储所有查询结果
+    allBooks: [],
     total: 0,
     page_cnt: 0,
     inited: false,
     searching: false,
     searchStatus: "",
     searchName: "", // 搜索关键词
+    cachedSearchName: "", // 缓存的搜索关键词，用于判断是否需要重新查询
   }),
   head() {
     let displayTitle = this.$t('listBook.search');
@@ -80,8 +84,12 @@ export default {
     this.init();
   },
   beforeRouteUpdate(to, from, next) {
-    this.init();
+    // 先完成路由跳转，确保 this.$route 是最新的
     next();
+    // 在下一个 tick 中执行查询，确保路由已经更新
+    this.$nextTick(() => {
+      this.init();
+    });
   },
   methods: {
     async init() {
@@ -95,13 +103,26 @@ export default {
         this.allBooks = [];
         this.total = 0;
         this.page_cnt = 0;
+        this.cachedSearchName = "";
         return;
       }
 
-      // 如果URL中有start参数，说明是翻页操作，直接从缓存的allBooks中获取数据
+      // 如果搜索关键词变化了，清空缓存
+      if (this.searchName !== this.cachedSearchName) {
+        this.allBooks = [];
+        this.cachedSearchName = this.searchName;
+      }
+
+      // 如果URL中有start参数且缓存有效，说明是翻页操作，直接从缓存的allBooks中获取数据
       const start = parseInt(this.$route.query.start || 0);
       if (start > 0 && this.allBooks.length > 0) {
         this.updateBooksFromCache(start);
+        return;
+      }
+
+      // 如果缓存中已有数据且是当前搜索关键词的结果，直接使用缓存
+      if (this.allBooks.length > 0 && this.searchName === this.cachedSearchName) {
+        this.updateBooksFromCache(0);
         return;
       }
 
@@ -178,7 +199,7 @@ export default {
 
     async searchByTitle(name) {
       try {
-        const url = `/search?title=${encodeURIComponent(name)}&start=0&size=9999`;
+        const url = `/search?title=${encodeURIComponent(name)}&start=0&size=${this.max_search_size}`;
         const rsp = await this.$backend(url);
         if (rsp.err === 'ok') {
           return rsp;
@@ -191,7 +212,7 @@ export default {
 
     async searchBySegmentation(name) {
       try {
-        const url = `/search?seg=1&title=${encodeURIComponent(name)}&start=0&size=9999`;
+        const url = `/search?seg=1&title=${encodeURIComponent(name)}&start=0&size=${this.max_search_size}`;
         const rsp = await this.$backend(url);
         if (rsp.err === 'ok') {
           return rsp;
@@ -204,7 +225,7 @@ export default {
 
     async searchExtended(name) {
       try {
-        const url = `/search?name=${encodeURIComponent(name)}&start=0&size=9999`;
+        const url = `/search?name=${encodeURIComponent(name)}&start=0&size=${this.max_search_size}`;
         const rsp = await this.$backend(url);
         if (rsp.err === 'ok') {
           return rsp;
