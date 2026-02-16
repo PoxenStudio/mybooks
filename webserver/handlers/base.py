@@ -706,7 +706,20 @@ class ListHandler(BaseHandler):
 
         # 提前查询被标记为sole的图书ID并过滤
         ids = [book["id"] for book in books]
-        sole_book_ids = set(item.book_id for item in self.sqlite_session.query(Item).filter(Item.book_id.in_(ids), Item.sole == 1, Item.collector_id != self.user_id()).all()) if ids else set()
+        sole_book_ids = (
+            set(
+                item.book_id
+                for item in self.sqlite_session.query(Item)
+                .filter(
+                    Item.book_id.in_(ids),
+                    Item.sole == 1,
+                    Item.collector_id != self.user_id(),
+                )
+                .all()
+            )
+            if ids
+            else set()
+        )
         books = [b for b in books if b["id"] not in sole_book_ids]
 
         # 只查询剩余书籍的Item信息

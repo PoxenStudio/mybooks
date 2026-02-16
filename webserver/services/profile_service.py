@@ -28,7 +28,6 @@ CONF = loader.get_settings()
 
 
 class APIStats:
-    """API统计信息"""
     def __init__(self):
         self.count = 0              # 调用次数
         self.total_time = 0.0       # 总耗时
@@ -36,25 +35,21 @@ class APIStats:
         self.min_time = float('inf')  # 最小耗时
 
     def add(self, duration: float):
-        """添加一次调用记录"""
         self.count += 1
         self.total_time += duration
         self.max_time = max(self.max_time, duration)
         self.min_time = min(self.min_time, duration)
 
     def get_avg_time(self) -> float:
-        """获取平均耗时"""
         return self.total_time / self.count if self.count > 0 else 0.0
 
     def reset(self):
-        """重置统计数据"""
         self.count = 0
         self.total_time = 0.0
         self.max_time = 0.0
         self.min_time = float('inf')
 
     def to_dict(self) -> dict:
-        """转换为字典"""
         return {
             "count": self.count,
             "avg_time": round(self.get_avg_time(), 4),
@@ -65,7 +60,6 @@ class APIStats:
 
 
 class ProfileService:
-    """性能分析服务（单例）"""
     _instance = None
     _lock = threading.Lock()
 
@@ -86,26 +80,16 @@ class ProfileService:
             self._initialized = True
             self._start_time = datetime.now()
 
-            # 确保日志目录存在
             log_dir = "/data/logs"
             if not os.path.exists(log_dir):
                 os.makedirs(log_dir, exist_ok=True)
 
     def record_request(self, endpoint: str, method: str, duration: float):
-        """
-        记录一次API请求
-
-        Args:
-            endpoint: 请求路径
-            method: HTTP方法
-            duration: 请求耗时(秒)
-        """
         key = f"{method} {endpoint}"
         with self._stats_lock:
             self._api_stats[key].add(duration)
 
     def get_memory_info(self) -> Dict:
-        """获取当前内存使用情况"""
         try:
             memory_info = self._process.memory_info()
             memory_percent = self._process.memory_percent()
@@ -122,20 +106,8 @@ class ProfileService:
             return {}
 
     def get_top_memory_types(self, top_n: int = 10) -> List[Dict]:
-        """
-        获取占用内存最大的前N个数据类型
-
-        Args:
-            top_n: 返回前N个类型，默认10
-
-        Returns:
-            列表，每项包含 type_name, count, total_size, avg_size
-        """
         try:
-            # 强制垃圾回收
             gc.collect()
-
-            # 统计每种类型的对象数量和总大小
             type_stats = defaultdict(lambda: {"count": 0, "total_size": 0})
 
             for obj in gc.get_objects():
@@ -145,10 +117,8 @@ class ProfileService:
                     type_stats[obj_type]["count"] += 1
                     type_stats[obj_type]["total_size"] += obj_size
                 except Exception:
-                    # 某些对象可能无法获取大小，跳过
                     continue
 
-            # 转换为列表并按总大小排序
             result = []
             for type_name, stats in type_stats.items():
                 result.append({
@@ -158,7 +128,6 @@ class ProfileService:
                     "avg_size": stats["total_size"] / stats["count"] if stats["count"] > 0 else 0
                 })
 
-            # 按总大小排序并返回前N个
             result.sort(key=lambda x: x["total_size"], reverse=True)
             return result[:top_n]
 
@@ -166,8 +135,34 @@ class ProfileService:
             logging.error(f"Failed to get top memory types: {e}", exc_info=True)
             return []
 
+    def get_top_memory_classnames(self, top_n: int = 10) -> List[Dict]:
+        try:
+            gc.collect()
+            class_stats = defaultdict(lambda: {"count": 0, "total_size": 0})
+            for obj in gc.get_objects():
+                try:
+                    cls = type(obj)
+                    class_name = f"{cls.__module__}.{cls.__name__}"
+                    obj_size = sys.getsizeof(obj)
+                    class_stats[class_name]["count"] += 1
+                    class_stats[class_name]["total_size"] += obj_size
+                except Exception:
+                    continue
+            result = []
+            for class_name, stats in class_stats.items():
+                result.append({
+                    "class_name": class_name,
+                    "count": stats["count"],
+                    "total_size": stats["total_size"] / (1024 * 1024),
+                    "avg_size": stats["total_size"] / stats["count"] if stats["count"] > 0 else 0
+                })
+            result.sort(key=lambda x: x["total_size"], reverse=True)
+            return result[:top_n]
+        except Exception as e:
+            logging.error(f"Failed to get top memory classnames: {e}", exc_info=True)
+            return []
+
     def _get_stats_snapshot(self) -> Dict:
-        """获取统计数据快照并重置计数器"""
         with self._stats_lock:
             snapshot = {}
             for endpoint, stats in self._api_stats.items():
@@ -177,30 +172,21 @@ class ProfileService:
             return snapshot
 
     def _write_profiling_log(self):
-        """定期写入性能分析日志"""
         try:
             from webserver.constants import PROFILE_LOG_PATH
 
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-            # 获取内存信息
             memory_info = self.get_memory_info()
-
-            # 获取API统计快照
             api_stats = self._get_stats_snapshot()
-
-            # 运行时长
             uptime = datetime.now() - self._start_time
-            uptime_str = str(uptime).split('.')[0]  # 去掉微秒
+            uptime_str = str(uptime).split('.')[0]
 
-            # 构建日志内容
             log_lines = []
             log_lines.append("=" * 80)
             log_lines.append(f"Profiling Report - {timestamp}")
             log_lines.append(f"Uptime: {uptime_str}")
             log_lines.append("=" * 80)
 
-            # 内存信息
             log_lines.append("\n[Memory Usage]")
             if memory_info:
                 log_lines.append(f"  RSS: {memory_info['rss']:.2f} MB")
@@ -212,7 +198,6 @@ class ProfileService:
             else:
                 log_lines.append("  (Failed to collect memory info)")
 
-            # Python 对象内存占用统计
             log_lines.append("\n[Top 10 Memory-Consuming Types]")
             try:
                 top_types = self.get_top_memory_types(10)
@@ -231,13 +216,30 @@ class ProfileService:
             except Exception as e:
                 log_lines.append(f"  (Error collecting type statistics: {e})")
 
+            log_lines.append("\n[Top 10 Memory-Consuming Classes]")
+            try:
+                top_classes = self.get_top_memory_classnames(10)
+                if top_classes:
+                    log_lines.append(f"  {'Class':<50} {'Count':>12} {'Total(MB)':>15} {'Avg(Bytes)':>15}")
+                    log_lines.append("  " + "-" * 95)
+                    for item in top_classes:
+                        log_lines.append(
+                            f"  {item['class_name']:<50} "
+                            f"{item['count']:>12,} "
+                            f"{item['total_size']:>15.2f} "
+                            f"{item['avg_size']:>15.2f}"
+                        )
+                else:
+                    log_lines.append("  (Failed to collect class statistics)")
+            except Exception as e:
+                log_lines.append(f"  (Error collecting class statistics: {e})")
+
             # API统计信息
             log_lines.append("\n[API Statistics]")
             if api_stats:
-                # 按调用次数排序
                 sorted_stats = sorted(api_stats.items(),
-                                     key=lambda x: x[1]['count'],
-                                     reverse=True)
+                                      key=lambda x: x[1]['count'],
+                                      reverse=True)
 
                 log_lines.append(f"  {'Endpoint':<60} {'Count':>8} {'Avg(s)':>10} {'Max(s)':>10} {'Total(s)':>10}")
                 log_lines.append("  " + "-" * 100)
@@ -251,7 +253,6 @@ class ProfileService:
                         f"{stats['total_time']:>10.4f}"
                     )
 
-                # 统计摘要
                 total_requests = sum(s['count'] for s in api_stats.values())
                 log_lines.append("  " + "-" * 100)
                 log_lines.append(f"  Total Requests: {total_requests}")
@@ -259,8 +260,6 @@ class ProfileService:
                 log_lines.append("  (No API calls in this period)")
 
             log_lines.append("\n")
-
-            # 写入日志文件
             log_content = "\n".join(log_lines)
             log_file_path = PROFILE_LOG_PATH
 
@@ -279,12 +278,10 @@ class ProfileService:
             return
 
         logging.info("Starting Profile Service...")
-
-        # 记录启动信息
         self._start_time = datetime.now()
         initial_memory = self.get_memory_info()
         logging.info(f"Initial memory: RSS={initial_memory.get('rss', 0):.2f}MB, "
-                    f"Percent={initial_memory.get('percent', 0)}%")
+                     f"Percent={initial_memory.get('percent', 0)}%")
 
         # 使用Tornado的PeriodicCallback定期执行
         interval_ms = CONF.get(PROFILE_INTERVAL, PROFILE_OUTPUT_INTERVAL) * 1000  # 转换为毫秒
@@ -297,7 +294,6 @@ class ProfileService:
         logging.info(f"ProfileService started, reporting every {CONF.get(PROFILE_INTERVAL, PROFILE_OUTPUT_INTERVAL)} seconds")
 
     def stop(self):
-        """停止性能分析服务"""
         if self._periodic_callback:
             self._periodic_callback.stop()
             logging.info("ProfileService stopped")
@@ -308,5 +304,4 @@ _profile_service = ProfileService()
 
 
 def get_profile_service() -> ProfileService:
-    """获取性能分析服务实例"""
     return _profile_service
