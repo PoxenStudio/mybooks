@@ -263,7 +263,7 @@ class ProfileService:
             log_content = "\n".join(log_lines)
             log_file_path = PROFILE_LOG_PATH
 
-            with open(log_file_path, "a", encoding="utf-8") as f:
+            with open(log_file_path, "w", encoding="utf-8") as f:
                 f.write(log_content)
 
             logging.info(f"Profiling report written to {log_file_path}")
