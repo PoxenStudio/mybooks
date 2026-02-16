@@ -39,4 +39,4 @@ ENABLE_AUDIO_CONVERSION_LOG = "ENABLE_AUDIO_CONVERSION_LOG"
 ENABLE_PROFILE = "ENABLE_PROFILE"
 PROFILE_INTERVAL = "PROFILE_INTERVAL"
 PROFILE_OUTPUT_INTERVAL = 5 * 60  # 每5分钟输出一次性能分析结果（单位：秒）
-PROFILE_LOG_PATH = "/data/logs/profiling.log"  # 性能分析日志文件路径
+PROFILE_LOG_PATH = "/data/log/profiling.log"  # 性能分析日志文件路径
