@@ -243,7 +243,7 @@ class ProfileService:
 
                 log_lines.append(f"  {'Endpoint':<60} {'Count':>8} {'Avg(s)':>10} {'Max(s)':>10} {'Total(s)':>10}")
                 log_lines.append("  " + "-" * 100)
-
+                sorted_stats = sorted_stats[:50]
                 for endpoint, stats in sorted_stats:
                     log_lines.append(
                         f"  {endpoint:<60} "
