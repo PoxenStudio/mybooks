@@ -207,6 +207,12 @@ def make_app():
         logging.info("Initializing library database...")
         book_db = LibraryDatabase(os.path.expanduser(options.with_library))
         cache = book_db.new_api
+        try:
+            if hasattr(cache.backend, 'prefs'):
+                cache.backend.prefs.set('fts_enabled', False)
+                logging.info("FTS disabled successfully")
+        except Exception as e:
+            logging.warning(f"Failed to disable FTS: {e}")
 
         added_category = add_meta_in_calibre(cache, COLUMN_CATEGORY, "Book Category", "text")
         added_phy_count = add_meta_in_calibre(cache, COLUMN_PHY_COUNT, "Physical Book Count", "int")
@@ -341,6 +347,12 @@ def make_app():
         from webserver.services.profile_service import get_profile_service
         profile_service = get_profile_service()
         profile_service.start()
+
+    if CONF.get("CALIBRE_CACHE_CLEAN_ENABLED", True):
+        from webserver.services.calibre_cache_clean import get_cache_clean_service
+        cache_clean_service = get_cache_clean_service()
+        cache_clean_service.setup(cache)
+        cache_clean_service.start()
 
     return app
 

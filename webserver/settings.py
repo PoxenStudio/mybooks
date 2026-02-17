@@ -74,6 +74,9 @@ settings = {
     "DEFAULT_PAGE_SIZE": 60,
     "ENABLE_AUDIO_CONVERSION_LOG": False,
 
+    "CALIBRE_CACHE_CLEAN_ENABLED": False,
+    "CALIBRE_CACHE_CLEAN_INTERVAL": 1800,
+
     "EPUB_VIEWER": "epubjs.html",
     "CANDLE_READER_SERVER": "https://brs.talebook.org",
     "PDF_VIEWER": "/static/pdfjs/web/viewer.html?file=%(pdf_url)s",
