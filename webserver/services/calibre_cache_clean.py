@@ -167,7 +167,7 @@ class CalibreCacheCleanService:
             stats_str = ", ".join(f"{k}={v}" for k, v in initial_stats.items())
             logging.info(f"Initial cache stats: {stats_str}")
 
-        logging.info(f"CalibreCacheCleanService started, cleaning every {interval_seconds} seconds ({interval_seconds//60} minutes)")
+        logging.info(f"CalibreCacheCleanService started, cleaning every {interval_seconds} seconds ({interval_seconds // 60} minutes)")
 
     def stop(self):
         """停止缓存清理服务"""
