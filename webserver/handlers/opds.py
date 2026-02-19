@@ -433,6 +433,10 @@ class OpdsHandler(BaseHandler):
         self.set_status(401)
         raise web.Finish()
 
+    def check_opds_enabled(self):
+        if not CONF.get("ENABLE_OPDS_SERVICE", True):
+            raise web.HTTPError(503, reason="OPDS service is not enabled")
+
     def get_opds_acquisition_feed(
         self,
         ids,
@@ -733,29 +737,34 @@ class OpdsHandler(BaseHandler):
 
 class OpdsIndex(OpdsHandler):
     def get(self):
+        self.check_opds_enabled()
         self.write(self.opds())
 
 
 class OpdsNav(OpdsHandler):
     def get(self, which):
+        self.check_opds_enabled()
         offset = self.get_argument("offset", 0)
         self.write(self.opds_navcatalog(which, offset=offset))
 
 
 class OpdsCategory(OpdsHandler):
     def get(self, category, which):
+        self.check_opds_enabled()
         offset = self.get_argument("offset", 0)
         self.write(self.opds_category(category, which, offset=offset))
 
 
 class OpdsCategoryGroup(OpdsHandler):
     def get(self, category, which):
+        self.check_opds_enabled()
         offset = self.get_argument("offset", 0)
         self.write(self.opds_category_group(category, which, offset=offset))
 
 
 class OpdsSearch(OpdsHandler):
     def get(self, which):
+        self.check_opds_enabled()
         offset = self.get_argument("offset", 0)
         self.write(self.opds_search(which, offset=offset))
 

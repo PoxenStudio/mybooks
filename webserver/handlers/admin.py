@@ -26,7 +26,7 @@ from webserver.models import Reader
 from webserver.utils import SimpleBookFormatter
 from webserver.version import VERSION
 from webserver.handlers.audio import AudioUtils
-from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_PHYSICAL, BOOK_TYPE_EBOOK
+from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_PHYSICAL, BOOK_TYPE_EBOOK, ENABLE_OPDS_SERVICE
 
 CONF = loader.get_settings()
 USER_UPDATE_TS_MAP = {}
@@ -234,6 +234,8 @@ class AdminSettings(BaseHandler):
             CONF["BOOKBARN_COLLECTION_HOUR"] = 3
         if CONF.get("ENABLE_RECEIVING_BOOKS", None) is None:
             CONF["ENABLE_RECEIVING_BOOKS"] = CONF.get("ENABLE_BOOKBARN", False)
+        if CONF.get("ENABLE_OPDS_SERVICE", None) is None:
+            CONF["ENABLE_OPDS_SERVICE"] = True
 
         if CONF.get("MAIN_PAGE_RANDOM_COUNT", -1) == -1:
             CONF["MAIN_PAGE_RANDOM_COUNT"] = 12
@@ -338,7 +340,8 @@ class AdminSettings(BaseHandler):
             "INDEX_PAGE_TYPE",
             "DEFAULT_PAGE_SIZE",
             "WEBDAV_SYNC_FOLDER",
-            "ENABLE_AUDIO_CONVERSION_LOG"
+            "ENABLE_AUDIO_CONVERSION_LOG",
+            "ENABLE_OPDS_SERVICE"
         ]
 
         current_icon = CONF.get("site_icon", "favicon_0")  # favicon_0 means use current icon
@@ -359,6 +362,8 @@ class AdminSettings(BaseHandler):
 
         if ENABLE_VIP_QUOTA_KEY not in args:
             args[ENABLE_VIP_QUOTA_KEY] = current_vip_quota
+        if ENABLE_OPDS_SERVICE not in args:
+            args[ENABLE_OPDS_SERVICE] = CONF.get(ENABLE_OPDS_SERVICE, True)
 
         if args["site_icon"] != "favicon_0" and args["site_icon"] != current_icon:
             new_icon_path = CONF["static_path"] + "/logo/" + args["site_icon"] + ".ico"
