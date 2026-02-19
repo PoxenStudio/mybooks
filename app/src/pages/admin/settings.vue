@@ -394,7 +394,9 @@ export default {
           { icon: "", key: "autoreload", label: "settings.autoreload", type: 'checkbox' },
           { icon: "", key: "ENABLE_PHYSICAL_BOOKS", label: "settings.enable_physical_books", type: 'checkbox' },
           { icon: "", key: "WEBDAV_SYNC_FOLDER", label: "settings.enable_webdav_sync", type: 'checkbox' },
-          { icon: "mdi-math-log", key: "ENABLE_AUDIO_CONVERSION_LOG", label: "settings.enable_audio_conversion_log", type: 'checkbox' },          { icon: "", key: "ENABLE_OPDS_SERVICE", label: "settings.enable_opds_service", type: 'checkbox' },        ]
+          { icon: "mdi-math-log", key: "ENABLE_AUDIO_CONVERSION_LOG", label: "settings.enable_audio_conversion_log", type: 'checkbox' },
+          { icon: "mdi-cloud-print-outline", key: "ENABLE_OPDS_SERVICE", label: "settings.enable_opds_service", type: 'checkbox' },
+        ]
       },
 
       {
