@@ -9,7 +9,7 @@
     <section>
       <h2>{{ $t('opds.commonReaders') }}</h2>
       <ul>
-        <li><strong>KyBook</strong>：{{ $t('opds.kybookDescription') }} <a href="https://apps.apple.com/app/kybook/id1049898139" target="_blank" rel="noopener noreferrer">[{{ $t('opds.download') }}]</a></li>
+        <li><strong>Readest</strong>：{{ $t('opds.readestDescription') }} <a href="https://apps.apple.com/us/app/readest-ebook-reader/id6738622779" target="_blank" rel="noopener noreferrer">[{{ $t('opds.download') }}]</a></li>
         <li><strong>{{ $t('opds.moonReader') }}</strong>：{{ $t('opds.moonReaderDescription') }} <a href="https://play.google.com/store/apps/details?id=com.flyersoft.moonreader" target="_blank" rel="noopener noreferrer">[{{ $t('opds.download') }}]</a></li>
       </ul>
     </section>

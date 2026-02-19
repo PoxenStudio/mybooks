@@ -120,7 +120,7 @@
         "link": "OPDS 链接",
         "linkDescription": "您的 OPDS 链接为：",
         "commonReaders": "常见 OPDS 阅读软件",
-        "kybookDescription": "支持 iOS 和 macOS 的电子书阅读器",
+        "readestDescription": "支持 iOS/macOS及Windows 的电子书阅读器",
         "moonReader": "静读天下",
         "moonReaderDescription": "Android 平台上功能强大的电子书阅读器",
         "download": "下载",
