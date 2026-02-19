@@ -416,15 +416,15 @@ export default {
                 { heading: "appHeader.categoryBrowse" },
                 { icon: "mdi-headphones", href: "/audiobooks", text: "appHeader.audioBooks", count: this.sys.audiobooks, color: "purple"},
                 { icon: "category", href: "/categories", text: "appHeader.categoryBrowse", color: "green" },
-                { icon: "mdi-home-group", href: "/publisher", text: "appHeader.publishers", count: this.sys.publishers, color: "primary"},
                 { icon: "mdi-account-group", href: "/author", text: "appHeader.authors", count: this.sys.authors, color: "primary"},
+                { icon: "mdi-home-group", href: "/publisher", text: "appHeader.publishers", count: this.sys.publishers, color: "primary"},
                 {
                     target: "",
                     links: [
                         { icon: "widgets", href: "/nav", text: "appHeader.tagCategory", count: this.sys.books, color: "primary" },
                         { icon: "mdi-tag-heart", href: "/tag", text: "appHeader.tags", count: this.sys.tags, color: "green"},
                         { icon: "mdi-trending-up", href: "/hot", text: "appHeader.hotRanking", color: "orange"},
-                        { icon: "mdi-translate", href: "/language", text: "appHeader.languages", color: "black"},
+                        { icon: "mdi-translate", href: "/language", text: "appHeader.languages", color: "primary"},
                         { icon: "mdi-history", href: "/all", text: "appHeader.allBooks", color: "primary"},
                         { icon: "mdi-bookshelf", href: "/printbooks", text: "appHeader.physicalBooks", color: "primary"},
                         { icon: "mdi-star-shooting", href: "/rating", text: "appHeader.rating", color: "orange"},
