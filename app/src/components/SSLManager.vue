@@ -41,7 +41,7 @@ export default {
         async check_certs() {
             var re = {
                 crt: /-----BEGIN CERTIFICATE-----[^ ]*-----END CERTIFICATE-----/gm,
-                key: /-----BEGIN [A-Z]* PRIVATE KEY-----[^ ]*-----END [A-Z]* PRIVATE KEY-----/gm,
+                key: /-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----[^ ]*-----END (?:[A-Z]+ )?PRIVATE KEY-----/gm,
             };
 
             var content = await this.ssl_crt.text();
