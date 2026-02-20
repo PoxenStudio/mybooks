@@ -5,7 +5,7 @@
                 <v-row>
                     <v-col cols=4 xs=4 sm=4 md=4 lg=4 class='col-book-img'>
                         <div class="book-img-container">
-                            <v-img :src="book.img" :aspect-ratio="11/15" style="border-radius: 12px;" class="book-img-hover"></v-img>
+                            <v-img :src="book.thumb" :aspect-ratio="11/15" style="border-radius: 12px;" class="book-img-hover"></v-img>
                             <!-- 实体书角标 -->
                             <div v-if="book.book_type === 1" class="physical-book-badge">
                                 <v-icon small color="white">mdi-bookshelf</v-icon>
