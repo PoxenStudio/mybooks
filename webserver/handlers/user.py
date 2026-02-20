@@ -13,12 +13,15 @@ from webserver import loader
 from webserver.services.mail import MailService
 from webserver.handlers.base import BaseHandler, auth, js
 from webserver.handlers.audio import AudioUtils
-from webserver.models import Message, Reader, StickyItem
+from webserver.models import Device, Message, Reader, StickyItem
 from webserver.version import VERSION
 
 CONF = loader.get_settings()
 COOKIE_REDIRECT = "login_redirect"
 ENABLE_VIP_QUOTA_KEY = "ENABLE_VIP_QUOTA"
+
+# In-memory cache for user devices, keyed by user_id
+_user_devices_cache = {}
 
 
 class Done(BaseHandler):
@@ -592,6 +595,59 @@ class PinItem(BaseHandler):
             return {"err": "db.error", "msg": _(u"置顶失败")}
 
 
+class UserDevices(BaseHandler):
+    """管理当前用户的阅读设备"""
+
+    @js
+    @auth
+    def get(self):
+        user_id = self.user_id()
+        if user_id in _user_devices_cache:
+            return {"err": "ok", "devices": _user_devices_cache[user_id]}
+        devices = self.sqlite_session.query(Device).filter(Device.reader_id == user_id).all()
+        result = [d.to_dict() for d in devices]
+        _user_devices_cache[user_id] = result
+        return {"err": "ok", "devices": result}
+
+    @js
+    @auth
+    def post(self):
+        user_id = self.user_id()
+        try:
+            data = tornado.escape.json_decode(self.request.body)
+        except Exception:
+            return {"err": "params.invalid", "msg": _(u"参数无效")}
+
+        devices_data = data.get("devices", [])
+        if not isinstance(devices_data, list):
+            return {"err": "params.invalid", "msg": _(u"参数无效")}
+
+        # Replace all existing devices for this user
+        self.sqlite_session.query(Device).filter(Device.reader_id == user_id).delete()
+        result = []
+        for d in devices_data:
+            device = Device(
+                reader_id=user_id,
+                name=d.get("name", ""),
+                device_type=d.get("type", "duokan"),
+                ip=d.get("ip", ""),
+                port=int(d.get("port", 12121)),
+                schema=d.get("schema", "http"),
+                mailbox=d.get("mailbox", ""),
+            )
+            self.sqlite_session.add(device)
+            result.append(device.to_dict())
+        try:
+            self.sqlite_session.commit()
+            # Refresh cache
+            _user_devices_cache[user_id] = result
+            return {"err": "ok", "msg": _(u"设备保存成功")}
+        except Exception as e:
+            logging.error("Save user devices failed: %s", e)
+            self.sqlite_session.rollback()
+            return {"err": "db.error", "msg": _(u"数据库操作异常，请重试")}
+
+
 class UnpinItem(BaseHandler):
     """取消置顶作者或标签"""
     @js
@@ -651,4 +707,5 @@ def routes():
         (r"/api/done/", Done),
         (r"/api/user/pin", PinItem),
         (r"/api/user/unpin", UnpinItem),
+        (r"/api/user/devices", UserDevices),
     ]

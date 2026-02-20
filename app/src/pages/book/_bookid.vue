@@ -2194,13 +2194,19 @@ export default {
                 return;
             }
             try {
-                const response = await this.$backend('/admin/settings');
-                if (response.err === 'ok' && response.settings) {
-                    if (response.settings.DEVICES) {
-                        this.devices = response.settings.DEVICES;
-                    }
-                    if (response.settings.BOOK_NAV) {
-                        this.categories = response.settings.BOOK_NAV.split('\n').map(line => {
+                const [settingsResponse, devicesResponse] = await Promise.all([
+                    this.$backend('/admin/settings'),
+                    this.$backend('/user/devices'),
+                ]);
+                if (settingsResponse.err === 'ok' && settingsResponse.settings) {
+                    const globalDevices = settingsResponse.settings.DEVICES || [];
+                    const personalDevices = (devicesResponse.err === 'ok' ? devicesResponse.devices : null) || [];
+                    // Merge: personal devices first, then global devices not already present by name
+                    const usedNames = new Set(personalDevices.map(d => d.name));
+                    const extraGlobal = globalDevices.filter(d => !usedNames.has(d.name));
+                    this.devices = [...personalDevices, ...extraGlobal];
+                    if (settingsResponse.settings.BOOK_NAV) {
+                        this.categories = settingsResponse.settings.BOOK_NAV.split('\n').map(line => {
                             const parts = line.split('=');
                             return parts[0].trim();
                         }).filter(c => c);

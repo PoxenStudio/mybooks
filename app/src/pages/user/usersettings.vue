@@ -1,6 +1,16 @@
 <template>
-  <v-form ref="form" @submit.prevent="save">
-    <v-row align="start">
+  <div>
+    <!-- Tab navigation -->
+    <v-tabs v-model="activeTab" class="mb-4">
+      <v-tab>{{ $t('user.basic_info') }}</v-tab>
+      <v-tab>{{ $t('user.device_mgt') }}</v-tab>
+    </v-tabs>
+
+    <!-- Tab 1: Basic Info -->
+    <v-tabs-items v-model="activeTab">
+      <v-tab-item>
+        <v-form ref="form" @submit.prevent="save">
+          <v-row align="start">
       <!-- Avatar -->
       <v-col cols="3">
         <v-subheader class="pa-0 float-right">{{ $t('user.avatar') }}</v-subheader>
@@ -161,12 +171,76 @@
       </v-col>
     </v-row>
   </v-form>
+      </v-tab-item>
+
+      <!-- Tab 2: Reading Devices -->
+      <v-tab-item>
+        <v-card flat class="pa-2">
+          <v-card-subtitle class="px-0">{{ $t('user.device_mgt_description') }}</v-card-subtitle>
+
+          <v-row v-for="(device, idx) in userDevices" :key="'udev-' + idx">
+            <v-col class="py-0" cols="2">
+              <v-text-field flat small hide-details single-line v-model="device.name"
+                :label="$t('settings.device_name')" type="text" maxlength="64"></v-text-field>
+            </v-col>
+            <v-col class="py-0" cols="2">
+              <v-select flat small hide-details single-line v-model="device.type"
+                :items="deviceTypes" :label="$t('settings.device_type')"></v-select>
+            </v-col>
+            <template v-if="device.type === 'kindle'">
+              <v-col class="py-0" cols="6">
+                <v-text-field flat small hide-details single-line v-model="device.mailbox"
+                  :label="$t('settings.device_mailbox')" type="email"
+                  placeholder="user@kindle.com"></v-text-field>
+              </v-col>
+            </template>
+            <template v-else>
+              <v-col class="py-0" cols="2">
+                <v-text-field flat small hide-details single-line v-model="device.ip"
+                  :label="$t('settings.device_ip')" type="text"></v-text-field>
+              </v-col>
+              <v-col class="py-0" cols="2">
+                <v-text-field flat small hide-details single-line v-model.number="device.port"
+                  :label="$t('settings.device_port')" type="number"></v-text-field>
+              </v-col>
+              <v-col class="py-0" cols="2">
+                <v-select flat small hide-details single-line v-model="device.schema"
+                  :items="deviceSchemas" :label="$t('settings.device_schema')"></v-select>
+              </v-col>
+            </template>
+            <v-col class="py-0" cols="1" align-self="end">
+              <v-btn icon small @click="userDevices.splice(idx, 1)">
+                <v-icon>delete</v-icon>
+              </v-btn>
+            </v-col>
+          </v-row>
+
+          <v-row>
+            <v-col align="center">
+              <v-btn color="primary" @click="userDevices.push({ name: $t('settings.default_reader_name'), type: 'duokan', ip: '', port: 12121, schema: 'http', mailbox: '' })">
+                <v-icon>add</v-icon>{{ $t('settings.add') }}
+              </v-btn>
+            </v-col>
+          </v-row>
+
+          <v-row class="mt-4">
+            <v-col cols="12" class="text-center">
+              <v-btn dark large rounded color="orange" @click="saveDevices" :loading="savingDevices">
+                {{ $t('user.save') }}
+              </v-btn>
+            </v-col>
+          </v-row>
+        </v-card>
+      </v-tab-item>
+    </v-tabs-items>
+  </div>
 </template>
 
 <script>
 export default {
   data() {
     return {
+      activeTab: 0,
       user: {
         username: '',
         email: '',
@@ -196,6 +270,11 @@ export default {
       isUploading: false,
       cropper: null,
       isCropping: false,
+      // Device management
+      userDevices: [],
+      savingDevices: false,
+      deviceTypes: [],
+      deviceSchemas: ['http', 'https'],
     }
   },
   async asyncData({ app }) {
@@ -205,6 +284,14 @@ export default {
     return { title: this.$t('user.user_center') }
   },
   created() {
+    this.deviceTypes = [
+      { text: this.$t('settings.device_type_duokan'), value: 'duokan' },
+      { text: this.$t('settings.device_type_ireader'), value: 'ireader' },
+      { text: this.$t('settings.device_type_hanwang'), value: 'hanwang' },
+      { text: this.$t('settings.device_type_boox'), value: 'boox' },
+      { text: this.$t('settings.device_type_dangdang'), value: 'dangdang' },
+      { text: 'Kindle', value: 'kindle' },
+    ]
     this.init()
   },
   methods: {
@@ -216,6 +303,11 @@ export default {
           rsp.user.password1 = ''
           rsp.user.password2 = ''
           this.user = rsp.user
+        }
+      })
+      this.$backend('/user/devices').then(rsp => {
+        if (rsp.err === 'ok') {
+          this.userDevices = rsp.devices || []
         }
       })
     },
@@ -368,6 +460,23 @@ export default {
         } else {
           this.$alert('danger', rsp.msg)
         }
+      })
+    },
+    saveDevices() {
+      this.savingDevices = true
+      this.$backend('/user/devices', {
+        method: 'POST',
+        body: JSON.stringify({ devices: this.userDevices })
+      }).then(rsp => {
+        if (rsp.err === 'ok') {
+          this.$alert('success', rsp.msg || this.$t('user.device_save_success'))
+        } else {
+          this.$alert('error', rsp.msg)
+        }
+      }).catch(() => {
+        this.$alert('error', this.$t('user.device_save_failed'))
+      }).finally(() => {
+        this.savingDevices = false
       })
     }
   }

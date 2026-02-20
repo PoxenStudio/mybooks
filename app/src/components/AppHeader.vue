@@ -214,7 +214,7 @@
                                 </v-list-item-content>
                             </v-list-item>
                             <v-divider></v-divider>
-                            <v-list-item to="/user/detail">
+                            <v-list-item to="/user/usersettings">
                                 <v-list-item-action><v-icon>contacts</v-icon></v-list-item-action>
                                 <v-list-item-title> {{ $t('appHeader.user_center') }} </v-list-item-title>
                             </v-list-item>
@@ -385,7 +385,9 @@ export default {
             var home_links = [
                 // home
                 { icon: "home", href: "/", text: "appHeader.home", color:"primary" },
-            ];
+            ].concat(this.user.is_login ? [
+                { icon: "mdi-account-cog", href: "/user/usersettings", text: "appHeader.user_center", color: "primary" },
+            ] : []);
             var admin_links = [
                 {
                     icon: "mdi-cog",
