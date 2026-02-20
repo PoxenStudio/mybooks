@@ -122,6 +122,14 @@
             :footer-props="{ 'items-per-page-options': [10, 50, 100] }"
             :mobile-breakpoint="600"
         >
+            <template v-slot:top>
+                <v-data-footer
+                    :options.sync="options"
+                    :pagination="topPagination"
+                    :items-per-page-options="[10, 50, 100]"
+                    @update:options="options = $event"
+                />
+            </template>
             <template v-slot:item.status="{ item }">
                 <v-chip small v-if="item.status == 'ready'" class="success">{{ $t('admin.books.status.ready') }}</v-chip>
                 <v-chip small v-else-if="item.status == 'exist'" class="lighten-4">{{ $t('admin.books.status.exist') }}</v-chip>
@@ -459,6 +467,18 @@ export default {
             if (pct < 0) return 0;
             if (pct > 100) return 100;
             return pct;
+        },
+        topPagination() {
+            const { page = 1, itemsPerPage = 100 } = this.options;
+            const pageCount = itemsPerPage <= 0 ? 1 : Math.ceil(this.total / itemsPerPage);
+            return {
+                page,
+                itemsPerPage,
+                pageStart: (page - 1) * itemsPerPage,
+                pageStop: Math.min(page * itemsPerPage, this.total),
+                pageCount,
+                itemsLength: this.total,
+            };
         },
         responsiveHeaders: function() {
             // 根据屏幕宽度返回不同的headers配置

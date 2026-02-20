@@ -63,6 +63,10 @@ export default {
     // treeShake: true,
     defaultAssets: false,
     iconfont: 'mdi',
+    lang: {
+      locales: { zhHans: require('vuetify/lib/locale/zh-Hans').default },
+      current: 'zhHans',
+    },
   },
 
   googleFonts: {

@@ -121,6 +121,14 @@
             :items-per-page="100"
             :footer-props="{ 'items-per-page-options': [10, 50, 100, 1000, 5000, 10000] }"
         >
+            <template v-slot:top>
+                <v-data-footer
+                    :options.sync="options"
+                    :pagination="topPagination"
+                    :items-per-page-options="[10, 50, 100, 1000, 5000, 10000]"
+                    @update:options="options = $event"
+                />
+            </template>
             <template v-slot:item.status="{ item }">
                 <v-chip small v-if="item.status == 'ready'" class="success">{{ $t('imports.status.ready') }}</v-chip>
                 <v-chip small v-else-if="item.status == 'exist'" class="lighten-4">{{ $t('imports.status.exist') }}</v-chip>
@@ -228,6 +236,18 @@ export default {
             if (pct < 0) return 0;
             if (pct > 100) return 100;
             return pct;
+        },
+        topPagination() {
+            const { page = 1, itemsPerPage = 100 } = this.options;
+            const pageCount = itemsPerPage <= 0 ? 1 : Math.ceil(this.total / itemsPerPage);
+            return {
+                page,
+                itemsPerPage,
+                pageStart: (page - 1) * itemsPerPage,
+                pageStop: Math.min(page * itemsPerPage, this.total),
+                pageCount,
+                itemsLength: this.total,
+            };
         },
         progressPrefix() {
             if (this.scanning) return "扫描中";
