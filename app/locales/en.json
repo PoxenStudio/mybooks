@@ -372,7 +372,7 @@
         "book2audio_proxy_address": "Audio Proxy Server Address",
         "use_bookbarn_proxy": "Use Book Barn Proxy Service (enabled after authorization via WeChat official account)",
         "book2audio_proxy_test": "Test Connection",
-        "device_mgt": "Device Management",
+        "device_mgt": "Global Device Management",
         "device_mgt_description": "Manage global reading devices available to all users. Users can also configure their own devices in their User Center.",
         "device_name": "Name",
         "device_ip": "IP",

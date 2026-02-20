@@ -519,7 +519,7 @@
         "book2audio_proxy_address": "语音代理服务器地址",
         "use_bookbarn_proxy": "使用书栈代理服务 (公众号后台私信授权后开通)",
         "book2audio_proxy_test": "测试是否连通",
-        "device_mgt": "设备管理",
+        "device_mgt": "全局设备管理",
         "device_mgt_description": "管理全局阅读设备，所有用户均可使用。用户也可在个人用户中心配置自己的私人设备。",
         "device_name": "名称",
         "device_ip": "IP地址",

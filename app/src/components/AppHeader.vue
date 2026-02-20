@@ -393,7 +393,7 @@ export default {
                     icon: "mdi-cog",
                     text: "appHeader.admin",
                     expand: this.$route.path.indexOf("/admin/") == 0,
-                    color: "dark-grey",
+                    color: "primary",
                     groups: [
                         { icon: "mdi-cog", href: "/admin/settings", text: "appHeader.systemSettings", color: "primary"},
                         { icon: "mdi-account", href: "/admin/users", text: "appHeader.userManagement", color: "primary"},

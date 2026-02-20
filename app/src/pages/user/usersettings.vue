@@ -176,7 +176,7 @@
       <!-- Tab 2: Reading Devices -->
       <v-tab-item>
         <v-card flat class="pa-2">
-          <v-card-subtitle class="px-0">{{ $t('user.device_mgt_description') }}</v-card-subtitle>
+          <v-card-subtitle class="px-0 text-center">{{ $t('user.device_mgt_description') }}</v-card-subtitle>
 
           <v-row v-for="(device, idx) in userDevices" :key="'udev-' + idx">
             <v-col class="py-0" cols="2">
