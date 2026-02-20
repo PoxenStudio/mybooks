@@ -64,7 +64,10 @@ export default {
     defaultAssets: false,
     iconfont: 'mdi',
     lang: {
-      locales: { zhHans: require('vuetify/lib/locale/zh-Hans').default },
+      locales: {
+        zhHans: require('vuetify/lib/locale/zh-Hans').default,
+        en: require('vuetify/lib/locale/en').default,
+      },
       current: 'zhHans',
     },
   },
