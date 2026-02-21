@@ -468,7 +468,7 @@
                             <div class="tag-chips" style="margin-top: 5px;">
                                 <v-chip rounded smallF color="#003153" class="white--text"
                                         @click="ai_fill_book" :loading="ai_filling">
-                                    <v-icon small left>mdi-robot</v-icon>
+                                    <v-icon left>mdi-robot</v-icon>
                                     {{ $t('book.aiUpdate') }}
                                 </v-chip>
                                 <v-menu offset-y>
