@@ -26,7 +26,7 @@
 		const path = url.searchParams.get("bookPath") || "https://s3.amazonaws.com/moby-dick/"
 		// 配置 assets 目录路径，默认为空字符串表示当前目录下的 assets
 		const assetsPath = url.searchParams.get("assetsPath") || ""
-		window.onload = (e) => new Reader(path, { assetsPath: assetsPath })
+		window.onload = (e) => new Reader(path, { annotations: false, arrows: "content",assetsPath: assetsPath })
 	</script>
 </head>
 

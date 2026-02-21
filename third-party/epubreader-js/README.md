@@ -29,6 +29,11 @@ You can run the reader locally with the command
 ```javascript
 npm run serve
 ```
+Or run the server in dist folder with python:
+
+```bash
+cd dist; python -m http.server 8080
+```
 
 Builds are concatenated and minified using [webpack](https://github.com/webpack/webpack)
 
