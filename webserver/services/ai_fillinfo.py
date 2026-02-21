@@ -41,6 +41,13 @@ class AIFillInfoService(AsyncService):
     def _make_client(self) -> BookAIClient:
         return BookAIClient()
 
+    def _missing_api_key_msg(self) -> str:
+        if not CONF.get("AI_ENABLED"):
+            return _("AI 助手未启用，需要到系统设置中启用")
+        if not CONF.get("AI_DEEPSEEK_API_KEY"):
+            return _("请先在系统管理中设置 DeepSeek API 密钥")
+        return ""
+
     def _apply_ai_info(self, book_id: int, mi, info: AIBookInfo) -> bool:
         try:
             if info.tags:
@@ -82,6 +89,11 @@ class AIFillInfoService(AsyncService):
 
     @AsyncService.register_function
     def fill_one(self, book_id: int, force: bool = False) -> dict:
+        missing_msg = self._missing_api_key_msg()
+        if missing_msg:
+            logging.warning("[AIFill] %s", missing_msg)
+            return {"status": "fail", "msg": missing_msg}
+
         try:
             mi = self.db.get_metadata(book_id, index_is_id=True)
         except Exception as e:
@@ -122,6 +134,30 @@ class AIFillInfoService(AsyncService):
 
     @AsyncService.register_service
     def fill_all(self, idlist: list, force: bool = False):
+        missing_msg = self._missing_api_key_msg()
+        if missing_msg:
+            logging.warning("[AIFill] %s", missing_msg)
+            try:
+                task = BackgroundService().update_task(
+                    service_type=BackgroundTask.SERVICE_TYPE_AI_FILL,
+                    service_item=_("AI 更新"),
+                    progress=0,
+                    progress_data={
+                        "total": len(idlist),
+                        "done": 0,
+                        "skip": 0,
+                        "fail": 0,
+                    },
+                )
+                self.task_id = task.id
+                self._finish_task(failed=True, error_msg=missing_msg)
+            except Exception as e:
+                logging.error("[AIFill] Failed to create background task: %s", e)
+                self.is_running = False
+                self.current_book_id = None
+                self.task_id = None
+            return
+
         self.is_running = True
         self.start_time = time.time()
         self.count_total = len(idlist)
