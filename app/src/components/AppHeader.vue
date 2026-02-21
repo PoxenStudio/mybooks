@@ -38,6 +38,7 @@
                         v-else-if="item.groups && item.groups.length > 0 && miniVariant"
                         :key="'item-' + idx"
                         :class="{ 'v-list-item--icon-only': miniVariant }"
+                        @click="handleMiniVariantGroupClick(idx, item)"
                     >
                         <v-icon :color="item.color || ''" size="24">{{ item.icon }}</v-icon>
                     </v-list-item>
@@ -45,11 +46,12 @@
                     <v-list-group
                         v-else-if="item.groups && item.groups.length > 0"
                         no-action
-                        :value="item.expand"
+                        :value="isGroupExpanded(idx, item)"
+                        @input="toggleGroup(idx, item)"
                         :key="'group-' + idx"
                     >
                         <template v-slot:activator>
-                            <v-list-item dense>
+                            <v-list-item dense @click="toggleGroup(idx, item)">
                                 <v-list-item-action class="mt-1 mb-1 mr-2" dense>
                                     <v-icon class="pa-0 ma-0" :color="item.color || ''">{{ item.icon }}</v-icon>
                                 </v-list-item-action>
@@ -418,6 +420,7 @@ export default {
         messages: [],
         runningTasks: [],
         taskPollingTimer: null,
+        expandedGroups: {},
     }),
     computed: {
         appBarColor() {
@@ -455,7 +458,7 @@ export default {
             var reading_links = [
                 {
                     icon: "mdi-book-open-page-variant-outline",
-                    text: "appHeader.reading",
+                    text: "appHeader.readingInfo",
                     expand: this.$route.path.indexOf("/reading/") == 0 || this.$route.path.indexOf("/favorites/") == 0 || this.$route.path.indexOf("/wants/") == 0 || this.$route.path.indexOf("/read-done/") == 0,
                     color: "primary",
                     groups: [
@@ -762,6 +765,19 @@ export default {
         },
         getTaskProgress(task) {
             return Math.round(task.progress);
+        },
+        isGroupExpanded(idx, item) {
+            if (this.expandedGroups[idx] !== undefined) {
+                return this.expandedGroups[idx];
+            }
+            return item.expand || false;
+        },
+        toggleGroup(idx, item) {
+            this.$set(this.expandedGroups, idx, !this.isGroupExpanded(idx, item));
+        },
+        handleMiniVariantGroupClick(idx, item) {
+            this.miniVariant = false;
+            this.$set(this.expandedGroups, idx, true);
         },
     },
 };
