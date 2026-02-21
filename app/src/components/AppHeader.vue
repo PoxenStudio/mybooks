@@ -184,7 +184,7 @@
             </template>
         </v-navigation-drawer>
 
-        <v-app-bar class="px-0" :color="appBarColor" dense dark app fixed extension-height="64">
+        <v-app-bar class="px-0" :color="drawerColor" dense dark app fixed extension-height="64">
             <template v-if="btn_search && $vuetify.breakpoint.xs" #extension>
                 <v-container fluid>
                     <v-form @submit.prevent="doSearch">
@@ -437,9 +437,6 @@ export default {
         expandedGroups: {},
     }),
     computed: {
-        appBarColor() {
-            return this.$vuetify.theme.dark ? 'dark' : '#003153';
-        },
         drawerColor() {
             return this.$vuetify.theme.dark ? 'dark' : '#F7FAF7';
         },
