@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title></title>
+
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+	<meta http-equiv="Permissions-Policy" content="interest-cohort=()">
+	<meta name="description" content="">
+	<meta name="viewport" content="width=device-width, user-scalable=no">
+	<meta name="apple-mobile-web-app-capable" content="yes">
+
+	<link rel="icon" type="image/png" href="assets/img/favicon.png">
+	<link rel="stylesheet" href="assets/css/main.css">
+
+	<!-- Libs -->
+	<script src="dist/js/libs/jszip.min.js"></script>
+	<script src="dist/js/libs/md5.min.js"></script>
+	<script src="dist/js/libs/epub.min.js"></script>
+
+	<!-- Reader -->
+	<script type="module">
+		import { Reader } from "./dist/js/epubreader.min.js"
+		const url = new URL(window.location)
+		const path = url.searchParams.get("bookPath") || "https://s3.amazonaws.com/moby-dick/"
+		// 配置 assets 目录路径，默认为空字符串表示当前目录下的 assets
+		const assetsPath = url.searchParams.get("assetsPath") || ""
+		window.onload = (e) => new Reader(path, { assetsPath: assetsPath })
+	</script>
+</head>
+
+<body>
+</body>
+
+</html>

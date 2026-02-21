@@ -1,0 +1,7 @@
+dist/
+
+# Dependency directories
+node_modules/
+
+# Visual Studio Code
+.vscode

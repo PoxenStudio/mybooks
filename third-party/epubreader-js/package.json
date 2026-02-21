@@ -1,0 +1,44 @@
+{
+    "name": "epubreader-js",
+    "version": "0.3.4",
+    "homepage": "https://github.com/intity/epubreader-js",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/intity/epubreader-js.git"
+    },
+    "directories": {
+        "dist": "dist",
+        "docs": "docs"
+    },
+    "description": "epub reader",
+    "bugs": {
+        "url": "https://github.com/intity/epubreader-js/issues"
+    },
+    "main": "src/reader.js",
+    "type": "module",
+    "scripts": {
+        "build": "webpack --mode=production --progress",
+        "serve": "webpack serve",
+        "minify": "webpack --mode=production --optimization-minimize --progress",
+        "prepare": "npm run build && npm run minify"
+    },
+    "author": "fchasen@gmail.com",
+    "license": "MIT",
+    "contributors": [
+        {
+            "name": "vite",
+            "email": "nuget@list.ru"
+        }
+    ],
+    "devDependencies": {
+        "copy-webpack-plugin": "^8.1.1",
+        "webpack": "^5.99.9",
+        "webpack-cli": "^6.0.1",
+        "webpack-concat-files-plugin": "^0.5.2",
+        "webpack-dev-server": "^5.2.2"
+    },
+    "dependencies": {
+        "epubjs": "^0.3.93",
+        "js-md5": "^0.7.3"
+    }
+}
