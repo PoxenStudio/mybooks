@@ -17,13 +17,12 @@
                     <template v-if="!miniVariant">
                         <v-menu v-model="showUserMenu" offset-y>
                             <template v-slot:activator="{ on }">
-                                <v-list-item class="px-2" v-on="on">
+                                <v-list-item class="px-2 app-prepend-item" v-on="on">
                                     <v-list-item-avatar color="primary" class="avatar-round">
                                         <img :src="user.avatar" @error="handleAvatarError" ref="drawerAvatar" class="avatar-img" />
                                     </v-list-item-avatar>
                                     <v-list-item-content>
                                         <v-list-item-title>{{ user.nickname }}</v-list-item-title>
-                                        <v-list-item-subtitle>{{ user.email }}</v-list-item-subtitle>
                                     </v-list-item-content>
                                     <v-btn icon class="ml-auto" @click.stop="toggleMiniVariant">
                                         <v-icon>mdi-chevron-left</v-icon>
@@ -45,7 +44,7 @@
                     <template v-else>
                         <v-menu v-model="showUserMenu" offset-y>
                             <template v-slot:activator="{ on }">
-                                <v-list-item class="px-2 justify-center" v-on="on" :ripple="false" :dense="true">
+                                <v-list-item class="px-2 justify-center app-prepend-item" v-on="on" :ripple="false" :dense="true">
                                     <v-list-item-avatar color="primary" class="avatar-round">
                                         <img :src="user.avatar" @error="handleAvatarError" ref="drawerAvatarMini" class="avatar-img" />
                                     </v-list-item-avatar>
@@ -65,7 +64,10 @@
                     </template>
                 </template>
                 <template v-else>
-                    <v-list-item class="px-2">
+                    <v-list-item class="px-2 app-prepend-item">
+                        <v-avatar color="grey" size="40" class="avatar-round">
+                            <v-icon>mdi-account</v-icon>
+                        </v-avatar>
                         <v-list-item-content>
                             <v-btn to="/login" color="indigo accent-4" class="mt-1">
                                 <v-icon left>account_circle</v-icon> {{ $t('appHeader.please_login') }}
@@ -113,7 +115,13 @@
                             </v-list-item>
                         </template>
 
-                        <v-list-item v-for="link in item.groups" :key="'link-' + link.href" :to="link.href">
+                        <v-list-item
+                            v-for="link in item.groups"
+                            :key="'link-' + link.href"
+                            :to="isExternalLink(link.href) ? undefined : link.href"
+                            :href="isExternalLink(link.href) ? link.href : undefined"
+                            :target="isExternalLink(link.href) ? '_blank' : undefined"
+                        >
                             <v-list-item-content>
                                 <v-list-item-title>
                                     <v-icon :color="link.color || ''">{{ link.icon }}</v-icon> {{ $t(link.text) }}
@@ -170,7 +178,7 @@
 
             <template v-slot:append>
                 <v-divider></v-divider>
-                <v-list-item class="px-2 justify-center" @click="toggleMiniVariant" :disabled="!user.is_login" :class="{ 'v-list-item--disabled': !user.is_login }">
+                <v-list-item class="px-2" :class="[miniVariant ? 'justify-center' : 'justify-end', { 'v-list-item--disabled': !user.is_login }]" @click="toggleMiniVariant" :disabled="!user.is_login">
                     <v-icon>mdi-chevron-{{ miniVariant ? 'right' : 'left' }}</v-icon>
                 </v-list-item>
             </template>
@@ -498,8 +506,8 @@ export default {
                     text: "appHeader.friendLinks",
                     color: "primary",
                     groups: this.sys.friends.map((friend) => ({
-                        icon: "link",
-                        href: friend.url,
+                        icon: "mdi-open-in-new",
+                        href: friend.href,
                         text: friend.text,
                         color: "primary",
                     })),
@@ -566,6 +574,9 @@ export default {
         this.stopTaskPolling();
     },
     methods: {
+        isExternalLink(url) {
+            return url && (url.startsWith('http://') || url.startsWith('https://'));
+        },
         getDefaultAvatar() {
             return window.location.origin + '/avatar/reader.png';
         },
@@ -956,11 +967,20 @@ export default {
     filter: grayscale(100%) !important;
 }
 
+.app-prepend-item {
+    min-height: 48px !important;
+    height: 48px !important;
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+}
+
 .v-list-item.justify-center {
-    padding: 12px 0 !important;
+    padding: 4px 0 !important;
     justify-content: center !important;
     transition: none !important;
     transform: none !important;
+    min-height: 48px !important;
+    height: 48px !important;
 }
 
 .v-list-item.justify-center .v-list-item__prepend {
