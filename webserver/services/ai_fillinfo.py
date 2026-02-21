@@ -48,6 +48,8 @@ class AIFillInfoService(AsyncService):
                 mi.comments = info.comments
             if info.category:
                 mi.set(CALIBRE_COLUMN_CATEGORY, info.category)
+            if info.authors and (not mi.authors or mi.authors[0] in ["Unknown", "佚名"]):
+                mi.authors = info.authors
 
             self.db.set_metadata(book_id, mi, ignore_errors=True)
             if info.category:
@@ -61,10 +63,11 @@ class AIFillInfoService(AsyncService):
                     )
 
             logging.info(
-                "[AIFill] Updated book id=%d: category=%s, tags=%s",
+                "[AIFill] Updated book id=%d: category=%s, tags=%s, authors=%s",
                 book_id,
                 info.category,
                 info.tags,
+                info.authors
             )
             return True
         except Exception as e:
@@ -72,21 +75,20 @@ class AIFillInfoService(AsyncService):
             return False
 
     def _should_skip(self, mi) -> bool:
-        # 如果作者是空的或者为Unknown或佚名，则认为信息不完整，为避免误判跳过处理
-        return not mi.authors or str(mi.authors[0]).strip() in ["", "Unknown", "佚名", "未知"]
+        return False
 
     @AsyncService.register_function
     def fill_one(self, book_id: int, force: bool = False) -> dict:
         try:
             mi = self.db.get_metadata(book_id, index_is_id=True)
         except Exception as e:
-            msg = _("读取书籍元数据失败 id=%d: %s") % (book_id, e)
-            logging.error("[AIFill] %s", msg)
+            msg = _("读取书籍元数据失败")
+            logging.error(f"[AIFill] Failed:{e}")
             return {"status": "fail", "msg": msg}
 
         if not force and self._should_skip(mi):
             logging.info("[AIFill] Skip book id=%d (already has complete info)", book_id)
-            return {"status": "skip", "msg": _("图书已有完整信息，跳过更新")}
+            return {"status": "skip", "msg": _("作者信息不完整，可能导致信息错误，跳过更新")}
 
         try:
             client = self._make_client()
@@ -101,7 +103,7 @@ class AIFillInfoService(AsyncService):
         )
 
         if info is None or not info.is_valid():
-            msg = _("AI 未能返回有效信息，book id=%d") % book_id
+            msg = _("AI 未能返回有效信息")
             logging.warning("[AIFill] %s", msg)
             return {"status": "fail", "msg": msg}
 

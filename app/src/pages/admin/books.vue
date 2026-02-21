@@ -42,6 +42,18 @@
                         <v-icon>mdi-tag-remove-outline</v-icon>
                         <span v-if="!$vuetify.breakpoint.xs">{{ $t('admin.books.clearRareTags') }}</span>
                     </v-btn>
+                    <v-btn
+                        :disabled="loading || scraping || books_selected.length === 0"
+                        outlined
+                        color="teal darken-1"
+                        @click="ai_fill"
+                        class="flex-shrink-0"
+                        :icon="$vuetify.breakpoint.xs"
+                        :small="$vuetify.breakpoint.xs"
+                    >
+                        <v-icon>mdi-robot</v-icon>
+                        <span v-if="!$vuetify.breakpoint.xs">{{ $t('admin.books.aiUpdate') }}</span>
+                    </v-btn>
                     <!-- 删除选中按钮紧跟在主要按钮后面 -->
                     <v-btn
                         v-if="!loading && books_selected.length > 0"
@@ -394,6 +406,8 @@
                 </v-card-actions>
             </v-card>
         </v-dialog>
+
+
 </v-card>
 </template>
 
@@ -651,6 +665,21 @@ export default {
                 // Start checking status
                 this.checkCurrentState();
             })
+        },
+
+        ai_fill() {
+            const idlist = this.getSelectedBookIds();
+            if (!idlist) return;
+            this.$backend("/admin/book/aifill", {
+                method: "POST",
+                body: JSON.stringify({ idlist }),
+            }).then((rsp) => {
+                if (rsp.err != "ok") {
+                    this.$alert("error", rsp.msg);
+                    return;
+                }
+                this.$alert("success", rsp.msg);
+            });
         },
 
         delete_book(book) {

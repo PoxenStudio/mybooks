@@ -462,6 +462,11 @@
                                 </v-chip>
                             </div>
                             <div class="tag-chips" style="margin-top: 5px;">
+                                <v-chip rounded smallF color="#003153" class="white--text"
+                                        @click="ai_fill_book" :loading="ai_filling">
+                                    <v-icon small left>mdi-robot</v-icon>
+                                    {{ $t('book.aiUpdate') }}
+                                </v-chip>
                                 <v-menu offset-y>
                                     <template v-slot:activator="{ on, attrs }">
                                         <v-chip rounded smallF color="green" class="white--text" v-bind="attrs" v-on="on" :disabled="categories.length === 0">
@@ -1150,6 +1155,7 @@ export default {
         },
         debug: false,
         loaded: false,
+        ai_filling: false,
         mail_to: "",
         kindle_sender: "",
         txt_parse_inited: false,
@@ -1656,6 +1662,22 @@ export default {
                 } else {
                     this.$alert("error", rsp.msg);
                 }
+            });
+        },
+        ai_fill_book() {
+            if (this.ai_filling) return;
+            this.ai_filling = true;
+            this.$backend("/book/" + this.book.id + "/aifill", {
+                method: "POST",
+            }).then((rsp) => {
+                if (rsp.err === "ok") {
+                    this.$alert("success", this.$t('book.aiUpdateSuccess'));
+                    location.reload();
+                } else {
+                    this.$alert("error", rsp.msg);
+                }
+            }).finally(() => {
+                this.ai_filling = false;
             });
         },
         convert_book() {

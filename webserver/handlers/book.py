@@ -27,6 +27,7 @@ from tornado import web
 
 from webserver import loader, utils
 from webserver.services.autofill import AutoFillService
+from webserver.services.ai_fillinfo import AIFillInfoService
 from webserver.services.book_search import BookSearch
 from webserver.services.convert import ConvertService
 from webserver.services.extract import ExtractService
@@ -177,6 +178,31 @@ class BookTags(BaseHandler):
         except Exception as e:
             logging.error(f"Error updating tags for book {book_id}: {e}")
             return {"err": "internal", "msg": _(u"更新标签时发生错误，请稍后再试")}
+
+
+class BookAIFill(BaseHandler):
+    """使用 AI 同步更新单本书的分类、标签、简介和作者介绍"""
+    @js
+    @auth
+    def post(self, id):
+        book_id = int(id)
+        book = self.get_book(book_id, raise_exception=False)
+        if not book:
+            return {"err": "params.book.invalid", "msg": _(u"书籍不存在")}
+
+        if not self.is_admin() and not self.is_book_owner(book_id, self.user_id()):
+            return {"err": "user.no_permission", "msg": _(u"无权限")}
+
+        result = AIFillInfoService().fill_one(book_id, force=True)
+        status = result.get("status", "fail")
+        if status == "ok":
+            return {
+                "err": "ok",
+                "msg": _(u"AI 更新成功"),
+                "category": result.get("category", ""),
+                "tags": result.get("tags", []),
+            }
+        return {"err": "ai.fill.failed", "msg": result.get("msg", _(u"AI 更新失败"))}
 
 
 class BookUpdateTags(BaseHandler):
@@ -2664,6 +2690,7 @@ def routes():
         (r"/api/reading/stats", BookReadingStats),
         (r"/api/library/stats", LibraryStats),
         (r"/api/book/([0-9]+)/tags", BookTags),
+        (r"/api/book/([0-9]+)/aifill", BookAIFill),
         (r"/api/book/update_tags", BookUpdateTags),
         (r"/api/book/category", BookCategoryBatch),
         (r"/api/book/([0-9]+)/category", BookCategory),

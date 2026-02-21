@@ -67,7 +67,7 @@ settings = {
     "ENABLE_PHYSICAL_BOOKS": True,
     "ALLOW_GUEST_UPLOAD": False,
     "AI_ENABLED": False,
-    "AI_MODEL": "qwen3:0.6b",
+    "AI_MODEL": "deepseek-chat",
     "AI_MCP_TOKEN": "",
     "AI_DEEPSEEK_API_KEY": "",
     "MAIN_PAGE_RANDOM_COUNT": 12,

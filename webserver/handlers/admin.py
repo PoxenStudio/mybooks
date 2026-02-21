@@ -18,6 +18,7 @@ import tornado
 
 from webserver import loader
 from webserver.services.autofill import AutoFillService
+from webserver.services.ai_fillinfo import AIFillInfoService
 from webserver.services.mail import MailService
 from webserver.services.book_barn import BookBarnClient
 from webserver.services.background_service import BackgroundService, BackgroundTask
@@ -629,6 +630,48 @@ class AdminBookFill(BaseHandler):
         return {"err": "ok", "msg": _(u"任务启动成功！请耐心等待，稍后再来刷新页面")}
 
 
+class AdminBookAIFill(BaseHandler):
+    """Admin API: 批量使用 AI 更新指定书籍的信息"""
+    @js
+    @is_admin
+    def get(self):
+        status = AIFillInfoService().status()
+        return {
+            "err": "ok",
+            "status": {
+                "total": status["count_total"],
+                "skip": status["count_skip"],
+                "done": status["count_done"],
+                "fail": status["count_fail"],
+                "running": status["is_running"],
+            },
+        }
+
+    @js
+    @is_admin
+    def post(self):
+        req = tornado.escape.json_decode(self.request.body)
+        idlist = req.get("idlist", [])
+        if not idlist:
+            return {"err": "params.error", "msg": _(u"参数错误")}
+
+        filling_status = AIFillInfoService().status()
+        if filling_status["is_running"]:
+            return {"err": "task.running", "msg": _(u"有 AI 任务正在运行中，请稍后再试")}
+
+        if idlist == "all":
+            idlist = list(self.calibre_db_cache.all_book_ids())
+        elif isinstance(idlist, list):
+            for bid in idlist:
+                if not isinstance(bid, int):
+                    return {"err": "params.error.idlist", "msg": _(u"idlist参数错误")}
+        else:
+            return {"err": "params.error.idlist", "msg": _(u"idlist参数错误")}
+
+        AIFillInfoService().fill_all(idlist)
+        return {"err": "ok", "msg": _(u"AI 更新任务已启动，请耐心等待")}
+
+
 class AdminBookbarnTokenApply(BaseHandler):
     @js
     @is_admin
@@ -756,6 +799,7 @@ def routes():
         (r"/api/admin/testmail", AdminTestMail),
         (r"/api/admin/book/list", AdminBookList),
         (r"/api/admin/book/fill", AdminBookFill),
+        (r"/api/admin/book/aifill", AdminBookAIFill),
         (r"/api/admin/bookbarn/token/apply", AdminBookbarnTokenApply),
         (r"/api/admin/books/delete", AdminDeleteBooks),
         (r"/api/admin/audio/test", AudioTestConnection),
