@@ -492,10 +492,25 @@ export default {
                 { icon: "mdi-star-shooting", href: "/rating", text: "appHeader.rating", color: "orange"},
             ];
 
+            const friend_links = [
+                {
+                    icon: "link",
+                    text: "appHeader.friendLinks",
+                    color: "primary",
+                    groups: this.sys.friends.map((friend) => ({
+                        icon: "link",
+                        href: friend.url,
+                        text: friend.text,
+                        color: "primary",
+                    })),
+                }
+            ];
+
             return home_links
                 .concat(this.user.is_admin ? admin_links : [])
                 .concat(this.user.is_login ? reading_links : [])
                 .concat(nav_links)
+                .concat(this.sys.friends.length > 0 ? friend_links : [])
         },
     },
     mounted() {
@@ -888,7 +903,8 @@ export default {
 
 .app-navigation-drawer .v-list-item--icon-only {
     justify-content: center;
-    padding: 12px 0 !important;
+    padding: 2px 0 !important;
+    min-height: 36px !important;
 }
 
 .app-navigation-drawer .v-list-item--icon-only .v-icon {
