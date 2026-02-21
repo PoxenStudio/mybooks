@@ -51,7 +51,7 @@
                         :key="'group-' + idx"
                     >
                         <template v-slot:activator>
-                            <v-list-item dense @click="toggleGroup(idx, item)">
+                            <v-list-item dense>
                                 <v-list-item-action class="mt-1 mb-1 mr-2" dense>
                                     <v-icon class="pa-0 ma-0" :color="item.color || ''">{{ item.icon }}</v-icon>
                                 </v-list-item-action>

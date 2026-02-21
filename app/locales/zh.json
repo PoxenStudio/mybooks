@@ -616,7 +616,7 @@
     },
     "appHeader": {
         "home": "首页",
-        "admin": "管理",
+        "admin": "系统管理",
         "systemSettings": "系统设置",
         "userManagement": "用户管理",
         "bookManagement": "图书管理",
