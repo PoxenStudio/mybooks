@@ -661,7 +661,8 @@
         "taskTypeAutofill": "图书信息更新",
         "taskTypeScan": "批量导入图书",
         "taskTypeAudio": "音频转换",
-        "taskTypeConvert": "格式转换"
+        "taskTypeConvert": "格式转换",
+        "taskTypeAIFill": "AI更新信息"
     },
     "bookCards": {
         "browseDetails": "点击浏览详情"

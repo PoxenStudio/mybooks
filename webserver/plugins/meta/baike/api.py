@@ -1,11 +1,5 @@
 #!/usr/bin/python3
 # -*- coding: UTF-8 -*-
-
-"""
-This is the standard runscript for all of calibre's tools.
-Do not modify it unless you know what you are doing.
-"""
-
 import logging
 import re
 import requests

@@ -9,6 +9,7 @@ from webserver.assistant.book_ai_client import AIBookInfo, BookAIClient
 from webserver.constants import CALIBRE_COLUMN_CATEGORY
 from webserver.services import AsyncService
 from webserver.services.background_service import BackgroundService, BackgroundTask
+from webserver.plugins.meta.douban import str2date
 
 CONF = loader.get_settings()
 
@@ -50,6 +51,8 @@ class AIFillInfoService(AsyncService):
                 mi.set(CALIBRE_COLUMN_CATEGORY, info.category)
             if info.authors:
                 mi.authors = mi.authors = [utils.super_strip(a) for a in info.authors]
+            if info.pubdate:
+                mi.pubdate = str2date(info.pubdate)
 
             self.db.set_metadata(book_id, mi, ignore_errors=True, force_changes=True)
             if info.category:

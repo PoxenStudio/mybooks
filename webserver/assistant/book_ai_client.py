@@ -16,6 +16,7 @@ class AIBookInfo:
     category: str = ""
     tags: List[str] = field(default_factory=list)
     authors: List[str] = field(default_factory=list)
+    pubdate: str = ""
     summary: str = ""
     author_intro: str = ""
 
@@ -23,7 +24,7 @@ class AIBookInfo:
     def comments(self) -> str:
         parts = []
         if self.summary:
-            parts.append(f"<p><b>内容简介</b></p><p>{self.summary}</p>")
+            parts.append(f"<p>{self.summary}</p>")
         if self.author_intro:
             parts.append(f"<p><b>作者简介</b></p><p>{self.author_intro}</p>")
         return "\n".join(parts)
@@ -46,6 +47,7 @@ class BookAIClient:
         '  "category": "书籍分类（单个，如：小说、历史、科技、文学、传记、哲学、艺术、经济等）",\n'
         '  "tags": ["标签1", "标签2"],\n'
         '  "authors": ["作者1", "作者2"],\n'
+        '  "pubdate": "出版年月（如：2026-05或2026）",\n'
         '  "summary": "书籍主要内容总结（800字以内）",\n'
         '  "author_intro": "作者介绍（200字以内，无充分信息时留空字符串）"\n'
         "}"
@@ -97,6 +99,13 @@ class BookAIClient:
             result_tags = getattr(book, "tags", []) or []
             if result_tags:
                 block.append(f"标签：{', '.join(str(t) for t in result_tags[:8])}")
+            result_pub_date = getattr(book, "pubdate", None)
+            if result_pub_date:
+                try:
+                    pub_date_str = result_pub_date.strftime("%Y-%m")
+                except Exception:
+                    pub_date_str = str(result_pub_date)[:7]
+                block.append(f"出版日期：{pub_date_str}")
             result_comments = getattr(book, "comments", "") or ""
             if result_comments:
                 block.append(f"简介：{result_comments[:500]}")
@@ -154,6 +163,7 @@ class BookAIClient:
                 authors=[str(a).strip() for a in data.get("authors", []) if str(a).strip()],
                 summary=str(data.get("summary", "")).strip(),
                 author_intro=str(data.get("author_intro", "")).strip(),
+                pubdate=str(data.get("pubdate", "")).strip(),
             )
             logging.info(
                 "[BookAI] Got info for '%s': category=%s, tags=%s, authors=%s",
