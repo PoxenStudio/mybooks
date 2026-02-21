@@ -815,14 +815,14 @@ export default {
 }
 
 .app-navigation-drawer ::-webkit-scrollbar-thumb {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.55) 0%, rgba(118, 75, 162, 0.55) 100%);
     border-radius: 10px;
     transition: all 0.3s ease;
 }
 
 .app-navigation-drawer ::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
-    box-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
+    background: linear-gradient(135deg, rgba(118, 75, 162, 0.55) 0%, rgba(102, 126, 234, 0.55) 100%);
+    box-shadow: 0 0 10px rgba(102, 126, 234, 0.425);
 }
 
 .app-navigation-drawer ::-webkit-scrollbar-corner {
