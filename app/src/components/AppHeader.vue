@@ -812,7 +812,7 @@ export default {
 
 <style>
 .avatar-round {
-    border-radius: 50% !important;
+    border-radius: 55% !important;
     overflow: hidden;
 }
 
@@ -821,6 +821,7 @@ export default {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    padding: 2px;
 }
 
 .app-navigation-drawer {
