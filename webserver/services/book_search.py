@@ -6,7 +6,7 @@ import re
 from gettext import gettext as _
 
 from webserver import loader
-from webserver.plugins.meta import baike, douban, youshu
+from webserver.plugins.meta import baike, douban
 
 CONF = loader.get_settings()
 
