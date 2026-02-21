@@ -3048,8 +3048,6 @@ class Reader {
 		const theme = this.settings.theme;
 		const fontName = this.settings.styles.font === "default" ? "" : this.settings.styles.font;
 
-		console.log(`Applying styles - Theme: ${theme}, Font: ${fontName || "default"}`);
-
 		// Load font first if needed, then apply styles
 		const applyStylesWithFont = (actualFontName) => {
 			let contentStyles = {};
@@ -3135,8 +3133,6 @@ class Reader {
 			if (actualFontName) {
 				this.injectFontWithRetry(actualFontName);
 			}
-
-			console.log(`Applied styles with theme: ${theme}, font: ${actualFontName || "default"}`);
 		};
 
 		if (fontName) {
@@ -3156,7 +3152,6 @@ class Reader {
 			const iframes = document.querySelectorAll('#viewer iframe');
 
 			if (iframes.length === 0 && attempts < maxRetries) {
-				console.log(`No iframes found, retrying... (${attempts}/${maxRetries})`);
 				setTimeout(tryInject, 200);
 				return;
 			}
@@ -3196,7 +3191,6 @@ class Reader {
 
 						fontStyleElement.textContent = fontFaceCSS;
 						injectedCount++;
-						console.log(`Injected font ${fontName} into iframe ${injectedCount}`);
 					}
 				} catch (error) {
 					console.warn(`Failed to inject font into iframe:`, error);
@@ -3204,7 +3198,6 @@ class Reader {
 			});
 
 			if (injectedCount === 0 && attempts < maxRetries) {
-				console.log(`Font injection failed, retrying... (${attempts}/${maxRetries})`);
 				setTimeout(tryInject, 200);
 			}
 		};
@@ -3252,34 +3245,34 @@ class Reader {
 	 */
 	cfgInit(bookPath, settings) {
 
-		this.entryKey = md5(bookPath).toString();
-		this.settings = {
-			bookPath: bookPath,
-			assetsPath: "",
-			arrows: this.isMobile ? "none" : "content", // none | content | toolbar
-			manager: this.isMobile ? "continuous" : "default",
-			restore: true,
-			history: true,
-			openbook: this.storage.indexedDB ? true : false,
-			language: "zh",
-			theme: "light",
-			sectionId: undefined,
-			bookmarks: [],   // array | false
-			annotations: [], // array | false
-			flow: "paginated", // paginated | scrolled
-			spread: {
-				mod: "auto", // auto | none
-				min: 800
-			},
-			styles: {
-				font: "default",
-				fontSize: 100
-			},
-			pagination: undefined, // not implemented
-			fullscreen: document.fullscreenEnabled
-		};
+			this.entryKey = md5(bookPath).toString();
+			this.settings = {
+				bookPath: bookPath,
+				assetsPath: "",
+				arrows: this.isMobile ? "none" : "content", // none | content | toolbar
+				manager: "default", // Change to "default" for mobile too to fix multiple page flip issue
+				restore: true,
+				history: true,
+				openbook: this.storage.indexedDB ? true : false,
+				language: "zh",
+				theme: "light",
+				sectionId: undefined,
+				bookmarks: [],   // array | false
+				annotations: [], // array | false
+				flow: "paginated", // paginated | scrolled
+				spread: {
+					mod: "auto", // auto | none
+					min: 800
+				},
+				styles: {
+					font: "default",
+					fontSize: 100
+				},
+				pagination: undefined, // not implemented
+				fullscreen: document.fullscreenEnabled
+			};
 
-		extend(settings || {}, this.settings);
+			extend(settings || {}, this.settings);
 
 		if (this.settings.restore) {
 			this.applySavedSettings(settings || {});
