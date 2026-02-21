@@ -120,7 +120,7 @@
         <v-app-bar class="px-0" :color="appBarColor" dense dark app fixed extension-height="64">
             <template v-if="btn_search && $vuetify.breakpoint.xs" #extension>
                 <v-container fluid>
-                    <v-form @submit.prevent="do_search">
+                    <v-form @submit.prevent="doSearch">
                         <v-row>
                             <v-col cols="9">
                                 <v-text-field
@@ -135,7 +135,7 @@
                                 ></v-text-field>
                             </v-col>
                             <v-col cols="3">
-                                <v-btn dark rounded @click="do_mobile_search" color="primary" :disabled="ai_thinking">{{ $t('appHeader.search') }}</v-btn>
+                                <v-btn dark rounded @click="doSearch" color="primary" :disabled="ai_thinking">{{ $t('appHeader.search') }}</v-btn>
                             </v-col>
                         </v-row>
                     </v-form>
@@ -154,7 +154,7 @@
                     solo-inverted
                     hide-details
                     prepend-inner-icon="search"
-                    @keyup.enter="do_search"
+                    @keyup.enter="doSearch"
                     @focus="isFocused = true"
                     @blur="isFocused = false"
                     ref="search"
@@ -166,7 +166,7 @@
                     :disabled="ai_thinking"
                 >
                     <template #append>
-                        <v-btn v-if="isAiFeatureEnabled" :color="isFocused ? (ai_enabled ? 'orange' : 'grey') : 'transparent'" class="black--text" rounded @click="toggle_ai">AI</v-btn>
+                        <v-btn v-if="isAiFeatureEnabled" :color="isFocused ? (ai_enabled ? 'orange' : 'grey') : 'transparent'" class="black--text" rounded @click="toggleAi">AI</v-btn>
                     </template>
                 </v-text-field>
                 <v-spacer></v-spacer>
@@ -239,7 +239,7 @@
                                     </v-list-item-content>
 
                                     <v-list-item-action>
-                                        <v-btn rounded color='primary' @click.prevent="hidemsg(idx, msg.id)">{{ $t('appHeader.ok') }}</v-btn>
+                                        <v-btn rounded color='primary' @click.prevent="hideMsg(idx, msg.id)">{{ $t('appHeader.ok') }}</v-btn>
                                     </v-list-item-action>
                                 </v-list-item>
                             </v-list>
@@ -249,13 +249,13 @@
                     <v-menu v-model="showUserMenu" offset-y right>
                         <template v-slot:activator="{ on }">
                             <v-btn v-on="on" class="mr-2" icon large outlined>
-                                <v-avatar size="32px"><img :src="user.avatar" @error="handleToolbarAvatarError" ref="toolbarAvatar" /></v-avatar>
+                                <v-avatar size="32px"><img :src="user.avatar" @error="handleAvatarError" ref="toolbarAvatar" /></v-avatar>
                             </v-btn>
                         </template>
                         <v-list min-width="240">
                             <v-list-item>
                                 <v-list-item-avatar>
-                                    <img :src="user.avatar" @error="handleMenuAvatarError" ref="menuAvatar" />
+                                    <img :src="user.avatar" @error="handleAvatarError" ref="menuAvatar" />
                                 </v-list-item-avatar>
                                 <v-list-item-content>
                                     <v-list-item-title> {{ user.nickname }} </v-list-item-title>
@@ -306,7 +306,7 @@
                     <v-icon left color="white">mdi-robot</v-icon>
                     {{ $t('appHeader.aiAssistant') }}
                     <v-spacer></v-spacer>
-                    <v-btn icon dark @click="close_ai">
+                    <v-btn icon dark @click="closeAi">
                         <v-icon>mdi-close</v-icon>
                     </v-btn>
                 </v-card-title>
@@ -357,7 +357,7 @@
                         dense
                         hide-details
                         :disabled="ai_thinking"
-                        @keyup.enter="send_ai_message"
+                        @keyup.enter="sendAiMessage"
                         class="mr-2"
                         ref="aiInput"
                     >
@@ -367,7 +367,7 @@
                         color="primary"
                         :loading="ai_thinking"
                         :disabled="!ai_input.trim() || ai_thinking"
-                        @click="send_ai_message"
+                        @click="sendAiMessage"
                         large
                     >
                         <v-icon>mdi-send</v-icon>
@@ -436,16 +436,16 @@ export default {
             return false;
         },
         items: function () {
-            var home_links = [
+            const home_links = [
                 { icon: "home", href: "/", text: "appHeader.home", color:"primary" },
             ].concat(this.user.is_login ? [
                 { icon: "mdi-account-cog", href: "/user/usersettings", text: "appHeader.user_center", color: "primary" },
             ] : []);
-            var admin_links = [
+            const admin_links = [
                 {
                     icon: "mdi-cog",
                     text: "appHeader.admin",
-                    expand: this.$route.path.indexOf("/admin/") == 0,
+                    expand: this.isPathMatch("/admin/"),
                     color: "primary",
                     groups: [
                         { icon: "mdi-cog", href: "/admin/settings", text: "appHeader.systemSettings", color: "primary"},
@@ -455,11 +455,11 @@ export default {
                     ],
                 },
             ];
-            var reading_links = [
+            const reading_links = [
                 {
                     icon: "mdi-book-open-page-variant-outline",
                     text: "appHeader.readingInfo",
-                    expand: this.$route.path.indexOf("/reading/") == 0 || this.$route.path.indexOf("/favorites/") == 0 || this.$route.path.indexOf("/wants/") == 0 || this.$route.path.indexOf("/read-done/") == 0,
+                    expand: this.isPathMatch("/reading/") || this.isPathMatch("/favorites/") || this.isPathMatch("/wants/") || this.isPathMatch("/read-done/"),
                     color: "primary",
                     groups: [
                         { icon: "mdi-heart", href: "/favorites", text: "appHeader.favorites", color: "red" },
@@ -469,7 +469,7 @@ export default {
                     ]
                 }
             ];
-            var nav_links = [
+            const nav_links = [
                 { icon: "mdi-headphones", href: "/audiobooks", text: "appHeader.audioBooks", count: this.sys.audiobooks, color: "purple"},
                 { icon: "category", href: "/categories", text: "appHeader.categoryBrowse", color: "green" },
                 { icon: "mdi-account-group", href: "/author", text: "appHeader.authors", count: this.sys.authors, color: "primary"},
@@ -491,7 +491,7 @@ export default {
         },
     },
     mounted() {
-        this.visit_admin_pages = this.$route.path.indexOf("/admin/") == 0;
+        this.visit_admin_pages = this.isPathMatch("/admin/");
         this.sidebar = this.$vuetify.breakpoint.lgAndUp;
         this.$backend("/user/info").then((rsp) => {
             this.err = rsp.err;
@@ -514,11 +514,7 @@ export default {
             }
             if (process.client && rsp.sys.theme !== '') {
                 localStorage.setItem('site_theme', this.sys.theme);
-                if (rsp.sys.theme === 'dark') {
-                    this.$vuetify.theme.dark = true;
-                } else {
-                    this.$vuetify.theme.dark = false;
-                }
+                this.$vuetify.theme.dark = rsp.sys.theme === 'dark';
             }
             if (rsp.sys.footer === '') {
                 rsp.sys.footer = this.$t('footer.base_message');
@@ -539,7 +535,7 @@ export default {
         this.startTaskPolling();
     },
     beforeDestroy() {
-        this.close_ai();
+        this.closeAi();
         this.stopTaskPolling();
     },
     methods: {
@@ -547,12 +543,6 @@ export default {
             return window.location.origin + '/avatar/reader.png';
         },
         handleAvatarError(event) {
-            event.target.src = this.getDefaultAvatar();
-        },
-        handleToolbarAvatarError(event) {
-            event.target.src = this.getDefaultAvatar();
-        },
-        handleMenuAvatarError(event) {
             event.target.src = this.getDefaultAvatar();
         },
         toggleMiniVariant() {
@@ -565,28 +555,28 @@ export default {
         },
         handleMouseLeave() {
             if (this.miniVariant) {
-                this.sidebar = true;
+                this.sidebar = false;
             }
         },
-        toggle_ai() {
+        toggleAi() {
             if (!this.user.is_login) {
                 alert("请先登录以使用AI功能");
                 return;
             }
             this.ai_enabled = !this.ai_enabled;
             if (this.ai_enabled) {
-                this.connect_ai();
+                this.connectAi();
                 this.$nextTick(() => {
                     if (this.$refs.aiInput) {
                         this.$refs.aiInput.focus();
                     }
-                    this.scroll_ai_bottom();
+                    this.scrollAiBottom();
                 });
             } else {
-                this.close_ai();
+                this.closeAi();
             }
         },
-        connect_ai() {
+        connectAi() {
             if (this.ai_ws) {
                 console.log('WebSocket already connected');
                 return;
@@ -608,12 +598,12 @@ export default {
                 if (data.type === 'start') {
                     this.ai_thinking = true;
                     this.ai_messages.push({ role: 'assistant', content: '', status: '正在思考...', streaming: true });
-                    this.scroll_ai_bottom();
+                    this.scrollAiBottom();
                 } else if (data.type === 'content') {
                     const lastMsg = this.ai_messages[this.ai_messages.length - 1];
                     if (lastMsg) {
                         lastMsg.content += data.content;
-                        this.scroll_ai_bottom();
+                        this.scrollAiBottom();
                     }
                 } else if (data.type === 'status') {
                     if (this.ai_messages.length > 0) {
@@ -629,11 +619,11 @@ export default {
                         lastMsg.streaming = false;
                         lastMsg.status = '';
                     }
-                    this.scroll_ai_bottom();
+                    this.scrollAiBottom();
                 } else if (data.type === 'error') {
                     this.ai_thinking = false;
                     this.ai_messages.push({ role: 'assistant', content: '出错了: ' + data.content, status: 'error' });
-                    this.scroll_ai_bottom();
+                    this.scrollAiBottom();
                 }
             };
 
@@ -652,7 +642,7 @@ export default {
                 this.ai_thinking = false;
             };
         },
-        close_ai() {
+        closeAi() {
             if (this.ai_ws) {
                 console.log('Closing AI WebSocket');
                 this.ai_ws.close();
@@ -660,7 +650,7 @@ export default {
             }
             this.ai_enabled = false;
         },
-        send_ai_message() {
+        sendAiMessage() {
             if (!this.ai_input.trim() || this.ai_thinking || !this.ai_ws) return;
 
             const message = this.ai_input.trim();
@@ -669,12 +659,12 @@ export default {
             this.ai_messages.push({ role: 'user', content: message });
 
             this.$nextTick(() => {
-                this.scroll_ai_bottom();
+                this.scrollAiBottom();
             });
 
             this.ai_ws.send(JSON.stringify({ type: 'query', content: message }));
         },
-        scroll_ai_bottom() {
+        scrollAiBottom() {
             this.$nextTick(() => {
                 const container = this.$refs.chatMessages;
                 if (container) {
@@ -684,33 +674,25 @@ export default {
         },
         chunk: function (arr, len) {
             if (!arr || !Array.isArray(arr)) return [];
-            var e = arr.length;
-            var r = [];
-            for (var idx = 0; idx < e; idx += len) {
-                var n = Math.min(idx + len, e);
+            const e = arr.length;
+            const r = [];
+            for (let idx = 0; idx < e; idx += len) {
+                const n = Math.min(idx + len, e);
                 r.push(arr.slice(idx, n));
             }
             return r;
         },
-        do_mobile_search: function () {
-            if (this.search.trim() != "") {
+        doSearch() {
+            if (this.search.trim() !== "") {
                 this.$router.push("/search?name=" + this.search.trim());
             } else {
-                if (this.$refs.mobile_search) {
-                    this.$refs.mobile_search.focus();
+                const ref = this.$refs.mobile_search || this.$refs.search;
+                if (ref) {
+                    ref.focus();
                 }
             }
         },
-        do_search: function () {
-            if (this.search.trim() != "") {
-                this.$router.push("/search?name=" + this.search.trim());
-            } else {
-                if (this.$refs.search) {
-                    this.$refs.search.focus();
-                }
-            }
-        },
-        hidemsg: function (idx, msgid) {
+        hideMsg(idx, msgid) {
             this.$backend("/user/messages", {
                 method: "POST",
                 body: JSON.stringify({ id: msgid }),
@@ -778,6 +760,9 @@ export default {
         handleMiniVariantGroupClick(idx, item) {
             this.miniVariant = false;
             this.$set(this.expandedGroups, idx, true);
+        },
+        isPathMatch(path) {
+            return this.$route.path.indexOf(path) === 0;
         },
     },
 };
