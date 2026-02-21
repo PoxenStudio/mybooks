@@ -5,7 +5,7 @@
             app
             :width="240"
             :mini-variant-width="64"
-            :mini-variant="miniVariant"
+            :mini-variant="miniVariant && user.is_login"
             :color="drawerColor"
             :clipped="false"
             class="app-navigation-drawer"
@@ -13,17 +13,37 @@
             @mouseleave="handleMouseLeave"
         >
             <template v-slot:prepend>
-                <v-list-item class="px-2">
-                    <v-list-item-avatar v-if="user.is_login" @click.stop="showUserMenu = true">
-                        <img :src="user.avatar" @error="handleAvatarError" ref="drawerAvatar" />
-                    </v-list-item-avatar>
-                    <v-avatar v-else color="grey" size="40">
+                <v-menu v-model="showUserMenu" offset-y v-if="user.is_login">
+                    <template v-slot:activator="{ on }">
+                        <v-list-item class="px-2" v-on="on">
+                            <v-list-item-avatar>
+                                <img :src="user.avatar" @error="handleAvatarError" ref="drawerAvatar" />
+                            </v-list-item-avatar>
+                            <v-list-item-content v-if="!miniVariant">
+                                <v-list-item-title>{{ user.nickname }}</v-list-item-title>
+                                <v-list-item-subtitle>{{ user.email }}</v-list-item-subtitle>
+                            </v-list-item-content>
+                        </v-list-item>
+                    </template>
+                    <v-list min-width="240">
+                        <v-list-item to="/soledbooks">
+                            <v-list-item-action><v-icon>mdi-shield-account</v-icon></v-list-item-action>
+                            <v-list-item-title> {{ $t('appHeader.soledBooks') }} </v-list-item-title>
+                        </v-list-item>
+                        <v-list-item to="/logout">
+                            <v-list-item-action><v-icon>exit_to_app</v-icon></v-list-item-action>
+                            <v-list-item-title> {{ $t('appHeader.logout') }} </v-list-item-title>
+                        </v-list-item>
+                    </v-list>
+                </v-menu>
+                <v-list-item class="px-2" v-else>
+                    <v-avatar color="grey" size="40">
                         <v-icon>mdi-account</v-icon>
                     </v-avatar>
-                    <v-list-item-content v-if="!miniVariant">
-                        <v-list-item-title v-if="user.is_login">{{ user.nickname }}</v-list-item-title>
-                        <v-list-item-subtitle v-if="user.is_login">{{ user.email }}</v-list-item-subtitle>
-                        <v-list-item-title v-else>{{ $t('appHeader.please_login') }}</v-list-item-title>
+                    <v-list-item-content>
+                        <v-btn to="/login" color="indigo accent-4" class="mt-1">
+                            <v-icon left>account_circle</v-icon> {{ $t('appHeader.please_login') }}
+                        </v-btn>
                     </v-list-item-content>
                 </v-list-item>
                 <v-divider></v-divider>
@@ -174,129 +194,76 @@
 
             <v-btn v-else icon class="d-flex d-sm-none" @click="btn_search = !btn_search"> <v-icon>search</v-icon> </v-btn>
 
-            <template v-if="err == 'ok'">
-                <template v-if="user.is_login">
-                    <v-menu offset-y right :close-on-content-click="false" v-if="runningTasks.length > 0">
-                        <template v-slot:activator="{ on }">
-                            <v-btn v-on="on" icon class="mr-2" width="48px" height="48px">
-                                <v-img src="/icons/running.svg" style="margin:8px 8px;" width="32px" height="32px"></v-img>
-                            </v-btn>
-                        </template>
-                        <v-card width="380">
-                            <v-card-title class="py-2">
-                                <span>{{ $t('appHeader.backgroundTasks') }}</span>
-                            </v-card-title>
-                            <v-list three-line dense width="380">
-                                <v-list-item v-for="task in runningTasks" :key="task.id">
-                                    <v-list-item-content>
-                                        <v-list-item-title class="body-2 font-weight-bold">
-                                            {{ getTaskTypeLabel(task.service_type) }}
-                                        </v-list-item-title>
-                                        <v-list-item-subtitle class="caption mt-1">
-                                            {{ task.service_item }}
-                                        </v-list-item-subtitle>
-                                        <v-list-item-subtitle class="mt-2">
-                                            <v-progress-linear
-                                                :value="getTaskProgress(task)"
-                                                color="primary"
-                                                height="6"
-                                                rounded
-                                            ></v-progress-linear>
-                                            <span class="caption mt-1">{{ getTaskProgress(task) }}%</span>
-                                        </v-list-item-subtitle>
-                                    </v-list-item-content>
-                                </v-list-item>
-                            </v-list>
-                        </v-card>
-                    </v-menu>
-
-                    <v-menu offset-y right :close-on-content-click="false" v-if="messages.length > 0">
-                        <template v-slot:activator="{ on }">
-                            <v-btn v-on="on" icon color="yellow"> <v-icon class="blink">notifications</v-icon> </v-btn>
-                        </template>
-                        <v-card :width="$vuetify.breakpoint.smAndUp ? 400 : 300">
-                            <v-card-title class="py-2">
-                                <span>{{ $t('appHeader.message_notification') }}</span>
-                                <v-spacer></v-spacer>
-                                <v-btn rounded color='error' @click="clearAllMessages" style="color: white;" v-if="messages.length > 3">
-                                    <v-icon left>mdi-delete-sweep</v-icon>
-                                    {{ $t('appHeader.clear_messages') }}
-                                </v-btn>
-                            </v-card-title>
-                            <v-list three-line dense max-width="400" min-width="300">
-                                <v-list-item v-for="(msg, idx) in messages" :key="msg.id">
-                                    <v-list-item-avatar>
-                                        <v-icon large color="green" v-if="msg.status == 'success'">mdi-information</v-icon>
-                                        <v-icon large color="red" v-else>mdi-alert</v-icon>
-                                    </v-list-item-avatar>
-
-                                    <v-list-item-content>
-                                        <p class="body-2">
-                                            {{ msg.data.message }}
-                                            <br />
-                                            <span>{{ msg.create_time }}</span>
-                                        </p>
-                                    </v-list-item-content>
-
-                                    <v-list-item-action>
-                                        <v-btn rounded color='primary' @click.prevent="hideMsg(idx, msg.id)">{{ $t('appHeader.ok') }}</v-btn>
-                                    </v-list-item-action>
-                                </v-list-item>
-                            </v-list>
-                        </v-card>
-                    </v-menu>
-
-                    <v-menu v-model="showUserMenu" offset-y right>
-                        <template v-slot:activator="{ on }">
-                            <v-btn v-on="on" class="mr-2" icon large outlined>
-                                <v-avatar size="32px"><img :src="user.avatar" @error="handleAvatarError" ref="toolbarAvatar" /></v-avatar>
-                            </v-btn>
-                        </template>
-                        <v-list min-width="240">
-                            <v-list-item>
-                                <v-list-item-avatar>
-                                    <img :src="user.avatar" @error="handleAvatarError" ref="menuAvatar" />
-                                </v-list-item-avatar>
+            <template v-if="err == 'ok' && user.is_login">
+                <v-menu offset-y right :close-on-content-click="false" v-if="runningTasks.length > 0">
+                    <template v-slot:activator="{ on }">
+                        <v-btn v-on="on" icon class="mr-2" width="48px" height="48px">
+                            <v-img src="/icons/running.svg" style="margin:8px 8px;" width="32px" height="32px"></v-img>
+                        </v-btn>
+                    </template>
+                    <v-card width="380">
+                        <v-card-title class="py-2">
+                            <span>{{ $t('appHeader.backgroundTasks') }}</span>
+                        </v-card-title>
+                        <v-list three-line dense width="380">
+                            <v-list-item v-for="task in runningTasks" :key="task.id">
                                 <v-list-item-content>
-                                    <v-list-item-title> {{ user.nickname }} </v-list-item-title>
-                                    <v-list-item-subtitle> {{ user.email }} </v-list-item-subtitle>
+                                    <v-list-item-title class="body-2 font-weight-bold">
+                                        {{ getTaskTypeLabel(task.service_type) }}
+                                    </v-list-item-title>
+                                    <v-list-item-subtitle class="caption mt-1">
+                                        {{ task.service_item }}
+                                    </v-list-item-subtitle>
+                                    <v-list-item-subtitle class="mt-2">
+                                        <v-progress-linear
+                                            :value="getTaskProgress(task)"
+                                            color="primary"
+                                            height="6"
+                                            rounded
+                                        ></v-progress-linear>
+                                        <span class="caption mt-1">{{ getTaskProgress(task) }}%</span>
+                                    </v-list-item-subtitle>
                                 </v-list-item-content>
                             </v-list-item>
-                            <v-divider></v-divider>
-                            <v-list-item to="/user/usersettings">
-                                <v-list-item-action><v-icon>contacts</v-icon></v-list-item-action>
-                                <v-list-item-title> {{ $t('appHeader.user_center') }} </v-list-item-title>
-                            </v-list-item>
-                            <v-list-item to="/user/history">
-                                <v-list-item-action><v-icon>history</v-icon></v-list-item-action>
-                                <v-list-item-title> {{ $t('appHeader.reading_history') }} </v-list-item-title>
-                            </v-list-item>
-                            <v-list-item target="_blank" href="https://github.com/PoxenStudio/talebook/issues">
-                                <v-list-item-action><v-icon>sms_failed</v-icon></v-list-item-action>
-                                <v-list-item-title> {{ $t('appHeader.feedback') }} </v-list-item-title>
-                            </v-list-item>
-                            <v-divider></v-divider>
-                            <template v-if="user.is_admin">
-                                <v-list-item to="/admin/settings">
-                                    <v-list-item-action><v-icon color="red">mdi-console</v-icon></v-list-item-action>
-                                    <v-list-item-title> {{ $t('appHeader.admin_entry') }} </v-list-item-title>
-                                </v-list-item>
-                            </template>
-                            <v-list-item to="/soledbooks">
-                                <v-list-item-action><v-icon>mdi-shield-account</v-icon></v-list-item-action>
-                                <v-list-item-title> {{ $t('appHeader.soledBooks') }} </v-list-item-title>
-                            </v-list-item>
-                            <v-list-item to="/logout">
-                                <v-list-item-action><v-icon>exit_to_app</v-icon></v-list-item-action>
-                                <v-list-item-title> {{ $t('appHeader.logout') }} </v-list-item-title>
+                        </v-list>
+                    </v-card>
+                </v-menu>
+
+                <v-menu offset-y right :close-on-content-click="false" v-if="messages.length > 0">
+                    <template v-slot:activator="{ on }">
+                        <v-btn v-on="on" icon color="yellow"> <v-icon class="blink">notifications</v-icon> </v-btn>
+                    </template>
+                    <v-card :width="$vuetify.breakpoint.smAndUp ? 400 : 300">
+                        <v-card-title class="py-2">
+                            <span>{{ $t('appHeader.message_notification') }}</span>
+                            <v-spacer></v-spacer>
+                            <v-btn rounded color='error' @click="clearAllMessages" style="color: white;" v-if="messages.length > 3">
+                                <v-icon left>mdi-delete-sweep</v-icon>
+                                {{ $t('appHeader.clear_messages') }}
+                            </v-btn>
+                        </v-card-title>
+                        <v-list three-line dense max-width="400" min-width="300">
+                            <v-list-item v-for="(msg, idx) in messages" :key="msg.id">
+                                <v-list-item-avatar>
+                                    <v-icon large color="green" v-if="msg.status == 'success'">mdi-information</v-icon>
+                                    <v-icon large color="red" v-else>mdi-alert</v-icon>
+                                </v-list-item-avatar>
+
+                                <v-list-item-content>
+                                    <p class="body-2">
+                                        {{ msg.data.message }}
+                                        <br />
+                                        <span>{{ msg.create_time }}</span>
+                                    </p>
+                                </v-list-item-content>
+
+                                <v-list-item-action>
+                                    <v-btn rounded color='primary' @click.prevent="hideMsg(idx, msg.id)">{{ $t('appHeader.ok') }}</v-btn>
+                                </v-list-item-action>
                             </v-list-item>
                         </v-list>
-                    </v-menu>
-                </template>
-
-                <v-btn v-else class="px-xs-1" to="/login" color="indigo accent-4">
-                    <v-icon class="d-none d-sm-flex">account_circle</v-icon> {{ $t('appHeader.please_login') }}
-                </v-btn>
+                    </v-card>
+                </v-menu>
             </template>
         </v-app-bar>
 
@@ -452,6 +419,7 @@ export default {
                         { icon: "mdi-account", href: "/admin/users", text: "appHeader.userManagement", color: "primary"},
                         { icon: "mdi-library-shelves", href: "/admin/books", text: "appHeader.bookManagement", color: "primary"},
                         { icon: "mdi-import", href: "/admin/imports", text: "appHeader.importBooks", color: "primary"},
+                        { icon: "sms_failed", href: "https://github.com/PoxenStudio/talebook/issues", text: "appHeader.feedback", color: "primary"},
                     ],
                 },
             ];
@@ -465,23 +433,24 @@ export default {
                         { icon: "mdi-heart", href: "/favorites", text: "appHeader.favorites", color: "red" },
                         { icon: "mdi-bookmark-plus", href: "/wants", text: "appHeader.wants", color: "orange" },
                         { icon: "mdi-book-open-page-variant", href: "/reading", text: "appHeader.reading", color: "blue" },
-                        { icon: "mdi-check-circle", href: "/read-done", text: "appHeader.readDone", color: "green" }
+                        { icon: "mdi-check-circle", href: "/read-done", text: "appHeader.readDone", color: "green" },
+                        { icon: "mdi-history", href: "/user/history", text: "appHeader.reading_history", color: "primary" },
                     ]
                 }
             ];
             const nav_links = [
-                { icon: "mdi-headphones", href: "/audiobooks", text: "appHeader.audioBooks", count: this.sys.audiobooks, color: "purple"},
                 { icon: "category", href: "/categories", text: "appHeader.categoryBrowse", color: "green" },
+                { icon: "mdi-headphones", href: "/audiobooks", text: "appHeader.audioBooks", count: this.sys.audiobooks, color: "purple"},
                 { icon: "mdi-account-group", href: "/author", text: "appHeader.authors", count: this.sys.authors, color: "primary"},
                 { icon: "mdi-home-group", href: "/publisher", text: "appHeader.publishers", count: this.sys.publishers, color: "primary"},
                 { icon: "widgets", href: "/nav", text: "appHeader.tagCategory", count: this.sys.books, color: "primary" },
                 { icon: "mdi-tag-heart", href: "/tag", text: "appHeader.tags", count: this.sys.tags, color: "green"},
+                { icon: "mdi-library-shelves", href: "/series", text: "appHeader.series", count: this.sys.series, color: "primary"},
                 { icon: "mdi-trending-up", href: "/hot", text: "appHeader.hotRanking", color: "orange"},
                 { icon: "mdi-translate", href: "/language", text: "appHeader.languages", color: "primary"},
                 { icon: "mdi-history", href: "/all", text: "appHeader.allBooks", color: "primary"},
                 { icon: "mdi-bookshelf", href: "/printbooks", text: "appHeader.physicalBooks", color: "primary"},
                 { icon: "mdi-star-shooting", href: "/rating", text: "appHeader.rating", color: "orange"},
-                { icon: "mdi-library-shelves", href: "/series", text: "appHeader.series", count: this.sys.series, color: "primary"},
             ];
 
             return home_links
@@ -492,7 +461,8 @@ export default {
     },
     mounted() {
         this.visit_admin_pages = this.isPathMatch("/admin/");
-        this.sidebar = this.$vuetify.breakpoint.lgAndUp;
+        this.sidebar = true;
+        this.miniVariant = false;
         this.$backend("/user/info").then((rsp) => {
             this.err = rsp.err;
             this.sys = rsp.sys;
@@ -523,6 +493,9 @@ export default {
             if (rsp.sys.header === '') {
                 rsp.sys.header = this.$t('appHeader.defaultHeader');
                 this.$store.commit("set_header", rsp.sys.header);
+            }
+            if (rsp.user.is_login) {
+                this.sidebar = this.$vuetify.breakpoint.lgAndUp;
             }
         });
         this.$backend("/user/messages").then((rsp) => {
