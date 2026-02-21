@@ -25,11 +25,6 @@
                         <v-list-item-subtitle v-if="user.is_login">{{ user.email }}</v-list-item-subtitle>
                         <v-list-item-title v-else>{{ $t('appHeader.please_login') }}</v-list-item-title>
                     </v-list-item-content>
-                    <v-list-item-action v-if="!miniVariant">
-                        <v-btn icon @click="toggleMiniVariant">
-                            <v-icon>mdi-chevron-left</v-icon>
-                        </v-btn>
-                    </v-list-item-action>
                 </v-list-item>
                 <v-divider></v-divider>
             </template>
@@ -38,9 +33,23 @@
                 <template v-for="(item, idx) in items">
                     <v-subheader v-if="item.heading" :key="'heading-' + idx" v-show="!miniVariant">{{ $t(item.heading) }}</v-subheader>
 
-                    <v-list-group v-else-if="item.groups && item.groups.length > 0" no-action :value="item.expand" :key="'group-' + idx" v-show="!miniVariant">
+                    <v-list-item
+                        dense
+                        v-else-if="item.groups && item.groups.length > 0 && miniVariant"
+                        :key="'item-' + idx"
+                        :class="{ 'v-list-item--icon-only': miniVariant }"
+                    >
+                        <v-icon :color="item.color || ''" size="24">{{ item.icon }}</v-icon>
+                    </v-list-item>
+
+                    <v-list-group
+                        v-else-if="item.groups && item.groups.length > 0"
+                        no-action
+                        :value="item.expand"
+                        :key="'group-' + idx"
+                    >
                         <template v-slot:activator>
-                            <v-list-item>
+                            <v-list-item dense>
                                 <v-list-item-action class="mt-1 mb-1 mr-2" dense>
                                     <v-icon class="pa-0 ma-0" :color="item.color || ''">{{ item.icon }}</v-icon>
                                 </v-list-item-action>
@@ -100,10 +109,8 @@
 
             <template v-slot:append>
                 <v-divider></v-divider>
-                <v-list-item class="px-2" @click="toggleMiniVariant">
-                    <v-icon v-if="miniVariant">mdi-chevron-right</v-icon>
-                    <v-icon v-else>mdi-chevron-left</v-icon>
-                    <span v-if="!miniVariant" class="ml-2">{{ $t('appHeader.minimize') }}</span>
+                <v-list-item class="px-2 justify-center" @click="toggleMiniVariant">
+                    <v-icon>mdi-chevron-{{ miniVariant ? 'right' : 'left' }}</v-icon>
                 </v-list-item>
             </template>
         </v-navigation-drawer>
@@ -447,7 +454,7 @@ export default {
             ];
             var reading_links = [
                 {
-                    icon: "mdi-account-group",
+                    icon: "mdi-book-open-page-variant-outline",
                     text: "appHeader.reading",
                     expand: this.$route.path.indexOf("/reading/") == 0 || this.$route.path.indexOf("/favorites/") == 0 || this.$route.path.indexOf("/wants/") == 0 || this.$route.path.indexOf("/read-done/") == 0,
                     color: "primary",
@@ -833,6 +840,41 @@ export default {
 
 .app-navigation-drawer .v-list-item--icon-only .v-icon {
     font-size: 24px;
+}
+
+.app-navigation-drawer .v-list-group {
+    padding-left: 0 !important;
+}
+
+.app-navigation-drawer .v-list-group__header {
+    padding-left: 0 !important;
+}
+
+.app-navigation-drawer .v-list-group__header > .v-list-item {
+    padding-left: 16px !important;
+    padding-right: 0 !important;
+}
+
+.app-navigation-drawer .v-list-group__header > .v-list-item > .v-list-item__prepend {
+    margin-right: 16px !important;
+    min-width: auto !important;
+}
+
+.app-navigation-drawer .v-list-group__header > .v-list-item > .v-list-item__content {
+    margin-right: 48px !important;
+}
+
+.app-navigation-drawer .v-list-group__header > .v-list-item > .v-list-item__append {
+    position: absolute !important;
+    right: 0 !important;
+}
+
+.app-navigation-drawer .v-list-group__header > .v-list-item {
+    position: relative !important;
+}
+
+.app-navigation-drawer .v-list-group__items > .v-list-item {
+    padding-left: 48px !important;
 }
 </style>
 
