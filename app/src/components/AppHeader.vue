@@ -777,6 +777,31 @@ export default {
     border-bottom-right-radius: 12px !important;
 }
 
+.app-navigation-drawer ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.app-navigation-drawer ::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 10px;
+}
+
+.app-navigation-drawer ::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 10px;
+    transition: all 0.3s ease;
+}
+
+.app-navigation-drawer ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+    box-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
+}
+
+.app-navigation-drawer ::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
 .app-navigation-drawer::before {
     content: '';
     position: absolute;
