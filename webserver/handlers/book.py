@@ -1245,8 +1245,12 @@ class BookEdit(BaseHandler):
 
         if data.get("book_count", None):
             book_cnt = data.get("book_count", 0)
-            mi.set(CALIBRE_COLUMN_PHY_COUNT, book_cnt)
-            mi.set(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_PHYSICAL)
+            if data.get("book_type", BOOK_TYPE_EBOOK) == BOOK_TYPE_PHYSICAL:
+                mi.set(CALIBRE_COLUMN_PHY_COUNT, book_cnt)
+                mi.set(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_PHYSICAL)
+            else:
+                mi.set(CALIBRE_COLUMN_PHY_COUNT, 0)
+                mi.set(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK)
             # Need to update the item too
             existing_item = self.sqlite_session.query(Item).filter(Item.book_id == bid).first()
             if existing_item:
@@ -1257,7 +1261,7 @@ class BookEdit(BaseHandler):
                 item = Item()
                 item.book_id = bid
                 item.collector_id = self.user_id()
-                item.book_type = BOOK_TYPE_PHYSICAL
+                item.book_type = data.get("book_type", BOOK_TYPE_EBOOK)
                 item.book_count = book_cnt
                 self.sqlite_session.add(item)
                 self.sqlite_session.commit()
