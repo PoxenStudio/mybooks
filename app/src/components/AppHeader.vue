@@ -151,10 +151,6 @@
                         </v-btn>
                     </template>
                     <v-list min-width="240">
-                        <v-list-item to="/soledbooks">
-                            <v-list-item-action><v-icon>mdi-shield-account</v-icon></v-list-item-action>
-                            <v-list-item-title> {{ $t('appHeader.soledBooks') }} </v-list-item-title>
-                        </v-list-item>
                         <v-list-item to="/logout">
                             <v-list-item-action><v-icon>exit_to_app</v-icon></v-list-item-action>
                             <v-list-item-title> {{ $t('appHeader.logout') }} </v-list-item-title>
@@ -352,6 +348,8 @@
 </template>
 
 <script>
+import { colors } from 'vuetify/lib';
+
 export default {
     data: () => ({
         err: "",
@@ -411,9 +409,19 @@ export default {
         items: function () {
             const home_links = [
                 { icon: "home", href: "/", text: "appHeader.home", color:"primary" },
-            ].concat(this.user.is_login ? [
-                { icon: "mdi-account-cog", href: "/user/usersettings", text: "appHeader.user_center", color: "primary" },
-            ] : []);
+            ];
+            const user_links = [
+                {
+                    icon: "mdi-account-group",
+                    text: "appHeader.user_center",
+                    color: "primary",
+                    expand: this.isPathMatch("/user/"),
+                    groups: [
+                        { icon: "mdi-account-cog", href: "/user/usersettings", text: "appHeader.user_setting", color: "primary" },
+                        { icon: "mdi-shield-account", href: "/soledbooks", text: "appHeader.soledBooks", color: "primary"},
+                    ],
+                }
+            ];
             const admin_links = [
                 {
                     icon: "mdi-cog",
@@ -444,6 +452,7 @@ export default {
                     ]
                 }
             ];
+
             const nav_links = [
                 { icon: "category", href: "/categories", text: "appHeader.categoryBrowse", color: "green" },
                 { icon: "mdi-headphones", href: "/audiobooks", text: "appHeader.audioBooks", count: this.sys.audiobooks, color: "purple"},
@@ -452,11 +461,11 @@ export default {
                 { icon: "widgets", href: "/nav", text: "appHeader.tagCategory", count: this.sys.books, color: "primary" },
                 { icon: "mdi-tag-heart", href: "/tag", text: "appHeader.tags", count: this.sys.tags, color: "green"},
                 { icon: "mdi-library-shelves", href: "/series", text: "appHeader.series", count: this.sys.series, color: "primary"},
-                { icon: "mdi-trending-up", href: "/hot", text: "appHeader.hotRanking", color: "orange"},
                 { icon: "mdi-translate", href: "/language", text: "appHeader.languages", color: "primary"},
                 { icon: "mdi-history", href: "/all", text: "appHeader.allBooks", color: "primary"},
                 { icon: "mdi-bookshelf", href: "/printbooks", text: "appHeader.physicalBooks", color: "primary"},
                 { icon: "mdi-star-shooting", href: "/rating", text: "appHeader.rating", color: "orange"},
+                { icon: "mdi-trending-up", href: "/hot", text: "appHeader.hotRanking", color: "orange"},
             ];
 
             const friend_links = [
@@ -474,6 +483,7 @@ export default {
             ];
 
             return home_links
+                .concat(this.user.is_login ? user_links : [])
                 .concat(this.user.is_admin ? admin_links : [])
                 .concat(this.user.is_login ? reading_links : [])
                 .concat(nav_links)
