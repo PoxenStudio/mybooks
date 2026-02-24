@@ -111,6 +111,17 @@
                     </v-list-item>
                 </template>
             </v-list>
+            <template v-slot:append v-if="user.is_login">
+                <v-divider></v-divider>
+                <v-list-item dense to="/logout">
+                    <v-list-item-action dense>
+                        <v-icon>exit_to_app</v-icon>
+                    </v-list-item-action>
+                    <v-list-item-content v-if="!miniVariant">
+                        <v-list-item-title>{{ $t('appHeader.logout') }}</v-list-item-title>
+                    </v-list-item-content>
+                </v-list-item>
+            </template>
         </v-navigation-drawer>
 
         <v-app-bar class="px-0" :color="appBarColor" dense dark app fixed clipped-left extension-height="64">
@@ -144,19 +155,6 @@
                         <img :src="user.avatar" @error="handleAvatarError" class="avatar-img" />
                     </v-avatar>
                 </v-btn>
-                <v-menu v-model="showUserMenu" offset-y>
-                    <template v-slot:activator="{ on }">
-                        <v-btn icon v-on="on" class="ml-2">
-                            <v-icon>mdi-dots-vertical</v-icon>
-                        </v-btn>
-                    </template>
-                    <v-list min-width="240">
-                        <v-list-item to="/logout">
-                            <v-list-item-action><v-icon>exit_to_app</v-icon></v-list-item-action>
-                            <v-list-item-title> {{ $t('appHeader.logout') }} </v-list-item-title>
-                        </v-list-item>
-                    </v-list>
-                </v-menu>
             </template>
             <template v-else>
                 <v-btn to="/login" color="indigo accent-4" class="ml-4">
@@ -366,7 +364,6 @@ export default {
         ai_ws: null,
         ai_input: '',
         user: {},
-        showUserMenu: false,
         sys: {
             books: 0,
             tags: 0,
