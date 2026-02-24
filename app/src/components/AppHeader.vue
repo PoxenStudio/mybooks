@@ -163,8 +163,7 @@
             </template>
 
             <v-toolbar-title class="ml-4 mr-12 align-center d-flex">
-                <div class="breathing-light"></div>
-                <span class="cursor-pointer ml-2" @click="$router.push('/')">{{ sys.title }}</span>
+                <span class="cursor-pointer" @click="$router.push('/')">{{ sys.title.length > 10 ? sys.title.substring(0, 10) + '...' : sys.title }}</span>
             </v-toolbar-title>
 
             <v-spacer></v-spacer>
@@ -779,6 +778,19 @@ export default {
 .avatar-round {
     border-radius: 55% !important;
     overflow: hidden;
+    animation: breathing-avatar 3s ease-in-out infinite;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+}
+
+@keyframes breathing-avatar {
+    0%, 100% {
+        box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 0 16px rgba(255, 255, 255, 0.9);
+        transform: scale(1.05);
+    }
 }
 
 .avatar-img {
