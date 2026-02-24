@@ -3,11 +3,12 @@
         <v-navigation-drawer
             v-model="sidebar"
             app
+            fixed
             :width="240"
             :mini-variant-width="64"
             :mini-variant="miniVariant && user.is_login"
             :color="drawerColor"
-            :clipped="true"
+            :clipped="$vuetify.breakpoint.lgAndUp"
             class="app-navigation-drawer"
             @mouseenter="handleMouseEnter"
             @mouseleave="handleMouseLeave"
@@ -523,7 +524,6 @@ export default {
             }
             if (rsp.user.is_login) {
                 this.sidebar = this.$vuetify.breakpoint.lgAndUp;
-                this.miniVariant = !this.$vuetify.breakpoint.lgAndUp;
             }
         });
         this.$backend("/user/messages").then((rsp) => {
@@ -794,6 +794,8 @@ export default {
     box-shadow: 2px 0 12px rgba(0, 0, 0, 0.08) !important;
     transition: all 0.3s ease !important;
     border-bottom-right-radius: 12px !important;
+    top: 56px !important;
+    height: calc(100vh - 56px) !important;
 }
 
 
