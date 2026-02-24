@@ -3,12 +3,11 @@
         <v-navigation-drawer
             v-model="sidebar"
             app
-            fixed
             :width="240"
             :mini-variant-width="64"
             :mini-variant="miniVariant && user.is_login"
             :color="drawerColor"
-            :clipped="$vuetify.breakpoint.lgAndUp"
+            :clipped="true"
             class="app-navigation-drawer"
             @mouseenter="handleMouseEnter"
             @mouseleave="handleMouseLeave"
@@ -523,7 +522,7 @@ export default {
                 this.$store.commit("set_header", rsp.sys.header);
             }
             if (rsp.user.is_login) {
-                this.sidebar = true;
+                this.sidebar = this.$vuetify.breakpoint.lgAndUp;
                 this.miniVariant = !this.$vuetify.breakpoint.lgAndUp;
             }
         });
@@ -554,8 +553,12 @@ export default {
             if (!this.user.is_login) {
                 return;
             }
-            this.miniVariant = !this.miniVariant;
-            this.sidebar = true;
+            if (!this.sidebar) {
+                this.sidebar = true;
+                this.miniVariant = false;
+            } else {
+                this.miniVariant = !this.miniVariant;
+            }
         },
         handleMouseEnter() {
         },
