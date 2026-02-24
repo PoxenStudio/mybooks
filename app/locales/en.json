@@ -523,7 +523,15 @@
         "deviceTypeRequired": "Please select device type",
         "deviceIPRequired": "Please enter device IP address",
         "devicePortRequired": "Please enter device port",
-        "clearCategory": "Clear"
+        "clearCategory": "Clear",
+        "shareToEmail": "Share to Email",
+        "shareToEmailDesc": "Enter an email address to send the book file",
+        "emailAddress": "Email Address",
+        "emailRequired": "Email address is required",
+        "emailInvalid": "Invalid email address format",
+        "willSendFormat": "Will send {format} format",
+        "sendToEmailSuccess": "Book is being sent to {email}, please check your inbox",
+        "sendToEmailFailed": "Failed to send, please try again later"
     },
     "reader": {
         "tip": {

@@ -383,21 +383,29 @@ class ScanService(AsyncService):
                         continue
 
                     # 非结构化的格式，calibre无法识别准确的信息，直接从文件名提取
-                    if fmt in ["txt", "pdf"]:
-                        mi.title = fname.replace("." + fmt, "")
+                    if fmt == "txt":
+                        mi.title = utils.remove_zlibrary_suffix(fname.replace("." + fmt, ""))
                         mi.authors = [_(u"佚名")]
+
+                    if fmt == "pdf":
+                        if mi.title is None or mi.title.strip() == "":
+                            mi.title = utils.remove_zlibrary_suffix(fname.replace("." + fmt, ""))
+                        if mi.authors is None or len(mi.authors) == 0 or mi.authors[0].lower() == "unknown":
+                            mi.authors = [_(u"佚名")]
 
                     # 再次检查是否有重复书籍
                     ids = self.db.books_with_same_title(mi)
                     existed_ebook = False
+                    logging.info(f"Found same title book ids: {ids} for file: {fpath}")
                     if ids:
-                        row.book_id = ids.pop()
+                        row.book_id = 0
                         for bid in ids:
                             b = self.db.get_metadata(bid, index_is_id=True)
                             # 如果是实体书，则跳过
                             if b.get(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK) == BOOK_TYPE_PHYSICAL:
                                 continue
                             existed_ebook = True
+                            row.book_id = bid
                             if fmt.upper() in b.formats:
                                 row.status = ScanFile.EXIST
                                 break

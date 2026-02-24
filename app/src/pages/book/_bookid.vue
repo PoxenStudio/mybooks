@@ -332,6 +332,10 @@
                                     <v-icon>mdi-robot</v-icon>
                                     {{ $t('book.aiUpdate') }}
                                 </v-list-item>
+                                <v-list-item v-if="$store.state.user?.is_login" @click="dialog_send_to_email = true" :disabled="!hasCompatibleEmailFormats">
+                                    <v-icon>mdi-email-send</v-icon>
+                                    {{ $t('book.shareToEmail') }}
+                                </v-list-item>
                                 <v-list-item @click="delete_book">
                                     <v-icon>delete_forever</v-icon>
                                     {{ $t('book.deleteBook') }}
@@ -982,6 +986,56 @@
             </v-card-actions>
         </v-card>
     </v-dialog>
+
+    <!-- 发送到邮箱对话框 -->
+    <v-dialog v-model="dialog_send_to_email" persistent max-width="500">
+        <v-card>
+            <v-card-title class="headline">
+                <v-icon class="mr-2">mdi-email-send</v-icon>
+                {{ $t('book.shareToEmail') }}
+            </v-card-title>
+            <v-card-text>
+                <p class="mb-4">
+                    {{ $t('book.shareToEmailDesc') }}
+                    <span class="caption grey--text">
+                        ({{ $t('book.willSendFormat', { format: selectedEmailFormat }) }})
+                    </span>
+                </p>
+                <v-text-field
+                    v-model="email_address"
+                    :label="$t('book.emailAddress') + ' *'"
+                    outlined
+                    dense
+                    type="email"
+                    :rules="emailRules"
+                    :error-messages="email_error"
+                    placeholder="example@email.com"
+                    @input="email_error = ''"
+                >
+                    <template v-slot:prepend-inner>
+                        <v-icon>mdi-email</v-icon>
+                    </template>
+                </v-text-field>
+                <v-alert v-if="email_size_warning" type="warning" dense outlined class="mt-2">
+                    {{ email_size_warning }}
+                </v-alert>
+            </v-card-text>
+            <v-card-actions>
+                <v-spacer></v-spacer>
+                <v-btn text @click="closeEmailDialog">
+                    {{ $t('common.cancel') }}
+                </v-btn>
+                <v-btn
+                    color="primary"
+                    :loading="sending_to_email"
+                    @click="sendToEmail"
+                    :disabled="!canSendToEmail"
+                >
+                    {{ $t('common.send') }}
+                </v-btn>
+            </v-card-actions>
+        </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -1135,6 +1189,41 @@ export default {
         hasPDF() {
             if (!this.book || !this.book.files) return false;
             return this.book.files.some(file => file.format.toLowerCase() === 'pdf');
+        },
+
+        // 检查是否有兼容邮箱发送的文件格式（EPUB/AZW3/PDF/MOBI/TXT）
+        hasCompatibleEmailFormats: function() {
+            if (!this.book || !this.book.files) return false;
+            const supportedFormats = ['epub', 'azw3', 'pdf', 'mobi', 'txt'];
+            return this.book.files.some(file =>
+                supportedFormats.includes(file.format.toLowerCase())
+            );
+        },
+
+        // 获取要发送的邮件格式（优先级：EPUB > AZW3 > PDF > MOBI > TXT）
+        selectedEmailFormat: function() {
+            if (!this.book || !this.book.files) return '';
+            const formatPriority = ['epub', 'azw3', 'pdf', 'mobi', 'txt'];
+            for (const format of formatPriority) {
+                const file = this.book.files.find(f =>
+                    f.format.toLowerCase() === format
+                );
+                if (file) return format.toUpperCase();
+            }
+            return '';
+        },
+
+        // 检查是否可以发送到邮箱
+        canSendToEmail() {
+            return this.email_address && this.isValidEmail(this.email_address) && !this.email_error;
+        },
+
+        // 邮箱验证规则
+        emailRules() {
+            return [
+                v => !!v || this.$t('book.emailRequired'),
+                v => this.isValidEmail(v) || this.$t('book.emailInvalid')
+            ];
         }
     },
     data: () => ({
@@ -1208,6 +1297,12 @@ export default {
             { text: '文石Boox', value: 'boox' },
             { text: '当当阅读器', value: 'dangdang' },
         ],
+        // 发送到邮箱对话框
+        dialog_send_to_email: false,
+        sending_to_email: false,
+        email_address: '',
+        email_error: '',
+        email_size_warning: '',
         adding_book: false,
         isbn: "",
         continueAdding: false,
@@ -2404,6 +2499,63 @@ export default {
                 this.$alert('error', '发送失败，请稍后重试');
             } finally {
                 this.sending_to_device = false;
+            }
+        },
+
+        // 邮箱地址验证
+        isValidEmail(email) {
+            const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+            return emailPattern.test(email);
+        },
+
+        // 关闭邮箱对话框
+        closeEmailDialog() {
+            this.dialog_send_to_email = false;
+            this.email_address = '';
+            this.email_error = '';
+            this.email_size_warning = '';
+        },
+
+        // 发送到邮箱
+        async sendToEmail() {
+            if (!this.canSendToEmail) {
+                this.$alert('error', this.$t('book.emailRequired'));
+                return;
+            }
+
+            // 再次验证邮箱格式
+            if (!this.isValidEmail(this.email_address)) {
+                this.email_error = this.$t('book.emailInvalid');
+                return;
+            }
+
+            this.sending_to_email = true;
+            try {
+                const requestBody = {
+                    email: this.email_address.trim()
+                };
+
+                const response = await this.$backend(`/book/${this.book.id}/mailto`, {
+                    method: 'POST',
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (response.err === 'ok') {
+                    this.$alert('success', this.$t('book.sendToEmailSuccess', { email: this.email_address }));
+                    this.closeEmailDialog();
+                } else {
+                    // 处理特定错误类型
+                    if (response.err === 'file.too_large') {
+                        this.email_size_warning = response.msg;
+                    } else {
+                        this.$alert('error', response.msg || this.$t('book.sendToEmailFailed'));
+                    }
+                }
+            } catch (error) {
+                console.error('发送邮件失败:', error);
+                this.$alert('error', this.$t('book.sendToEmailFailed'));
+            } finally {
+                this.sending_to_email = false;
             }
         },
     },

@@ -3,6 +3,7 @@
 
 import hashlib
 import logging
+import traceback
 
 from gettext import gettext as _
 
@@ -74,6 +75,7 @@ class MailService(AsyncService):
     def send_book(self, user_id: int, site_url: str, book: dict, mail_to: str, fmt: str, fpath: str):
         from calibre.ebooks.metadata import authors_to_string
 
+        logging.info(f"Preparing to send book {book['id']} to email {mail_to}")
         # read meta info
         author = authors_to_string(book["authors"] if book["authors"] else [_(u"佚名")])
         title = book["title"] if book["title"] else _(u"无名书籍")
@@ -81,6 +83,7 @@ class MailService(AsyncService):
         with open(fpath, "rb") as f:
             fdata = f.read()
 
+        logging.info(f"Book {book['id']} read successfully, preparing email content")
         mail_args = {
             "title": title,
             "site_url": site_url,
@@ -94,14 +97,12 @@ class MailService(AsyncService):
             logging.info("send %(title)s to %(mail_to)s" % vars())
             self.do_send_mail(mail_from, mail_to, mail_subject, mail_body, fdata, fname)
             status = "success"
-            msg = _("[%(title)s] 已成功发送至Kindle邮箱 [%(mail_to)s] !!") % vars()
+            msg = _("[%(title)s] 已成功发送至邮箱 [%(mail_to)s] !!") % vars()
             logging.info(msg)
-        except:
-            import traceback
-
-            logging.error("Failed to send to kindle: %s" % mail_to)
+        except Exception as e:
+            logging.error("Failed to send to email: %s, exception:%s" % (mail_to, e))
             logging.error(traceback.format_exc())
             status = "danger"
-            msg = traceback.format_exc()
+            msg = "[%(title)s] 发送至邮箱 [%(mail_to)s] 失败,请检查系统设置中的邮箱设置是否正确!" % {"title": title, "mail_to": mail_to}
         self.add_msg(user_id, status, msg)
         return

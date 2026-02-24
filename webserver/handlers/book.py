@@ -1768,9 +1768,15 @@ class BookUpload(BaseHandler):
             return {"err": "book.invalid", "msg": _(u"此书籍文件无法识别, 或者受DRM保护无法导入")}
 
         # 非结构化的格式，calibre无法识别准确的信息，直接从文件名提取
-        if fmt in ["txt", "pdf"]:
+        if fmt == "txt":
             mi.title = utils.remove_zlibrary_suffix(name.replace("." + fmt, ""))
             mi.authors = [_(u"佚名")]
+
+        if fmt == "pdf":
+            if mi.title is None or mi.title.strip() == "":
+                mi.title = utils.remove_zlibrary_suffix(name.replace("." + fmt, ""))
+            if mi.authors is None or len(mi.authors) == 0 or mi.authors[0].lower() == "unknown":
+                mi.authors = [_(u"佚名")]
 
         logging.info("upload mi.title = " + repr(mi.title))
         books = self.calibre_db.books_with_same_title(mi)
@@ -2304,6 +2310,82 @@ class BookSendToDevice(BaseHandler):
             return {"err": "upload.error", "msg": _(u"发送过程出错，请查看日志获取详细信息")}
 
 
+class BookSendToMail(BaseHandler):
+    @js
+    def post(self, bid):
+        """发送书籍到指定邮箱"""
+        book_id = int(bid)
+        book = self.get_book(book_id, raise_exception=False)
+        if not book:
+            return {"err": "book.not_found", "msg": _(u"书籍已不存在")}
+
+        if not CONF["ALLOW_GUEST_PUSH"]:
+            if not self.current_user:
+                return {"err": "user.need_login", "msg": _(u"请先登录")}
+            else:
+                if not self.current_user.can_push():
+                    return {"err": "permission", "msg": _(u"无权限进行推送，请联系管理员检查权限")}
+                elif not self.current_user.is_active():
+                    return {"err": "permission", "msg": _(u"无权限进行操作，请先激活账号。")}
+
+        # 解析请求参数
+        try:
+            data = tornado.escape.json_decode(self.request.body)
+            mail_to = data.get("email", "").strip()
+        except:
+            return {"err": "params.invalid", "msg": _(u"没有指定邮箱地址")}
+
+        if not mail_to:
+            return {"err": "params.missing", "msg": _(u"邮箱地址不能为空")}
+
+        # 验证邮箱地址格式
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, mail_to):
+            return {"err": "email.invalid", "msg": _(u"邮箱地址格式不正确")}
+
+        # 按优先级查找可用格式: EPUB > AZW3 > PDF > MOBI > TXT
+        format_priority = ["epub", "azw3", "pdf", "mobi", "txt"]
+        file_path = None
+        file_format = None
+
+        for fmt in format_priority:
+            fmt_key = "fmt_%s" % fmt
+            if fmt_key in book:
+                file_path = book[fmt_key]
+                file_format = fmt
+                break
+
+        if not file_path:
+            return {"err": "format.not_found", "msg": _(u"书籍没有支持的文件格式（EPUB/AZW3/PDF/MOBI/TXT）")}
+
+        # 检查文件是否存在
+        if not os.path.exists(file_path):
+            return {"err": "file.missing", "msg": _(u"书籍文件不存在")}
+
+        # 检查文件大小（50MB = 52428800 bytes）
+        file_size = os.path.getsize(file_path)
+        max_size = 50 * 1024 * 1024  # 50MB
+        if file_size > max_size:
+            size_mb = file_size / (1024 * 1024)
+            return {
+                "err": "file.too_large",
+                "msg": _(u"附件过大（%.1fMB），邮件附件大小不能超过50MB") % size_mb
+            }
+
+        # 记录推送历史和增加统计
+        self.user_history("push_history", book)
+        self.count_increase(book_id, count_download=1, count_visit=1)
+        logging.info(f"[SEND_TO_MAIL] 发送书籍 {book_id} ({file_format}, {file_size} bytes) 到邮箱 {mail_to}")
+        MailService().send_book(self.user_id(), self.site_url, book, mail_to, file_format, file_path)
+
+        self.add_msg(
+            "success",
+            _(u"已开始推送《%(title)s》到%(email)s") % {"title": book["title"], "email": mail_to},
+        )
+
+        return {"err": "ok", "msg": _(u"后台正在推送，稍后可以刷新页面，在通知消息中查看结果。")}
+
+
 class BookSperate(BaseHandler):
     @js
     @auth
@@ -2677,6 +2759,7 @@ def routes():
         (r"/api/book/([0-9]+\..+)", BookDownload),
         (r"/api/book/([0-9]+)/refer", BookRefer),
         (r"/api/book/([0-9]+)/send_to_device", BookSendToDevice),
+        (r"/api/book/([0-9]+)/mailto", BookSendToMail),
         (r"/read/([0-9]+)", BookRead),
         (r"/api/read/txt", TxtRead),
         (r"/api/book/txt/init", BookTxtInit),
