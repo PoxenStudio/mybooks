@@ -1768,9 +1768,15 @@ class BookUpload(BaseHandler):
             return {"err": "book.invalid", "msg": _(u"此书籍文件无法识别, 或者受DRM保护无法导入")}
 
         # 非结构化的格式，calibre无法识别准确的信息，直接从文件名提取
-        if fmt in ["txt", "pdf"]:
+        if fmt == "txt":
             mi.title = utils.remove_zlibrary_suffix(name.replace("." + fmt, ""))
             mi.authors = [_(u"佚名")]
+
+        if fmt == "pdf":
+            if mi.title is None or mi.title.strip() == "":
+                mi.title = utils.remove_zlibrary_suffix(name.replace("." + fmt, ""))
+            if mi.authors is None or len(mi.authors) == 0 or mi.authors[0].lower() == "unknown":
+                mi.authors = [_(u"佚名")]
 
         logging.info("upload mi.title = " + repr(mi.title))
         books = self.calibre_db.books_with_same_title(mi)
