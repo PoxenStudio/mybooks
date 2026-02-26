@@ -271,7 +271,7 @@
                                     <v-icon small>more_vert</v-icon>
                                 </v-btn>
                             </template>
-                            <v-list>
+                            <v-list min-width="200">
                                 <v-list-item @click="save_meta_to_file" :disabled="!hasEpubOrAzw3">
                                     <v-icon>mdi-file-sync</v-icon>
                                     {{ $t('book.saveMetaToFile') }}
@@ -303,7 +303,7 @@
                                     <v-icon small>more_vert</v-icon>
                                 </v-btn>
                             </template>
-                            <v-list>
+                            <v-list min-width="200">
                                 <v-list-item :to="'/book/' + book.id + '/edit'">
                                     <v-icon>settings_applications</v-icon>
                                     {{ $t('book.editBookInfo') }}
@@ -491,9 +491,8 @@
                                 </v-menu>
                             </div>
                             <div class="tag-chips">
-                                <template v-for="author in book.authors">
+                                <template v-for="(author, index) in book.authors" :key="'author-' + index">
                                     <v-chip
-                                        :key="'author-' + author"
                                         rounded
                                         smallF
                                         dark
