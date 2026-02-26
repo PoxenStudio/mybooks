@@ -2508,7 +2508,7 @@ class BookSaveMeta(BaseHandler):
     @js
     @auth
     def post(self, bid):
-        """将书籍的元数据保存到文件中（仅支持 epub 和 azw3）"""
+        """将书籍的元数据保存到文件中（仅支持 epub/azw3/pdf）"""
         book_id = int(bid)
         book = self.get_book(book_id, raise_exception=False)
         if not book:
@@ -2519,13 +2519,13 @@ class BookSaveMeta(BaseHandler):
 
         # 检查是否有支持的格式
         supported_formats = []
-        for fmt in ["epub", "azw3"]:
+        for fmt in ["epub", "azw3", "pdf"]:
             fmt_key = f"fmt_{fmt}"
             if fmt_key in book:
                 supported_formats.append((fmt, book[fmt_key]))
 
         if not supported_formats:
-            return {"err": "format.not_supported", "msg": _(u"书籍没有支持的格式（需要 EPUB 或 AZW3）")}
+            return {"err": "format.not_supported", "msg": _(u"书籍没有支持的格式（需要 EPUB、AZW3 或 PDF）")}
 
         try:
             from calibre.ebooks.metadata.meta import set_metadata
@@ -2545,6 +2545,11 @@ class BookSaveMeta(BaseHandler):
                         failed_formats.append(fmt.upper())
                         continue
 
+                    if mi.title:
+                        mi.title_sort = utils.super_strip(mi.title)
+                    if mi.authors:
+                        mi.author_sort = utils.super_strip(mi.authors[0])
+
                     # 获取封面数据（cover方法直接返回字节数据）
                     cover_data = self.calibre_db.cover(book_id, index_is_id=True)
                     if cover_data:
@@ -2554,7 +2559,7 @@ class BookSaveMeta(BaseHandler):
 
                     # 将元数据写入文件（包含封面）
                     with open(file_path, "r+b") as stream:
-                        set_metadata(stream, mi, stream_type=fmt)
+                        set_metadata(stream, mi, stream_type=fmt, use_libprs_metadata=True)
 
                     logging.info(f"[SAVE_META] Successfully saved metadata to {fmt.upper()} file for book {book_id}")
                     success_formats.append(fmt.upper())

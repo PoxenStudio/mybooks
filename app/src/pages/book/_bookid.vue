@@ -272,7 +272,7 @@
                                 </v-btn>
                             </template>
                             <v-list min-width="200">
-                                <v-list-item @click="save_meta_to_file" :disabled="!hasEpubOrAzw3">
+                                <v-list-item @click="save_meta_to_file" :disabled="!hasEpubAzw3OrPDF">
                                     <v-icon>mdi-file-sync</v-icon>
                                     {{ $t('book.saveMetaToFile') }}
                                 </v-list-item>
@@ -1168,12 +1168,12 @@ export default {
             }
         },
 
-        // 检查是否有 epub 或 azw3 格式
-        hasEpubOrAzw3() {
+        // 检查是否有 epub、azw3 或 pdf 格式
+        hasEpubAzw3OrPDF() {
             if (!this.book || !this.book.files) return false;
             return this.book.files.some(file => {
                 const format = file.format.toLowerCase();
-                return format === 'epub' || format === 'azw3';
+                return format === 'epub' || format === 'azw3' || format === 'pdf';
             });
         },
 
@@ -1840,7 +1840,7 @@ export default {
         },
         save_meta_to_file() {
             // 保存元数据到书籍文件
-            if (!this.hasEpubOrAzw3) {
+            if (!this.hasEpubAzw3OrPDF) {
                 this.$alert("error", this.$t('book.needEpubOrAzw3'));
                 return;
             }
