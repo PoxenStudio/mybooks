@@ -488,7 +488,7 @@ export default {
     },
     mounted() {
         this.visit_admin_pages = this.isPathMatch("/admin/");
-        this.sidebar = true;
+        this.sidebar = false;
         this.miniVariant = false;
         this.$backend("/user/info").then((rsp) => {
             this.err = rsp.err;
@@ -523,6 +523,7 @@ export default {
             }
             if (rsp.user.is_login) {
                 this.sidebar = this.$vuetify.breakpoint.lgAndUp;
+                this.miniVariant = this.$vuetify.breakpoint.lgAndUp;
             }
         });
         this.$backend("/user/messages").then((rsp) => {
