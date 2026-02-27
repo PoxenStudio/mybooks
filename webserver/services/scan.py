@@ -272,7 +272,7 @@ class ScanService(AsyncService):
                     # 如果是实体书，则跳过
                     if b.get(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK) == BOOK_TYPE_PHYSICAL:
                         continue
-                    if fmt.upper() in b.formats:
+                    if b.formats and fmt and fmt.upper() in b.formats:
                         row.book_id = b.id
                         row.status = ScanFile.EXIST
                         break
