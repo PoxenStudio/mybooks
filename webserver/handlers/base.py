@@ -626,7 +626,7 @@ class BaseHandler(web.RequestHandler):
     def all_tags_with_count(self):
         sql = """SELECT tags.name, count(distinct book) as count
         FROM tags left join books_tags_link on tags.id = books_tags_link.tag
-        group by tags.id"""
+        group by tags.id order by count desc"""
         with self.db_lock:
             tags = dict((i[0], i[1]) for i in self.calibre_db_cache.backend.conn.get(sql))
         return tags
