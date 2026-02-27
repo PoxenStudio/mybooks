@@ -136,4 +136,4 @@ NAS安装指南：请参考网友们的帖子：[帖子1](https://post.smzdm.com
 [PoxenStudio Talebook](https://mybooks.top)
 
 ## 联系邮箱
-📧 [poxenstudio@gmail.com](mailto://poxenstudio@gmail.com)
+📧 [poxenstudio@gmail.com](mailto:poxenstudio@gmail.com)
