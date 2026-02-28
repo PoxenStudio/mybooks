@@ -292,6 +292,10 @@
                                     <v-icon>mdi-file-document-remove-outline</v-icon>
                                     {{ $t('book.deleteFormat') }}
                                 </v-list-item>
+                                <v-list-item @click="show_upload_format_dialog">
+                                    <v-icon>mdi-file-upload-outline</v-icon>
+                                    {{ $t('book.uploadNewFormat') }}
+                                </v-list-item>
                             </v-list>
                         </v-menu>
                     </template>
@@ -894,6 +898,45 @@
         </v-card>
     </v-dialog>
 
+    <!-- 上传新格式对话框 -->
+    <v-dialog v-model="dialog_upload_format" persistent max-width="500">
+        <v-card>
+            <v-card-title class="headline">
+                <v-icon class="mr-2">mdi-file-upload-outline</v-icon>
+                {{ $t('book.uploadNewFormat') }}
+            </v-card-title>
+            <v-card-text>
+                <p class="mb-4">{{ $t('book.uploadNewFormatDesc') }}</p>
+                <v-file-input
+                    v-model="upload_format_file"
+                    :label="$t('book.selectFile')"
+                    outlined
+                    dense
+                    show-size
+                    accept=".epub,.mobi,.azw,.azw3,.pdf,.txt"
+                    prepend-icon="mdi-file-document"
+                ></v-file-input>
+                <v-alert type="info" text dense class="mt-4">
+                    {{ $t('book.supportedFormatsUpload') }}
+                </v-alert>
+            </v-card-text>
+            <v-card-actions>
+                <v-spacer></v-spacer>
+                <v-btn text @click="dialog_upload_format = false">
+                    {{ $t('common.cancel') }}
+                </v-btn>
+                <v-btn
+                    color="primary"
+                    :loading="uploading_format"
+                    @click="confirmUploadFormat"
+                    :disabled="!upload_format_file"
+                >
+                    {{ $t('book.upload') }}
+                </v-btn>
+            </v-card-actions>
+        </v-card>
+    </v-dialog>
+
     <!-- 发送到设备对话框 -->
     <v-dialog v-model="dialog_send_to_device" persistent max-width="600">
         <v-card>
@@ -1276,6 +1319,10 @@ export default {
         dialog_delete_format: false,
         selectedDeletedFormat: null,
         deleting_format: false,
+        // 上传新格式对话框
+        dialog_upload_format: false,
+        upload_format_file: null,
+        uploading_format: false,
         // 添加实体书对话框
         isbn_dialog: false,
         // 发送到设备对话框
@@ -1927,6 +1974,47 @@ export default {
                 this.deleting_format = false;
                 this.$alert("error", this.$t('book.deleteFormatFailed'));
             });
+        },
+        show_upload_format_dialog() {
+            this.upload_format_file = null;
+            this.dialog_upload_format = true;
+        },
+        async confirmUploadFormat() {
+            if (!this.upload_format_file) {
+                this.$alert("error", this.$t('book.selectFileToUpload'));
+                return;
+            }
+
+            this.uploading_format = true;
+            try {
+                const data = new FormData();
+                data.append("ebook", this.upload_format_file);
+                data.append("bid", this.book.id);
+
+                const rsp = await this.$backend("/book/upload?bid=" + this.book.id, {
+                    method: 'POST',
+                    body: data
+                });
+
+                this.uploading_format = false;
+
+                if (rsp.err === "ok") {
+                    this.dialog_upload_format = false;
+                    this.$alert("success", rsp.msg || this.$t('book.uploadSuccess'));
+                    // 刷新页面以显示新格式
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                } else if (rsp.err === "format.already_exists") {
+                    this.$alert("error", rsp.msg || this.$t('book.formatAlreadyExists'));
+                } else {
+                    this.$alert("error", rsp.msg || this.$t('book.uploadFailed'));
+                }
+            } catch (err) {
+                this.uploading_format = false;
+                console.error("Upload error:", err);
+                this.$alert("error", this.$t('book.uploadFailed') + ": " + (err.message || this.$t('book.uploadFailedNetwork')));
+            }
         },
         formatFileSize(size) {
             if (size >= 1048576) {

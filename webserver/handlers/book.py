@@ -1720,6 +1720,69 @@ class BookUpload(BaseHandler):
         p = self.request.files["ebook"][0]
         return (p["filename"], p["body"])
 
+    def _add_format_to_existing_book(self, book_id):
+        """向已存在的书籍添加新格式文件"""
+        from calibre.ebooks.metadata.meta import get_metadata
+
+        # 检查书籍是否存在
+        book = self.get_book(book_id, raise_exception=False)
+        if not book:
+            return {"err": "book.not_found", "msg": _(u"书籍不存在")}
+
+        # 检查权限
+        if not self.is_admin() and not self.is_book_owner(book_id, self.user_id()):
+            return {"err": "user.no_permission", "msg": _(u"无权限")}
+
+        # 获取上传文件
+        name, data = self.get_upload_file()
+        if name is None:
+            return {"err": "params.filename", "msg": _(u"文件不存在或未选择文件")}
+
+        name = re.sub(r"[\x80-\xFF]+", BookUpload.convert, name)
+        logging.info(f"Adding format to book {book_id}, file name = {repr(name)}")
+
+        fmt = os.path.splitext(name)[1]
+        fmt = fmt[1:] if fmt else None
+        if not fmt:
+            return {"err": "params.filename", "msg": _(u"文件名不合法, 没有扩展名")}
+        fmt = fmt.lower()
+
+        if fmt not in SUPPORTED_EBOOK_FORMATS:
+            return {"err": "params.format.unsupported", "msg": _(u"不支持的书籍格式: %s" % fmt)}
+
+        if f"fmt_{fmt}" in book:
+            return {
+                "err": "format.already_exists",
+                "msg": _(u"书籍已存在 %s 格式") % fmt.upper(),
+                "book_id": book_id
+            }
+
+        fpath = os.path.join(CONF["upload_path"], name)
+        with open(fpath, "wb") as f:
+            f.write(data)
+        logging.debug(f"Save format file to [{fpath}]")
+
+        try:
+            # 添加格式到已存在的书籍
+            self.calibre_db.add_format(book_id, fmt.upper(), fpath, True)
+            logging.info(f"Successfully added {fmt.upper()} format to book {book_id}")
+
+            try:
+                self.save_book_meta(book_id, fmt=fmt)
+                logging.info(f"Metadata written to new format {fmt.upper()} for book {book_id}")
+            except Exception as e:
+                logging.warning(f"Failed to write metadata to new format: {e}")
+
+            self.add_msg("success", _(u"格式添加成功！"))
+            return {"err": "ok", "book_id": book_id, "msg": _(u"成功添加 %s 格式") % fmt.upper()}
+        except Exception as e:
+            logging.error(f"Failed to add format to book {book_id}: {e}")
+            return {"err": "internal", "msg": _(u"添加格式失败: %s") % str(e)}
+        finally:
+            # 清理临时文件
+            if os.path.exists(fpath):
+                os.remove(fpath)
+
     @js
     def post(self):
         from calibre.ebooks.metadata.meta import get_metadata
@@ -1729,6 +1792,11 @@ class BookUpload(BaseHandler):
                 return {"err": "permission", "msg": _(u"无权操作，请先登录")}
             if not self.current_user.can_upload():
                 return {"err": "permission", "msg": _(u"无权操作")}
+
+        # 检查是否为添加格式到已有书籍
+        target_book_id = self.get_argument("bid", None)
+        if target_book_id:
+            return self._add_format_to_existing_book(int(target_book_id))
 
         name, data = self.get_upload_file()
         if name is None:
