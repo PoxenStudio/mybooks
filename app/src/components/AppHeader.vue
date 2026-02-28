@@ -843,12 +843,33 @@ export default {
     top: 56px !important;
     height: calc(100vh - 56px) !important;
     background: var(--v-background-base) !important;
+    background-color: #F7FAF7 !important;
+    opacity: 1 !important;
+}
+
+@media (max-width: 1024px) {
+    .app-navigation-drawer {
+        top: 56px !important;
+        height: calc(100vh - 56px) !important;
+        background-color: #F7FAF7 !important;
+        opacity: 1 !important;
+    }
+
+    .theme--dark .app-navigation-drawer {
+        background-color: #1E1E1E !important;
+    }
 }
 
 .app-navigation-drawer .v-list-item {
     position: relative !important;
     z-index: 1 !important;
     background: var(--v-background-base) !important;
+    background-color: #F7FAF7 !important;
+    opacity: 1 !important;
+}
+
+.theme--dark .app-navigation-drawer .v-list-item {
+    background-color: #1E1E1E !important;
 }
 
 .app-navigation-drawer .v-list-group {
@@ -858,7 +879,13 @@ export default {
 
 .app-navigation-drawer .v-list-item--icon-only {
     background: var(--v-background-base) !important;
+    background-color: #F7FAF7 !important;
     z-index: 2 !important;
+    opacity: 1 !important;
+}
+
+.theme--dark .app-navigation-drawer .v-list-item--icon-only {
+    background-color: #1E1E1E !important;
 }
 
 
@@ -996,6 +1023,12 @@ export default {
     position: relative !important;
     z-index: 1 !important;
     background: var(--v-background-base) !important;
+    background-color: #F7FAF7 !important;
+    opacity: 1 !important;
+}
+
+.theme--dark .app-navigation-drawer .v-list-group__items > .v-list-item--group-child {
+    background-color: #1E1E1E !important;
 }
 
 .app-navigation-drawer .v-list-group__items > .v-list-item--group-child .v-list-item-action {
@@ -1006,6 +1039,12 @@ export default {
     position: relative !important;
     z-index: 1 !important;
     background: var(--v-background-base) !important;
+    background-color: #F7FAF7 !important;
+    opacity: 1 !important;
+}
+
+.theme--dark .app-navigation-drawer .v-list-group__items {
+    background-color: #1E1E1E !important;
 }
 
 .app-navigation-drawer .v-list-group__items > .v-list-item--group-child:hover {
@@ -1082,6 +1121,21 @@ export default {
 .v-list-item.justify-center::before,
 .v-list-item.justify-center::after {
     display: none !important;
+}
+
+@media (max-width: 1024px) {
+    .v-navigation-drawer--temporary {
+        box-shadow: 2px 0 12px rgba(0, 0, 0, 0.2) !important;
+    }
+
+    .v-navigation-drawer--temporary .v-navigation-drawer__scrim {
+        opacity: 0.5 !important;
+        background-color: rgba(0, 0, 0, 0.5) !important;
+    }
+
+    .app-navigation-drawer {
+        box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15) !important;
+    }
 }
 </style>
 
