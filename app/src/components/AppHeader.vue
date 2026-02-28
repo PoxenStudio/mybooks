@@ -348,10 +348,29 @@
 import { colors } from 'vuetify/lib';
 
 export default {
-    data: () => ({
-        err: "",
-        sidebar: false,
-        miniVariant: false,
+    data() {
+        let sidebar = false;
+        let miniVariant = false;
+
+        if (process.client) {
+            const isLargeScreen = window.innerWidth >= 1280;
+            const savedSidebar = localStorage.getItem('drawerSidebar');
+            const savedMiniVariant = localStorage.getItem('drawerMiniVariant');
+
+            if (isLargeScreen) {
+                if (savedMiniVariant !== null) {
+                    miniVariant = savedMiniVariant === 'true';
+                    sidebar = true;
+                } else if (savedSidebar !== null) {
+                    sidebar = savedSidebar === 'true';
+                }
+            }
+        }
+
+        return {
+            err: "",
+            sidebar,
+            miniVariant,
         right: null,
         btn_search: false,
         search: "",
@@ -387,7 +406,8 @@ export default {
         runningTasks: [],
         taskPollingTimer: null,
         expandedGroups: {},
-    }),
+    };
+    },
     computed: {
         appBarColor() {
             return this.$vuetify.theme.dark ? 'dark' : '#003153';
@@ -486,17 +506,6 @@ export default {
         },
     },
     mounted() {
-        if (process.client) {
-            const savedSidebar = localStorage.getItem('drawerSidebar');
-            const savedMiniVariant = localStorage.getItem('drawerMiniVariant');
-            if (savedMiniVariant !== null && savedMiniVariant === 'true') {
-                this.miniVariant = true;
-                this.sidebar = true;
-            } else if (savedSidebar !== null) {
-                this.sidebar = savedSidebar === 'true';
-            }
-        }
-
         this.$backend("/user/info").then((rsp) => {
             this.err = rsp.err;
             this.sys = rsp.sys;
@@ -531,9 +540,11 @@ export default {
             if (rsp.user.is_login) {
                 if (process.client && localStorage.getItem('drawerSidebar') === null) {
                     this.sidebar = this.$vuetify.breakpoint.lgAndUp;
+                    localStorage.setItem('drawerSidebar', this.sidebar);
                 }
                 if (process.client && localStorage.getItem('drawerMiniVariant') === null) {
                     this.miniVariant = this.$vuetify.breakpoint.lgAndUp;
+                    localStorage.setItem('drawerMiniVariant', this.miniVariant);
                 }
             }
         });
