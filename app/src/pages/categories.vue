@@ -96,7 +96,7 @@ export default {
         // Need to verify if this syntax works with the existing search API
         // The search API uses calibre_db.search which supports standard Calibre search syntax
         const query = `#category:=${category}`;
-        const response = await this.$backend(`/search?name=${encodeURIComponent(query)}&start=${start}&size=${this.page_size}`);
+        const response = await this.$backend(`/search?name=${encodeURIComponent(query)}&start=${start}&size=${this.page_size}&order=title`);
 
         if (response.err === "ok") {
           this.books = response.books || [];
