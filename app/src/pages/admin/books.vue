@@ -53,6 +53,12 @@
                                 </v-list-item-icon>
                                 <v-list-item-title>{{ $t('admin.books.clearRareTags') }}</v-list-item-title>
                             </v-list-item>
+                            <v-list-item @click="show_kindle_convert_dialog">
+                                <v-list-item-icon>
+                                    <v-icon>mdi-book-sync</v-icon>
+                                </v-list-item-icon>
+                                <v-list-item-title>{{ $t('admin.books.kindleConvert') }}</v-list-item-title>
+                            </v-list-item>
                         </v-list>
                     </v-menu>
                     <v-btn
@@ -406,6 +412,27 @@
             </v-card>
         </v-dialog>
 
+        <!-- Kindle格式转EPUB确认对话框 -->
+        <v-dialog v-model="kindle_convert_dialog" persistent transition="dialog-bottom-transition" width="500">
+            <v-card>
+                <v-toolbar flat dense dark color="info"> {{ $t('admin.books.reminderTitle') }} </v-toolbar>
+                <v-card-title></v-card-title>
+                <v-card-text>
+                    <p v-if="books_selected.length > 0">
+                        {{ $t('admin.books.kindleConvertSelectedConfirm', { count: books_selected.length }) }}
+                    </p>
+                    <p v-else>
+                        {{ $t('admin.books.kindleConvertAllConfirm') }}
+                    </p>
+                </v-card-text>
+                <v-card-actions>
+                    <v-btn @click="kindle_convert_dialog = false">{{ $t('admin.books.cancel') }}</v-btn>
+                    <v-spacer></v-spacer>
+                    <v-btn color="info" @click="kindleConvert">{{ $t('admin.books.execute') }}</v-btn>
+                </v-card-actions>
+            </v-card>
+        </v-dialog>
+
 
 </v-card>
 </template>
@@ -419,6 +446,7 @@ export default {
         meta_dialog: false,
         exchange_type_dialog: false,
         clear_rare_tags_dialog: false,
+        kindle_convert_dialog: false,
         adding_book: false,
         books_selected: [],
         tag_input: null,
@@ -610,6 +638,34 @@ export default {
 
         show_clear_rare_tags_dialog() {
             this.clear_rare_tags_dialog = true;
+        },
+
+        show_kindle_convert_dialog() {
+            this.kindle_convert_dialog = true;
+        },
+
+        kindleConvert() {
+            this.loading = true;
+            this.kindle_convert_dialog = false;
+
+            const body = {};
+            if (this.books_selected.length > 0) {
+                body.idlist = this.books_selected.map((book) => book.id);
+            }
+
+            this.$backend("/admin/book/kindleconvert", {
+                method: "POST",
+                body: JSON.stringify(body),
+            })
+                .then((rsp) => {
+                    this.handleApiResponse(rsp);
+                    this.books_selected = [];
+                    this.getDataFromApi();
+                    this.$alert("success", rsp.msg);
+                })
+                .finally(() => {
+                    this.loading = false;
+                });
         },
 
         clearRareTags() {

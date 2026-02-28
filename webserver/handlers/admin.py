@@ -19,6 +19,7 @@ import tornado
 from webserver import loader
 from webserver.services.autofill import AutoFillService
 from webserver.services.ai_fillinfo import AIFillInfoService
+from webserver.services.batch_convert import BatchConvertService
 from webserver.services.mail import MailService
 from webserver.services.book_barn import BookBarnClient
 from webserver.services.background_service import BackgroundService, BackgroundTask
@@ -672,6 +673,46 @@ class AdminBookAIFill(BaseHandler):
         return {"err": "ok", "msg": _(u"AI 更新任务已启动，请耐心等待")}
 
 
+class AdminBookConvert(BaseHandler):
+    """Admin API: 批量转换Kindle格式为EPUB"""
+    @js
+    @is_admin
+    def get(self):
+        status = BatchConvertService().status()
+        return {
+            "err": "ok",
+            "status": {
+                "total": status["count_total"],
+                "skip": status["count_skip"],
+                "done": status["count_done"],
+                "fail": status["count_fail"],
+                "running": status["is_running"],
+            },
+        }
+
+    @js
+    @is_admin
+    def post(self):
+        req = tornado.escape.json_decode(self.request.body)
+        idlist = req.get("idlist", [])
+        convert_status = BatchConvertService().status()
+        if convert_status["is_running"]:
+            return {"err": "task.running", "msg": _(u"有转换任务正在运行中，请稍后再试")}
+
+        if idlist:
+            if not isinstance(idlist, list):
+                return {"err": "params.error.idlist", "msg": _(u"参数错误, 未指定正确的id列表")}
+            for bid in idlist:
+                if not isinstance(bid, int):
+                    return {"err": "params.error.idlist", "msg": _(u"参数错误, id列表中包含无效的id")}
+
+        if not idlist:
+            idlist = list(self.calibre_db_cache.all_book_ids())
+
+        BatchConvertService().convert_all(self.current_user.id, idlist)
+        return {"err": "ok", "msg": _(u"Kindle转EPUB任务已启动，左上角可以查看进度")}
+
+
 class AdminBookbarnTokenApply(BaseHandler):
     @js
     @is_admin
@@ -800,6 +841,7 @@ def routes():
         (r"/api/admin/book/list", AdminBookList),
         (r"/api/admin/book/fill", AdminBookFill),
         (r"/api/admin/book/aifill", AdminBookAIFill),
+        (r"/api/admin/book/kindleconvert", AdminBookConvert),
         (r"/api/admin/bookbarn/token/apply", AdminBookbarnTokenApply),
         (r"/api/admin/books/delete", AdminDeleteBooks),
         (r"/api/admin/audio/test", AudioTestConnection),
