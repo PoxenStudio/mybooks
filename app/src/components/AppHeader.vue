@@ -57,10 +57,14 @@
                             :to="isExternalLink(link.href) ? undefined : link.href"
                             :href="isExternalLink(link.href) ? link.href : undefined"
                             :target="isExternalLink(link.href) ? '_blank' : undefined"
+                            class="v-list-item--group-child"
                         >
+                            <v-list-item-action class="mt-1 mb-1 mr-2" dense>
+                                <v-icon class="pa-0 ma-0" :color="link.color || ''">{{ link.icon }}</v-icon>
+                            </v-list-item-action>
                             <v-list-item-content>
                                 <v-list-item-title>
-                                    <v-icon :color="link.color || ''">{{ link.icon }}</v-icon> {{ $t(link.text) }}
+                                    {{ $t(link.text) }}
                                 </v-list-item-title>
                             </v-list-item-content>
                         </v-list-item>
@@ -838,6 +842,23 @@ export default {
     border-bottom-right-radius: 12px !important;
     top: 56px !important;
     height: calc(100vh - 56px) !important;
+    background: var(--v-background-base) !important;
+}
+
+.app-navigation-drawer .v-list-item {
+    position: relative !important;
+    z-index: 1 !important;
+    background: var(--v-background-base) !important;
+}
+
+.app-navigation-drawer .v-list-group {
+    position: relative !important;
+    z-index: 1 !important;
+}
+
+.app-navigation-drawer .v-list-item--icon-only {
+    background: var(--v-background-base) !important;
+    z-index: 2 !important;
 }
 
 
@@ -967,6 +988,34 @@ export default {
 
 .app-navigation-drawer .v-list-group__items > .v-list-item {
     padding-left: 48px !important;
+}
+
+.app-navigation-drawer .v-list-group__items > .v-list-item--group-child {
+    padding-left: 48px !important;
+    min-height: 40px !important;
+    position: relative !important;
+    z-index: 1 !important;
+    background: var(--v-background-base) !important;
+}
+
+.app-navigation-drawer .v-list-group__items > .v-list-item--group-child .v-list-item-action {
+    margin-right: 12px !important;
+}
+
+.app-navigation-drawer .v-list-group__items {
+    position: relative !important;
+    z-index: 1 !important;
+    background: var(--v-background-base) !important;
+}
+
+.app-navigation-drawer .v-list-group__items > .v-list-item--group-child:hover {
+    background: linear-gradient(90deg, rgba(102, 126, 234, 0.08) 0%, rgba(102, 126, 234, 0.02) 100%);
+    border-radius: 0 8px 8px 0;
+}
+
+.app-navigation-drawer .v-list-group__items > .v-list-item--active {
+    background: linear-gradient(90deg, rgba(102, 126, 234, 0.15) 0%, rgba(102, 126, 234, 0.05) 100%);
+    border-radius: 0 8px 8px 0;
 }
 
 .v-list-item--disabled {
