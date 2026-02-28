@@ -96,6 +96,7 @@ def is_admin(func):
 
 class BaseHandler(web.RequestHandler):
     _path_to_env = {}
+    _query_fallback_cache = {}
     site_url = ""
     db_lock = None  # 数据库访问锁，在应用启动时初始化
 
@@ -627,9 +628,18 @@ class BaseHandler(web.RequestHandler):
         sql = """SELECT tags.name, count(distinct book) as count
         FROM tags left join books_tags_link on tags.id = books_tags_link.tag
         group by tags.id order by count desc"""
-        with self.db_lock:
-            tags = dict((i[0], i[1]) for i in self.calibre_db_cache.backend.conn.get(sql))
-        return tags
+        cache_key = "all_tags_with_count"
+        try:
+            with self.db_lock:
+                tags = dict((i[0], i[1]) for i in self.calibre_db_cache.backend.conn.get(sql))
+            BaseHandler._query_fallback_cache[cache_key] = tags
+            return tags
+        except Exception as e:
+            cached = BaseHandler._query_fallback_cache.get(cache_key, {})
+            logging.error("all_tags_with_count query failed: %s", str(e))
+            if cached:
+                logging.warning("all_tags_with_count fallback to cache, count=%d", len(cached))
+            return cached
 
     def get_category_with_count(self, field):
         table = field if field in ["series"] else field + "s"
@@ -640,6 +650,7 @@ class BaseHandler(web.RequestHandler):
             name_column = "A.lang_code as name"
             field = "lang_code"
 
+        cache_key = f"get_category_with_count:{table}:{field}:{name_column}"
         args = {"table": table, "field": field, "name_column": name_column}
         sql = (
             """SELECT A.id, %(name_column)s, count(distinct book) as count
@@ -648,10 +659,18 @@ class BaseHandler(web.RequestHandler):
             % args
         )
         logging.debug(sql)
-        with self.db_lock:
-            rows = self.calibre_db_cache.backend.conn.get(sql)
-        items = [{"id": a, "name": b, "count": c} for a, b, c in rows]
-        return items
+        try:
+            with self.db_lock:
+                rows = self.calibre_db_cache.backend.conn.get(sql)
+            items = [{"id": a, "name": b, "count": c} for a, b, c in rows]
+            BaseHandler._query_fallback_cache[cache_key] = items
+            return items
+        except Exception as e:
+            cached = BaseHandler._query_fallback_cache.get(cache_key, [])
+            logging.error("get_category_with_count query failed for %s: %s", cache_key, str(e))
+            if cached:
+                logging.warning("get_category_with_count fallback to cache for %s, count=%d", cache_key, len(cached))
+            return cached
 
     def books_by_id(self):
         sql = "SELECT id FROM books order by id desc"
