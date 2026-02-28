@@ -420,7 +420,17 @@
         "emailInvalid": "邮箱地址格式不正确",
         "willSendFormat": "将发送 {format} 格式",
         "sendToEmailSuccess": "书籍正在发送到 {email}，请稍后查收邮件",
-        "sendToEmailFailed": "发送失败，请稍后重试"
+        "sendToEmailFailed": "发送失败，请稍后重试",
+        "uploadNewFormat": "上传新格式文件",
+        "uploadNewFormatDesc": "为当前书籍添加新的格式文件",
+        "selectFile": "选择文件",
+        "supportedFormatsUpload": "支持的格式: EPUB, MOBI, AZW, AZW3, PDF, TXT",
+        "upload": "上传",
+        "selectFileToUpload": "请选择要上传的文件",
+        "formatAlreadyExists": "该格式文件已存在",
+        "uploadSuccess": "格式上传成功",
+        "uploadFailed": "上传失败",
+        "uploadFailedNetwork": "网络错误"
     },
     "reader": {
         "tip": {
