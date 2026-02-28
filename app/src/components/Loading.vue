@@ -19,7 +19,7 @@ export default {
     right: 0;
     bottom: 0;
     z-index: 1;
-    background: white;
+    background: var(--tb-component-loading-bg);
     text-align: center;
     padding-top: 200px;
     font-size: 30px;

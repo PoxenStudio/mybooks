@@ -815,7 +815,7 @@ export default {
 <style scoped>
 .audio-player-container {
   height: 100vh;
-  background: linear-gradient(135deg, #2c2c2c 0%, #1a1a1a 100%);
+  background: linear-gradient(135deg, var(--tb-component-player-bg) 0%, var(--tb-component-player-inner-bg) 100%);
   color: #ffffff;
   display: flex;
   flex-direction: column;

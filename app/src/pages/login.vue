@@ -91,13 +91,9 @@ export default {
             // 为body添加login-page类名，应用背景图样式
             document.body.classList.add('login-page');
 
-            // set the theme according to the local storage value
-            const saved_theme = localStorage.getItem('site_theme');
-            if (saved_theme === 'dark') {
-                this.$vuetify.theme.dark = true;
-            } else {
-                this.$vuetify.theme.dark = false;
-            }
+            // set the theme according to user/site preference
+            const saved_theme = localStorage.getItem('user_theme') || localStorage.getItem('site_theme') || 'light';
+            this.$setTheme(saved_theme, false);
 
             // 延迟执行focus，确保DOM已渲染
             this.$nextTick(() => {

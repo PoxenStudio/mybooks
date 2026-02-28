@@ -1,0 +1,50 @@
+name: light
+label: 浅色
+vuetify_dark: false
+tokens:
+  nav:
+    bg: "#003153"
+    drawer_bg: "#002a45"
+    text: "rgba(255,255,255,0.87)"
+    text_muted: "rgba(255,255,255,0.70)"
+    hover_bg: "rgba(0,49,83,0.08)"
+  app:
+    bg: "#003153"
+    main_bg: "#f5f5f5"
+    surface: "#ffffff"
+    divider: "rgba(0,0,0,0.12)"
+  text:
+    primary: "rgba(0,0,0,0.87)"
+    secondary: "rgba(0,0,0,0.60)"
+    on_brand: "rgba(255,255,255,0.87)"
+    footer: "#666666"
+  color:
+    primary: "#00539a"
+    primary_hover: "#0074B7"
+    secondary: "#424242"
+    accent: "#82B1FF"
+    error: "#FF5252"
+    warning: "#FFC107"
+    info: "#2196F3"
+    success: "#4CAF50"
+  stats:
+    bar_from: "#003153"
+    bar_to: "#00539a"
+    card_1_from: "#1976d2"
+    card_1_to: "#42a5f5"
+    card_2_from: "#388e3c"
+    card_2_to: "#66bb6a"
+    card_3_from: "#f57c00"
+    card_3_to: "#ffa726"
+    card_4_from: "#7b1fa2"
+    card_4_to: "#ab47bc"
+  component:
+    tab_bg: "#f5f5f5"
+    tab_border: "#e0e0e0"
+    tab_active: "#1976d2"
+    tab_inactive_text: "#424242"
+    player_bg: "#2c2c2c"
+    player_inner_bg: "#1a1a1a"
+    loading_bg: "#ffffff"
+    login_overlay: "rgba(0,0,0,0.5)"
+    author_badge: "#299075"

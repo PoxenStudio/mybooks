@@ -199,19 +199,19 @@ export default {
 
 /* 渐变背景 */
 .gradient-bg-primary {
-    background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
+    background: linear-gradient(135deg, var(--tb-stats-card-1-from) 0%, var(--tb-stats-card-1-to) 100%);
 }
 
 .gradient-bg-success {
-    background: linear-gradient(135deg, #388e3c 0%, #66bb6a 100%);
+    background: linear-gradient(135deg, var(--tb-stats-card-2-from) 0%, var(--tb-stats-card-2-to) 100%);
 }
 
 .gradient-bg-info {
-    background: linear-gradient(135deg, #0288d1 0%, #29b6f6 100%);
+    background: linear-gradient(135deg, var(--tb-stats-card-3-from) 0%, var(--tb-stats-card-3-to) 100%);
 }
 
 .gradient-bg-orange {
-    background: linear-gradient(135deg, #f57c00 0%, #ffb74d 100%);
+    background: linear-gradient(135deg, var(--tb-stats-card-4-from) 0%, var(--tb-stats-card-4-to) 100%);
 }
 
 .book-card {

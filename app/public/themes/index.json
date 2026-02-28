@@ -1,0 +1,12 @@
+[
+  {
+    "name": "dark",
+    "label": "深色",
+    "vuetify_dark": true
+  },
+  {
+    "name": "light",
+    "label": "浅色",
+    "vuetify_dark": false
+  }
+]

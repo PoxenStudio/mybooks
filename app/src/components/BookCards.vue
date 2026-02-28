@@ -149,7 +149,7 @@ export default {
     position: absolute;
     top: 6px;
     left: 6px;
-    background-color: #2196F3;
+    background-color: var(--tb-color-info);
     border-radius: 50%;
     width: 24px;
     height: 24px;
@@ -163,7 +163,7 @@ export default {
     position: absolute;
     top: 6px;
     right: 6px;
-    background-color: #9C27B0;
+    background-color: var(--tb-color-accent);
     border-radius: 50%;
     width: 24px;
     height: 24px;

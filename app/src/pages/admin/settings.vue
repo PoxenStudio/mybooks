@@ -496,12 +496,7 @@ export default {
         localStorage.setItem('defaultPageSize', this.settings['DEFAULT_PAGE_SIZE']);
 
         if (this.settings['site_theme'] !== '') {
-          localStorage.setItem('site_theme', this.settings['site_theme']);
-          if (this.settings['site_theme'] === 'dark') {
-            this.$vuetify.theme.dark = true;
-          } else {
-            this.$vuetify.theme.dark = false;
-          }
+          this.$setSiteDefaultTheme(this.settings['site_theme']);
         }
       }
 

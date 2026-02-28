@@ -203,36 +203,20 @@ export default {
   font-weight: 600;
 }
 
-.theme--light .folder-tab {
-  background-color: #f5f5f5;
-  color: #424242;
-  border: 1px solid #e0e0e0;
+.folder-tab {
+  background-color: var(--tb-component-tab-bg);
+  color: var(--tb-component-tab-inactive-text);
+  border: 1px solid var(--tb-component-tab-border);
 }
 
-.theme--light .folder-tab:hover {
-  background-color: #eeeeee;
+.folder-tab:hover {
+  filter: brightness(0.95);
 }
 
-.theme--light .folder-tab.active {
-  background-color: #1976d2;
+.folder-tab.active {
+  background-color: var(--tb-component-tab-active);
   color: white;
-  border-color: #1976d2;
-}
-
-.theme--dark .folder-tab {
-  background-color: #2d2d2d;
-  color: #e0e0e0;
-  border: 1px solid #424242;
-}
-
-.theme--dark .folder-tab:hover {
-  background-color: #3d3d3d;
-}
-
-.theme--dark .folder-tab.active {
-  background-color: #1976d2;
-  color: white;
-  border-color: #1976d2;
+  border-color: var(--tb-component-tab-active);
 }
 
 @media (max-width: 600px) {

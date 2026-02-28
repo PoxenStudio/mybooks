@@ -494,7 +494,7 @@ export default {
   border: 1px solid #eee;
   border-radius: 4px;
   overflow: hidden;
-  background-color: #f5f5f5;
+  background-color: var(--tb-app-main-bg);
 }
 
 .cropper-container >>> .vue-cropper {

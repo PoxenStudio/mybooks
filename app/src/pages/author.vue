@@ -75,10 +75,9 @@
           <div v-if="pins && pins.length > 0" class="mb-2">
             <v-chip
               small
-              class="ma-1"
+              class="ma-1 author-pin-chip"
               v-for="pin in pins"
               :key="'pin-' + pin.name"
-              color="#299075"
               @click="selectAuthor(pin.name)"
               style="cursor: pointer"
             >
@@ -402,3 +401,10 @@ export default {
   }
 }
 </script>
+
+<style scoped>
+.author-pin-chip {
+  background-color: var(--tb-component-author-badge) !important;
+  color: #ffffff !important;
+}
+</style>

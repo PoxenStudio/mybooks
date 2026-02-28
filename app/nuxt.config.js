@@ -34,14 +34,17 @@ export default {
     'material-design-icons-iconfont/dist/material-design-icons.css',
     '@mdi/font/css/materialdesignicons.css',
     '~/assets/css/fonts.css',
-    '~/assets/css/background.css'
+    '~/assets/css/background.css',
+    '~/assets/css/themes.css',     // Auto-generated from public/themes/*.yaml
+    '~/assets/css/theme-base.css', // Structural styles referencing CSS vars
   ],
 
   // Plugins to run before rendering page: https://go.nuxtjs.dev/config-plugins
   plugins: [
     "~/plugins/talebook.js",
     "~/plugins/load-plugins.js",
-    "~/plugins/i18n.js"
+    "~/plugins/i18n.js",
+    { src: "~/plugins/theme.js", mode: "client" },
   ],
 
   // Auto import components: https://go.nuxtjs.dev/config-components

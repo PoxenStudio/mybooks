@@ -1,0 +1,125 @@
+/**
+ * theme-base.css
+ * 结构样式层：引用 --tb-* CSS 变量，替代原 theme-custom.css 中的硬编码颜色。
+ * 颜色值均来自 themes.css（由 scripts/build-themes.js 自动生成）。
+ *
+ * 勿在此文件内写入任何硬编码 hex / rgb 颜色值。
+ */
+
+/* ── Application 根层 ────────────────────────────────────────────── */
+.v-application {
+  background-color: var(--tb-app-bg) !important;
+}
+
+/* ── App Bar ─────────────────────────────────────────────────────── */
+.v-application .v-app-bar {
+  background-color: var(--tb-nav-bg) !important;
+}
+
+.v-application .v-app-bar .v-toolbar__title,
+.v-application .v-app-bar .v-btn {
+  color: var(--tb-nav-text) !important;
+}
+
+.v-application .v-app-bar .v-input input {
+  color: var(--tb-nav-text) !important;
+}
+
+.v-application .v-app-bar .v-input__icon i {
+  color: var(--tb-nav-text-muted) !important;
+}
+
+/* ── Navigation Drawer ───────────────────────────────────────────── */
+.v-application .v-navigation-drawer {
+  background-color: var(--tb-nav-drawer-bg) !important;
+}
+
+.v-application .v-navigation-drawer .v-list-item__title,
+.v-application .v-navigation-drawer .v-list-item__content,
+.v-application .v-navigation-drawer .v-icon {
+  color: var(--tb-nav-text) !important;
+}
+
+/* ── Main Content Area ───────────────────────────────────────────── */
+.v-application .v-main,
+.v-application .v-content {
+  background-color: var(--tb-app-main-bg) !important;
+}
+
+/* ── Bottom Navigation ───────────────────────────────────────────── */
+.v-application .v-bottom-navigation {
+  background-color: var(--tb-nav-bg) !important;
+}
+
+.v-application .v-bottom-navigation .v-btn {
+  color: var(--tb-nav-text) !important;
+}
+
+/* ── Toolbar (standalone) ────────────────────────────────────────── */
+.v-application .v-toolbar {
+  background-color: var(--tb-nav-bg) !important;
+}
+
+/* ── Cards & Sheets ──────────────────────────────────────────────── */
+.v-application .v-card {
+  background-color: var(--tb-app-surface) !important;
+}
+
+.v-application .v-sheet {
+  background-color: var(--tb-app-surface) !important;
+}
+
+/* ── List ────────────────────────────────────────────────────────── */
+.v-application .v-list {
+  background-color: transparent !important;
+}
+
+.v-application .v-list-item:hover {
+  background-color: var(--tb-nav-hover-bg) !important;
+}
+
+/* ── Divider ─────────────────────────────────────────────────────── */
+.v-application .v-divider {
+  border-color: var(--tb-app-divider) !important;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────── */
+.v-application .v-btn.primary {
+  background-color: var(--tb-color-primary) !important;
+}
+
+.v-application .v-btn.primary:hover {
+  background-color: var(--tb-color-primary-hover) !important;
+}
+
+/* ── Library Stats Bar ───────────────────────────────────────────── */
+.v-application .library-stats-bar {
+  background: linear-gradient(
+    135deg,
+    var(--tb-stats-bar-from) 0%,
+    var(--tb-stats-bar-to) 100%
+  ) !important;
+}
+
+/* ── 响应式：移动端 ──────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .v-application .v-app-bar,
+  .v-application .v-bottom-navigation {
+    background-color: var(--tb-nav-bg) !important;
+  }
+}
+
+/* ── 过渡动画（主题切换时平滑过渡）────────────────────────────────── */
+.v-application {
+  transition: background-color 0.25s ease;
+}
+
+.v-application .v-card,
+.v-application .v-sheet,
+.v-application .v-list,
+.v-application .v-toolbar,
+.v-application .v-app-bar,
+.v-application .v-navigation-drawer,
+.v-application .v-bottom-navigation {
+  transition: background-color 0.25s ease;
+}

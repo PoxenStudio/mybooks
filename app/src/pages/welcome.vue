@@ -50,12 +50,8 @@ export default {
     created() {
         this.$store.commit('navbar', false);
         if (process.client) {
-            const saved_theme = localStorage.getItem('site_theme');
-            if (saved_theme === 'dark') {
-                this.$vuetify.theme.dark = true;
-            } else {
-                this.$vuetify.theme.dark = false;
-            }
+            const saved_theme = localStorage.getItem('user_theme') || localStorage.getItem('site_theme') || 'light';
+            this.$setTheme(saved_theme, false);
         }
         if ( this.err == 'free' ) {
             this.$router.push(this.$route.query.next || "/");

@@ -60,7 +60,7 @@ ul, ol {
 }
 
 code {
-  background: #f5f5f5;
+  background: var(--tb-app-main-bg);
   padding: 2px 5px;
   border-radius: 3px;
 }

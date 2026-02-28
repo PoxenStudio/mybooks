@@ -2,6 +2,20 @@
 <html lang="en">
 
 <head>
+  <!-- Anti-FOUC: set data-theme before any CSS is applied -->
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem('user_theme') ||
+                localStorage.getItem('site_theme') ||
+                'light';
+        if (t !== 'light' && t !== 'dark') t = 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch(e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
   {{ HEAD }}
 </head>
 

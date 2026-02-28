@@ -61,7 +61,7 @@ export default {
 }
 
 .version-info {
-    color: #666;
+    color: var(--tb-text-footer);
     font-size: 12px;
     margin-top: 8px;
     margin-bottom: 8px;

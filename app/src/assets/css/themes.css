@@ -1,0 +1,94 @@
+/**
+ * themes.css — AUTO-GENERATED, DO NOT EDIT MANUALLY
+ * Source:  public/themes/*.yaml
+ * Rebuild: npm run build-themes
+ * Generated: 2026-02-28T13:31:58.072Z
+ */
+
+/* ── Theme: 深色 ── */
+:root[data-theme="dark"] {
+  --tb-nav-bg: #1e1e1e;
+  --tb-nav-drawer-bg: #121212;
+  --tb-nav-text: rgba(255,255,255,0.87);
+  --tb-nav-text-muted: rgba(255,255,255,0.54);
+  --tb-nav-hover-bg: rgba(255,255,255,0.08);
+  --tb-app-bg: #121212;
+  --tb-app-main-bg: #1e1e1e;
+  --tb-app-surface: #2d2d2d;
+  --tb-app-divider: rgba(255,255,255,0.12);
+  --tb-text-primary: rgba(255,255,255,0.87);
+  --tb-text-secondary: rgba(255,255,255,0.60);
+  --tb-text-on-brand: rgba(255,255,255,0.87);
+  --tb-text-footer: #999999;
+  --tb-color-primary: #2196F3;
+  --tb-color-primary-hover: #42A5F5;
+  --tb-color-secondary: #616161;
+  --tb-color-accent: #82B1FF;
+  --tb-color-error: #FF5252;
+  --tb-color-warning: #FFC107;
+  --tb-color-info: #42A5F5;
+  --tb-color-success: #66BB6A;
+  --tb-stats-bar-from: #1e3a52;
+  --tb-stats-bar-to: #2d5a7b;
+  --tb-stats-card-1-from: #1565c0;
+  --tb-stats-card-1-to: #42a5f5;
+  --tb-stats-card-2-from: #2e7d32;
+  --tb-stats-card-2-to: #66bb6a;
+  --tb-stats-card-3-from: #e65100;
+  --tb-stats-card-3-to: #ffa726;
+  --tb-stats-card-4-from: #6a1b9a;
+  --tb-stats-card-4-to: #ab47bc;
+  --tb-component-tab-bg: #2d2d2d;
+  --tb-component-tab-border: #444444;
+  --tb-component-tab-active: #2196F3;
+  --tb-component-tab-inactive-text: #e0e0e0;
+  --tb-component-player-bg: #2c2c2c;
+  --tb-component-player-inner-bg: #1a1a1a;
+  --tb-component-loading-bg: #121212;
+  --tb-component-login-overlay: rgba(0,0,0,0.7);
+  --tb-component-author-badge: #4db88c;
+}
+
+/* ── Theme: 浅色 ── */
+:root[data-theme="light"] {
+  --tb-nav-bg: #003153;
+  --tb-nav-drawer-bg: #002a45;
+  --tb-nav-text: rgba(255,255,255,0.87);
+  --tb-nav-text-muted: rgba(255,255,255,0.70);
+  --tb-nav-hover-bg: rgba(0,49,83,0.08);
+  --tb-app-bg: #003153;
+  --tb-app-main-bg: #f5f5f5;
+  --tb-app-surface: #ffffff;
+  --tb-app-divider: rgba(0,0,0,0.12);
+  --tb-text-primary: rgba(0,0,0,0.87);
+  --tb-text-secondary: rgba(0,0,0,0.60);
+  --tb-text-on-brand: rgba(255,255,255,0.87);
+  --tb-text-footer: #666666;
+  --tb-color-primary: #00539a;
+  --tb-color-primary-hover: #0074B7;
+  --tb-color-secondary: #424242;
+  --tb-color-accent: #82B1FF;
+  --tb-color-error: #FF5252;
+  --tb-color-warning: #FFC107;
+  --tb-color-info: #2196F3;
+  --tb-color-success: #4CAF50;
+  --tb-stats-bar-from: #003153;
+  --tb-stats-bar-to: #00539a;
+  --tb-stats-card-1-from: #1976d2;
+  --tb-stats-card-1-to: #42a5f5;
+  --tb-stats-card-2-from: #388e3c;
+  --tb-stats-card-2-to: #66bb6a;
+  --tb-stats-card-3-from: #f57c00;
+  --tb-stats-card-3-to: #ffa726;
+  --tb-stats-card-4-from: #7b1fa2;
+  --tb-stats-card-4-to: #ab47bc;
+  --tb-component-tab-bg: #f5f5f5;
+  --tb-component-tab-border: #e0e0e0;
+  --tb-component-tab-active: #1976d2;
+  --tb-component-tab-inactive-text: #424242;
+  --tb-component-player-bg: #2c2c2c;
+  --tb-component-player-inner-bg: #1a1a1a;
+  --tb-component-loading-bg: #ffffff;
+  --tb-component-login-overlay: rgba(0,0,0,0.5);
+  --tb-component-author-badge: #299075;
+}

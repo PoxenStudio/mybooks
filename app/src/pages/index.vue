@@ -72,7 +72,7 @@
             <v-card outlined style="border-radius: 12px;">
                 <v-list>
                     <v-list-item :to="nav.href" >
-                        <v-list-item-avatar large color='#003153' >
+                        <v-list-item-avatar large :color="$vuetify.theme.dark ? 'grey darken-3' : 'primary'" >
                             <v-icon dark >{{nav.icon}}</v-icon>
                         </v-list-item-avatar>
                         <v-list-item-content>
@@ -252,7 +252,7 @@ export default {
 <style>
 /* 书库统计标题栏样式 */
 .library-stats-bar {
-    background: #55655f;
+    background: linear-gradient(135deg, var(--tb-stats-bar-from) 0%, var(--tb-stats-bar-to) 100%);
     color: white;
     padding: 2px;
     margin: 0;

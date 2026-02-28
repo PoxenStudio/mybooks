@@ -7,7 +7,6 @@
             :width="240"
             :mini-variant-width="64"
             :mini-variant="miniVariant"
-            :color="drawerColor"
             :clipped="$vuetify.breakpoint.lgAndUp"
             class="app-navigation-drawer"
             @mouseenter="handleMouseEnter"
@@ -128,7 +127,7 @@
             </template>
         </v-navigation-drawer>
 
-        <v-app-bar class="px-0" :color="appBarColor" dense dark app fixed clipped-left extension-height="64">
+        <v-app-bar class="px-0" dense dark app fixed clipped-left extension-height="64">
             <template v-if="btn_search && $vuetify.breakpoint.xs" #extension>
                 <v-container fluid>
                     <v-form @submit.prevent="doSearch">
@@ -413,12 +412,6 @@ export default {
     };
     },
     computed: {
-        appBarColor() {
-            return this.$vuetify.theme.dark ? 'dark' : '#003153';
-        },
-        drawerColor() {
-            return this.$vuetify.theme.dark ? 'dark' : '#F7FAF7';
-        },
         isAiFeatureEnabled() {
             if (process.client) {
                 return localStorage.getItem('aiEnabled') === 'true';
@@ -530,8 +523,7 @@ export default {
                 localStorage.setItem('chunk_upload_size', rsp.sys.chunkUploadSize);
             }
             if (process.client && rsp.sys.theme !== '') {
-                localStorage.setItem('site_theme', this.sys.theme);
-                this.$vuetify.theme.dark = rsp.sys.theme === 'dark';
+                this.$setSiteDefaultTheme(rsp.sys.theme);
             }
             if (rsp.sys.footer === '') {
                 rsp.sys.footer = this.$t('footer.base_message');
@@ -1145,16 +1137,16 @@ export default {
 }
 
 .chat-messages::-webkit-scrollbar-track {
-    background: #f1f1f1;
+    background: var(--tb-app-main-bg);
 }
 
 .chat-messages::-webkit-scrollbar-thumb {
-    background: #cccccc;
+    background: var(--tb-app-divider);
     border-radius: 4px;
 }
 
 .chat-messages::-webkit-scrollbar-thumb:hover {
-    background: #999999;
+    background: var(--tb-text-footer);
 }
 
 .message-item {
