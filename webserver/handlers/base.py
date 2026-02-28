@@ -5,8 +5,10 @@ import asyncio
 import base64
 import datetime
 import logging
+import os
 import random
 import time
+import traceback
 from collections import defaultdict
 from gettext import gettext as _
 
@@ -55,7 +57,6 @@ def js(func):
             if result is not None:
                 rsp["msg"] = result
         except Exception as e:
-            import traceback
             logging.error(traceback.format_exc())
             msg = (
                 'Exception:<br><pre style="white-space:pre-wrap;word-break:keep-all">%s</pre>' % traceback.format_exc()
@@ -709,6 +710,87 @@ class BaseHandler(web.RequestHandler):
         except Exception as e:
             logging.debug(f"Search query '{query}' failed: {e}")
         return existing_books
+
+    def save_book_meta(self, book_id, fmt=None):
+        book = self.get_book(book_id, raise_exception=False)
+        if not book:
+            return {"err": "book.not_found", "msg": _(u"书籍不存在")}
+
+        logging.info(f"[SAVE_META] save meta for book id:{book_id}, fmt:{fmt if fmt else 'ALL'}")
+
+        # 检查是否有支持的格式（可按 fmt 过滤）
+        supported_formats = []
+        for f in ["epub", "azw3", "pdf"]:
+            if fmt and f != fmt.lower():
+                continue
+            fmt_key = f"fmt_{f}"
+            if fmt_key in book:
+                supported_formats.append((f, book[fmt_key]))
+
+        if not supported_formats:
+            if fmt:
+                return {
+                    "err": "format.not_supported",
+                    "msg": _(u"书籍没有指定的格式：%s") % fmt.upper(),
+                }
+            return {"err": "format.not_supported", "msg": _(u"书籍没有支持的格式（需要 EPUB、AZW3 或 PDF）")}
+        try:
+            from calibre.ebooks.metadata.meta import set_metadata
+
+            # 获取当前书籍的元数据
+            mi = self.calibre_db.get_metadata(book_id, index_is_id=True)
+            if not mi:
+                return {"err": "book.meta.not_found", "msg": _(u"无法获取书籍元数据")}
+
+            success_formats = []
+            failed_formats = []
+
+            for f, file_path in supported_formats:
+                try:
+                    if not os.path.exists(file_path):
+                        logging.warning(f"[SAVE_META] File not found: {file_path}")
+                        failed_formats.append(f.upper())
+                        continue
+
+                    if mi.title:
+                        mi.title_sort = utils.super_strip(mi.title)
+                    if mi.authors:
+                        mi.author_sort = utils.super_strip(mi.authors[0])
+
+                    # 获取封面数据（cover 方法直接返回字节数据）
+                    cover_data = self.calibre_db.cover(book_id, index_is_id=True)
+                    if cover_data:
+                        mi.cover_data = ('jpeg', cover_data)
+                        logging.info(f"[SAVE_META] Cover data added for {f.upper()}, size: {len(cover_data)} bytes")
+
+                    # 将元数据写入文件（包含封面）
+                    with open(file_path, "rb+") as stream:
+                        set_metadata(stream, mi, stream_type=f)
+
+                    logging.info(f"[SAVE_META] Successfully saved metadata to {f.upper()} file for book {book_id}")
+                    success_formats.append(f.upper())
+                except Exception as e:
+                    logging.error(f"[SAVE_META] Failed to save metadata to {f.upper()} file for book {book_id}: {e}")
+                    logging.error(traceback.format_exc())
+                    failed_formats.append(f.upper())
+
+            if success_formats:
+                msg = _(u"成功将元数据同步到文件：%s") % ", ".join(success_formats)
+                if failed_formats:
+                    msg += _(u"；失败：%s") % ", ".join(failed_formats)
+                return {"err": "ok", "msg": msg, "success_formats": success_formats, "failed_formats": failed_formats}
+            else:
+                return {
+                    "err": "save.failed",
+                    "msg": _(u"同步元数据失败：%s") % ", ".join(failed_formats),
+                    "success_formats": [],
+                    "failed_formats": failed_formats,
+                }
+
+        except Exception as e:
+            logging.error(f"[SAVE_META] Error saving metadata for book {book_id}: {e}")
+            logging.error(traceback.format_exc())
+            return {"err": "internal", "msg": _(u"同步元数据时发生错误: %s") % str(e)}
 
 
 class ListHandler(BaseHandler):

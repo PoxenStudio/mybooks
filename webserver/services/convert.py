@@ -3,6 +3,7 @@
 
 import os
 import logging
+import traceback
 
 from gettext import gettext as _
 import subprocess
@@ -10,6 +11,7 @@ import time
 import psutil
 
 from webserver import loader
+from webserver import utils
 from webserver.services import AsyncService
 from webserver.services.mail import MailService
 from webserver.services.background_service import BackgroundService, BackgroundTask
@@ -51,7 +53,13 @@ class ConvertService(AsyncService):
         args = [EBOOK_CONVERT_CMD, old_path, new_path]
         args += ["--book-producer", "PoxenStudio/Talebook"]
         if new_path.lower().endswith(".epub"):
-            args += ["--flow-size", "0"]
+            args += ["--epub-version", "2"]
+            if old_path.lower().endswith(".txt"):
+                args += ["--chapter-mark", "pagebreak",
+                         "--output-profile", "kindle",
+                         "--flow-size", "260"]
+            else:
+                args += ["--flow-size", "0"]
         elif new_path.lower().endswith(".azw3"):
             args += ["--embed-font-family", "Lato"]
             args += ["--enable-heuristics", "--output-profile", "kindle"]
@@ -71,9 +79,9 @@ class ConvertService(AsyncService):
         timeout = DEFAULT_CONVERT_TIMEOUT
         try:
             timeout = int(CONF["convert_timeout"])
-        except:
+        except Exception as e:
+            logging.warning("Failed to get convert timeout from config: %s", e)
             timeout = DEFAULT_CONVERT_TIMEOUT
-            pass
 
         with open(log_path, "w") as log:
             cmd = " ".join("'%s'" % v for v in args)
@@ -140,6 +148,34 @@ class ConvertService(AsyncService):
         with open(new_path, "rb") as f:
             self.db.add_format(book["id"], new_fmt, f, index_is_id=True)
             logging.info("added new book: %s", new_path)
+
+        # Write metadata to the new file (including cover)
+        try:
+            from calibre.ebooks.metadata.meta import set_metadata
+
+            book_id = book["id"]
+            mi = self.db.get_metadata(book_id, index_is_id=True)
+            if mi:
+                if mi.title:
+                    mi.title_sort = utils.super_strip(mi.title)
+                if mi.authors:
+                    mi.author_sort = utils.super_strip(mi.authors[0])
+
+                cover_data = self.db.cover(book_id, index_is_id=True)
+                if cover_data:
+                    mi.cover_data = ("jpeg", cover_data)
+
+                fmt_path = self.db.format_abspath(book_id, new_fmt, index_is_id=True)
+                if fmt_path and os.path.exists(fmt_path):
+                    with open(fmt_path, "rb+") as stream:
+                        set_metadata(stream, mi, stream_type=new_fmt)
+                    logging.info(f"[CONVERT] Metadata written to {new_fmt.upper()} for book {book_id}")
+                else:
+                    logging.warning(f"[CONVERT] Cannot find converted file path for book {book_id} fmt {new_fmt}")
+        except Exception:
+            logging.error(f"[CONVERT] Failed to write metadata after conversion for book {book['id']}")
+            logging.error(traceback.format_exc())
+
         self.add_msg(user_id, "success", _(u"[%s]文件格式转换成功" % service_item))
         # 清理临时文件
         os.remove(new_path)
