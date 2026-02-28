@@ -168,6 +168,7 @@
             "description": "This table only displays partial fields of books. Click to quickly modify. For complete book information, please click the link to view the book details page.",
             "refresh": "Refresh",
             "autoUpdate": "Auto-update book information...",
+            "batchProcess": "Batch Process",
             "clearRareTags": "Update Rare Tags",
             "aiUpdate": "AI Update Info",
             "clearRareTagsConfirm": "This will update tags for books with tags that have less than 3 books. This operation may take some time. Continue?",

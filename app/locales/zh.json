@@ -173,6 +173,7 @@
             "description": "此表格仅展示图书的部分字段，点击即可快捷修改。完整图书信息请点击链接查看书籍详情页面",
             "refresh": "刷新",
             "autoUpdate": "自动更新信息",
+            "batchProcess": "批量处理",
             "clearRareTags": "更新稀少标签",
             "aiUpdate": "AI更新信息",
             "clearRareTagsConfirm": "会将少于3本书的标签所对应的书籍重新更新标签。此操作可能需要一些时间，确认继续？",

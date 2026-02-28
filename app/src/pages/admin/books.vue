@@ -18,6 +18,43 @@
                         <v-icon>mdi-reload</v-icon>
                         <span v-if="!$vuetify.breakpoint.xs">{{ $t('admin.books.refresh') }}</span>
                     </v-btn>
+                    <v-menu offset-y>
+                        <template v-slot:activator="{ on, attrs }">
+                            <v-btn
+                                :disabled="loading || scraping"
+                                outlined
+                                color="purple"
+                                class="flex-shrink-0"
+                                :icon="$vuetify.breakpoint.xs"
+                                :small="$vuetify.breakpoint.xs"
+                                v-bind="attrs"
+                                v-on="on"
+                            >
+                                <v-icon>mdi-dots-vertical</v-icon>
+                                <span v-if="!$vuetify.breakpoint.xs">{{ $t('admin.books.batchProcess') }}</span>
+                            </v-btn>
+                        </template>
+                        <v-list>
+                            <v-list-item @click="show_clear_rare_tags_dialog">
+                                <v-list-item-icon>
+                                    <v-icon>mdi-tag-remove-outline</v-icon>
+                                </v-list-item-icon>
+                                <v-list-item-title>{{ $t('admin.books.clearRareTags') }}</v-list-item-title>
+                            </v-list-item>
+                            <v-list-item @click="ai_fill" :disabled="books_selected.length === 0">
+                                <v-list-item-icon>
+                                    <v-icon>mdi-robot</v-icon>
+                                </v-list-item-icon>
+                                <v-list-item-title>{{ $t('admin.books.aiUpdate') }}</v-list-item-title>
+                            </v-list-item>
+                            <v-list-item @click="show_exchange_type_dialog" :disabled="books_selected.length === 0">
+                                <v-list-item-icon>
+                                    <v-icon>mdi-swap-horizontal</v-icon>
+                                </v-list-item-icon>
+                                <v-list-item-title>{{ $t('admin.books.exchangeType') }}</v-list-item-title>
+                            </v-list-item>
+                        </v-list>
+                    </v-menu>
                     <v-btn
                         :disabled="loading || scraping"
                         outlined
@@ -31,31 +68,6 @@
                         <span v-if="!$vuetify.breakpoint.xs">{{ $t('admin.books.autoUpdate') }}</span>
                     </v-btn>
                     <v-btn
-                        :disabled="loading || scraping"
-                        outlined
-                        color="warning"
-                        @click="show_clear_rare_tags_dialog"
-                        class="flex-shrink-0"
-                        :icon="$vuetify.breakpoint.xs"
-                        :small="$vuetify.breakpoint.xs"
-                    >
-                        <v-icon>mdi-tag-remove-outline</v-icon>
-                        <span v-if="!$vuetify.breakpoint.xs">{{ $t('admin.books.clearRareTags') }}</span>
-                    </v-btn>
-                    <v-btn
-                        :disabled="loading || scraping || books_selected.length === 0"
-                        outlined
-                        color="teal darken-1"
-                        @click="ai_fill"
-                        class="flex-shrink-0"
-                        :icon="$vuetify.breakpoint.xs"
-                        :small="$vuetify.breakpoint.xs"
-                    >
-                        <v-icon>mdi-robot</v-icon>
-                        <span v-if="!$vuetify.breakpoint.xs">{{ $t('admin.books.aiUpdate') }}</span>
-                    </v-btn>
-                    <!-- 删除选中按钮紧跟在主要按钮后面 -->
-                    <v-btn
                         v-if="!loading && books_selected.length > 0"
                         outlined
                         color="error"
@@ -66,19 +78,6 @@
                     >
                         <v-icon>mdi-delete</v-icon>
                         <span v-if="!$vuetify.breakpoint.xs">{{ $t('admin.books.deleteSelected') }}</span>
-                    </v-btn>
-                    <!-- 图书类型互转按钮 -->
-                    <v-btn
-                        v-if="!loading && books_selected.length > 0"
-                        outlined
-                        color="warning"
-                        @click="show_exchange_type_dialog"
-                        class="flex-shrink-0"
-                        :icon="$vuetify.breakpoint.xs"
-                        :small="$vuetify.breakpoint.xs"
-                    >
-                        <v-icon>mdi-swap-horizontal</v-icon>
-                        <span v-if="!$vuetify.breakpoint.xs">{{ $t('admin.books.exchangeType') }}</span>
                     </v-btn>
                     <v-select
                         dense
@@ -131,14 +130,14 @@
             :server-items-length="total"
             :loading="loading"
             :items-per-page="100"
-            :footer-props="{ 'items-per-page-options': [10, 50, 100] }"
+            :footer-props="{ 'items-per-page-options': [10, 50, 100, 1000] }"
             :mobile-breakpoint="600"
         >
             <template v-slot:top>
                 <v-data-footer
                     :options.sync="options"
                     :pagination="topPagination"
-                    :items-per-page-options="[10, 50, 100]"
+                    :items-per-page-options="[10, 50, 100, 1000]"
                     @update:options="options = $event"
                 />
             </template>
@@ -645,6 +644,7 @@ export default {
                     this.handleApiResponse(rsp);
                     this.books_selected = [];
                     this.getDataFromApi();
+                    this.$alert("success", rsp.msg);
                 })
                 .finally(() => {
                     this.loading = false;
