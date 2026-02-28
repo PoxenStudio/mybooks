@@ -35,12 +35,6 @@
                             </v-btn>
                         </template>
                         <v-list>
-                            <v-list-item @click="show_clear_rare_tags_dialog">
-                                <v-list-item-icon>
-                                    <v-icon>mdi-tag-remove-outline</v-icon>
-                                </v-list-item-icon>
-                                <v-list-item-title>{{ $t('admin.books.clearRareTags') }}</v-list-item-title>
-                            </v-list-item>
                             <v-list-item @click="ai_fill" :disabled="books_selected.length === 0">
                                 <v-list-item-icon>
                                     <v-icon>mdi-robot</v-icon>
@@ -52,6 +46,12 @@
                                     <v-icon>mdi-swap-horizontal</v-icon>
                                 </v-list-item-icon>
                                 <v-list-item-title>{{ $t('admin.books.exchangeType') }}</v-list-item-title>
+                            </v-list-item>
+                            <v-list-item @click="show_clear_rare_tags_dialog">
+                                <v-list-item-icon>
+                                    <v-icon>mdi-tag-remove-outline</v-icon>
+                                </v-list-item-icon>
+                                <v-list-item-title>{{ $t('admin.books.clearRareTags') }}</v-list-item-title>
                             </v-list-item>
                         </v-list>
                     </v-menu>
