@@ -2499,8 +2499,9 @@ class BookSperate(BaseHandler):
             if 'upload_path' in locals() and os.path.exists(upload_path):
                 try:
                     os.remove(upload_path)
-                except:
-                    pass
+                except Exception as err:
+                    logging.error(f"[SEPARATE] Failed to clean up temporary file {upload_path}: {err}")
+
             return {"err": "internal", "msg": _(u"分离格式时发生错误: %s") % str(e)}
 
 
@@ -2510,75 +2511,11 @@ class BookSaveMeta(BaseHandler):
     def post(self, bid):
         """将书籍的元数据保存到文件中（仅支持 epub/azw3/pdf）"""
         book_id = int(bid)
-        book = self.get_book(book_id, raise_exception=False)
-        if not book:
-            return {"err": "book.not_found", "msg": _(u"书籍不存在")}
-
         if not self.is_admin() and not self.is_book_owner(book_id, self.user_id()):
-            return {"err": "user.no_permission", "msg": _(u"无权限")}
+            return {"err": "user.no_permission", "msg": _(u"无权限，非管理员或书籍所有者无法操作")}
 
-        # 检查是否有支持的格式
-        supported_formats = []
-        for fmt in ["epub", "azw3", "pdf"]:
-            fmt_key = f"fmt_{fmt}"
-            if fmt_key in book:
-                supported_formats.append((fmt, book[fmt_key]))
-
-        if not supported_formats:
-            return {"err": "format.not_supported", "msg": _(u"书籍没有支持的格式（需要 EPUB、AZW3 或 PDF）")}
-
-        try:
-            from calibre.ebooks.metadata.meta import set_metadata
-
-            # 获取当前书籍的元数据
-            mi = self.calibre_db.get_metadata(book_id, index_is_id=True)
-            if not mi:
-                return {"err": "book.meta.not_found", "msg": _(u"无法获取书籍元数据")}
-
-            success_formats = []
-            failed_formats = []
-
-            for fmt, file_path in supported_formats:
-                try:
-                    if not os.path.exists(file_path):
-                        logging.warning(f"[SAVE_META] File not found: {file_path}")
-                        failed_formats.append(fmt.upper())
-                        continue
-
-                    if mi.title:
-                        mi.title_sort = utils.super_strip(mi.title)
-                    if mi.authors:
-                        mi.author_sort = utils.super_strip(mi.authors[0])
-
-                    # 获取封面数据（cover方法直接返回字节数据）
-                    cover_data = self.calibre_db.cover(book_id, index_is_id=True)
-                    if cover_data:
-                        # cover_data 已经是字节数据，设置封面数据，格式为 (扩展名, 字节数据)
-                        mi.cover_data = ('jpeg', cover_data)
-                        logging.info(f"[SAVE_META] Cover data added for {fmt.upper()}, size: {len(cover_data)} bytes")
-
-                    # 将元数据写入文件（包含封面）
-                    with open(file_path, "r+b") as stream:
-                        set_metadata(stream, mi, stream_type=fmt, use_libprs_metadata=True)
-
-                    logging.info(f"[SAVE_META] Successfully saved metadata to {fmt.upper()} file for book {book_id}")
-                    success_formats.append(fmt.upper())
-                except Exception as e:
-                    logging.error(f"[SAVE_META] Failed to save metadata to {fmt.upper()} file for book {book_id}: {e}")
-                    failed_formats.append(fmt.upper())
-
-            if success_formats:
-                msg = _(u"成功将元数据同步到文件：%s") % ", ".join(success_formats)
-                if failed_formats:
-                    msg += _(u"；失败：%s") % ", ".join(failed_formats)
-                return {"err": "ok", "msg": msg}
-            else:
-                return {"err": "save.failed", "msg": _(u"同步元数据失败：%s") % ", ".join(failed_formats)}
-
-        except Exception as e:
-            logging.error(f"[SAVE_META] Error saving metadata for book {book_id}: {e}")
-            traceback.print_exc()
-            return {"err": "internal", "msg": _(u"同步元数据时发生错误: %s") % str(e)}
+        fmt = self.get_argument("fmt", None)
+        return self.save_book_meta(book_id, fmt=fmt)
 
 
 class ClearRareTags(ListHandler):
