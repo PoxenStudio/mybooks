@@ -1722,18 +1722,13 @@ class BookUpload(BaseHandler):
 
     def _add_format_to_existing_book(self, book_id):
         """向已存在的书籍添加新格式文件"""
-        from calibre.ebooks.metadata.meta import get_metadata
-
-        # 检查书籍是否存在
         book = self.get_book(book_id, raise_exception=False)
         if not book:
             return {"err": "book.not_found", "msg": _(u"书籍不存在")}
 
-        # 检查权限
         if not self.is_admin() and not self.is_book_owner(book_id, self.user_id()):
             return {"err": "user.no_permission", "msg": _(u"无权限")}
 
-        # 获取上传文件
         name, data = self.get_upload_file()
         if name is None:
             return {"err": "params.filename", "msg": _(u"文件不存在或未选择文件")}
@@ -1763,7 +1758,6 @@ class BookUpload(BaseHandler):
         logging.debug(f"Save format file to [{fpath}]")
 
         try:
-            # 添加格式到已存在的书籍
             self.calibre_db.add_format(book_id, fmt.upper(), fpath, True)
             logging.info(f"Successfully added {fmt.upper()} format to book {book_id}")
 
