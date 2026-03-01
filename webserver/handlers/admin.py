@@ -2,7 +2,6 @@
 # -*- coding: UTF-8 -*-
 
 import datetime
-import hashlib
 import logging
 import os
 import re
