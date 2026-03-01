@@ -186,7 +186,7 @@ class UserNew(BaseHandler):
         user.username = username
         user.name = nickname
         user.email = email
-        user.avatar = "reader.png"
+        user.avatar = "reader.svg"
         user.create_time = datetime.datetime.now()
         user.update_time = datetime.datetime.now()
         user.access_time = datetime.datetime.now()
