@@ -14,7 +14,7 @@
             @mouseenter="handleMouseEnter"
             @mouseleave="handleMouseLeave"
         >
-            <div class="drawer-click-area" @click="toggleDrawerState">
+            <div class="drawer-click-area">
                 <v-list dense @click.stop>
                     <template v-for="(item, idx) in items">
                         <v-subheader v-if="item.heading" :key="'heading-' + idx" v-show="!miniVariant">{{ $t(item.heading) }}</v-subheader>
@@ -599,16 +599,6 @@ export default {
             if (process.client) {
                 localStorage.setItem('drawerSidebar', this.sidebar);
                 localStorage.setItem('drawerMiniVariant', this.miniVariant);
-            }
-        },
-        toggleDrawerState(event) {
-            if (this.$vuetify.breakpoint.lgAndUp) {
-                this.toggleMiniVariant();
-            } else {
-                this.sidebar = !this.sidebar;
-                if (process.client) {
-                    localStorage.setItem('drawerSidebar', this.sidebar);
-                }
             }
         },
         handleMouseEnter() {
