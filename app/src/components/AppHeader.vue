@@ -1,6 +1,7 @@
 <template>
     <div>
         <v-navigation-drawer
+            v-if="$store.state.nav"
             v-model="sidebar"
             app
             fixed
@@ -156,7 +157,7 @@
                 </v-container>
             </template>
 
-            <v-tooltip bottom>
+            <v-tooltip bottom v-if="$store.state.nav">
                 <template v-slot:activator="{ on, attrs }">
                     <v-btn icon @click="toggleMiniVariant" v-bind="attrs" v-on="on">
                         <v-avatar color="primary" class="avatar-round" size="36">
