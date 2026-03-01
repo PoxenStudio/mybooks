@@ -156,11 +156,17 @@
                 </v-container>
             </template>
 
-            <v-btn icon @click="toggleMiniVariant">
-                <v-avatar color="primary" class="avatar-round" size="36">
-                    <img :src="user.is_login ? user.avatar : getGuestAvatar()" @error="handleAvatarError" class="avatar-img" />
-                </v-avatar>
-            </v-btn>
+            <v-tooltip bottom>
+                <template v-slot:activator="{ on, attrs }">
+                    <v-btn icon @click="toggleMiniVariant" v-bind="attrs" v-on="on">
+                        <v-avatar color="primary" class="avatar-round" size="36">
+                            <img :src="user.is_login ? user.avatar : getGuestAvatar()" @error="handleAvatarError" class="avatar-img" />
+                        </v-avatar>
+                    </v-btn>
+                </template>
+                <span v-if="user.is_login">{{ user.username }}({{ user.email }})</span>
+                <span v-else>{{ $t('appHeader.please_login') }}</span>
+            </v-tooltip>
 
             <v-toolbar-title class="ml-4 mr-12 align-center d-flex">
                 <span class="cursor-pointer" @click="$router.push('/')">{{ sys.title.length > 10 ? sys.title.substring(0, 10) + '...' : sys.title }}</span>
