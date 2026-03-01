@@ -2149,7 +2149,7 @@ class BookTxtInit(BaseHandler):
         book = self.get_book(bid)
         fpath = book.get("fmt_txt", None)
         if not fpath:
-            return {"err": "format error", "msg": "非txt书籍"}
+            return {"err": "format error", "msg": "非text书籍"}
         # 解压后的目录
         fdir = os.path.join(CONF["extract_path"], str(book["id"]))
         # txt 解析出的目录文件
@@ -2158,13 +2158,13 @@ class BookTxtInit(BaseHandler):
         if is_ready:
             with open(content_path, 'r', encoding='utf8') as f:
                 meta = json.loads(f.read())
-            return {"err": "ok", "msg": "已解析", "data": {
+            return {"err": "ok", "msg": "parsed", "data": {
                 "content": meta['toc'],
                 "encoding": meta['encoding'],
                 "name": book["title"]
             }}
         if test_ready != "0":
-            return {"err": "ok", "msg": "未解析完成"}
+            return {"err": "ok", "msg": "not parsed"}
 
         # 若未解析则计算预计等待时间，至少2分钟
         wait = min(120, os.path.getsize(fpath) / (1024 * 1024) * 15)

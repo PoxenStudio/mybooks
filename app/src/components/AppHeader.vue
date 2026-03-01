@@ -862,8 +862,6 @@ export default {
     border-bottom-right-radius: 12px !important;
     top: 56px !important;
     height: calc(100vh - 56px) !important;
-    background: var(--v-background-base) !important;
-    background-color: var(--v-background-base) !important;
     opacity: 1 !important;
 }
 
@@ -876,7 +874,6 @@ export default {
     .app-navigation-drawer {
         top: 56px !important;
         height: calc(100vh - 56px) !important;
-        background-color: var(--v-background-base) !important;
         opacity: 1 !important;
     }
 }
@@ -884,8 +881,6 @@ export default {
 .app-navigation-drawer .v-list-item {
     position: relative !important;
     z-index: 1 !important;
-    background: var(--v-background-base) !important;
-    background-color: var(--v-background-base) !important;
     opacity: 1 !important;
 }
 
@@ -895,8 +890,6 @@ export default {
 }
 
 .app-navigation-drawer .v-list-item--icon-only {
-    background: var(--v-background-base) !important;
-    background-color: var(--v-background-base) !important;
     z-index: 2 !important;
     opacity: 1 !important;
 }
@@ -1035,13 +1028,7 @@ export default {
     min-height: 40px !important;
     position: relative !important;
     z-index: 1 !important;
-    background: var(--v-background-base) !important;
-    background-color: #F7FAF7 !important;
     opacity: 1 !important;
-}
-
-.theme--dark .app-navigation-drawer .v-list-group__items > .v-list-item--group-child {
-    background-color: #1E1E1E !important;
 }
 
 .app-navigation-drawer .v-list-group__items > .v-list-item--group-child .v-list-item-action {
@@ -1051,13 +1038,7 @@ export default {
 .app-navigation-drawer .v-list-group__items {
     position: relative !important;
     z-index: 1 !important;
-    background: var(--v-background-base) !important;
-    background-color: #F7FAF7 !important;
     opacity: 1 !important;
-}
-
-.theme--dark .app-navigation-drawer .v-list-group__items {
-    background-color: #1E1E1E !important;
 }
 
 .app-navigation-drawer .v-list-group__items > .v-list-item--group-child:hover {

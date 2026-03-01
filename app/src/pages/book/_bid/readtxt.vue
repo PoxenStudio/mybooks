@@ -73,25 +73,29 @@ import AppFooter from "~/components/AppFooter.vue"
 export default {
   name: "TxtReader",
   components: {AppFooter},
-  data: () => ({
-    sidebar: null,
-    bookid: null,
-    items: ["1", "2", "3"],
-    content: [],
-    inited: false,
-    wait: 0,
-    name: null,
-    novelContent: '',
-    selected: -1,
-    loading: true,
-    tip: {
-      title: this.$t('reader.tip.title'),
-      content: this.$t('reader.tip.content')
+  data() {
+    return {
+      sidebar: null,
+      bookid: null,
+      items: ["1", "2", "3"],
+      content: [],
+      inited: false,
+      wait: 0,
+      name: null,
+      novelContent: '',
+      selected: -1,
+      loading: true,
+      tip: {
+        title: '',
+        content: ''
+      }
     }
-  }),
+  },
   created() {
     this.bookid = this.$route.params.bid;
     this.$store.commit("navbar", false);
+    this.tip.title = this.$t('reader.tip.title');
+    this.tip.content = this.$t('reader.tip.content');
     this.init()
   },
   methods: {
@@ -104,7 +108,7 @@ export default {
             this.tip.content = rsp.msg;
             return;
           }
-          if (rsp.msg === this.$t('reader.parsed')) {
+          if (rsp.msg === "parsed") {
             this.inited = true;
             this.content = rsp.data.content;
             this.name = rsp.data.name;
@@ -130,7 +134,7 @@ export default {
               if (this.wait % 5 !== 0) return;
               this.$backend(`/book/txt/init?id=${this.bookid}&test=1`,)
                 .then(res => {
-                  if (res.err === "ok" && res.msg === this.$t('reader.parsed')) {
+                  if (res.err === "ok" && res.msg === "parsed") {
                     this.inited = true;
                     this.content = res.data.content;
                     this.name = res.data.name;

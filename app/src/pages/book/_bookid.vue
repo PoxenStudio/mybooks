@@ -1742,7 +1742,7 @@ export default {
         get_txt_parse_status(){
           this.$backend(`/book/txt/init?id=${this.book.id}&test=1`,)
             .then(res => {
-              if (res.err === "ok" && res.msg === "已解析") {
+              if (res.err === "ok" && res.msg === "parsed") {
                 this.txt_parse_inited = true;
               }
             })
