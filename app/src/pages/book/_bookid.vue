@@ -1744,6 +1744,7 @@ export default {
             .then(res => {
               if (res.err === "ok" && res.msg === "parsed") {
                 this.txt_parse_inited = true;
+                console.log(this.txt_parse_inited);
               }
             })
         },

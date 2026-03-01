@@ -391,7 +391,7 @@
         "series": "丛书",
         "clickToViewDetails": "点击浏览详情",
         "onlineReading": "在线阅读",
-        "txtOnlineReading": "TXT在线阅读",
+        "txtOnlineReading": "TXT在线阅读({status})",
         "parsed": "已解析",
         "notParsed": "未解析",
         "download": "下载",
