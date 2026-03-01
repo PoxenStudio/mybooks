@@ -867,6 +867,12 @@ export default {
     opacity: 1 !important;
 }
 
+.theme--dark .app-navigation-drawer {
+    background-color: #1E1E1E !important;
+    border-right-color: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.3) !important;
+}
+
 @media (max-width: 1024px) {
     .app-navigation-drawer {
         top: 56px !important;
