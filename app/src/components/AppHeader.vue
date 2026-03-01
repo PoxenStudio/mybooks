@@ -165,7 +165,7 @@
                     </v-btn>
                 </template>
                 <span v-if="user.is_login">{{ user.username }}({{ user.email }})</span>
-                <span v-else>{{ $t('appHeader.please_login') }}</span>
+                <span v-else>{{ $t('appHeader.not_login') }}</span>
             </v-tooltip>
 
             <v-toolbar-title class="ml-4 mr-12 align-center d-flex">

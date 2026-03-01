@@ -659,6 +659,7 @@
         "admin_entry": "Admin Entry",
         "logout": "Logout",
         "please_login": "Please Login",
+        "not_login": "Not Login",
         "message_notification": "Message Notifications",
         "clear_messages": "Clear All",
         "defaultFooter": "This site is built on Calibre, thanks to the power of open source. All resources are collected from the internet. If there is any infringement, please contact us via email.",
