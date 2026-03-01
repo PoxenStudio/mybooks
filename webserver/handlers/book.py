@@ -1835,7 +1835,8 @@ class BookUpload(BaseHandler):
             mi.authors = [_(u"佚名")]
 
         if fmt == "pdf":
-            if mi.title is None or mi.title.strip() == "":
+            title = mi.title.strip() if mi.title else ""
+            if not title or title.find("下载工具") >= 0:
                 mi.title = utils.remove_zlibrary_suffix(name.replace("." + fmt, ""))
             if mi.authors is None or len(mi.authors) == 0 or mi.authors[0].lower() == "unknown":
                 mi.authors = [_(u"佚名")]
