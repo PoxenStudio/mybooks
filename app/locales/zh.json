@@ -435,7 +435,7 @@
     "reader": {
         "tip": {
             "title": "正在解析",
-            "content": "正在解析目录，请稍后..."
+            "content": "正在解析目录，请稍后刷新..."
         },
         "loading": "加载中...",
         "previous": "上一章",
@@ -445,7 +445,7 @@
         "parsed": "已解析",
         "queue": "队列中",
         "queueMessage": "前方等待{queLen}个转换待完成，已步入后台队列",
-        "parsing": "首次阅读，正在解析目录，请稍后... {wait}",
+        "parsing": "首次阅读，正在解析目录，请稍候... {wait}",
         "timeoutMessage": "超时未完成，可继续等待稍后刷新尝试",
         "timeout": "解析超时",
         "contentError": "获取正文失败！{msg}"
