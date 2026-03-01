@@ -702,7 +702,7 @@
         "selectFile": "Please select an eBook to upload",
         "upload": "Upload",
         "addPhysicalBook": "Add Physical Book",
-        "addPhysicalBookDesc": "Please enter the ISBN number of the book to add. The system will automatically fetch book information from Douban:",
+        "addPhysicalBookDesc": "Please enter the ISBN number of the book to add. The system will automatically fetch book information online:",
         "isbnLabel": "ISBN Number",
         "isbnPlaceholder": "Please enter a 13 or 10 digit ISBN number",
         "isbnRequired": "ISBN number is required",
