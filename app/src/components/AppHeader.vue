@@ -13,119 +13,122 @@
             @mouseenter="handleMouseEnter"
             @mouseleave="handleMouseLeave"
         >
-
-            <v-list dense>
-                <template v-for="(item, idx) in items">
-                    <v-subheader v-if="item.heading" :key="'heading-' + idx" v-show="!miniVariant">{{ $t(item.heading) }}</v-subheader>
-
-                    <v-list-item
-                        dense
-                        v-else-if="item.groups && item.groups.length > 0 && miniVariant"
-                        :key="'item-' + idx"
-                        :class="{ 'v-list-item--icon-only': miniVariant }"
-                        @click="handleMiniVariantGroupClick(idx, item)"
-                    >
-                        <v-tooltip bottom>
-                            <template v-slot:activator="{ on, attrs }">
-                                <v-icon v-bind="attrs" v-on="on" :color="item.color || ''" size="24">{{ item.icon }}</v-icon>
-                            </template>
-                            {{ $t(item.text) }}
-                        </v-tooltip>
-                    </v-list-item>
-
-                    <v-list-group
-                        v-else-if="item.groups && item.groups.length > 0"
-                        no-action
-                        :value="isGroupExpanded(idx, item)"
-                        @input="toggleGroup(idx, item)"
-                        :key="'group-' + idx"
-                    >
-                        <template v-slot:activator>
-                            <v-list-item dense>
-                                <v-list-item-action class="mt-1 mb-1 mr-2" dense>
-                                    <v-icon class="pa-0 ma-0" :color="item.color || ''">{{ item.icon }}</v-icon>
-                                </v-list-item-action>
-                                <v-list-item-content>
-                                    <v-list-item-title>{{ $t(item.text) }}</v-list-item-title>
-                                </v-list-item-content>
-                            </v-list-item>
-                        </template>
+            <div class="drawer-click-area" @click="toggleDrawerState">
+                <v-list dense @click.stop>
+                    <template v-for="(item, idx) in items">
+                        <v-subheader v-if="item.heading" :key="'heading-' + idx" v-show="!miniVariant">{{ $t(item.heading) }}</v-subheader>
 
                         <v-list-item
-                            v-for="link in item.groups"
-                            :key="'link-' + link.href"
-                            :to="isExternalLink(link.href) ? undefined : link.href"
-                            :href="isExternalLink(link.href) ? link.href : undefined"
-                            :target="isExternalLink(link.href) ? '_blank' : undefined"
-                            class="v-list-item--group-child"
+                            dense
+                            v-else-if="item.groups && item.groups.length > 0 && miniVariant"
+                            :key="'item-' + idx"
+                            :class="{ 'v-list-item--icon-only': miniVariant }"
+                            @click="handleMiniVariantGroupClick(idx, item)"
                         >
-                            <v-list-item-action class="mt-1 mb-1 mr-2" dense>
-                                <v-icon class="pa-0 ma-0" :color="link.color || ''">{{ link.icon }}</v-icon>
-                            </v-list-item-action>
-                            <v-list-item-content>
-                                <v-list-item-title>
-                                    {{ $t(link.text) }}
-                                </v-list-item-title>
-                            </v-list-item-content>
-                        </v-list-item>
-                    </v-list-group>
-
-                    <template v-else-if="item.links" v-show="!miniVariant">
-                        <v-list-item dense v-for="(links, cidx) in chunk(item.links, 2)" :key="'chunk-' + idx + '-' + cidx">
-                            <v-row>
-                                <v-col class="pa-0" cols="6" v-for="link in links" :key="'btn-' + link.href">
-                                    <v-btn v-if="item.target != ''" text target="_blank" :href="link.href">
-                                        <v-icon v-if="link.icon" :color="link.color || ''" left>{{ link.icon }}</v-icon> {{ $t(link.text) }}
-                                    </v-btn>
-                                    <v-btn v-else text :to="link.href">
-                                        <v-icon v-if="link.icon" left :color="link.color || ''">{{ link.icon }}</v-icon> {{ $t(link.text) }}
-                                    </v-btn>
-                                </v-col>
-                            </v-row>
-                        </v-list-item>
-                    </template>
-
-                    <v-list-item
-                        dense
-                        v-else
-                        :key="'item-' + idx + '-' + (item.href || item.text)"
-                        :to="item.href"
-                        :target="item.target"
-                        :class="{ 'v-list-item--icon-only': miniVariant }"
-                    >
-                        <v-list-item-action class="mt-1 mb-1 mr-2" dense v-if="!miniVariant">
-                            <v-icon class="pa-0 ma-0" :color="item.color || ''">{{ item.icon }}</v-icon>
-                        </v-list-item-action>
-                        <template v-else>
                             <v-tooltip bottom>
                                 <template v-slot:activator="{ on, attrs }">
                                     <v-icon v-bind="attrs" v-on="on" :color="item.color || ''" size="24">{{ item.icon }}</v-icon>
                                 </template>
                                 {{ $t(item.text) }}
                             </v-tooltip>
+                        </v-list-item>
+
+                        <v-list-group
+                            v-else-if="item.groups && item.groups.length > 0"
+                            no-action
+                            :value="isGroupExpanded(idx, item)"
+                            @input="toggleGroup(idx, item)"
+                            :key="'group-' + idx"
+                        >
+                            <template v-slot:activator>
+                                <v-list-item dense>
+                                    <v-list-item-action class="mt-1 mb-1 mr-2" dense>
+                                        <v-icon class="pa-0 ma-0" :color="item.color || ''">{{ item.icon }}</v-icon>
+                                    </v-list-item-action>
+                                    <v-list-item-content>
+                                        <v-list-item-title>{{ $t(item.text) }}</v-list-item-title>
+                                    </v-list-item-content>
+                                </v-list-item>
+                            </template>
+
+                            <v-list-item
+                                v-for="link in item.groups"
+                                :key="'link-' + link.href"
+                                :to="isExternalLink(link.href) ? undefined : link.href"
+                                :href="isExternalLink(link.href) ? link.href : undefined"
+                                :target="isExternalLink(link.href) ? '_blank' : undefined"
+                                class="v-list-item--group-child"
+                            >
+                                <v-list-item-action class="mt-1 mb-1 mr-2" dense>
+                                    <v-icon class="pa-0 ma-0" :color="link.color || ''">{{ link.icon }}</v-icon>
+                                </v-list-item-action>
+                                <v-list-item-content>
+                                    <v-list-item-title>
+                                        {{ $t(link.text) }}
+                                    </v-list-item-title>
+                                </v-list-item-content>
+                            </v-list-item>
+                        </v-list-group>
+
+                        <template v-else-if="item.links" v-show="!miniVariant">
+                            <v-list-item dense v-for="(links, cidx) in chunk(item.links, 2)" :key="'chunk-' + idx + '-' + cidx">
+                                <v-row>
+                                    <v-col class="pa-0" cols="6" v-for="link in links" :key="'btn-' + link.href">
+                                        <v-btn v-if="item.target != ''" text target="_blank" :href="link.href">
+                                            <v-icon v-if="link.icon" :color="link.color || ''" left>{{ link.icon }}</v-icon> {{ $t(link.text) }}
+                                        </v-btn>
+                                        <v-btn v-else text :to="link.href">
+                                            <v-icon v-if="link.icon" left :color="link.color || ''">{{ link.icon }}</v-icon> {{ $t(link.text) }}
+                                        </v-btn>
+                                    </v-col>
+                                </v-row>
+                            </v-list-item>
                         </template>
-                        <v-list-item-content v-if="!miniVariant">
-                            <v-list-item-title>
-                                {{ $t(item.text) }}
-                            </v-list-item-title>
-                        </v-list-item-content>
-                        <v-list-item-action class="mt-1 mb-1 mr-2" v-if="item.count && !miniVariant">
-                            <v-chip small outlined>{{ item.count }}</v-chip>
-                        </v-list-item-action>
-                    </v-list-item>
+
+                        <v-list-item
+                            dense
+                            v-else
+                            :key="'item-' + idx + '-' + (item.href || item.text)"
+                            :to="item.href"
+                            :target="item.target"
+                            :class="{ 'v-list-item--icon-only': miniVariant }"
+                        >
+                            <v-list-item-action class="mt-1 mb-1 mr-2" dense v-if="!miniVariant">
+                                <v-icon class="pa-0 ma-0" :color="item.color || ''">{{ item.icon }}</v-icon>
+                            </v-list-item-action>
+                            <template v-else>
+                                <v-tooltip bottom>
+                                    <template v-slot:activator="{ on, attrs }">
+                                        <v-icon v-bind="attrs" v-on="on" :color="item.color || ''" size="24">{{ item.icon }}</v-icon>
+                                    </template>
+                                    {{ $t(item.text) }}
+                                </v-tooltip>
+                            </template>
+                            <v-list-item-content v-if="!miniVariant">
+                                <v-list-item-title>
+                                    {{ $t(item.text) }}
+                                </v-list-item-title>
+                            </v-list-item-content>
+                            <v-list-item-action class="mt-1 mb-1 mr-2" v-if="item.count && !miniVariant">
+                                <v-chip small outlined>{{ item.count }}</v-chip>
+                            </v-list-item-action>
+                        </v-list-item>
+                    </template>
+                </v-list>
+                <template v-slot:append v-if="user.is_login">
+                    <div @click.stop>
+                        <v-divider></v-divider>
+                        <v-list-item dense to="/logout">
+                            <v-list-item-action dense>
+                                <v-icon>exit_to_app</v-icon>
+                            </v-list-item-action>
+                            <v-list-item-content v-if="!miniVariant">
+                                <v-list-item-title>{{ $t('appHeader.logout') }}</v-list-item-title>
+                            </v-list-item-content>
+                        </v-list-item>
+                    </div>
                 </template>
-            </v-list>
-            <template v-slot:append v-if="user.is_login">
-                <v-divider></v-divider>
-                <v-list-item dense to="/logout">
-                    <v-list-item-action dense>
-                        <v-icon>exit_to_app</v-icon>
-                    </v-list-item-action>
-                    <v-list-item-content v-if="!miniVariant">
-                        <v-list-item-title>{{ $t('appHeader.logout') }}</v-list-item-title>
-                    </v-list-item-content>
-                </v-list-item>
-            </template>
+            </div>
         </v-navigation-drawer>
 
         <v-app-bar class="px-0" :color="appBarColor" dense dark app fixed clipped-left extension-height="64">
@@ -153,18 +156,11 @@
                 </v-container>
             </template>
 
-            <template v-if="user.is_login">
-                <v-btn icon @click="toggleMiniVariant">
-                    <v-avatar color="primary" class="avatar-round" size="36">
-                        <img :src="user.avatar" @error="handleAvatarError" class="avatar-img" />
-                    </v-avatar>
-                </v-btn>
-            </template>
-            <template v-else>
-                <v-btn to="/login" color="indigo accent-4" class="ml-4">
-                    <v-icon left>account_circle</v-icon> {{ $t('appHeader.please_login') }}
-                </v-btn>
-            </template>
+            <v-btn icon @click="toggleMiniVariant">
+                <v-avatar color="primary" class="avatar-round" size="36">
+                    <img :src="user.is_login ? user.avatar : getGuestAvatar()" @error="handleAvatarError" class="avatar-img" />
+                </v-avatar>
+            </v-btn>
 
             <v-toolbar-title class="ml-4 mr-12 align-center d-flex">
                 <span class="cursor-pointer" @click="$router.push('/')">{{ sys.title.length > 10 ? sys.title.substring(0, 10) + '...' : sys.title }}</span>
@@ -570,15 +566,15 @@ export default {
             return url && (url.startsWith('http://') || url.startsWith('https://'));
         },
         getDefaultAvatar() {
-            return window.location.origin + '/avatar/reader.png';
+            return window.location.origin + '/avatar/reader.svg';
+        },
+        getGuestAvatar() {
+            return window.location.origin + '/icons/user-guest.svg';
         },
         handleAvatarError(event) {
             event.target.src = this.getDefaultAvatar();
         },
         toggleMiniVariant() {
-            if (!this.user.is_login) {
-                return;
-            }
             if (!this.sidebar) {
                 this.sidebar = true;
                 this.miniVariant = false;
@@ -588,6 +584,16 @@ export default {
             if (process.client) {
                 localStorage.setItem('drawerSidebar', this.sidebar);
                 localStorage.setItem('drawerMiniVariant', this.miniVariant);
+            }
+        },
+        toggleDrawerState(event) {
+            if (this.$vuetify.breakpoint.lgAndUp) {
+                this.toggleMiniVariant();
+            } else {
+                this.sidebar = !this.sidebar;
+                if (process.client) {
+                    localStorage.setItem('drawerSidebar', this.sidebar);
+                }
             }
         },
         handleMouseEnter() {
