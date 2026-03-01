@@ -685,6 +685,7 @@ class BookCover(BaseHandler):
             ext = fileinfo['content_type'].split('/')[-1]
         mi.cover_data = (ext or None, img_data)
         mi.timestamp = nowf()
+
         self.calibre_db.set_metadata(book_id, mi)
         return {"err": "ok"}
 
