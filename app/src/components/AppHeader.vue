@@ -115,20 +115,20 @@
                         </v-list-item>
                     </template>
                 </v-list>
-                <template v-slot:append v-if="user.is_login">
-                    <div @click.stop>
-                        <v-divider></v-divider>
-                        <v-list-item dense to="/logout">
-                            <v-list-item-action dense>
-                                <v-icon>exit_to_app</v-icon>
-                            </v-list-item-action>
-                            <v-list-item-content v-if="!miniVariant">
-                                <v-list-item-title>{{ $t('appHeader.logout') }}</v-list-item-title>
-                            </v-list-item-content>
-                        </v-list-item>
-                    </div>
-                </template>
             </div>
+            <template v-slot:append v-if="user.is_login">
+                <div @click.stop>
+                    <v-divider></v-divider>
+                    <v-list-item dense to="/logout">
+                        <v-list-item-action dense>
+                            <v-icon>exit_to_app</v-icon>
+                        </v-list-item-action>
+                        <v-list-item-content v-if="!miniVariant">
+                            <v-list-item-title>{{ $t('appHeader.logout') }}</v-list-item-title>
+                        </v-list-item-content>
+                    </v-list-item>
+                </div>
+            </template>
         </v-navigation-drawer>
 
         <v-app-bar class="px-0" :color="appBarColor" dense dark app fixed clipped-left extension-height="64">
@@ -422,6 +422,7 @@ export default {
             return false;
         },
         items: function () {
+            const login_link = { icon: "account_circle", href: "/login", text: "appHeader.please_login", color:"primary" };
             const home_links = [
                 { icon: "home", href: "/", text: "appHeader.home", color:"primary" },
             ];
@@ -497,7 +498,8 @@ export default {
                 }
             ];
 
-            return home_links
+            return [].concat(this.user.is_login ? [] : [login_link])
+                .concat(home_links)
                 .concat(this.user.is_login ? user_links : [])
                 .concat(this.user.is_admin ? admin_links : [])
                 .concat(this.user.is_login ? reading_links : [])
@@ -566,10 +568,16 @@ export default {
             return url && (url.startsWith('http://') || url.startsWith('https://'));
         },
         getDefaultAvatar() {
-            return window.location.origin + '/avatar/reader.svg';
+            if (process.client) {
+                return window.location.origin + '/avatar/reader.svg';
+            }
+            return '/avatar/reader.svg';
         },
         getGuestAvatar() {
-            return window.location.origin + '/icons/user-guest.svg';
+            if (process.client) {
+                return window.location.origin + '/icons/user-guest.svg';
+            }
+            return '/icons/user-guest.svg';
         },
         handleAvatarError(event) {
             event.target.src = this.getDefaultAvatar();
