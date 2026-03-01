@@ -169,7 +169,7 @@
             </v-tooltip>
 
             <v-toolbar-title class="ml-4 mr-12 align-center d-flex">
-                <span class="cursor-pointer" @click="$router.push('/')">{{ sys.title.length > 16 ? sys.title.substring(0, 16) + '...' : sys.title }}</span>
+                <span class="cursor-pointer" @click="$router.push('/')">{{ sys.title }}</span>
             </v-toolbar-title>
 
             <v-spacer></v-spacer>
@@ -858,17 +858,16 @@ export default {
 .app-navigation-drawer {
     border-right: 2px solid rgba(0, 0, 0, 0.08) !important;
     box-shadow: 2px 0 12px rgba(0, 0, 0, 0.08) !important;
-    transition: all 0.3s ease !important;
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
     border-bottom-right-radius: 12px !important;
     top: 56px !important;
     height: calc(100vh - 56px) !important;
     background: var(--v-background-base) !important;
-    background-color: #F7FAF7 !important;
+    background-color: var(--v-background-base) !important;
     opacity: 1 !important;
 }
 
 .theme--dark .app-navigation-drawer {
-    background-color: #1E1E1E !important;
     border-right-color: rgba(255, 255, 255, 0.08) !important;
     box-shadow: 2px 0 12px rgba(0, 0, 0, 0.3) !important;
 }
@@ -877,12 +876,8 @@ export default {
     .app-navigation-drawer {
         top: 56px !important;
         height: calc(100vh - 56px) !important;
-        background-color: #F7FAF7 !important;
+        background-color: var(--v-background-base) !important;
         opacity: 1 !important;
-    }
-
-    .theme--dark .app-navigation-drawer {
-        background-color: #1E1E1E !important;
     }
 }
 
@@ -890,12 +885,8 @@ export default {
     position: relative !important;
     z-index: 1 !important;
     background: var(--v-background-base) !important;
-    background-color: #F7FAF7 !important;
+    background-color: var(--v-background-base) !important;
     opacity: 1 !important;
-}
-
-.theme--dark .app-navigation-drawer .v-list-item {
-    background-color: #1E1E1E !important;
 }
 
 .app-navigation-drawer .v-list-group {
@@ -905,13 +896,9 @@ export default {
 
 .app-navigation-drawer .v-list-item--icon-only {
     background: var(--v-background-base) !important;
-    background-color: #F7FAF7 !important;
+    background-color: var(--v-background-base) !important;
     z-index: 2 !important;
     opacity: 1 !important;
-}
-
-.theme--dark .app-navigation-drawer .v-list-item--icon-only {
-    background-color: #1E1E1E !important;
 }
 
 
