@@ -121,7 +121,7 @@
                     <v-divider></v-divider>
                     <v-list-item dense to="/logout">
                         <v-list-item-action dense>
-                            <v-icon>exit_to_app</v-icon>
+                            <v-icon>logout</v-icon>
                         </v-list-item-action>
                         <v-list-item-content v-if="!miniVariant">
                             <v-list-item-title>{{ $t('appHeader.logout') }}</v-list-item-title>
