@@ -25,6 +25,30 @@ class EpubBookParser:
         self.search_and_replace_file = ""
         self.book = epub.read_epub(input_file, {"ignore_ncx": True})
 
+    def print_toc(self, items=None, level=1):
+        if not self.book or not self.book.toc:
+            logger.warning("No TOC found in the EPUB book.")
+            return
+        if items is None:
+            items = self.book.toc
+        for item in items:
+            if isinstance(item, epub.Link):
+                logger.info('[LINK]' + ' ' * level + f'- {item.title} ({item.href})')
+            elif isinstance(item, epub.Section):
+                logger.info('[SECTION]' + ' ' * level + f'+ {item.title} ({item.href})')
+                if item.children:
+                    self.print_toc(item.children, level + 1)
+            elif isinstance(item, tuple) and len(item) == 2:
+                section, children = item
+                if hasattr(section, 'title') and hasattr(section, 'href'):
+                    logger.info('[LINK]' + ' ' * level + f'+ {section.title} ({section.href}) [section from tuple]')
+                else:
+                    logger.info('[SECTION]' + ' ' * level + f'? {section}')
+                if children:
+                    self.print_toc(children, level + 1)
+            else:
+                logger.info('[UNKNOWN]' + ' ' * level + f'? {item}')
+
     def get_book(self):
         return self.book
 
@@ -154,3 +178,5 @@ if __name__ == "__main__":
     logger.info(f"Total chapters found: {len(chapters)}")
     for idx, (title, text) in enumerate(chapters, start=1):
         logger.info(f"Chapter {idx}: Title: {title}, Text length: {len(text)} characters")
+
+    parser.print_toc()
