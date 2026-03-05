@@ -170,7 +170,7 @@
             </v-tooltip>
 
             <v-toolbar-title class="ml-4 mr-12 align-center d-flex">
-                <span class="cursor-pointer" @click="$router.push('/')">{{ sys.title }}</span>
+                <span>{{ sys.title }}</span>
             </v-toolbar-title>
 
             <v-spacer></v-spacer>
