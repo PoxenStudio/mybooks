@@ -11,17 +11,21 @@ import traceback
 import uuid
 import time
 import secrets
+import base64
+import os
+import re
 from gettext import gettext as _
 from typing import Any, Sequence, Dict, Optional
 
 from mcp.server import Server
 from mcp.types import Tool, TextContent
 from webserver.constants import CALIBRE_COLUMN_CATEGORY, COLUMN_CATEGORY
+from webserver.constants import CALIBRE_ERROR_FLAG, CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL
 from webserver.handlers.base import BaseHandler
 from webserver.utils import MCPBookFormatter
 from webserver.services.book_search import BookSearch
 from webserver.services.autofill import AutoFillService
-from webserver import loader
+from webserver import loader, utils
 
 CONF = loader.get_settings()
 MCP_TOKEN_KEY = "AI_MCP_TOKEN"
@@ -60,7 +64,6 @@ class MCPService:
 
         if self.need_login:
             self.need_login_prompt = "Requires an authentication token parameter which is obtained through login."
-        pass
 
     def _generate_token(self, user_id: int, username: str) -> str:
         """生成访问令牌（基础版本）"""
@@ -701,6 +704,257 @@ class MCPService:
             logging.error(traceback.format_exc())
             return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
 
+    async def upload_book(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
+        """Upload a new ebook file to the collection."""
+        # 验证token
+        user_info = self._require_auth(arguments)
+        if not user_info:
+            return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Authentication required"}))]
+
+        try:
+            from calibre.ebooks.metadata.meta import get_metadata
+            from webserver.models import Reader
+
+            # 检查用户权限
+            user = self.base_handler.sqlite_session.query(Reader).get(user_info["user_id"])
+            if not user:
+                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "User not found"}))]
+
+            # 检查是否允许上传
+            if CONF["ALLOW_GUEST_UPLOAD"] is False:
+                if user.is_guest():
+                    return [TextContent(type="text", text=json.dumps({
+                        "status": "error",
+                        "message": "Permission denied: guest users cannot upload books"
+                    }))]
+                if not user.can_upload():
+                    return [TextContent(type="text", text=json.dumps({
+                        "status": "error",
+                        "message": "Permission denied: user cannot upload books"
+                    }))]
+
+            # 获取参数
+            filename = arguments.get("filename", "").strip()
+            file_content_base64 = arguments.get("file_content", "").strip()
+            target_book_id = arguments.get("book_id")
+
+            if not filename:
+                return [TextContent(type="text", text=json.dumps({
+                    "status": "error",
+                    "message": "Missing required parameter: filename"
+                }))]
+
+            if not file_content_base64:
+                return [TextContent(type="text", text=json.dumps({
+                    "status": "error",
+                    "message": "Missing required parameter: file_content"
+                }))]
+
+            # 解码base64文件内容
+            try:
+                file_data = base64.b64decode(file_content_base64)
+            except Exception as e:
+                return [TextContent(type="text", text=json.dumps({
+                    "status": "error",
+                    "message": f"Invalid base64 file content: {str(e)}"
+                }))]
+
+            # 检查文件大小（50MB = 50 * 1024 * 1024 bytes）
+            max_size = 50 * 1024 * 1024
+            if len(file_data) > max_size:
+                return [TextContent(type="text", text=json.dumps({
+                    "status": "error",
+                    "message": f"File size exceeds limit: {len(file_data)} bytes (max: {max_size} bytes)"
+                }))]
+
+            # 处理文件名编码
+            def convert_encoding(s):
+                try:
+                    return s.group(0).encode("latin1").decode("utf8")
+                except Exception:
+                    return s.group(0)
+
+            filename = re.sub(r"[\x80-\xFF]+", convert_encoding, filename)
+            logging.info(f"MCP upload book filename = {repr(filename)}")
+
+            # 验证文件格式
+            fmt = os.path.splitext(filename)[1]
+            fmt = fmt[1:] if fmt else None
+            if not fmt:
+                return [TextContent(type="text", text=json.dumps({
+                    "status": "error",
+                    "message": "Invalid filename: no file extension"
+                }))]
+
+            fmt = fmt.lower()
+            # 限制为epub/pdf/azw3格式
+            supported_formats = ['epub', 'pdf', 'azw3']
+            if fmt not in supported_formats:
+                return [TextContent(type="text", text=json.dumps({
+                    "status": "error",
+                    "message": f"Unsupported format: {fmt}. Only epub, pdf, azw3 are supported"
+                }))]
+
+            # 保存文件到临时路径
+            upload_path = CONF.get("upload_path", "/tmp")
+            fpath = os.path.join(upload_path, filename)
+            with open(fpath, "wb") as f:
+                f.write(file_data)
+            logging.info(f"Saved upload file to [{fpath}]")
+
+            try:
+                # 检查是否为添加格式到已有书籍
+                if target_book_id:
+                    return await self._add_format_to_existing_book(
+                        int(target_book_id), fpath, fmt, user_info
+                    )
+
+                # 读取电子书元数据
+                failed = False
+                with open(fpath, "rb") as stream:
+                    mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
+                    if mi.title and mi.title == CALIBRE_ERROR_FLAG:
+                        logging.error(f"Failed to get metadata for {fpath}, reason: {mi.comments}")
+                        failed = True
+                    mi.title = utils.super_strip(mi.title)
+                    if mi.author_sort == "Unknown" and mi.authors and len(mi.authors) > 0:
+                        mi.authors = [utils.super_strip(a) for a in mi.authors]
+                    else:
+                        mi.authors = [utils.super_strip(mi.author_sort)]
+
+                if failed:
+                    return [TextContent(type="text", text=json.dumps({
+                        "status": "error",
+                        "message": "Cannot recognize this ebook file or it is DRM protected"
+                    }))]
+
+                # 对于PDF格式的特殊处理
+                if fmt == "pdf":
+                    title = mi.title.strip() if mi.title else ""
+                    if not title or title.find(_(u"下载工具")) >= 0:
+                        mi.title = utils.remove_zlibrary_suffix(filename.replace("." + fmt, ""))
+                    if mi.authors is None or len(mi.authors) == 0 or mi.authors[0].lower() == "unknown":
+                        mi.authors = [_(u"佚名")]
+
+                logging.info(f"Upload book title = {repr(mi.title)}")
+
+                # 检查是否存在同名书籍
+                books = self.base_handler.calibre_db.books_with_same_title(mi)
+                if books:
+                    book_id = None
+                    for bid in books:
+                        b = self.base_handler.calibre_db.get_metadata(bid, index_is_id=True)
+                        # 如果是实体书，则跳过
+                        if b.get(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK) == BOOK_TYPE_PHYSICAL:
+                            continue
+                        if book_id is None:
+                            book_id = b.get("id")
+                        if b.get("authors", "") != mi.authors:
+                            continue
+                        if fmt.upper() in b.formats:
+                            return [TextContent(type="text", text=json.dumps({
+                                "status": "error",
+                                "message": f"Book '{mi.title}' already has {fmt.upper()} format",
+                                "book_id": b.get("id")
+                            }))]
+
+                    # 添加格式或创建新书
+                    if book_id is None:
+                        book_id = self._add_new_book_via_mcp(mi, [fpath], user_info["user_id"])
+                    else:
+                        self.base_handler.calibre_db.add_format(book_id, fmt.upper(), fpath, True)
+                else:
+                    book_id = self._add_new_book_via_mcp(mi, [fpath], user_info["user_id"])
+
+                result = {
+                    "status": "success",
+                    "message": "Book uploaded successfully",
+                    "book_id": book_id,
+                    "title": mi.title,
+                    "authors": mi.authors,
+                    "format": fmt.upper(),
+                    "uploaded_by": user_info["username"]
+                }
+
+                logging.info(f"Book uploaded via MCP by {user_info['username']}: {mi.title} (ID: {book_id})")
+                return [TextContent(type="text", text=json.dumps(result))]
+
+            finally:
+                # 清理临时文件
+                if os.path.exists(fpath):
+                    os.remove(fpath)
+                    logging.debug(f"Cleaned up temporary file: {fpath}")
+
+        except Exception as e:
+            error_msg = f"Error uploading book: {str(e)}"
+            logging.error(error_msg)
+            logging.error(traceback.format_exc())
+            return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
+
+    def _add_new_book_via_mcp(self, mi, fpaths, user_id: int) -> int:
+        """添加新书籍（MCP专用版本）"""
+        from webserver.models import Item
+
+        book_id = self.base_handler.calibre_db.import_book(mi, fpaths)
+        self.base_handler.increase_history_count("upload_history")
+        item = Item()
+        item.book_id = book_id
+        item.collector_id = user_id
+        self.base_handler.sqlite_session.add(item)
+        self.base_handler.sqlite_session.commit()
+        AutoFillService().auto_fill(book_id)
+        return book_id
+
+    async def _add_format_to_existing_book(self, book_id: int, fpath: str,
+                                           fmt: str, user_info: dict) -> Sequence[TextContent]:
+        """向已存在的书籍添加新格式文件"""
+        book = self.base_handler.get_book(book_id, raise_exception=False)
+        if not book:
+            return [TextContent(type="text", text=json.dumps({
+                "status": "error",
+                "message": f"Book not found: {book_id}"
+            }))]
+
+        # 检查权限
+        if not (user_info.get("is_admin", False) or
+                self.base_handler.is_book_owner(book_id, user_info["user_id"])):
+            return [TextContent(type="text", text=json.dumps({
+                "status": "error",
+                "message": "Permission denied: not book owner or admin"
+            }))]
+
+        # 检查格式是否已存在
+        if f"fmt_{fmt}" in book:
+            return [TextContent(type="text", text=json.dumps({
+                "status": "error",
+                "message": f"Book already has {fmt.upper()} format",
+                "book_id": book_id
+            }))]
+
+        try:
+            self.base_handler.calibre_db.add_format(book_id, fmt.upper(), fpath, True)
+            logging.info(f"Successfully added {fmt.upper()} format to book {book_id}")
+
+            try:
+                self.base_handler.save_book_meta(book_id, fmt=fmt)
+                logging.info(f"Metadata written to new format {fmt.upper()} for book {book_id}")
+            except Exception as e:
+                logging.warning(f"Failed to write metadata to new format: {e}")
+
+            return [TextContent(type="text", text=json.dumps({
+                "status": "success",
+                "message": f"Successfully added {fmt.upper()} format to book",
+                "book_id": book_id,
+                "format": fmt.upper(),
+                "uploaded_by": user_info["username"]
+            }))]
+        except Exception as e:
+            logging.error(f"Failed to add format to book {book_id}: {e}")
+            return [TextContent(type="text", text=json.dumps({
+                "status": "error",
+                "message": f"Failed to add format: {str(e)}"
+            }))]
+
     async def get_books_count(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
         """Get the current count of books in the collection."""
         # 验证token
@@ -942,6 +1196,37 @@ class MCPService:
                         {"required": ["title"]}
                     ]
                 }
+            ),
+            Tool(
+                name="upload_book",
+                description="Upload a new ebook file to the collection. Supports epub, pdf, and azw3 formats. "
+                            "File size must be within 50MB." + self.need_login_prompt + "\n\n"
+                            "Required parameters:\n"
+                            "- filename: Name of the ebook file (including extension)\n"
+                            "- file_content: Base64 encoded file content\n\n"
+                            "Optional parameters:\n"
+                            "- book_id: If specified, adds the file as a new format to an existing book instead of creating a new book\n\n"
+                            "Returns:\n"
+                            "- success: book_id, title, authors, format, and uploader info\n"
+                            "- error: error message with details",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "filename": {
+                            "type": "string",
+                            "description": "Filename of the ebook (e.g., 'book.epub', 'document.pdf')"
+                        },
+                        "file_content": {
+                            "type": "string",
+                            "description": "Base64 encoded file content"
+                        },
+                        "book_id": {
+                            "type": ["integer", "string"],
+                            "description": "Optional: ID of existing book to add format to"
+                        }
+                    },
+                    "required": ["filename", "file_content"]
+                }
             )
         ]
         if self.need_login:
@@ -1106,6 +1391,9 @@ class MCPService:
                     return self._create_tool_result(request_id, result[0].text)
                 elif tool_name == "auto_fill_book_info":
                     result = await self.auto_fill_book_info(arguments)
+                    return self._create_tool_result(request_id, result[0].text)
+                elif tool_name == "upload_book":
+                    result = await self.upload_book(arguments)
                     return self._create_tool_result(request_id, result[0].text)
                 else:
                     return self._create_jsonrpc_response(
