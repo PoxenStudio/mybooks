@@ -704,6 +704,116 @@ class MCPService:
             logging.error(traceback.format_exc())
             return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
 
+    async def download_book(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
+        """Download an ebook file from the collection."""
+        user_info = self._require_auth(arguments)
+        if not user_info:
+            return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Authentication required"}))]
+
+        try:
+            from webserver.models import Reader
+
+            # 参数校验
+            book_id = arguments.get("book_id")
+            req_format = arguments.get("format")
+            supported_formats = ["epub", "azw3", "pdf"]
+            fallback_order = ["epub", "azw3", "pdf"]
+
+            if book_id is None:
+                return [TextContent(type="text", text=json.dumps({
+                    "status": "error",
+                    "message": "Missing required parameter: book_id"
+                }))]
+
+            if req_format is not None:
+                req_format = str(req_format).strip().lower()
+                if req_format not in supported_formats:
+                    return [TextContent(type="text", text=json.dumps({
+                        "status": "error",
+                        "message": f"Unsupported format: {req_format}. Only epub, azw3, pdf are supported"
+                    }))]
+
+            # 权限校验（与 BookDownload 一致）
+            user = self.base_handler.sqlite_session.query(Reader).get(user_info["user_id"])
+            if not user:
+                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "User not found"}))]
+
+            if not user.can_save():
+                return [TextContent(type="text", text=json.dumps({
+                    "status": "error",
+                    "message": "Permission denied: user cannot download books"
+                }))]
+            if not user.is_active():
+                return [TextContent(type="text", text=json.dumps({
+                    "status": "error",
+                    "message": "Permission denied: inactive user"
+                }))]
+
+            # 查书
+            book = self.base_handler.get_book(int(book_id), raise_exception=False)
+            if not book:
+                return [TextContent(type="text", text=json.dumps({
+                    "status": "error",
+                    "message": f"Book not found: {book_id}"
+                }))]
+
+            # 选格式：指定则校验存在；未指定按 epub -> azw3 -> pdf 顺序
+            if req_format:
+                selected_format = req_format
+                if f"fmt_{selected_format}" not in book:
+                    return [TextContent(type="text", text=json.dumps({
+                        "status": "error",
+                        "message": f"Book {book['id']} does not have format: {selected_format}"
+                    }))]
+            else:
+                selected_format = None
+                for fmt in fallback_order:
+                    if f"fmt_{fmt}" in book:
+                        selected_format = fmt
+                        break
+                if not selected_format:
+                    return [TextContent(type="text", text=json.dumps({
+                        "status": "error",
+                        "message": "No downloadable format found for this book (epub/azw3/pdf)"
+                    }))]
+
+            file_path = book.get(f"fmt_{selected_format}")
+            if not file_path or not os.path.exists(file_path):
+                return [TextContent(type="text", text=json.dumps({
+                    "status": "error",
+                    "message": f"Book file not found for format: {selected_format}"
+                }))]
+
+            # 下载计数
+            self.base_handler.increase_history_count("download_history")
+            self.base_handler.count_increase(book["id"], count_download=1)
+
+            with open(file_path, "rb") as f:
+                file_data = f.read()
+
+            result = {
+                "status": "success",
+                "book_id": book["id"],
+                "title": book.get("title", ""),
+                "format": selected_format,
+                "filename": f"{book['id']}-{book.get('title', 'book')}.{selected_format}",
+                "file_size": len(file_data),
+                "file_content": base64.b64encode(file_data).decode("ascii"),
+                "downloaded_by": user_info["username"]
+            }
+
+            logging.info(
+                f"Book downloaded via MCP by {user_info['username']}: "
+                f"book_id={book['id']}, format={selected_format}, size={len(file_data)}"
+            )
+            return [TextContent(type="text", text=json.dumps(result))]
+
+        except Exception as e:
+            error_msg = f"Error downloading book: {str(e)}"
+            logging.error(error_msg)
+            logging.error(traceback.format_exc())
+            return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
+
     async def upload_book(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
         """Upload a new ebook file to the collection."""
         # 验证token
@@ -916,8 +1026,7 @@ class MCPService:
             }))]
 
         # 检查权限
-        if not (user_info.get("is_admin", False) or
-                self.base_handler.is_book_owner(book_id, user_info["user_id"])):
+        if not (user_info.get("is_admin", False) or self.base_handler.is_book_owner(book_id, user_info["user_id"])):
             return [TextContent(type="text", text=json.dumps({
                 "status": "error",
                 "message": "Permission denied: not book owner or admin"
@@ -1197,37 +1306,63 @@ class MCPService:
                     ]
                 }
             ),
-            Tool(
-                name="upload_book",
-                description="Upload a new ebook file to the collection. Supports epub, pdf, and azw3 formats. "
-                            "File size must be within 50MB." + self.need_login_prompt + "\n\n"
-                            "Required parameters:\n"
-                            "- filename: Name of the ebook file (including extension)\n"
-                            "- file_content: Base64 encoded file content\n\n"
-                            "Optional parameters:\n"
-                            "- book_id: If specified, adds the file as a new format to an existing book instead of creating a new book\n\n"
-                            "Returns:\n"
-                            "- success: book_id, title, authors, format, and uploader info\n"
-                            "- error: error message with details",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "filename": {
-                            "type": "string",
-                            "description": "Filename of the ebook (e.g., 'book.epub', 'document.pdf')"
-                        },
-                        "file_content": {
-                            "type": "string",
-                            "description": "Base64 encoded file content"
-                        },
-                        "book_id": {
-                            "type": ["integer", "string"],
-                            "description": "Optional: ID of existing book to add format to"
-                        }
-                    },
-                    "required": ["filename", "file_content"]
-                }
-            )
+            # Tool(
+            #     name="upload_book",
+            #     description="Upload a new ebook file to the collection. Supports epub, pdf, and azw3 formats. "
+            #                 "File size must be within 50MB." + self.need_login_prompt + "\n\n"
+            #                 "Required parameters:\n"
+            #                 "- filename: Name of the ebook file (including extension)\n"
+            #                 "- file_content: Base64 encoded file content\n\n"
+            #                 "Optional parameters:\n"
+            #                 "- book_id: If specified, adds the file as a new format to an existing book instead of creating a new book\n\n"
+            #                 "Returns:\n"
+            #                 "- success: book_id, title, authors, format, and uploader info\n"
+            #                 "- error: error message with details",
+            #     inputSchema={
+            #         "type": "object",
+            #         "properties": {
+            #             "filename": {
+            #                 "type": "string",
+            #                 "description": "Filename of the ebook (e.g., 'book.epub', 'document.pdf')"
+            #             },
+            #             "file_content": {
+            #                 "type": "string",
+            #                 "description": "Base64 encoded file content"
+            #             },
+            #             "book_id": {
+            #                 "type": ["integer", "string"],
+            #                 "description": "Optional: ID of existing book to add format to"
+            #             }
+            #         },
+            #         "required": ["filename", "file_content"]
+            #     }
+            # ),
+            # Tool(
+            #     name="download_book",
+            #     description="Download a book file from the collection in epub/azw3/pdf format." + self.need_login_prompt + "\n\n"
+            #                 "Required parameters:\n"
+            #                 "- book_id: ID of the book to download\n\n"
+            #                 "Optional parameters:\n"
+            #                 "- format: Specify one format from epub/azw3/pdf. "
+            #                 "If omitted, it will auto-select by priority: epub -> azw3 -> pdf\n\n"
+            #                 "Returns:\n"
+            #                 "- success: base64 file content, selected format, and metadata\n"
+            #                 "- error: book or format not found, or permission denied",
+            #     inputSchema={
+            #         "type": "object",
+            #         "properties": {
+            #             "book_id": {
+            #                 "type": ["integer", "string"],
+            #                 "description": "ID of the book to download"
+            #             },
+            #             "format": {
+            #                 "type": "string",
+            #                 "description": "Optional format: epub, azw3, or pdf"
+            #             }
+            #         },
+            #         "required": ["book_id"]
+            #     }
+            # )
         ]
         if self.need_login:
             for tool in tools:
@@ -1394,6 +1529,9 @@ class MCPService:
                     return self._create_tool_result(request_id, result[0].text)
                 elif tool_name == "upload_book":
                     result = await self.upload_book(arguments)
+                    return self._create_tool_result(request_id, result[0].text)
+                elif tool_name == "download_book":
+                    result = await self.download_book(arguments)
                     return self._create_tool_result(request_id, result[0].text)
                 else:
                     return self._create_jsonrpc_response(

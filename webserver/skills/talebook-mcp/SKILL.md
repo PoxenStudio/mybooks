@@ -1,24 +1,18 @@
 ---
-name: talebook-mcp
-description: Talebook 是一个个人电子书库管理系统，提供书籍的存储、分类、搜索和元数据管理功能。通过 MCP 接口，你可以帮助用户：
-- 查询书库中书籍总量和统计信息
-- 浏览书库中的书籍列表
-- 搜索特定书籍
-- 更新书籍的元数据（书名、作者、标签、分类等）
-- 从在线来源查询书籍信息
-- 对书库中书籍进行自动元数据填充（封面、简介、标签等）
-homepage: http://192.168.31.102:8082
+name: talebook
+homepage: https://www.mybooks.top
 allowed-tools: Bash(curl:*)
 metadata: {"clawdbot":{},"openclaw":{"requires":{"bins":[]},"always":true}}
+description: "Talebook 是一个个人电子书库管理系统，提供书籍的存储、分类、搜索和元数据管理功能。你可以帮助用户：查询书库中书籍总量和统计信息,浏览书库中的书籍列表,搜索特定书籍,更新书籍的元数据（书名、作者、标签、分类等）,从在线来源查询书籍信息, 对书库中书籍进行自动元数据填充（封面、简介、标签等）"
 ---
 
-# talebook-mcp
+# talebook
 ## Quick Start
 ```bash
-$HOME/.openclaw/skills/talebook-mcp/scripts/talebook-mcp.sh <tool-name> '<json-args>'
+$HOME/.openclaw/skills/talebook/scripts/talebook-mcp.sh <tool-name> '<json-args>'
 ```
 
-## Tools
+## 使用方法
 
 ### `get_books_count` — 获取书库统计
 
@@ -30,7 +24,7 @@ $HOME/.openclaw/skills/talebook-mcp/scripts/talebook-mcp.sh <tool-name> '<json-a
 
 **执行脚本**:
 ```bash
-$HOME/.openclaw/skills/talebook-mcp/scripts/talebook-mcp.sh get_books_count '{}'
+$HOME/.openclaw/skills/talebook/scripts/talebook-mcp.sh get_books_count '{}'
 ```
 
 **返回示例**：
@@ -62,7 +56,7 @@ $HOME/.openclaw/skills/talebook-mcp/scripts/talebook-mcp.sh get_books_count '{}'
 
 **执行脚本**:
 ```bash
-$HOME/.openclaw/skills/talebook-mcp/scripts/talebook-mcp.sh get_books '{"page":"<page>"}'
+$HOME/.openclaw/skills/talebook/scripts/talebook-mcp.sh get_books '{"page":"<page>"}'
 ```
 
 **使用建议**：
@@ -94,7 +88,7 @@ $HOME/.openclaw/skills/talebook-mcp/scripts/talebook-mcp.sh get_books '{"page":"
 
 **执行脚本**:
 ```bash
-$HOME/.openclaw/skills/talebook-mcp/scripts/talebook-mcp.sh search_books '{}'
+$HOME/.openclaw/skills/talebook/scripts/talebook-mcp.sh search_books '{}'
 ```
 
 **返回说明**：
@@ -127,7 +121,7 @@ $HOME/.openclaw/skills/talebook-mcp/scripts/talebook-mcp.sh search_books '{}'
 
 **执行脚本**:
 ```bash
-$HOME/.openclaw/skills/talebook-mcp/scripts/talebook-mcp.sh update_book_info '{"book_id":"<book_id>"}'
+$HOME/.openclaw/skills/talebook/scripts/talebook-mcp.sh update_book_info '{"book_id":"<book_id>"}'
 ```
 
 **注意事项**：
@@ -179,7 +173,7 @@ $HOME/.openclaw/skills/talebook-mcp/scripts/talebook-mcp.sh update_book_info '{"
 
 **执行脚本**:
 ```bash
-$HOME/.openclaw/skills/talebook-mcp/scripts/talebook-mcp.sh query_book_metadata '{"title":"<title>"}'
+$HOME/.openclaw/skills/talebook/scripts/talebook-mcp.sh query_book_metadata '{"title":"<title>"}'
 ```
 
 **典型工作流**：
@@ -207,7 +201,7 @@ $HOME/.openclaw/skills/talebook-mcp/scripts/talebook-mcp.sh query_book_metadata 
 
 **执行脚本**:
 ```bash
-$HOME/.openclaw/skills/talebook-mcp/scripts/talebook-mcp.sh auto_fill_book_info '{}'
+$HOME/.openclaw/skills/talebook/scripts/talebook-mcp.sh auto_fill_book_info '{}'
 ```
 
 **两种调用模式**：
