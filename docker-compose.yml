@@ -10,8 +10,8 @@ services:
       - "3000:80"
       - "3443:443"
     environment:
-      - PUID=990
-      - PGID=990
+      - PUID=1000
+      - PGID=1000
       - TZ=Asia/Shanghai
     depends_on:
       - douban-rs-api
