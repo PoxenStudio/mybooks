@@ -413,7 +413,7 @@ class BatchAddService(AsyncService):
             scan_file.name = isbn if isbn else "NO_ISBN"
             scan_file.title = title
             scan_file.author = author
-            scan_file.status = ScanFile.INVALID_ISBN
+            scan_file.status = ScanFile.INVALID
             scan_file.book_id = 0
             self.session.add(scan_file)
             self.session.commit()

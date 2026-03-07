@@ -253,15 +253,19 @@ class ScanService(AsyncService):
                 logging.error("Error reading metadata from file %s: %s", fpath, e)
                 continue
 
+            row.status = ScanFile.READY  # 设置为可处理
             if mi.title and mi.title == CALIBRE_ERROR_FLAG:
                 logging.error("Failed to get metadata for %s, reason:%s", fpath, mi.comments)
+                row.status = ScanFile.INVALID
+                row.title = None
+                if not self.save_or_rollback(row):
+                    logging.error("Failed to save row status: %s", fpath)
                 continue
 
             row.title = mi.title
             row.author = mi.authors[0] if mi.authors else mi.author_sort
             row.publisher = mi.publisher
             row.tags = ", ".join(mi.tags)
-            row.status = ScanFile.READY  # 设置为可处理
 
             # TODO calibre提供的书籍重复接口只有对比title；应当提前对整个书库的文件做哈希，才能准确去重
             ids = self.db.books_with_same_title(mi)
@@ -432,7 +436,7 @@ class ScanService(AsyncService):
                             logging.error("save link error: %s", err)
 
                 except Exception as err:
-                    row.status = ScanFile.INVALID_ISBN
+                    row.status = ScanFile.INVALID
                     logging.error("Failed to process file %s: %s", fpath, err)
 
             # 批量提交当前批次的更改

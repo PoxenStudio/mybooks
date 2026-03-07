@@ -423,7 +423,7 @@ class ScanFile(Base, SQLAlchemyMixin):
     READY = "ready"
     EXIST = "exist"
     IMPORTED = "imported"
-    INVALID_ISBN = "invalid"
+    INVALID = "invalid"
     MISSED = "missed"
     PERMISSION = "permission"
 
