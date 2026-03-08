@@ -35,6 +35,7 @@
               </v-select>
               <template v-else-if="f.type === 'meta_sources'" :key="f.key + '-meta_sources'">
                 <v-select small
+                  ref="metaSourceSelect"
                   v-model="settings['META_SELECTED_SOURCE']"
                   :items="metaSourceItems"
                   :label="$t(f.label)"
@@ -42,8 +43,12 @@
                   multiple
                   chips
                   small-chips
-                  :disabled="!settings['auto_fill_meta']"
                 >
+                  <template v-slot:selection="{ item }">
+                    <v-chip small @click.stop="$refs.metaSourceSelect[0] ? $refs.metaSourceSelect[0].activateMenu() : $refs.metaSourceSelect.activateMenu()">
+                      {{ item.text }}
+                    </v-chip>
+                  </template>
                   <template v-slot:item="{ item, attrs, on }">
                     <v-list-item v-on="on" v-bind="attrs">
                       <v-list-item-action>

@@ -43,6 +43,10 @@ class AutoFillService(AsyncService):
 
     @AsyncService.register_service
     def auto_fill_all(self, idlist: list, only_tags=False, qpm=60):
+        if not CONF['auto_fill_meta']:
+            logging.info("Auto-fill meta is disabled in settings, skipping auto_fill_all.")
+            return
+
         # 根据qpm，计算更新的间隔，避免刷爆豆瓣等服务
         sleep_seconds = 60.0 / qpm
         batch_size = 10  # 每批处理的书籍数量
