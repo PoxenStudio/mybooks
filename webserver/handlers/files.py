@@ -100,8 +100,11 @@ class ProxyImageHandler(BaseHandler):
         url = self.get_argument("url")
 
         import urllib
-
         import requests
+        if not url:
+            cover = self.default_cover
+            self.write(cover)
+            return
 
         p = urllib.parse.urlparse(url)
         if not self.is_whitelist(p.netloc):
@@ -110,7 +113,7 @@ class ProxyImageHandler(BaseHandler):
 
         headers = dict(constants.CHROME_HEADERS)
         headers["Referer"] = url
-        r = requests.get(url, headers=headers)
+        r = requests.get(url, headers=headers, verify=False)
         for k, v in r.headers.items():
             self.set_header(k, v)
         self.write(r.content)

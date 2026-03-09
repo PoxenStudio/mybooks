@@ -152,6 +152,18 @@ def bind_topdir_book_names(cache):
     return
 
 
+def configure_amazon_plugin():
+    """配置 Amazon 插件，将 server 选项设置为 'amazon'"""
+    try:
+        from calibre.customize.ui import metadata_plugins
+        for plugin in metadata_plugins({'identify'}):
+            if plugin.name == 'Amazon.com':
+                plugin.prefs['server'] = 'amazon'
+                break
+    except Exception as e:
+        logging.error("配置 Amazon 插件失败: %s" % e)
+
+
 def make_app():
     auth_db_path = CONF["user_database"]
     logging.debug("Init library with [%s]" % options.with_library)
@@ -228,8 +240,9 @@ def make_app():
         logging.error(traceback.format_exc())
         sys.exit(1)
 
-    # patch calibre plugins
+    # patch calibre plugins and config amazon plugins
     patch_plugins()
+    configure_amazon_plugin()
 
     # hook 1: 按字母作为第一级目录，解决书库子目录太多的问题
     logging.info("Patching calibre book names format...")

@@ -42,6 +42,7 @@ from webserver.constants import COLUMN_CATEGORY, CALIBRE_COLUMN_CATEGORY
 from webserver.constants import CALIBRE_ERROR_FLAG, SUPPORTED_EBOOK_FORMATS
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT
 from webserver.constants import BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL, AUTO_FILL_META
+from webserver.constants import META_SOURCE_GOOGLE, META_SOURCE_AMAZON
 
 
 CONF = loader.get_settings()
@@ -510,6 +511,10 @@ class BookRefer(BaseHandler):
                 return api.get_book(title)
             except:
                 raise RuntimeError({"err": "httprequest.youshu.failed", "msg": _(u"优书网查询失败")})
+
+        if provider_key in (META_SOURCE_GOOGLE, META_SOURCE_AMAZON):
+            # Set the metadata & image from google and amazon plugins
+            pass
         raise RuntimeError({"err": "params.provider_key.not_support", "msg": _(u"不支持该provider_key")})
 
     def reset_book_meta(self, book_id):

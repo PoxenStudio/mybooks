@@ -36,7 +36,7 @@
               <template v-else-if="f.type === 'meta_sources'" :key="f.key + '-meta_sources'">
                 <v-select small
                   ref="metaSourceSelect"
-                  v-model="settings['META_SELECTED_SOURCE']"
+                  v-model="settings['META_SELECTED_SOURCES']"
                   :items="metaSourceItems"
                   :label="$t(f.label)"
                   :prepend-icon="f.icon"
@@ -388,7 +388,7 @@ export default {
         title: "settings.internet_book_sources",
         fields: [
           { icon: "", key: "auto_fill_meta", label: "settings.auto_fill_meta", type: 'checkbox' },
-          { icon: "mdi-source-branch", key: "META_SELECTED_SOURCE", label: "settings.meta_selected_source", type: 'meta_sources' },
+          { icon: "mdi-source-branch", key: "META_SELECTED_SOURCES", label: "settings.meta_selected_source", type: 'meta_sources' },
           { icon: "info", key: "douban_baseurl", label: "settings.douban_baseurl" },
           { icon: "info", key: "douban_apikey", label: "settings.douban_api_key" },
           { icon: "info", key: "douban_max_count", label: "settings.douban_max_count" },
@@ -454,8 +454,8 @@ export default {
         if (!('DEVICES' in this.settings) || !Array.isArray(this.settings['DEVICES'])) {
           this.settings['DEVICES'] = [];
         }
-        if (!('META_SELECTED_SOURCE' in this.settings) || !Array.isArray(this.settings['META_SELECTED_SOURCE'])) {
-          this.settings['META_SELECTED_SOURCE'] = (this.settings['META_ALL_SOURCES'] || ['douban', 'baidu', 'google', 'amazon', 'xinhua']).slice();
+        if (!('META_SELECTED_SOURCES' in this.settings) || !Array.isArray(this.settings['META_SELECTED_SOURCES'])) {
+          this.settings['META_SELECTED_SOURCES'] = (this.settings['META_ALL_SOURCES'] || ['douban', 'baidu', 'google', 'amazon', 'xinhua']).slice();
         }
         if (process.client && this.settings['MAX_UPLOAD_SIZE'] !== '') {
           localStorage.setItem('max_upload_size', this.settings['MAX_UPLOAD_SIZE']);

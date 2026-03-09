@@ -1756,6 +1756,16 @@ export default {
                     this.refer_books = rsp.books.map((b) => {
                         b.href = "";
                         b.img = "/get/pcover?url=" + encodeURIComponent(b.cover_url);
+                        try {
+                            const urlObj = new URL(b.cover_url);
+                            const hostname = urlObj.hostname.toLowerCase();
+                            const isAmazon = hostname.endsWith('amazon.com');
+                            if (isAmazon) {
+                                b.img = b.cover_url;
+                            }
+                        } catch (e) {
+                            ;
+                        }
                         return b;
                     });
                 })

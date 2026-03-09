@@ -55,7 +55,7 @@ RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
 
 # install python packages (--break-system-packages)
 # Install OpenCC based on architecture
-COPY prebuilt/ /tmp/prebuilt/
+COPY prebuilt/ requirements.txt /tmp/
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "aarch64" ]; then \
         pip install --no-cache-dir /tmp/prebuilt/opencc-1.1.9-cp312-cp312-manylinux2014_aarch64.whl --break-system-packages; \
@@ -64,10 +64,8 @@ RUN ARCH=$(uname -m) && \
     fi && \
     rm -rf /tmp/prebuilt
 
-# Apply calibre patches
-COPY calibre/7.6/calibre/db/cache.py /usr/lib/calibre/calibre/db/
-COPY calibre/7.6/calibre/customize/ui.py /usr/lib/calibre/calibre/customize/
-COPY requirements.txt /tmp/requirements.txt
+# Apply calibre patches and install requirements
+COPY calibre/7.6/calibre/ /usr/lib/calibre/calibre/
 RUN pip install --no-cache-dir -r /tmp/requirements.txt --break-system-packages && \
     rm -rf /root/.cache /tmp/requirements.txt
 
@@ -76,8 +74,7 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt --break-system-packages 
 RUN echo "Testing..."
 FROM server AS test
 RUN pip install flake8 pytest --break-system-packages
-COPY webserver/ /var/www/talebook/webserver/
-COPY tests/ /var/www/talebook/tests/
+COPY webserver/ tests/ /var/www/talebook/
 CMD ["pytest", "/var/www/talebook/tests"]
 RUN echo "Testing... [DONE]"
 
@@ -112,10 +109,7 @@ RUN mkdir -p /data/log/nginx/ && \
     mkdir -p /var/www/talebook/ && \
     chmod a+w -R /data/log /data/books /var/www
 
-COPY server.py /var/www/talebook/
-COPY docker/ /var/www/talebook/docker/
-COPY webserver/ /var/www/talebook/webserver/
-COPY webserver/settings.py /var/www/talebook/webserver/
+COPY server.py docker/ webserver/ /var/www/talebook/
 COPY conf/nginx/ssl.* /data/books/ssl/
 COPY conf/nginx/talebook.conf /etc/nginx/conf.d/
 COPY conf/supervisor/talebook.conf /etc/supervisor/conf.d/

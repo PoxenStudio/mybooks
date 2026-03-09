@@ -8,6 +8,7 @@ from gettext import gettext as _
 from webserver import loader
 from webserver.plugins.meta import baike, douban
 from webserver.constants import META_SELECTED_SOURCES, META_SOURCE_DOUBAN, META_SOURCE_BAIDU
+from webserver.constants import META_SOURCE_GOOGLE, META_SOURCE_AMAZON
 
 CONF = loader.get_settings()
 
@@ -105,4 +106,18 @@ class BookSearch:
             except Exception as e:
                 logging.error(_(u"百度百科查询失败: %s" % str(e)))
 
+        # Google & Amazon 搜索（使用 Calibre Metadata API）
+        if any(s in sources for s in [META_SOURCE_GOOGLE, META_SOURCE_AMAZON]):
+            try:
+                from webserver.plugins.meta.calibre import CalibreMetadataApi
+                calibre_books = CalibreMetadataApi.get_book_by_isbn(isbn) if isbn else None
+                logging.info(f"CalibreMetadataApi get_book_by_isbn result: {calibre_books}")
+                if calibre_books:
+                    books.extend(calibre_books)
+                calibre_books = CalibreMetadataApi.get_book_by_title(title=clean_title, timeout=10) if clean_title else None
+                logging.info(f"CalibreMetadataApi _identify result: {calibre_books}")
+                if calibre_books:
+                    books.extend(calibre_books)
+            except Exception as e:
+                logging.error(_(u"Calibre Metadata API查询失败: %s" % str(e)))
         return books
