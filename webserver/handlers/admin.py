@@ -840,7 +840,7 @@ class AdminTrashSize(BaseHandler):
     @auth
     def get(self):
         if not self.admin_user:
-            return {"err": "permission.not_admin", "msg": _("当前用户非管理员")}
+            return {"err": "ok", "sizes": {}, "msg": _("非管理员用户")}
         sizes = TrashManager.get_trash_sizes()
         return {"err": "ok", "sizes": sizes}
 
@@ -850,11 +850,11 @@ class AdminTrashClear(BaseHandler):
     @auth
     def post(self):
         if not self.admin_user:
-            return {"err": "permission.not_admin", "msg": _("当前用户非管理员")}
+            return {"err": "permission.not_admin", "msg": _("当前用户非管理员, 无权操作")}
         errors = TrashManager.clear_trashs()
         if errors:
             return {"err": "error", "msg": _("清理失败: %s") % "; ".join(errors)}
-        return {"err": "ok", "msg": _("清理成功")}
+        return {"err": "ok", "msg": _("已将Calibre回收站及上传目录清理成功")}
 
 
 def routes():
