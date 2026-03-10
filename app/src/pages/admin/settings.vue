@@ -218,9 +218,13 @@
             <template v-if="card.show_trash">
               <div class="text-center">
                 <p v-html="$t('settings.trash_description')"></p>
+                <div style="font-size: 1.2em; margin-bottom: 8px;">
+                  {{ $t('settings.trash_calibre_size') }}
+                  <span style="font-weight: bold; color: #1976d2;">{{ trashSizeTexts.trash }}</span>
+                </div>
                 <div style="font-size: 1.2em; margin-bottom: 16px;">
-                  {{ $t('settings.trash_current_size') }}
-                  <span style="font-weight: bold; color: #1976d2;">{{ trashSizeText }}</span>
+                  {{ $t('settings.trash_upload_size') }}
+                  <span style="font-weight: bold; color: #1976d2;">{{ trashSizeTexts.upload }}</span>
                 </div>
                 <v-btn color="red" dark @click="trashConfirmDialog = true" style="margin-bottom:24px">
                   <v-icon>delete</v-icon>{{ $t('settings.trash_clear_button') }}
@@ -527,8 +531,8 @@ export default {
       v => !v || /^[a-zA-Z0-9-]*$/.test(v) || 'Only alphanumeric characters allowed',
       v => !v || (v.length >= 16 && v.length <= 128) || 'Length must be between 16 and 128 characters'
     ],
-    trashSize: 0,
-    trashSizeText: '',
+    trashSizes: { trash: 0, upload: 0 },
+    trashSizeTexts: { trash: '', upload: '' },
     trashLoading: false,
     trashConfirmDialog: false,
   }),
@@ -657,11 +661,14 @@ export default {
       this.trashLoading = true;
       this.$backend('/admin/trash/size').then(rsp => {
         this.trashLoading = false;
-        if (rsp && rsp.err === 'ok') {
-          this.trashSize = rsp.size;
-          this.trashSizeText = this.formatTrashSize(rsp.size);
+        if (rsp && rsp.err === 'ok' && rsp.sizes) {
+          this.trashSizes = rsp.sizes;
+          this.trashSizeTexts = {
+            trash: this.formatTrashSize(rsp.sizes.trash),
+            upload: this.formatTrashSize(rsp.sizes.upload),
+          };
         } else {
-          this.trashSizeText = this.$t('settings.trash_unknown');
+          this.trashSizeTexts = { trash: this.$t('settings.trash_unknown'), upload: this.$t('settings.trash_unknown') };
         }
       });
     },

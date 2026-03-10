@@ -13,7 +13,6 @@ import time
 import traceback
 import uuid
 from gettext import gettext as _
-import threading
 
 import tornado
 
@@ -27,6 +26,7 @@ from webserver.services.background_service import BackgroundService, BackgroundT
 from webserver.handlers.base import BaseHandler, auth, js, is_admin
 from webserver.models import Reader
 from webserver.utils import SimpleBookFormatter
+from webserver.base.trash_manager import TrashManager
 from webserver.version import VERSION
 from webserver.handlers.audio import AudioUtils
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_PHYSICAL, BOOK_TYPE_EBOOK, ENABLE_OPDS_SERVICE
@@ -835,45 +835,14 @@ class AdminRunningTasks(BaseHandler):
         return {"err": "ok", "tasks": running_tasks}
 
 
-# --- Trash management ---
-TRASH_SIZE_CACHE = {"value": 0, "ts": 0}
-TRASH_SIZE_CACHE_LOCK = threading.Lock()
-TRASH_PATH = "/data/books/library/.caltrash"
-
-
-def get_trash_size():
-    now = time.time()
-    with TRASH_SIZE_CACHE_LOCK:
-        if now - TRASH_SIZE_CACHE["ts"] < 30:
-            return TRASH_SIZE_CACHE["value"]
-        size = 0
-        if os.path.exists(TRASH_PATH):
-            for root, dirs, files in os.walk(TRASH_PATH):
-                for f in files:
-                    fp = os.path.join(root, f)
-                    try:
-                        size += os.path.getsize(fp)
-                    except Exception:
-                        pass
-        TRASH_SIZE_CACHE["value"] = size
-        TRASH_SIZE_CACHE["ts"] = now
-        return size
-
-
-def clear_trash_cache():
-    with TRASH_SIZE_CACHE_LOCK:
-        TRASH_SIZE_CACHE["value"] = 0
-        TRASH_SIZE_CACHE["ts"] = 0
-
-
 class AdminTrashSize(BaseHandler):
     @js
     @auth
     def get(self):
         if not self.admin_user:
             return {"err": "permission.not_admin", "msg": _("当前用户非管理员")}
-        size = get_trash_size()
-        return {"err": "ok", "size": size}
+        sizes = TrashManager.get_trash_sizes()
+        return {"err": "ok", "sizes": sizes}
 
 
 class AdminTrashClear(BaseHandler):
@@ -882,19 +851,10 @@ class AdminTrashClear(BaseHandler):
     def post(self):
         if not self.admin_user:
             return {"err": "permission.not_admin", "msg": _("当前用户非管理员")}
-        if not os.path.exists(TRASH_PATH):
-            clear_trash_cache()
-            return {"err": "ok", "msg": _("回收站已清空")}
-        ts = int(time.time())
-        new_name = TRASH_PATH + ".bak_%d" % ts
-        try:
-            os.rename(TRASH_PATH, new_name)
-            os.makedirs(TRASH_PATH, exist_ok=True)
-            shutil.rmtree(new_name)
-            clear_trash_cache()
-            return {"err": "ok", "msg": _("回收站清理成功")}
-        except Exception as e:
-            return {"err": "error", "msg": _("清理失败: %s") % str(e)}
+        errors = TrashManager.clear_trashs()
+        if errors:
+            return {"err": "error", "msg": _("清理失败: %s") % "; ".join(errors)}
+        return {"err": "ok", "msg": _("清理成功")}
 
 
 def routes():
