@@ -13,6 +13,9 @@ import shutil
 import time
 import traceback
 import urllib
+import asyncio
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from gettext import gettext as _
 
@@ -483,6 +486,15 @@ class BookSetSole(BaseHandler):
 
 
 class BookRefer(BaseHandler):
+    _search_executor = ThreadPoolExecutor(max_workers=int(CONF.get("REFER_SEARCH_MAX_WORKERS", 6)))
+    _search_timeout = float(CONF.get("REFER_SEARCH_TIMEOUT", 12))
+    _search_cache_ttl = int(CONF.get("REFER_SEARCH_CACHE_TTL", 120))
+    _search_max_concurrency = int(CONF.get("REFER_SEARCH_MAX_CONCURRENCY", 8))
+    _search_cache = {}
+    _search_inflight = {}
+    _search_state_lock = threading.Lock()
+    _search_semaphore = None
+
     meta_keys = [
         "cover_url",
         "source",
@@ -500,6 +512,59 @@ class BookRefer(BaseHandler):
         "identifiers",
         "tags"
     ]
+
+    @classmethod
+    def _get_search_semaphore(cls):
+        if cls._search_semaphore is None:
+            cls._search_semaphore = asyncio.Semaphore(cls._search_max_concurrency)
+        return cls._search_semaphore
+
+    @staticmethod
+    def _build_search_key(title, isbn, publisher):
+        return "|".join([(title or "").strip(), (isbn or "").strip(), (publisher or "").strip()])
+
+    @classmethod
+    def _get_cached_books(cls, key):
+        now = time.time()
+        with cls._search_state_lock:
+            entry = cls._search_cache.get(key)
+            if not entry:
+                return None
+            expires_at, books = entry
+            if now >= expires_at:
+                cls._search_cache.pop(key, None)
+                return None
+            return books
+
+    @classmethod
+    def _set_cached_books(cls, key, books):
+        with cls._search_state_lock:
+            cls._search_cache[key] = (time.time() + cls._search_cache_ttl, books)
+
+    @classmethod
+    def _cleanup_inflight(cls, key, fut):
+        with cls._search_state_lock:
+            current = cls._search_inflight.get(key)
+            if current is fut:
+                cls._search_inflight.pop(key, None)
+
+    def _format_refer_books(self, books):
+        rsp = []
+        for b in books:
+            try:
+                d = dict((k, b.get(k, None)) for k in self.meta_keys)
+                # Remoe the key with empty values
+                d = {k: v for k, v in d.items() if v}
+                pubdate = b.get("pubdate")
+                if b.rating:
+                    d["rating"] = round(float(b.rating) / 2, 1)
+                d["pubyear"] = pubdate.strftime("%Y") if pubdate else ""
+                if not d["comments"]:
+                    d["comments"] = _(u"无详细介绍")
+                rsp.append(d)
+            except Exception as e:
+                logging.error("get book meta error: %s" % e)
+        return rsp
 
     def _convert_to_metadata(self, metadata):
         from calibre.ebooks.metadata.book.base import Metadata
@@ -590,7 +655,7 @@ class BookRefer(BaseHandler):
 
     @js
     @auth
-    def get(self, id):
+    async def get(self, id):
         book_id = int(id)
         # 优先使用URL参数中的书籍信息，避免查询数据库
         title = self.get_argument('title', "")
@@ -605,29 +670,46 @@ class BookRefer(BaseHandler):
             publisher = publisher or mi.publisher
 
         logging.info(f"BookRefer: Searching for book meta with title='{title}', isbn='{isbn}', publisher='{publisher}'")
-        books = BookSearch.plugin_search_books(
-            title=title,
-            isbn=isbn,
-            publisher=publisher
-        )
-        rsp = []
+        key = self._build_search_key(title, isbn, publisher)
+        cached_books = self._get_cached_books(key)
+        if cached_books is not None:
+            return {"err": "ok", "books": self._format_refer_books(cached_books), "cached": True}
 
-        for b in books:
+        semaphore = self._get_search_semaphore()
+        loop = asyncio.get_running_loop()
+
+        async with semaphore:
+            created = False
+            with self._search_state_lock:
+                fut = self._search_inflight.get(key)
+                if fut is None:
+                    fut = loop.run_in_executor(
+                        self._search_executor,
+                        BookSearch.plugin_search_books,
+                        title,
+                        isbn,
+                        publisher,
+                    )
+                    self._search_inflight[key] = fut
+                    created = True
+
+            if created:
+                fut.add_done_callback(lambda f, _key=key: self._cleanup_inflight(_key, f))
+
             try:
-                d = dict((k, b.get(k, None)) for k in self.meta_keys)
-                # Remoe the key with empty values
-                d = {k: v for k, v in d.items() if v}
-                pubdate = b.get("pubdate")
-                if b.rating:
-                    d["rating"] = round(float(b.rating) / 2, 1)
-                d["pubyear"] = pubdate.strftime("%Y") if pubdate else ""
-                if not d["comments"]:
-                    d["comments"] = _(u"无详细介绍")
-                rsp.append(d)
+                books = await asyncio.wait_for(asyncio.shield(fut), timeout=self._search_timeout)
+            except asyncio.TimeoutError:
+                logging.warning("BookRefer search timeout: key=%s", key)
+                fallback = self._get_cached_books(key) or []
+                return {"err": "timeout", "books": self._format_refer_books(fallback), "msg": _("查询超时，请稍后重试")}
             except Exception as e:
-                logging.error("get book meta error: %s" % e)
+                logging.error("BookRefer search failed: %s", e)
+                fallback = self._get_cached_books(key) or []
+                return {"err": "search.failed", "books": self._format_refer_books(fallback), "msg": _("查询失败，请稍后重试")}
 
-        return {"err": "ok", "books": rsp}
+        books = books or []
+        self._set_cached_books(key, books)
+        return {"err": "ok", "books": self._format_refer_books(books)}
 
     @js
     @auth
