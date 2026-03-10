@@ -199,15 +199,15 @@
                                             </v-btn>
                                         </template>
                                         <v-list dense>
-                                            <v-list-item @click="set_refer(book.provider_key, book.provider_value)">
+                                            <v-list-item @click="set_refer(book)">
                                                 <v-list-item-title>{{ $t('book.setBookInfoAndImage') }}</v-list-item-title>
                                             </v-list-item>
                                             <v-list-item
-                                                @click="set_refer(book.provider_key, book.provider_value, { only_meta: 'yes' })">
+                                                @click="set_refer(book, { only_meta: 'yes' })">
                                                 <v-list-item-title>{{ $t('book.setBookInfoOnly') }}</v-list-item-title>
                                             </v-list-item>
                                             <v-list-item
-                                                @click="set_refer(book.provider_key, book.provider_value, { only_cover: 'yes' })">
+                                                @click="set_refer(book, { only_cover: 'yes' })">
                                                 <v-list-item-title>{{ $t('book.setBookImageOnly') }}</v-list-item-title>
                                             </v-list-item>
                                         </v-list>
@@ -1756,16 +1756,6 @@ export default {
                     this.refer_books = rsp.books.map((b) => {
                         b.href = "";
                         b.img = "/get/pcover?url=" + encodeURIComponent(b.cover_url);
-                        try {
-                            const urlObj = new URL(b.cover_url);
-                            const hostname = urlObj.hostname.toLowerCase();
-                            const isAmazon = hostname.endsWith('amazon.com');
-                            if (isAmazon) {
-                                b.img = b.cover_url;
-                            }
-                        } catch (e) {
-                            ;
-                        }
                         return b;
                     });
                 })
@@ -1773,14 +1763,17 @@ export default {
                     this.refer_books_loading = false;
                 });
         },
-        set_refer(provider_key, provider_value, opt) {
+        set_refer(book, opt) {
             // 防止多次重复点击
             if(this.refer_books_setting_btn_loading) return;
+            const provider_key = book.provider_key
+            const provider_value = book.provider_value
             // 显示加载条提示
             this.refer_books_setting_btn_loading = true;
             var data = new URLSearchParams(opt);
             data.append("provider_key", provider_key);
             data.append("provider_value", provider_value);
+            data.append("metadata", JSON.stringify(book));
             this.$backend("/book/" + this.book.id + "/refer", {
                 method: "POST",
                 body: data,

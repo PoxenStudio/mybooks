@@ -65,14 +65,15 @@ class BaiduBaikeApi:
         mi.provider_key = KEY
         mi.provider_value = baike.get_id()
         try:
-            mi.cover_data = self.get_cover(mi.cover_url)
+            mi.cover_data = self.get_cover(mi.cover_url) if self.copy_image else None
         except Exception as e:
             logging.error(f"Failed to get cover data: {e}")
             mi.cover_data = None
         return mi
 
-    def get_cover(self, cover_url):
-        if not self.copy_image or not cover_url:
+    @staticmethod
+    def get_cover(cover_url):
+        if not cover_url:
             return None
         img = requests.get(cover_url, timeout=10, headers=CHROME_MOBILE_HEADERS).content
         img_fmt = 'jpg' if cover_url.lower().endswith('.jpeg') else 'png'

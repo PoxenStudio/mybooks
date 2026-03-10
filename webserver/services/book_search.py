@@ -111,11 +111,9 @@ class BookSearch:
             try:
                 from webserver.plugins.meta.calibre import CalibreMetadataApi
                 calibre_books = CalibreMetadataApi.get_book_by_isbn(isbn) if isbn else None
-                logging.info(f"CalibreMetadataApi get_book_by_isbn result: {calibre_books}")
                 if calibre_books:
                     books.extend(calibre_books)
                 calibre_books = CalibreMetadataApi.get_book_by_title(title=clean_title, timeout=10) if clean_title else None
-                logging.info(f"CalibreMetadataApi _identify result: {calibre_books}")
                 if calibre_books:
                     books.extend(calibre_books)
             except Exception as e:

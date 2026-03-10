@@ -5,9 +5,10 @@
 import logging
 import os
 import re
+import urllib
+import requests
 import zipfile
 from gettext import gettext as _
-
 from tornado import web
 from webserver import constants, loader
 from webserver.services.convert import ConvertService
@@ -90,7 +91,7 @@ class ImageHandler(BaseHandler):
 
 class ProxyImageHandler(BaseHandler):
     def is_whitelist(self, host):
-        whitelist = ["bcebos.com", "doubanio.com", "bdstatic.com"]
+        whitelist = ["bcebos.com", "doubanio.com", "bdstatic.com", "amazon.com"]
         for w in whitelist:
             if host.endswith(w):
                 return True
@@ -98,9 +99,6 @@ class ProxyImageHandler(BaseHandler):
 
     def get(self):
         url = self.get_argument("url")
-
-        import urllib
-        import requests
         if not url:
             cover = self.default_cover
             self.write(cover)
@@ -108,12 +106,15 @@ class ProxyImageHandler(BaseHandler):
 
         p = urllib.parse.urlparse(url)
         if not self.is_whitelist(p.netloc):
-            self.write("yoho")
+            cover = self.default_cover
+            self.write(cover)
             return
 
         headers = dict(constants.CHROME_HEADERS)
         headers["Referer"] = url
-        r = requests.get(url, headers=headers, verify=False)
+        r = requests.get(url, headers=headers, verify=False, timeout=15)
+        if r.status_code != 200:
+            raise web.HTTPError(500, "Failed to get cover: %r" % r.status_code)
         for k, v in r.headers.items():
             self.set_header(k, v)
         self.write(r.content)

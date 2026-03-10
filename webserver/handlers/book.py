@@ -35,6 +35,7 @@ from webserver.services.mail import MailService
 from webserver.handlers.base import BaseHandler, ListHandler, auth, js
 from webserver.models import Item, ReadingState
 from webserver.plugins.meta import baike, douban, youshu, xhsd
+from webserver.plugins.meta.calibre import CalibreMetadataApi
 from webserver.plugins.meta.bookbarn_tags import BookBarnTags
 from webserver.plugins.parser.txt import get_content_encoding
 from webserver.handlers.audio import AudioUtils
@@ -482,40 +483,54 @@ class BookSetSole(BaseHandler):
 
 
 class BookRefer(BaseHandler):
-    def plugin_get_book_meta(self, provider_key, provider_value, mi):
+    meta_keys = [
+        "cover_url",
+        "source",
+        "website",
+        "title",
+        "authors",
+        "author_sort",
+        "publisher",
+        "comments",
+        "provider_key",
+        "provider_value",
+        "isbn",
+        "isbn13",
+        "language",
+        "identifiers",
+        "tags"
+    ]
+
+    def _convert_to_metadata(self, metadata):
+        from calibre.ebooks.metadata.book.base import Metadata
+        mi = Metadata(metadata.get("title", ""))
+        mi.publisher = metadata.get("publisher", None)
+        mi.authors = metadata.get("authors", [])
+        mi.author_sort = metadata.get("author_sort", None)
+        mi.isbn = metadata.get("isbn", "")
+        mi.isbn13 = metadata.get("isbn13", None)
+        mi.language = metadata.get("language", "zho")
+        mi.identifiers = metadata.get("identifiers", None)
+        mi.tags = metadata.get("tags", None)
+        mi.comments = metadata.get("comments", None)
+        mi.website = metadata.get("website", None)
+        mi.source = metadata.get("source", None)
+        mi.provider_key = metadata.get("provider_key", None)
+        mi.provider_value = metadata.get("provider_value", None)
+        mi.cover_url = metadata.get("cover_url", None)
+        mi.rating = metadata.get("rating", 0)
+        return mi
+
+    def plugin_fill_book_cover(self, provider_key, cover_url):
         if provider_key == baike.KEY:
-            title = re.sub(u"[(（].*", "", mi.title)
-            api = baike.BaiduBaikeApi(copy_image=True)
-            try:
-                return api.get_book(title)
-            except:
-                raise RuntimeError({"err": "httprequest.baidubaike.failed", "msg": _(u"百度百科查询失败")})
-
-        if provider_key == douban.KEY:
-            mi.douban_id = provider_value
-            api = douban.DoubanBookApi(
-                CONF["douban_apikey"],
-                CONF["douban_baseurl"],
-                copy_image=True,
-                maxCount=CONF["douban_max_count"],
-            )
-            try:
-                return api.get_book(mi)
-            except:
-                raise RuntimeError({"err": "httprequest.douban.failed", "msg": _(u"豆瓣接口查询失败")})
-
-        if provider_key == youshu.KEY:
-            title = re.sub(u"[(（].*", "", mi.title)
-            api = youshu.YoushuApi(copy_image=True)
-            try:
-                return api.get_book(title)
-            except:
-                raise RuntimeError({"err": "httprequest.youshu.failed", "msg": _(u"优书网查询失败")})
-
-        if provider_key in (META_SOURCE_GOOGLE, META_SOURCE_AMAZON):
-            # Set the metadata & image from google and amazon plugins
-            pass
-        raise RuntimeError({"err": "params.provider_key.not_support", "msg": _(u"不支持该provider_key")})
+            return baike.BaiduBaikeApi.get_cover(cover_url)
+        elif provider_key == douban.KEY:
+            return douban.DoubanBookApi.get_cover(cover_url)
+        elif provider_key == youshu.KEY:
+            return youshu.YoushuApi.get_cover(cover_url)
+        elif provider_key in (META_SOURCE_GOOGLE, META_SOURCE_AMAZON):
+            return CalibreMetadataApi.get_cover(cover_url)
+        return None
 
     def reset_book_meta(self, book_id):
         book = self.get_book(book_id)
@@ -583,24 +598,16 @@ class BookRefer(BaseHandler):
             isbn=mi.isbn,
             publisher=mi.publisher
         )
-        keys = [
-            "cover_url",
-            "source",
-            "website",
-            "title",
-            "author_sort",
-            "publisher",
-            "isbn",
-            "comments",
-            "provider_key",
-            "provider_value",
-        ]
         rsp = []
 
         for b in books:
             try:
-                d = dict((k, b.get(k, "")) for k in keys)
+                d = dict((k, b.get(k, None)) for k in self.meta_keys)
+                # Remoe the key with empty values
+                d = {k: v for k, v in d.items() if v}
                 pubdate = b.get("pubdate")
+                if b.rating:
+                    d["rating"] = round(float(b.rating) / 2, 1)
                 d["pubyear"] = pubdate.strftime("%Y") if pubdate else ""
                 if not d["comments"]:
                     d["comments"] = _(u"无详细介绍")
@@ -619,6 +626,14 @@ class BookRefer(BaseHandler):
         provider_value = self.get_argument("provider_value", "")
         only_meta = self.get_argument("only_meta", "")
         only_cover = self.get_argument("only_cover", "")
+        metadata = self.get_argument("metadata", "")
+        if metadata:
+            try:
+                metadata = json.loads(metadata)
+            except Exception as e:
+                logging.error(f"Error parsing metadata JSON: {e}")
+                return {"err": "params.invalid", "msg": _(u"无效的metadata参数")}
+
         book_id = int(id)
         mi = self.calibre_db.get_metadata(book_id, index_is_id=True)
         if not mi:
@@ -636,16 +651,21 @@ class BookRefer(BaseHandler):
         if only_meta == "yes" and only_cover == "yes":
             return {"err": "params.conflict", "msg": _(u"参数冲突")}
 
-        try:
-            refer_mi = self.plugin_get_book_meta(provider_key, provider_value, mi)
-        except RuntimeError as e:
-            return e.args[0]
+        refer_mi = self._convert_to_metadata(metadata) if metadata else mi
+        if only_meta != "yes":
+            try:
+                cover_url = metadata.get("cover_url") if metadata else None
+                refer_mi.cover_data = self.plugin_fill_book_cover(provider_key, cover_url)
+            except RuntimeError as e:
+                logging.error(f"Error filling book metadata from plugin {provider_key}: {e}")
 
         if not refer_mi:
             return {"err": "plugin.fail", "msg": _(u"拉取图书信息异常，请重试")}
 
         if only_cover == "yes":
             # just set cover
+            if not refer_mi.cover_data:
+                return {"err": "plugin.no_cover", "msg": _(u"未找到封面信息")}
             mi.cover_data = refer_mi.cover_data
         else:
             if only_meta == "yes":
