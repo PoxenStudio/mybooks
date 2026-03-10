@@ -226,7 +226,8 @@
                   {{ $t('settings.trash_upload_size') }}
                   <span style="font-weight: bold; color: #1976d2;">{{ trashSizeTexts.upload }}</span>
                 </div>
-                <v-btn color="red" dark @click="trashConfirmDialog = true" style="margin-bottom:24px">
+                <v-btn color="red" dark @click="trashConfirmDialog = true" style="margin-bottom:24px"
+                  :disabled="trashSizes.trash + trashSizes.upload <= 10 * 1048576">
                   <v-icon>delete</v-icon>{{ $t('settings.trash_clear_button') }}
                 </v-btn>
               </div>
@@ -306,7 +307,7 @@ export default {
           },
           {
             icon: "mdi-shuffle", key: "MAIN_PAGE_RANDOM_COUNT", label: "settings.main_page_random_count", type: 'select',
-            items: [0, 12, 24, 48].map(v => ({ text: String(v), value: v }))
+            items: [0, 12, 24, 48, 96].map(v => ({ text: String(v), value: v }))
           },
           {
             icon: "mdi-book-multiple", key: "MAIN_PAGE_RECENT_COUNT", label: "settings.main_page_recent_count", type: 'select',

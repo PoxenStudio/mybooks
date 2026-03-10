@@ -854,7 +854,7 @@ class AdminTrashClear(BaseHandler):
         errors = TrashManager.clear_trashs()
         if errors:
             return {"err": "error", "msg": _("清理失败: %s") % "; ".join(errors)}
-        return {"err": "ok", "msg": _("已将Calibre回收站及上传目录清理成功")}
+        return {"err": "ok", "msg": _("已清理Calibre回收站及上传目录")}
 
 
 def routes():
