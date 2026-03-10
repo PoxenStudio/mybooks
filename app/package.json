@@ -1,6 +1,6 @@
 {
   "name": "talebook",
-  "version": "3.12.2",
+  "version": "3.35.1",
   "private": true,
   "scripts": {
     "dev": "nuxt",

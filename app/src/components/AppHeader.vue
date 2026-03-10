@@ -92,7 +92,7 @@
                             :key="'item-' + idx + '-' + (item.href || item.text)"
                             :to="item.href"
                             :target="item.target"
-                            :class="{ 'v-list-item--icon-only': miniVariant }"
+                            :class="{ 'v-list-item--icon-only': miniVariant, 'login-button': item.text === 'appHeader.please_login' }"
                         >
                             <v-list-item-action class="mt-1 mb-1 mr-2" dense v-if="!miniVariant">
                                 <v-icon class="pa-0 ma-0" :color="item.color || ''">{{ item.icon }}</v-icon>
@@ -170,7 +170,7 @@
             </v-tooltip>
 
             <v-toolbar-title class="ml-4 mr-12 align-center d-flex">
-                <span class="cursor-pointer" @click="$router.push('/')">{{ sys.title }}</span>
+                <span>{{ sys.title }}</span>
             </v-toolbar-title>
 
             <v-spacer></v-spacer>
@@ -926,11 +926,35 @@ export default {
     padding: 12px 8px !important;
 }
 
+.login-button {
+    background-color: #01847f !important;
+    border-radius: 8px !important;
+    margin: 3px 0 !important;
+    padding: 3px !important;
+}
+
+.login-button .v-list-item-title {
+    font-size: 16px !important;
+    font-weight: bold !important;
+    color: white !important;
+}
+
+.login-button .v-icon {
+    color: white !important;
+}
+
 .app-navigation-drawer .v-subheader {
     font-weight: 600 !important;
     letter-spacing: 0.5px !important;
     font-size: 0.75rem !important;
     opacity: 0.8 !important;
+}
+
+.app-navigation-drawer .v-list--dense .v-list-item .v-list-item__title,
+.app-navigation-drawer .v-list-item--dense .v-list-item__title {
+    font-size: 0.9rem !important; /* 1rem = 16px (默认字体大小) */
+    font-weight: 500 !important;
+    line-height: 1.25rem !important;
 }
 
 .app-navigation-drawer .v-icon {

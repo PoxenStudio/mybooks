@@ -9,6 +9,7 @@ import shutil
 import ssl
 import subprocess
 import tempfile
+import time
 import traceback
 import uuid
 from gettext import gettext as _
@@ -25,6 +26,7 @@ from webserver.services.background_service import BackgroundService, BackgroundT
 from webserver.handlers.base import BaseHandler, auth, js, is_admin
 from webserver.models import Reader
 from webserver.utils import SimpleBookFormatter
+from webserver.base.trash_manager import TrashManager
 from webserver.version import VERSION
 from webserver.handlers.audio import AudioUtils
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_PHYSICAL, BOOK_TYPE_EBOOK, ENABLE_OPDS_SERVICE
@@ -32,6 +34,8 @@ from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_PHYSICAL, BO
 CONF = loader.get_settings()
 USER_UPDATE_TS_MAP = {}
 ENABLE_VIP_QUOTA_KEY = "ENABLE_VIP_QUOTA"
+META_ALL_SOURCES = ["douban", "baidu", "google", "amazon", "xinhua"]
+DEFAULT_META_SOURCES = ["douban", "baidu", "xinhua"]
 
 
 class AdminUsers(BaseHandler):
@@ -81,16 +85,12 @@ class AdminUsers(BaseHandler):
                 "update_time": user.update_time.strftime("%Y-%m-%d %H:%M:%S") if user.update_time else "N/A",
                 "access_time": user.access_time.strftime("%Y-%m-%d %H:%M:%S") if user.access_time else "N/A",
             }
-
             if enable_vip_quota:
                 d["vipquota"] = user.vipquota or 0
                 d["vip_expire"] = user.vipexpire.strftime("%Y-%m-%d") if user.vipexpire else ""
-
             for attr in dir(user):
                 if attr.startswith("can_"):
                     d[attr] = getattr(user, attr)()
-
-            # Update the user statistic count
             need_update = False
             ts = USER_UPDATE_TS_MAP.get(user.id, 0)
             if not ts or (datetime.datetime.now() - ts).total_seconds() > 3600:
@@ -342,7 +342,8 @@ class AdminSettings(BaseHandler):
             "DEFAULT_PAGE_SIZE",
             "WEBDAV_SYNC_FOLDER",
             "ENABLE_AUDIO_CONVERSION_LOG",
-            "ENABLE_OPDS_SERVICE"
+            "ENABLE_OPDS_SERVICE",
+            "META_SELECTED_SOURCES"
         ]
 
         current_icon = CONF.get("site_icon", "favicon_0")  # favicon_0 means use current icon
@@ -365,6 +366,10 @@ class AdminSettings(BaseHandler):
             args[ENABLE_VIP_QUOTA_KEY] = current_vip_quota
         if ENABLE_OPDS_SERVICE not in args:
             args[ENABLE_OPDS_SERVICE] = CONF.get(ENABLE_OPDS_SERVICE, True)
+
+        args["META_ALL_SOURCES"] = META_ALL_SOURCES
+        if "META_SELECTED_SOURCES" not in args:
+            args["META_SELECTED_SOURCES"] = DEFAULT_META_SOURCES
 
         if args["site_icon"] != "favicon_0" and args["site_icon"] != current_icon:
             new_icon_path = CONF["static_path"] + "/logo/" + args["site_icon"] + ".ico"
@@ -830,6 +835,28 @@ class AdminRunningTasks(BaseHandler):
         return {"err": "ok", "tasks": running_tasks}
 
 
+class AdminTrashSize(BaseHandler):
+    @js
+    @auth
+    def get(self):
+        if not self.admin_user:
+            return {"err": "ok", "sizes": {}, "msg": _("非管理员用户")}
+        sizes = TrashManager.get_trash_sizes()
+        return {"err": "ok", "sizes": sizes}
+
+
+class AdminTrashClear(BaseHandler):
+    @js
+    @auth
+    def post(self):
+        if not self.admin_user:
+            return {"err": "permission.not_admin", "msg": _("当前用户非管理员, 无权操作")}
+        errors = TrashManager.clear_trashs()
+        if errors:
+            return {"err": "error", "msg": _("清理失败: %s") % "; ".join(errors)}
+        return {"err": "ok", "msg": _("已清理Calibre回收站及上传目录")}
+
+
 def routes():
     return [
         (r"/api/admin/ssl", AdminSSL),
@@ -847,4 +874,6 @@ def routes():
         (r"/api/admin/release/notes", ReleaseNotes),
         (r"/api/admin/token", AdminTokenHandler),
         (r"/api/admin/tasks/running", AdminRunningTasks),
+        (r"/api/admin/trash/size", AdminTrashSize),
+        (r"/api/admin/trash/clear", AdminTrashClear),
     ]

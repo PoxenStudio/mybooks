@@ -33,6 +33,34 @@
                   <v-img :src="`${site_url}/logo/${item.image_file}.ico`" max-width="32" max-height="32" />
                 </template>
               </v-select>
+              <template v-else-if="f.type === 'meta_sources'" :key="f.key + '-meta_sources'">
+                <v-select small
+                  ref="metaSourceSelect"
+                  v-model="settings['META_SELECTED_SOURCES']"
+                  :items="metaSourceItems"
+                  :label="$t(f.label)"
+                  :prepend-icon="f.icon"
+                  multiple
+                  chips
+                  small-chips
+                >
+                  <template v-slot:selection="{ item }">
+                    <v-chip small @click.stop="$refs.metaSourceSelect[0] ? $refs.metaSourceSelect[0].activateMenu() : $refs.metaSourceSelect.activateMenu()">
+                      {{ item.text }}
+                    </v-chip>
+                  </template>
+                  <template v-slot:item="{ item, attrs, on }">
+                    <v-list-item v-on="on" v-bind="attrs">
+                      <v-list-item-action>
+                        <v-checkbox :input-value="attrs.inputValue" color="primary"></v-checkbox>
+                      </v-list-item-action>
+                      <v-list-item-content>
+                        <v-list-item-title>{{ item.text }}</v-list-item-title>
+                      </v-list-item-content>
+                    </v-list-item>
+                  </template>
+                </v-select>
+              </template>
               <v-text-field v-else :prepend-icon="f.icon" v-model="settings[f.key]" :key="f.key + '-text'" :label="$t(f.label)"
                 type="text"></v-text-field>
             </template>
@@ -187,6 +215,23 @@
               </v-row>
             </template>
 
+            <template v-if="card.show_trash">
+              <div class="text-center">
+                <p v-html="$t('settings.trash_description')"></p>
+                <div style="font-size: 1.2em; margin-bottom: 8px;">
+                  {{ $t('settings.trash_calibre_size') }}
+                  <span style="font-weight: bold; color: #1976d2;">{{ trashSizeTexts.trash }}</span>
+                </div>
+                <div style="font-size: 1.2em; margin-bottom: 16px;">
+                  {{ $t('settings.trash_upload_size') }}
+                  <span style="font-weight: bold; color: #1976d2;">{{ trashSizeTexts.upload }}</span>
+                </div>
+                <v-btn color="red" dark @click="trashConfirmDialog = true" style="margin-bottom:24px"
+                  :disabled="trashSizes.trash + trashSizes.upload <= 10 * 1048576">
+                  <v-icon>delete</v-icon>{{ $t('settings.trash_clear_button') }}
+                </v-btn>
+              </div>
+            </template>
             <template v-if="card.show_ssl">
               <ssl-manager />
             </template>
@@ -194,6 +239,18 @@
         </v-card-text>
       </v-expand-transition>
     </v-card>
+
+    <v-dialog v-model="trashConfirmDialog" max-width="400" persistent>
+      <v-card>
+        <v-card-title class="headline">{{ $t('settings.trash_clear_confirm_title') }}</v-card-title>
+        <v-card-text>{{ $t('settings.trash_clear_confirm_message') }}</v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn text @click="trashConfirmDialog = false">{{ $t('common.cancel') }}</v-btn>
+          <v-btn color="red" dark @click="clearTrash">{{ $t('settings.trash_clear_confirm_button') }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <br />
     <div class="text-center">
@@ -250,7 +307,7 @@ export default {
           },
           {
             icon: "mdi-shuffle", key: "MAIN_PAGE_RANDOM_COUNT", label: "settings.main_page_random_count", type: 'select',
-            items: [0, 12, 24, 48].map(v => ({ text: String(v), value: v }))
+            items: [0, 12, 24, 48, 96].map(v => ({ text: String(v), value: v }))
           },
           {
             icon: "mdi-book-multiple", key: "MAIN_PAGE_RECENT_COUNT", label: "settings.main_page_recent_count", type: 'select',
@@ -360,6 +417,7 @@ export default {
         title: "settings.internet_book_sources",
         fields: [
           { icon: "", key: "auto_fill_meta", label: "settings.auto_fill_meta", type: 'checkbox' },
+          { icon: "mdi-source-branch", key: "META_SELECTED_SOURCES", label: "settings.meta_selected_source", type: 'meta_sources' },
           { icon: "info", key: "douban_baseurl", label: "settings.douban_baseurl" },
           { icon: "info", key: "douban_apikey", label: "settings.douban_api_key" },
           { icon: "info", key: "douban_max_count", label: "settings.douban_max_count" },
@@ -395,7 +453,7 @@ export default {
           { icon: "", key: "ENABLE_PHYSICAL_BOOKS", label: "settings.enable_physical_books", type: 'checkbox' },
           { icon: "", key: "WEBDAV_SYNC_FOLDER", label: "settings.enable_webdav_sync", type: 'checkbox' },
           { icon: "mdi-cloud-print-outline", key: "ENABLE_OPDS_SERVICE", label: "settings.enable_opds_service", type: 'checkbox' },
-	  { icon: "mdi-math-log", key: "ENABLE_AUDIO_CONVERSION_LOG", label: "settings.enable_audio_conversion_log", type: 'checkbox' },
+          { icon: "mdi-math-log", key: "ENABLE_AUDIO_CONVERSION_LOG", label: "settings.enable_audio_conversion_log", type: 'checkbox' },
         ]
       },
 
@@ -404,6 +462,12 @@ export default {
         title: "settings.ssl_certificate_management",
         fields: [],
         show_ssl: true,
+      },
+      {
+        show: false,
+        title: "settings.trash_management",
+        fields: [],
+        show_trash: true,
       },
     ];
 
@@ -424,6 +488,9 @@ export default {
         }
         if (!('DEVICES' in this.settings) || !Array.isArray(this.settings['DEVICES'])) {
           this.settings['DEVICES'] = [];
+        }
+        if (!('META_SELECTED_SOURCES' in this.settings) || !Array.isArray(this.settings['META_SELECTED_SOURCES'])) {
+          this.settings['META_SELECTED_SOURCES'] = (this.settings['META_ALL_SOURCES'] || ['douban', 'baidu', 'google', 'amazon', 'xinhua']).slice();
         }
         if (process.client && this.settings['MAX_UPLOAD_SIZE'] !== '') {
           localStorage.setItem('max_upload_size', this.settings['MAX_UPLOAD_SIZE']);
@@ -465,7 +532,23 @@ export default {
       v => !v || /^[a-zA-Z0-9-]*$/.test(v) || 'Only alphanumeric characters allowed',
       v => !v || (v.length >= 16 && v.length <= 128) || 'Length must be between 16 and 128 characters'
     ],
+    trashSizes: { trash: 0, upload: 0 },
+    trashSizeTexts: { trash: '', upload: '' },
+    trashLoading: false,
+    trashConfirmDialog: false,
   }),
+  computed: {
+    metaSourceItems() {
+      const allSources = this.settings['META_ALL_SOURCES'] || ['douban', 'baidu', 'google', 'amazon', 'xinhua'];
+      return allSources.map(source => ({
+        text: this.$t('settings.meta_source_' + source),
+        value: source,
+      }));
+    },
+  },
+  mounted() {
+    this.fetchTrashSize();
+  },
   beforeDestroy() {
     // 页面销毁时移除settings-page类名
     if (process.client) {
@@ -574,6 +657,40 @@ export default {
         .catch(err => {
           this.$alert('error', this.$t('settings.ai_mcp_token_generate_failed'));
         });
+    },
+    fetchTrashSize() {
+      this.trashLoading = true;
+      this.$backend('/admin/trash/size').then(rsp => {
+        this.trashLoading = false;
+        if (rsp && rsp.err === 'ok' && rsp.sizes) {
+          this.trashSizes = rsp.sizes;
+          this.trashSizeTexts = {
+            trash: this.formatTrashSize(rsp.sizes.trash),
+            upload: this.formatTrashSize(rsp.sizes.upload),
+          };
+        } else {
+          this.trashSizeTexts = { trash: this.$t('settings.trash_unknown'), upload: this.$t('settings.trash_unknown') };
+        }
+      });
+    },
+    formatTrashSize(size) {
+      if (size < 1024) return size + ' B';
+      if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB';
+      if (size < 1024 * 1024 * 1024) return (size / 1024 / 1024).toFixed(2) + ' MB';
+      return (size / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+    },
+    clearTrash() {
+      this.trashConfirmDialog = false;
+      this.$backend('/admin/trash/clear', {
+        method: 'POST',
+      }).then(rsp => {
+        if (rsp && rsp.err === 'ok') {
+          this.$alert('success', rsp.msg);
+          this.fetchTrashSize();
+        } else {
+          this.$alert('error', rsp.msg);
+        }
+      });
     },
   },
 }

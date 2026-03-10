@@ -11,7 +11,7 @@
 
             <v-dialog v-model="$store.state.alert.show" persistent :width="$vuetify.breakpoint.smAndDown?'80%':'50%'">
                 <v-card>
-                    <v-toolbar dark color="primary">
+                    <v-toolbar dark color="#003153">
                         <v-toolbar-title align-center></v-toolbar-title>
                     </v-toolbar>
                     <v-card-text class="pt-12">

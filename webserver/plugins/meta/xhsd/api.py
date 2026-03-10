@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
 
-KEY = "XHSD"
+KEY = "xinhua"
 XHSD_ISBN = "0000000000002"
 
 

@@ -10,7 +10,8 @@ import requests
 import traceback
 
 from webserver import loader
-from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT, BOOK_TYPE_PHYSICAL
+from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT
+from webserver.constants import BOOK_TYPE_PHYSICAL, AUTO_FILL_META
 from webserver.models import Item, ScanFile
 from webserver.services import AsyncService
 from webserver.plugins.meta import douban
@@ -346,13 +347,13 @@ class BatchAddService(AsyncService):
             logging.info("Added book with metadata: %s, book_id=%d", title, book_id)
 
             # 自动填充信息
-            from webserver.services.autofill import AutoFillService
-            AutoFillService().auto_fill(book_id)
+            if CONF.get(AUTO_FILL_META, False):
+                from webserver.services.autofill import AutoFillService
+                AutoFillService().auto_fill(book_id)
             return book_id
 
         except Exception as e:
             logging.error("Error adding book with metadata: %s", e)
-            import traceback
             logging.error(traceback.format_exc())
             self._record_invalid_isbn(csv_filename, isbn, title, author)
             return None
@@ -413,7 +414,7 @@ class BatchAddService(AsyncService):
             scan_file.name = isbn if isbn else "NO_ISBN"
             scan_file.title = title
             scan_file.author = author
-            scan_file.status = ScanFile.INVALID_ISBN
+            scan_file.status = ScanFile.INVALID
             scan_file.book_id = 0
             self.session.add(scan_file)
             self.session.commit()

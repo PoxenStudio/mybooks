@@ -12,6 +12,7 @@ import traceback
 import tornado.httpserver
 import tornado.ioloop
 import tornado.log
+from tornado.httpclient import AsyncHTTPClient
 from social_tornado.models import init_social
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import scoped_session, sessionmaker
@@ -57,6 +58,18 @@ def add_meta_in_calibre(calibre_db, key, name, datatype):
         logging.error(f"Error creating custom field: {e}")
         return False
     return True
+
+
+def config_calibre():
+    from calibre.db.backend import DB
+    db = DB(options.with_library)
+    if not db:
+        return
+    if 'expire_old_trash_after' in db.prefs and db.prefs['expire_old_trash_after'] == 7 * 24 * 3600:
+        logging.info("Calibre trash expire time already set to 7 days, no need to update.")
+        return
+    db.prefs['expire_old_trash_after'] = 7 * 24 * 3600
+    logging.info("Set calibre trash expire time to 7 days.")
 
 
 def init_calibre():
@@ -152,6 +165,18 @@ def bind_topdir_book_names(cache):
     return
 
 
+def configure_amazon_plugin():
+    """配置 Amazon 插件，将 server 选项设置为 'amazon'"""
+    try:
+        from calibre.customize.ui import metadata_plugins
+        for plugin in metadata_plugins({'identify'}):
+            if plugin.name == 'Amazon.com':
+                plugin.prefs['server'] = 'amazon'
+                break
+    except Exception as e:
+        logging.error("配置 Amazon 插件失败: %s" % e)
+
+
 def make_app():
     auth_db_path = CONF["user_database"]
     logging.debug("Init library with [%s]" % options.with_library)
@@ -195,6 +220,7 @@ def make_app():
 
     try:
         init_calibre()
+        config_calibre()
     except Exception as e:
         logging.error(f"Error initializing calibre: {e}")
         logging.error(traceback.format_exc())
@@ -202,6 +228,7 @@ def make_app():
 
     from calibre.db.legacy import LibraryDatabase
     from calibre.utils.date import fromtimestamp
+    from calibre.ebooks.metadata.sources.update import patch_plugins
     need_sync_item_to_calibre = False
     try:
         logging.info("Initializing library database...")
@@ -226,6 +253,10 @@ def make_app():
         logging.error(f"Error initializing library database: {e}")
         logging.error(traceback.format_exc())
         sys.exit(1)
+
+    # patch calibre plugins and config amazon plugins
+    patch_plugins()
+    configure_amazon_plugin()
 
     # hook 1: 按字母作为第一级目录，解决书库子目录太多的问题
     logging.info("Patching calibre book names format...")
@@ -374,10 +405,10 @@ def get_upload_size():
 
 
 def setup_logging():
-    # tornado 的 默认log 已在supervisor中配置为file了，这里再增加一个console的
-    # 创建控制台处理程序并设置格式
     logger = logging.getLogger()
     if options.log_file_prefix:
+        # remove tornado default file handler to avoid duplicate logs
+        logger.handlers = [h for h in logger.handlers if not isinstance(h, logging.FileHandler)]
         file_handler = RotatingFileHandler(
             options.log_file_prefix,
             maxBytes=5 * 1024 * 1024,
@@ -387,16 +418,14 @@ def setup_logging():
         file_handler.setFormatter(tornado.log.LogFormatter())
         logger.addHandler(file_handler)
 
-        # 添加控制台处理程序
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.INFO)
-        console_handler.setFormatter(tornado.log.LogFormatter())
-        logger.addHandler(console_handler)
-
 
 def main():
     tornado.options.parse_command_line()
     setup_logging()
+
+    # 配置异步 HTTP 客户端的最大连接数
+    AsyncHTTPClient.configure(None, max_clients=100)
+
     try:
         app = make_app()
     except Exception as e:

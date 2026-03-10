@@ -13,6 +13,7 @@ from webserver.services.autofill import AutoFillService
 from webserver import loader, utils
 from webserver.version import VERSION
 from webserver.models import Reader, Item
+from webserver.constants import AUTO_FILL_META
 from gettext import gettext as _
 import platform
 
@@ -418,7 +419,7 @@ class BookBarnService(AsyncService):
 
             for uid in admin_uids:
                 self.add_msg(uid, "success", _(f"[书栈]导入书籍{mi.title}成功！"))
-            if autoScrape == 1:
+            if autoScrape == 1 and CONF.get(AUTO_FILL_META, False):
                 AutoFillService().auto_fill(book_id)
             time.sleep(1)
         logging.info("[BARN]Processed done!")

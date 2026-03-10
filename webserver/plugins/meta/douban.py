@@ -153,15 +153,16 @@ class DoubanBookApi(object):
             return None
         return self._metadata(book)
 
-    def get_cover(self, cover_url):
-        if not self.copy_image:
+    @staticmethod
+    def get_cover(cover_url):
+        if not cover_url:
             return None
         img_fmt = get_extension_from_url(cover_url)
         if not img_fmt:
             return None
         headers = dict(CHROME_HEADERS)
         headers["Referer"] = cover_url
-        response = requests.get(cover_url, headers=headers, verify=False)
+        response = requests.get(cover_url, headers=headers, verify=False, timeout=15)
         if response.status_code != 200:
             logging.error("Get cover fail, status_code[%s] != 200 OK", response.status_code)
             return None

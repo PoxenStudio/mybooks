@@ -185,7 +185,7 @@
                                         dark
                                         :href="book.website"
                                         target="__blank"
-                                        :color="book.source === '豆瓣' ? 'green' : 'blue'"
+                                        :color="(book.source === '豆瓣' || book.source === 'amazon') ? 'green' : 'blue'"
                                     >{{ book.source }}
                                     </v-chip
                                     >
@@ -199,15 +199,15 @@
                                             </v-btn>
                                         </template>
                                         <v-list dense>
-                                            <v-list-item @click="set_refer(book.provider_key, book.provider_value)">
+                                            <v-list-item @click="set_refer(book)">
                                                 <v-list-item-title>{{ $t('book.setBookInfoAndImage') }}</v-list-item-title>
                                             </v-list-item>
                                             <v-list-item
-                                                @click="set_refer(book.provider_key, book.provider_value, { only_meta: 'yes' })">
+                                                @click="set_refer(book, { only_meta: 'yes' })">
                                                 <v-list-item-title>{{ $t('book.setBookInfoOnly') }}</v-list-item-title>
                                             </v-list-item>
                                             <v-list-item
-                                                @click="set_refer(book.provider_key, book.provider_value, { only_cover: 'yes' })">
+                                                @click="set_refer(book, { only_cover: 'yes' })">
                                                 <v-list-item-title>{{ $t('book.setBookImageOnly') }}</v-list-item-title>
                                             </v-list-item>
                                         </v-list>
@@ -1751,7 +1751,15 @@ export default {
         get_refer() {
             this.dialog_refer = true;
             this.refer_books_loading = true;
-            this.$backend("/book/" + this.book.id + "/refer")
+            // 构造查询参数，传递书籍信息避免后端重复查询数据库
+            const params = new URLSearchParams();
+            if (this.book.title) params.append('title', this.book.title);
+            if (this.book.isbn) params.append('isbn', this.book.isbn);
+            if (this.book.publisher) params.append('publisher', this.book.publisher);
+            const queryString = params.toString();
+            const url = `/book/${this.book.id}/refer${queryString ? '?' + queryString : ''}`;
+
+            this.$backend(url)
                 .then((rsp) => {
                     this.refer_books = rsp.books.map((b) => {
                         b.href = "";
@@ -1763,14 +1771,17 @@ export default {
                     this.refer_books_loading = false;
                 });
         },
-        set_refer(provider_key, provider_value, opt) {
+        set_refer(book, opt) {
             // 防止多次重复点击
             if(this.refer_books_setting_btn_loading) return;
+            const provider_key = book.provider_key
+            const provider_value = book.provider_value
             // 显示加载条提示
             this.refer_books_setting_btn_loading = true;
             var data = new URLSearchParams(opt);
             data.append("provider_key", provider_key);
             data.append("provider_value", provider_value);
+            data.append("metadata", JSON.stringify(book));
             this.$backend("/book/" + this.book.id + "/refer", {
                 method: "POST",
                 body: data,
