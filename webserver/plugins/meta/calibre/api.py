@@ -5,7 +5,7 @@ import logging
 import requests
 import traceback
 from gettext import gettext as _
-from webserver.constants import CHROME_HEADERS
+from webserver.constants import CHROME_HEADERS, META_SOURCE_GOOGLE, META_SOURCE_AMAZON
 
 KEY = "Calibre"
 
@@ -70,8 +70,11 @@ class CalibreMetadataApi:
         return ('jpg', img)
 
     @classmethod
-    def get_book_by_isbn(cls, isbn, timeout=30):
+    def get_book_by_isbn(cls, isbn, sources=None, timeout=30):
         """按 ISBN 查询书籍信息，成功时返回含封面的 Metadata 对象，否则返回 None"""
+        if not sources or META_SOURCE_GOOGLE not in sources:
+            return None
+
         if not isbn:
             return None
         try:
@@ -92,8 +95,11 @@ class CalibreMetadataApi:
             return None
 
     @classmethod
-    def get_book_by_title(cls, title, authors=None, timeout=30):
+    def get_book_by_title(cls, title, authors=None, sources=None, timeout=30):
         """按书名（及可选作者）查询书籍信息，成功时返回含封面的 Metadata 对象，否则返回 None"""
+        if not sources or META_SOURCE_AMAZON not in sources:
+            return None
+
         if not title:
             return None
         try:

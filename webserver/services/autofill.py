@@ -4,6 +4,7 @@
 import logging
 import re
 import time
+import traceback
 from gettext import gettext as _
 
 from webserver import loader, utils
@@ -277,18 +278,23 @@ class AutoFillService(AsyncService):
         calibre_sources = [s for s in sources if s in (META_SOURCE_GOOGLE, META_SOURCE_AMAZON)]
         if calibre_sources:
             try:
-                result = CalibreMetadataApi.get_book_by_isbn(mi.isbn, sources=calibre_sources)
-                if result and result.cover_data:
-                    return result
-            except Exception:
-                logging.error(_("calibre 插件 ISBN 查询 %s 失败"), title)
+                if META_SOURCE_AMAZON not in calibre_sources:
+                    # 只有在没有amazon时才使用google查询
+                    try:
+                        results = CalibreMetadataApi.get_book_by_isbn(isbn, sources=calibre_sources)
+                        if results:
+                            return results[0]
+                    except Exception:
+                        logging.error(_("calibre 插件 ISBN 查询 %s 失败"), title)
 
-            try:
-                result = CalibreMetadataApi.get_book_by_title(title, authors=mi.authors, sources=calibre_sources)
-                if result and result.cover_data:
+                results = CalibreMetadataApi.get_book_by_title(title, authors=mi.authors, sources=calibre_sources)
+                if results:
+                    result = results[0]
+                    result.cover_data = CalibreMetadataApi.get_cover(result.cover_url) if result.cover_url else None
                     return result
-            except Exception:
-                logging.error(_("calibre 插件书名查询 %s 失败"), title)
+            except Exception as e:
+                logging.error(_("calibre 插件书名查询 %s 失败: %s"), title, e)
+                logging.error(traceback.format_exc())
 
         # 5. 百度百科查询
         if META_SOURCE_BAIDU in sources:
@@ -338,16 +344,20 @@ class AutoFillService(AsyncService):
         # 3 & 4. 使用 Google Books 和 Amazon.com 查询
         calibre_sources = [s for s in sources if s in (META_SOURCE_GOOGLE, META_SOURCE_AMAZON)]
         if calibre_sources:
-            try:
-                result = CalibreMetadataApi.get_book_by_isbn(isbn, sources=calibre_sources)
-                if result and result.cover_data:
-                    return result
-            except Exception:
-                logging.error(_("calibre 插件 ISBN 查询 %s 失败"), title)
+            if META_SOURCE_AMAZON not in calibre_sources:
+                # 只有在没有amazon时才使用google查询
+                try:
+                    results = CalibreMetadataApi.get_book_by_isbn(isbn, sources=calibre_sources)
+                    if results:
+                        return results[0]
+                except Exception:
+                    logging.error(_("calibre 插件 ISBN 查询 %s 失败"), title)
 
             try:
-                result = CalibreMetadataApi.get_book_by_title(title, authors=[author] if author else None, sources=calibre_sources)
-                if result and result.cover_data:
+                results = CalibreMetadataApi.get_book_by_title(title, authors=[author] if author else None, sources=calibre_sources)
+                if results:
+                    result = results[0]
+                    result.cover_data = CalibreMetadataApi.get_cover(result.cover_url) if result.cover_url else None
                     return result
             except Exception:
                 logging.error(_("calibre 插件书名查询 %s 失败"), title)
