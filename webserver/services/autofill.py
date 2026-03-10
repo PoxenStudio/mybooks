@@ -281,7 +281,7 @@ class AutoFillService(AsyncService):
                 if META_SOURCE_AMAZON not in calibre_sources:
                     # 只有在没有amazon时才使用google查询
                     try:
-                        results = CalibreMetadataApi.get_book_by_isbn(isbn, sources=calibre_sources)
+                        results = CalibreMetadataApi.get_book_by_isbn(mi.isbn, sources=calibre_sources)
                         if results:
                             return results[0]
                     except Exception:

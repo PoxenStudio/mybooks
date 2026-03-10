@@ -9,7 +9,6 @@ import shutil
 import ssl
 import subprocess
 import tempfile
-import time
 import traceback
 import uuid
 from gettext import gettext as _
