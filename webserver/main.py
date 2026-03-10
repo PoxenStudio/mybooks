@@ -405,8 +405,6 @@ def get_upload_size():
 
 
 def setup_logging():
-    # tornado 的 默认log 已在supervisor中配置为file了，这里再增加一个console的
-    # 创建控制台处理程序并设置格式
     logger = logging.getLogger()
     if options.log_file_prefix:
         # remove tornado default file handler to avoid duplicate logs

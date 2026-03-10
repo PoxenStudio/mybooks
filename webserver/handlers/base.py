@@ -309,7 +309,11 @@ class BaseHandler(web.RequestHandler):
         if not login_time:
             login_time = self.get_secure_cookie_timestamp("user_id")
         if not login_time or int(login_time) < int(time.time()) - 7 * 86400:
-            return None
+            # Double check with user_id cookie, 飞牛应用中Docker登录会使用旧的lt cookie
+            login_time = self.get_secure_cookie_timestamp("user_id")
+            if not login_time or int(login_time) < int(time.time()) - 7 * 86400:
+                logging.info("Login time cookie is missing or expired. login_time: %s", login_time)
+                return None
         uid = self.get_secure_cookie("user_id")
         return int(uid) if uid and uid.isdigit() else None
 
