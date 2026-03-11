@@ -5,6 +5,7 @@ import logging
 import shutil
 import threading
 import time
+from gettext import gettext as _
 
 from webserver import loader
 CONF = loader.get_settings()
@@ -91,7 +92,7 @@ class TrashManager:
         upload_path = os.path.abspath(TrashManager.UPLOAD_TRASH_PATH)
 
         if trash_path != TrashManager.TRASH_PATH:
-            msg = u"配置的Calibre Library不是绝对路径，为了安全起见，跳过清理!"
+            msg = _(u"配置的Calibre Library不是绝对路径，为了安全起见，跳过清理!")
             logging.error(msg)
             errors.append(msg)
             return errors

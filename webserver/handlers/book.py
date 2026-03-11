@@ -559,11 +559,12 @@ class BookRefer(BaseHandler):
                 if b.rating:
                     d["rating"] = round(float(b.rating) / 2, 1)
                 d["pubyear"] = pubdate.strftime("%Y") if pubdate else ""
-                if not d["comments"]:
+                if not d.get("comments", ""):
                     d["comments"] = _(u"无详细介绍")
                 rsp.append(d)
             except Exception as e:
                 logging.error("get book meta error: %s" % e)
+                logging.error(traceback.format_exc())
         return rsp
 
     def _convert_to_metadata(self, metadata):

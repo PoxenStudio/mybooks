@@ -67,6 +67,7 @@ RUN ARCH=$(uname -m) && \
 # Apply calibre patches
 COPY calibre/7.6/calibre/db/cache.py /usr/lib/calibre/calibre/db/
 COPY calibre/7.6/calibre/customize/ui.py /usr/lib/calibre/calibre/customize/
+COPY calibre/7.6/calibre/ebooks/metadata/sources/amazon.py /usr/lib/calibre/calibre/ebooks/metadata/sources/
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt --break-system-packages && \
     rm -rf /root/.cache /tmp/requirements.txt
