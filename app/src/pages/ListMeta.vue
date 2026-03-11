@@ -9,11 +9,11 @@
             </v-col>
         </template >
         <v-col v-else>
-            <v-chip small class="ma-1" v-for="item in meta_items" :to="item.href" :key="item.name" outlined color="primary" >
+            <v-chip class="ma-1" v-for="item in meta_items" :to="item.href" :key="item.name" outlined color="primary" >
                 {{ item.name }}
                 <span v-if="item.count">&nbsp;({{ item.count }})</span>
             </v-chip>
-            <v-btn v-if="total > items.length" @click="expand()" color="primary" rounded small>{{ $t('listMeta.showAll') }}</v-btn>
+            <v-btn v-if="total > items.length" @click="expand()" color="primary" rounded>{{ $t('listMeta.showAll') }}</v-btn>
         </v-col>
     </v-row>
 </template>

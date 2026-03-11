@@ -95,7 +95,7 @@
                             :class="{ 'v-list-item--icon-only': miniVariant, 'login-button': item.text === 'appHeader.please_login' }"
                         >
                             <v-list-item-action class="mt-1 mb-1 mr-2" dense v-if="!miniVariant">
-                                <v-icon class="pa-0 ma-0" :color="item.color || ''">{{ item.icon }}</v-icon>
+                                <v-icon class="pa-0 ma-0" :color="white">{{ item.icon }}</v-icon>
                             </v-list-item-action>
                             <template v-else>
                                 <v-tooltip bottom>
@@ -931,6 +931,7 @@ export default {
     border-radius: 8px !important;
     margin: 3px 0 !important;
     padding: 3px !important;
+    color: white !important;
 }
 
 .login-button .v-list-item-title {
@@ -940,7 +941,8 @@ export default {
 }
 
 .login-button .v-icon {
-    color: white !important;
+    color: white;
+    background-color: transparent !important;
 }
 
 .app-navigation-drawer .v-subheader {

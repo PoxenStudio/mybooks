@@ -82,13 +82,12 @@
           <!-- Pinned Tags -->
           <div v-if="pins && pins.length > 0" class="mb-2">
             <v-chip
-              small
               class="ma-1"
               v-for="pin in pins"
               :key="'pin-' + pin.name"
-              color="#299075"
+              color="#01847F"
               @click="selectTag(pin.name)"
-              style="cursor: pointer"
+              style="cursor: pointer; color: white;"
             >
               {{ pin.name }}
               <v-icon
@@ -105,14 +104,13 @@
 
           <!-- Regular Tags -->
           <v-chip
-            small
             class="ma-1"
             v-for="item in visibleMetaItems"
             :key="item.name"
             outlined
             color="primary"
             @click="selectTag(item.name)"
-            style="cursor: pointer"
+            style="cursor: pointer;"
           >
             {{ item.name }}
             <span v-if="item.count">&nbsp;({{ item.count }})</span>
@@ -126,7 +124,7 @@
               mdi-pin-outline
             </v-icon>
           </v-chip>
-           <v-btn v-if="items.length > 50 && !show_all" @click="expandList()" color="primary" rounded small>
+           <v-btn v-if="items.length > 50 && !show_all" @click="expandList()" color="primary" rounded>
              {{ $t('listMeta.showAll') || 'Show All' }}
            </v-btn>
         </v-col>
