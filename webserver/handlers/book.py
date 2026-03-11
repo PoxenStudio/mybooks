@@ -488,7 +488,7 @@ class BookSetSole(BaseHandler):
 class BookRefer(BaseHandler):
     _search_executor = ThreadPoolExecutor(max_workers=int(CONF.get("REFER_SEARCH_MAX_WORKERS", 6)))
     _search_timeout = float(CONF.get("REFER_SEARCH_TIMEOUT", 60))
-    _search_cache_ttl = int(CONF.get("REFER_SEARCH_CACHE_TTL", 480))
+    _search_cache_ttl = int(CONF.get("REFER_SEARCH_CACHE_TTL", 180))
     _search_max_concurrency = int(CONF.get("REFER_SEARCH_MAX_CONCURRENCY", 16))
     _search_cache = {}
     _search_inflight = {}
@@ -709,7 +709,8 @@ class BookRefer(BaseHandler):
                 return {"err": "search.failed", "books": self._format_refer_books(fallback), "msg": _("查询失败，请稍后重试")}
 
         books = books or []
-        self._set_cached_books(key, books)
+        if books:
+            self._set_cached_books(key, books)
         return {"err": "ok", "books": self._format_refer_books(books)}
 
     @js
