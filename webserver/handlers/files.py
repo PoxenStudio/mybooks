@@ -209,7 +209,14 @@ class EpubReader(BaseHandler):
 
         with zipfile.ZipFile(fpath, 'r') as zf:
             if path not in zf.namelist():
-                raise web.HTTPError(404)
+                # 有些epub文件里路径忽略了大小写
+                path_lower = path.lower()
+                for name in zf.namelist():
+                    if name.lower() == path_lower:
+                        path = name
+                        break
+                if path not in zf.namelist():
+                    raise web.HTTPError(404)
             with zf.open(path) as f:
                 self.write(f.read())
 
