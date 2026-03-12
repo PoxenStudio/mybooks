@@ -85,14 +85,15 @@ class BaiduBaikeApi:
                 image = Image.open(BytesIO(img))
                 if image.mode in ("RGBA", "P"):
                     image = image.convert("RGB")
-                # crop the image to a square centered on the middle of the image
                 width, height = image.size
-                min_dim = min(width, height)
-                left = (width - min_dim) / 2
-                top = (height - min_dim) / 2
-                right = (width + min_dim) / 2
-                bottom = (height + min_dim) / 2
-                image = image.crop((left, top, right, bottom))
+                if height / width < 1.2:
+                    # crop the image to a square centered on the middle of the image
+                    min_dim = min(width, height)
+                    left = (width - min_dim) / 2
+                    top = (height - min_dim) / 2
+                    right = (width + min_dim) / 2
+                    bottom = (height + min_dim) / 2
+                    image = image.crop((left, top, right, bottom))
                 output = BytesIO()
                 image.save(output, format='JPEG')
                 img = output.getvalue()
