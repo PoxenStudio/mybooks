@@ -95,7 +95,7 @@
                             :class="{ 'v-list-item--icon-only': miniVariant, 'login-button': item.text === 'appHeader.please_login' }"
                         >
                             <v-list-item-action class="mt-1 mb-1 mr-2" dense v-if="!miniVariant">
-                                <v-icon class="pa-0 ma-0" :color="white">{{ item.icon }}</v-icon>
+                                <v-icon class="pa-0 ma-0" :color="item.color || 'white'">{{ item.icon }}</v-icon>
                             </v-list-item-action>
                             <template v-else>
                                 <v-tooltip bottom>
@@ -429,7 +429,7 @@ export default {
             return false;
         },
         items: function () {
-            const login_link = { icon: "account_circle", href: "/login", text: "appHeader.please_login", color:"primary" };
+            const login_link = { icon: "account_circle", href: "/login", text: "appHeader.please_login", color:"white" };
             const home_links = [
                 { icon: "home", href: "/", text: "appHeader.home", color:"primary" },
             ];
@@ -941,8 +941,6 @@ export default {
 }
 
 .login-button .v-icon {
-    color: white !important;
-    background-color: transparent !important;
     margin-left: 12px !important;
 }
 
