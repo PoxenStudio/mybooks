@@ -307,7 +307,7 @@ export default {
           },
           {
             icon: "mdi-shuffle", key: "MAIN_PAGE_RANDOM_COUNT", label: "settings.main_page_random_count", type: 'select',
-            items: [0, 12, 24, 48, 96].map(v => ({ text: String(v), value: v }))
+            items: [0, 12, 24, 48, 96, 192, 768].map(v => ({ text: String(v), value: v }))
           },
           {
             icon: "mdi-book-multiple", key: "MAIN_PAGE_RECENT_COUNT", label: "settings.main_page_recent_count", type: 'select',
