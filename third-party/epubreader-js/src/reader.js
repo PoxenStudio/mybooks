@@ -198,18 +198,25 @@ export class Reader {
 
 		this.on("flowchanged", (flow) => {
 			this.settings.flow = flow;
+			if (this.rendition) {
+				this.rendition.flow(flow);
+			}
 		});
 
 		this.on("spreadchanged", (spread) => {
 			if (spread.mod !== undefined) {
 				this.settings.spread.mod = spread.mod;
 				// Apply spread mode change to rendition
-				this.rendition.spread(spread.mod, this.settings.spread.min);
+				if (this.rendition) {
+					this.rendition.spread(spread.mod, this.settings.spread.min);
+				}
 			}
 			if (spread.min !== undefined) {
 				this.settings.spread.min = spread.min;
 				// Apply minimum spread width change to rendition
-				this.rendition.spread(this.settings.spread.mod, spread.min);
+				if (this.rendition) {
+					this.rendition.spread(this.settings.spread.mod, spread.min);
+				}
 			}
 		});
 	}
