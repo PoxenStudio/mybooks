@@ -23,7 +23,14 @@ const config = {
 		hot: false,
 		liveReload: true,
 		compress: true,
-		port: 8080
+		port: 8080,
+		proxy: [
+			{
+				context: ['/get'],
+				target: 'http://localhost:8082',
+				changeOrigin: true
+			}
+		]
 	},
 	experiments: {
 		outputModule: true
