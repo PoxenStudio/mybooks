@@ -16,6 +16,7 @@ from webserver import constants, loader
 from webserver.services.convert import ConvertService
 from webserver.handlers.base import BaseHandler
 
+
 CONF = loader.get_settings()
 
 # 创建线程池用于执行阻塞操作
@@ -219,7 +220,7 @@ class EpubReader(BaseHandler):
                 if path not in zf.namelist():
                     raise web.HTTPError(404)
 
-            content_type, _ = mimetypes.guess_type(path)
+            content_type = mimetypes.guess_type(path)[0]
             if content_type:
                 self.set_header("Content-Type", content_type)
 
