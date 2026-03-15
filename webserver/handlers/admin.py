@@ -782,12 +782,13 @@ class ReleaseNotes(BaseHandler):
         last_revsion = CONF.get("LAST_REVISION", "")
         force = self.get_argument("force", "false") == "true"
         logging.info("Current version: %s, Last revision: %s", VERSION, last_revsion)
-        if last_revsion != VERSION or force:
+        if last_revsion != VERSION:
             args = loader.SettingsLoader()
             args["LAST_REVISION"] = VERSION
             logic = SettingsSaverLogic()
             logic.save_extra_settings(args)
 
+        if last_revsion != VERSION or force:
             # Load the release notes from the public folder
             release_note_path = CONF["static_path"] + "/static/release_notes.txt"
             notes = ""
