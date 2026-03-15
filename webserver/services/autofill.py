@@ -111,6 +111,7 @@ class AutoFillService(AsyncService):
                         refer_mi = mi
                     else:
                         refer_mi = self.plugin_search_best_book_info(mi)
+
                     if refer_mi and refer_mi.cover_data is not None:
                         # 准备更新数据
                         self.do_fill_tags(book_id, refer_mi, need_commit=False)
@@ -262,15 +263,28 @@ class AutoFillService(AsyncService):
                 )
                 book = api.get_book_by_isbn(mi.isbn)
                 if book:
-                    return api.get_book_detail(book)
+                    book_detail_mi = api.get_book_detail(book)
+                    if book_detail_mi:
+                        if not book_detail_mi.authors or book_detail_mi.authors[0] in ("佚名", ""):
+                            book_detail_mi.authors = mi.authors
+                            book_detail_mi.author_sort = mi.author_sort
+                    return book_detail_mi
 
                 # 2. 豆瓣查询 title
                 books = api.search_books(title)
                 if books:
+                    book_detail_mi = None
                     for b in books:
                         if mi.title == b.get("title") and mi.publisher == b.get("publisher"):
-                            return api.get_book_detail(b)
-                    return api.get_book_detail(books[0])
+                            book_detail_mi = api.get_book_detail(b)
+                            break
+                    if not book_detail_mi:
+                        book_detail_mi = api.get_book_detail(books[0])
+                    if book_detail_mi:
+                        if not book_detail_mi.authors or book_detail_mi.authors[0] in ("佚名", ""):
+                            book_detail_mi.authors = mi.authors
+                            book_detail_mi.author_sort = mi.author_sort
+                    return book_detail_mi
             except Exception:
                 logging.error(_("douban 接口查询 %s 失败"), title)
 
