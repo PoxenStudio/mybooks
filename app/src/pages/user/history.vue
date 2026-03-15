@@ -48,7 +48,7 @@
             </v-col>
             <v-col cols=4 sm=2 v-for="book in currentReadingBooks" :key="'reading-' + book.id">
                 <v-card :to="'/book/' + book.id" class="ma-1 book-card">
-                    <v-img :src="book.img" :aspect-ratio="11/15">
+                    <v-img :src="book.thumb || book.img" :aspect-ratio="11/15">
                         <v-chip small color="primary" class="ma-1 reading-chip">{{ $t('readingState.reading') }}</v-chip>
                     </v-img>
                 </v-card>
@@ -63,7 +63,7 @@
             </v-col>
             <v-col cols=4 sm=2 v-for="book in monthReadDoneBooks" :key="'done-' + book.id">
                 <v-card :to="'/book/' + book.id" class="ma-1 book-card">
-                    <v-img :src="book.img" :aspect-ratio="11/15">
+                    <v-img :src="book.thumb || book.img" :aspect-ratio="11/15">
                         <v-chip small color="success" class="ma-1 done-chip">{{ $t('readingState.done') }}</v-chip>
                     </v-img>
                 </v-card>
@@ -86,7 +86,7 @@
             </v-col>
             <v-col cols=4 sm=2 v-else v-for="book in item.books" :key="item.name + book.id">
                 <v-card :to="book.href" class="ma-1 book-card">
-                    <v-img :src="book.img" :aspect-ratio="11/15" > </v-img>
+                    <v-img :src="book.thumb || book.img" :aspect-ratio="11/15" > </v-img>
                 </v-card>
             </v-col>
         </v-row>

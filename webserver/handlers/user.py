@@ -450,6 +450,7 @@ class UserInfo(BaseHandler):
                                 continue
                             b["img"] = self.cdn_url + "/get/cover/%(id)s.jpg?t=%(timestamp)s" % b
                             b["href"] = "/book/%(id)s" % b
+                            b["thumb"] = self.cdn_url + "/get/thumb_240_320/%(id)s.jpg?t=%(timestamp)s&size=240x320" % b
                             n.append(b)
                         v = n[:12]
 
