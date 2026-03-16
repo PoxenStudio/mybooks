@@ -37,6 +37,10 @@ define("syncdb", default=False, type=bool, help=_("Create all tables"))
 define("update-config", default=False, type=bool, help=_("update config when system upgrade"))
 
 
+# Set the maximum memory allocation for Qt image processing to prevent crashes with large images
+os.environ["QT_IMAGEIO_MAXALLOC"] = "400"
+
+
 def add_meta_in_calibre(calibre_db, key, name, datatype):
     found = False
     for k, v in calibre_db.field_metadata.items():
