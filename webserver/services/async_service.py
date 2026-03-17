@@ -156,7 +156,6 @@ class AsyncService(metaclass=SingletonType):
     @staticmethod
     def register_function(service_func):
         name = service_func.__name__
-        logging.debug("service register <%s>", name)
 
         def func_wrapper(ins: AsyncService, *args, **kwargs):
             s = AsyncService()
@@ -169,7 +168,6 @@ class AsyncService(metaclass=SingletonType):
     @staticmethod
     def register_service(service_func):
         name = service_func.__name__
-        logging.debug("service register <%s>", name)
 
         def func_wrapper(ins: AsyncService, *args, **kwargs):
             s = AsyncService()
