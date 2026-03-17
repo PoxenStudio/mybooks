@@ -566,9 +566,9 @@ class BaseHandler(web.RequestHandler):
             from webserver.handlers.audio import AudioBooksCache
             audio_book_ids = AudioBooksCache.get_audio_book_ids_set()
         except Exception as e:
-            logging.debug(f"Error getting audio book ids: {e}")
+            logging.error(f"Error getting audio book ids: {e}")
 
-        logging.debug(
+        logging.info(
             "[%5d ms] select books from library (count = %d)" % (int(1000 * (time.time() - _ts)), len(books))
         )
 
@@ -602,7 +602,7 @@ class BaseHandler(web.RequestHandler):
         if len(soled_books) > 0 and len(books) > 0:
             books = [b for b in books if b["id"] not in soled_books]
 
-        logging.debug(
+        logging.info(
             "[%5d ms] select books from database (count = %d)" % (int(1000 * (time.time() - _ts)), len(books))
         )
         return books
@@ -712,7 +712,7 @@ class BaseHandler(web.RequestHandler):
             if result:
                 existing_books.update(result)
         except Exception as e:
-            logging.debug(f"Search query '{query}' failed: {e}")
+            logging.error(f"Search query '{query}' failed: {e}")
         return existing_books
 
     def save_book_meta(self, book_id, fmt=None):

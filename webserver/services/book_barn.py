@@ -278,7 +278,6 @@ class BookBarnService(AsyncService):
 
             if not CONF.get("ENABLE_BOOKBARN", False) or not CONF.get("ENABLE_RECEIVING_BOOKS", False):
                 time.sleep(15 * 60)
-                logging.info("[BARN]Daily books checking, not enabled")
                 continue
 
             if self.checked_day is not None:

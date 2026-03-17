@@ -73,7 +73,7 @@ class EpubToAudioWorker:
         """
         if "[BOOKBARN]" not in line:
             if constants.ENABLE_AUDIO_CONVERSION_LOG in CONF and CONF[constants.ENABLE_AUDIO_CONVERSION_LOG]:
-                logging.debug(f"[AUDIO]: {line}")
+                logging.info(f"[AUDIO]: {line}")
             return
 
         match = re.search(r'\[BOOKBARN\](.+)', line)

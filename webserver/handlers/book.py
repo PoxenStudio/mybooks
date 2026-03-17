@@ -1678,7 +1678,7 @@ class SearchBook(ListHandler):
                 or_query = " OR ".join([f'title:"{word}"' for word in filtered_words])
         except Exception as e:
             logging.error(f"Word segmentation failed for '{name}': %s" % e)
-        logging.debug(f"[TRACE]Word segmentation search took {time.time() - start:.2f} seconds.")
+        logging.info(f"[TRACE]Word segmentation search took {time.time() - start:.2f} seconds.")
         return or_query
 
     def get(self):
@@ -1722,13 +1722,13 @@ class SearchBook(ListHandler):
                     query = " OR ".join(converted_names)
                 if seg_or_query:
                     query = f"({query}) OR ({seg_or_query})"
-                logging.debug(f"Searching books with query: {query}")
+                logging.info(f"Searching books with query: {query}")
                 ids2 = self.calibre_db_cache.search(query)
                 if ids2:
                     self._add_books(ids2, ids, seen)
             except Exception as e:
                 logging.error("Search book failed: %s" % e)
-        logging.debug(f"[TRACE] search took {time.time() - start:.2f} seconds.")
+        logging.info(f"[TRACE] search took {time.time() - start:.2f} seconds.")
 
         if exclude_id > 0 and exclude_id in seen:
             if exclude_id in ids:
@@ -1911,7 +1911,7 @@ class BookUpload(BaseHandler):
         fpath = os.path.join(CONF["upload_path"], name)
         with open(fpath, "wb") as f:
             f.write(data)
-        logging.debug(f"Save format file to [{fpath}]")
+        logging.info(f"Save format file to [{fpath}]")
 
         try:
             self.calibre_db.add_format(book_id, fmt.upper(), fpath, True)
@@ -1966,7 +1966,7 @@ class BookUpload(BaseHandler):
         fpath = os.path.join(CONF["upload_path"], name)
         with open(fpath, "wb") as f:
             f.write(data)
-        logging.debug("save upload file into [%s]", fpath)
+        logging.info("save upload file into [%s]", fpath)
 
         # read ebook meta
         failed = False
@@ -2005,8 +2005,8 @@ class BookUpload(BaseHandler):
             book_id = None
             for id in books:
                 b = self.calibre_db.get_metadata(id, index_is_id=True)
-                logging.debug(f"book id:{id}, book_type:{b.get(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK)}")
-                logging.debug(f"  existed formats: {b.formats}")
+                logging.info(f"book id:{id}, book_type:{b.get(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK)}")
+                logging.info(f"  existed formats: {b.formats}")
                 # 如果是实体书，则跳过
                 if b.get(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK) == BOOK_TYPE_PHYSICAL:
                     continue
@@ -2020,7 +2020,7 @@ class BookUpload(BaseHandler):
                         "msg": _(u"同名书籍《%s》已存在这一图书格式 %s") % (mi.title, fmt),
                         "book_id": b.get("id")
                     }
-            logging.debug("import [%s] from %s with format %s", repr(mi.title), fpath, fmt)
+            logging.info("import [%s] from %s with format %s", repr(mi.title), fpath, fmt)
             if book_id is None:
                 # New EBOOK
                 book_id = self._add_new_book(mi, [fpath])
@@ -2152,7 +2152,7 @@ class BookUploadChunk(BaseHandler):
             import shutil
             shutil.rmtree(temp_dir)
 
-            logging.debug("Merged chunked upload file into [%s]", final_path)
+            logging.info("Merged chunked upload file into [%s]", final_path)
 
             # Read ebook metadata (same logic as BookUpload)
             failed = False

@@ -223,7 +223,7 @@ class DoubanBookApi(object):
                 mi.cover_url = cover_url
                 mi.cover_data = cover_data
             else:
-                logging.debug("获取封面图片失败，使用默认封面")
+                logging.info("获取封面图片失败，使用默认封面")
 
         logging.debug("=================\ndouban metadata:\n%s" % mi)
         return mi

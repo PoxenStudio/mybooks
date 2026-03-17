@@ -120,7 +120,7 @@ class ScanService(AsyncService):
         inserted_hash = set()
         for fname, fpath, fmt in tasks:
             samefiles = self.session.query(ScanFile).filter(ScanFile.path == fpath)
-            logging.debug("Checking same files for path: %s, return count:%d", fpath, samefiles.count())
+            logging.info("Checking same files for path: %s, return count:%d", fpath, samefiles.count())
             if samefiles.count() > 0:
                 # 如果已经有相同的文件记录，则跳过
                 found_book = False
@@ -145,7 +145,7 @@ class ScanService(AsyncService):
                     continue
 
             # New record should be added
-            logging.debug("Processing new file: %s", fpath)
+            logging.info("Processing new file: %s", fpath)
             stat = os.stat(fpath)
             md5 = hashlib.md5(fname.encode("UTF-8")).hexdigest()
             hash = "fstat:%s/%s" % (stat.st_size, md5)

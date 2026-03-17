@@ -45,7 +45,7 @@ class BaiduBaikeApi:
         # 使用 info.get() 获取字段，如果不存在则使用备选字段或默认值
         title = info.get(u"中文名", info.get("title", ""))
         if not title:
-            logging.debug("No title found in info, means not a valid Baidu Baike page")
+            logging.info("No title found in info, means not a valid Baidu Baike page")
             return None
         mi = Metadata(title)
         mi.publisher = info.get(u"出版社", "")
