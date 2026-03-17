@@ -262,6 +262,21 @@ class ScanService(AsyncService):
                     logging.error("Failed to save row status: %s", fpath)
                 continue
 
+            if fmt == "txt":
+                mi.title = utils.remove_zlibrary_suffix(fname.replace("." + fmt, ""))
+                mi.authors = [_(u"佚名")]
+            elif fmt == "pdf":
+                if CONF["PDF_TILE_WITH_FILE_NAME"]:
+                    mi.title = utils.remove_zlibrary_suffix(fname.replace("." + fmt, ""))
+                else:
+                    title_ = mi.title.strip() if mi.title else ""
+                    if not title_ or title_.find(_(u"下载工具")) >= 0 or title_ == "SSReader Print.":
+                        mi.title = utils.remove_zlibrary_suffix(fname.replace("." + fmt, ""))
+                    else:
+                        mi.title = title_
+                if mi.authors is None or len(mi.authors) == 0 or mi.authors[0].lower() == "unknown":
+                    mi.authors = [_(u"佚名")]
+
             row.title = mi.title
             row.author = mi.authors[0] if mi.authors else mi.author_sort
             row.publisher = mi.publisher

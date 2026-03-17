@@ -217,9 +217,8 @@ TITLE_TEMPLATE="%%s | %(site_title)s"
             logging.error(traceback.format_exc())
             return {"err": "file.permission", "msg": _(u"更新磁盘配置文件失败！请确保配置文件的权限为可写入！")}
 
-        # ok, it's safe to update current environment
         CONF["installed"] = True
-        if not CONF.get("autoreload", False):
+        if CONF.get("autoreload", False):
             sys.exit(0)
         return {"err": "ok", "rsp": args}
 

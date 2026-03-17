@@ -416,7 +416,7 @@ export default {
         show: false,
         title: "settings.internet_book_sources",
         fields: [
-          { icon: "", key: "auto_fill_meta", label: "settings.auto_fill_meta", type: 'checkbox' },
+          { icon: "mdi-web-sync", key: "auto_fill_meta", label: "settings.auto_fill_meta", type: 'checkbox' },
           { icon: "mdi-source-branch", key: "META_SELECTED_SOURCES", label: "settings.meta_selected_source", type: 'meta_sources' },
           { icon: "info", key: "douban_baseurl", label: "settings.douban_baseurl" },
           { icon: "info", key: "douban_apikey", label: "settings.douban_api_key" },
@@ -438,7 +438,6 @@ export default {
             icon: "info", key: "BOOK_NAMES_FORMAT", label: "settings.book_names_format", type: 'select',
             items: [{ text: this.$t('settings.pinyin_directory'), value: "en" }, { text: this.$t('settings.utf8_directory'), value: "utf8" }]
           },
-          { icon: "", key: "PDF_TILE_WITH_FILE_NAME", label: "settings.pdf_tile_with_file_name", type: 'checkbox' },
           { icon: "info", key: "EPUB_VIEWER", label: "settings.epub_viewer", type: 'select',
             items: [{ text: this.$t('settings.epubjs'), value: "epubjs.html" }, { text: this.$t('settings.creader'), value: "creader.html" }]
           },
@@ -449,10 +448,11 @@ export default {
           { icon: "info", key: "push_title", label: "settings.push_title" },
           { icon: "info", key: "push_content", label: "settings.push_content" },
           { icon: "info", key: "convert_timeout", label: "settings.convert_timeout" },
-          { icon: "", key: "ENABLE_PHYSICAL_BOOKS", label: "settings.enable_physical_books", type: 'checkbox' },
-          { icon: "", key: "WEBDAV_SYNC_FOLDER", label: "settings.enable_webdav_sync", type: 'checkbox' },
+          { icon: "mdi-file-pdf-box", key: "PDF_TILE_WITH_FILE_NAME", label: "settings.pdf_tile_with_file_name", type: 'checkbox' },
+          { icon: "mdi-bookshelf", key: "ENABLE_PHYSICAL_BOOKS", label: "settings.enable_physical_books", type: 'checkbox' },
+          { icon: "mdi-cloud-arrow-up-outline", key: "WEBDAV_SYNC_FOLDER", label: "settings.enable_webdav_sync", type: 'checkbox' },
           { icon: "mdi-cloud-print-outline", key: "ENABLE_OPDS_SERVICE", label: "settings.enable_opds_service", type: 'checkbox' },
-          { icon: "", key: "autoreload", label: "settings.autoreload", type: 'checkbox' },
+          { icon: "mdi-restart", key: "autoreload", label: "settings.autoreload", type: 'checkbox' },
           { icon: "mdi-math-log", key: "ENABLE_AUDIO_CONVERSION_LOG", label: "settings.enable_audio_conversion_log", type: 'checkbox' },
         ]
       },
