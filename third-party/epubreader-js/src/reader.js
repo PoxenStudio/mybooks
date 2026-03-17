@@ -164,6 +164,16 @@ export class Reader {
 			}
 		});
 
+		this.rendition.on("locationChanged", (cfi) => {
+			const location = this.rendition.currentLocation();
+			if (location && location.start) {
+				const navItem = this.book.navigation.get(location.start.href);
+				const title = navItem ? navItem.label : location.start.href;
+				location.start.title = title.trim();
+				console.log("Location:", JSON.stringify(location.start));
+			}
+		});
+
 		this.on("styleschanged", (value) => {
 			if (!value) {
 				return;
