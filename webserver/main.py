@@ -190,7 +190,7 @@ def make_app():
     logging.info("Init Static  with [%s]" % CONF["resource_path"])
     logging.info("Init HTML    with [%s]" % CONF["html_path"])
     logging.info("Init Nuxtjs  with [%s]" % CONF["nuxt_env_path"])
-    banner_width = 88
+    banner_width = 90
     border_top = "╭" + "─" * banner_width + "╮"
     border_bottom = "╰" + "─" * banner_width + "╯"
     banner_lines = [
@@ -200,13 +200,13 @@ def make_app():
         "|" + "   / __ \\  ____    _  __  ___    ____   / ___/  / /_  __  __  ____/ /   (_)  ____ ".center(banner_width) + "|",
         "|" + "  / /_/ / / __ \\  | |/_/ / _ \\  / __ \\  \\__ \\  / __/ / / / / / __  /   / /  / __ \\".center(banner_width) + "|",
         "|" + " / ____/ / /_/ / _>  <  /  __/ / / / / ___/ / / /_  / /_/ / / /_/ /   / /  / /_/ /".center(banner_width) + "|",
-        "|" + "/_/      \____/ /_/|_|  \___/ /_/ /_/ /____/  \__/  \__,_/  \__,_/   /_/   \____/ ".center(banner_width) + "|",
+        "|" + "/_/      \\____/ /_/|_|  \\___/ /_/ /_/ /____/  \\__/  \\__,_/  \\__,_/   /_/   \\____/ ".center(banner_width) + "|",
         "|" + "  ______            __          __                    __   ".center(banner_width) + "|",
         "|" + " /_  __/  ____ _   / /  ___    / /_   ____   ____    / /__ ".center(banner_width) + "|",
-        "|" + "  / /    / __ `/  / /  / _ \  / __ \ / __ \ / __ \  / //_/ ".center(banner_width) + "|",
+        "|" + "  / /    / __ `/  / /  / _ \\  / __ \\ / __ \\ / __ \\  / //_/ ".center(banner_width) + "|",
         "|" + " / /    / /_/ /  / /  /  __/ / /_/ // /_/ // /_/ / / ,<    ".center(banner_width) + "|",
-        "|" + "/_/     \__,_/  /_/   \___/ /_.___/ \____/ \____/ /_/|_|   ".center(banner_width) + "|",
-        "|" + f"{VERSION}".center(banner_width) + "|",
+        "|" + "/_/     \\__,_/  /_/   \\___/ /_.___/ \\____/ \\____/ /_/|_|   ".center(banner_width) + "|",
+        "|" + (" " * 60 + f"{VERSION}").center(banner_width) + "|",
         border_bottom,
     ]
     logging.info("\n%s", "\n".join(banner_lines))

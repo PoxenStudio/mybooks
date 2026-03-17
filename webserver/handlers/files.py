@@ -85,7 +85,7 @@ class ImageHandler(BaseHandler):
 
                 return cover_data, updated
             except Exception as err:
-                logging.error("Failed to generate cove!!")
+                logging.error(f"Failed to generate cover!! {err}")
                 cover_data = self.default_cover
                 updated = self.build_time
                 return cover_data, updated
