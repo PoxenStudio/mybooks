@@ -145,7 +145,13 @@
                     :pagination="topPagination"
                     :items-per-page-options="[10, 50, 100, 1000]"
                     @update:options="options = $event"
-                />
+                >
+                    <template v-slot:prepend>
+                        <span v-if="books_selected.length > 0" class="caption grey--text mx-2">
+                            {{ $t('admin.books.selectedCount', { count: books_selected.length }) }}
+                        </span>
+                    </template>
+                </v-data-footer>
             </template>
             <template v-slot:item.status="{ item }">
                 <v-chip small v-if="item.status == 'ready'" class="success">{{ $t('admin.books.status.ready') }}</v-chip>

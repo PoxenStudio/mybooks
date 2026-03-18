@@ -181,6 +181,7 @@
             "kindleConvertAllConfirm": "会遍历所有书籍，将有Kindle格式（azw3/mobi）但没有EPUB格式的书籍转换为EPUB格式。这个操作可能需要较长时间，确认继续？",
             "clearRareTagsConfirm": "会将少于3本书的标签所对应的书籍重新更新标签。此操作可能需要一些时间，确认继续？",
             "deleteSelected": "删除选中图书",
+            "selectedCount": "已选中 {count} 条",
             "exchangeType": "图书类型互转",
             "exchangeTypeConfirm": "会将所选电子书的图书类型进行切换，电子书转为实体书，实体书则转为电子书。如当前无有效ISBN或已有电子书格式的文件，则忽略。",
             "noSelectedBook": "请先选择要删除的图书",
