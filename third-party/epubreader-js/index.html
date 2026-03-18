@@ -21,7 +21,7 @@
 
 	<!-- Reader -->
 	<script type="module">
-		import { Reader } from "./dist/js/epubreader.min.js"
+		import { Reader } from "./dist/js/epubreader.js"
 		const url = new URL(window.location)
 		const path = url.searchParams.get("bookPath") || "https://s3.amazonaws.com/moby-dick/"
 		// 配置 assets 目录路径，默认为空字符串表示当前目录下的 assets
