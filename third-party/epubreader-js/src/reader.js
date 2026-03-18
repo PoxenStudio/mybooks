@@ -81,16 +81,6 @@ export class Reader {
 			// snap: true
 		});
 
-		// const cfi = this.settings.previousLocationCfi;
-		// if (cfi) {
-		// 	this.displayed = this.rendition.display(cfi);
-		// } else {
-		// 	this.displayed = this.rendition.display();
-		// }
-		// this.displayed.then((renderer) => {
-		// 	this.emit("displayed", renderer, this.settings);
-		// });
-
 		this.book.ready.then(() => {
 			this.emit("bookready", this.settings);
 			console.log("Book is ready");

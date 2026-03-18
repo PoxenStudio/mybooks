@@ -2888,22 +2888,19 @@ class Reader {
 			minSpreadWidth: this.settings.spread.min,
 			width: "100%",
 			height: "100%",
-			snap: true
-		});
-
-		const cfi = this.settings.previousLocationCfi;
-		if (cfi) {
-			this.displayed = this.rendition.display(cfi);
-		} else {
-			this.displayed = this.rendition.display();
-		}
-
-		this.displayed.then((renderer) => {
-			this.emit("displayed", renderer, this.settings);
+			// snap: true
 		});
 
 		this.book.ready.then(() => {
 			this.emit("bookready", this.settings);
+			console.log("Book is ready");
+			const cfi = localStorage.getItem("lastReadPosition");
+			this.rendition.display(cfi || this.display_url).then(() => {
+				this.loading = !1, this.rendition.on("relocated", (o) => {
+					console.log("Relocated:", o);
+					localStorage.setItem("lastReadPosition", o.start.cfi);
+				});
+			});
 			// Apply styles (theme + font) after book is ready
 			this.applyStyles();
 		}).then(() => {
@@ -3262,8 +3259,8 @@ class Reader {
 			this.settings = {
 				bookPath: bookPath,
 				assetsPath: "",
-				arrows: this.isMobile ? "none" : "content", // none | content | toolbar
-				manager: "default", // Change to "default" for mobile too to fix multiple page flip issue
+				arrows: this.isMobile ? "none" : "none", // none | content | toolbar
+				manager: "default",
 				restore: true,
 				history: true,
 				openbook: this.storage.indexedDB ? true : false,
@@ -3389,7 +3386,6 @@ class Reader {
 	}
 
 	keyboardHandler(e) {
-
 		const step = 2;
 		let value = this.settings.styles.fontSize;
 
