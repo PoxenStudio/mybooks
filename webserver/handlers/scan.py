@@ -112,9 +112,9 @@ class Scanner:
     def scan_status(self):
         scan_id = self.session.query(sqlalchemy.func.max(ScanFile.scan_id)).scalar()
         if scan_id is None:
-            return (0, {})
+            return (0, {}, ScanService.get_invalid_folders())
         query = self.session.query(ScanFile.status).filter(ScanFile.scan_id == scan_id)
-        return (scan_id, self.count(query))
+        return (scan_id, self.count(query), ScanService.get_invalid_folders())
 
     def count(self, query):
         rows = query.all() if query else []
@@ -286,13 +286,15 @@ class ScanStatus(BaseHandler):
         scanner = None
         try:
             scanner = Scanner(self.calibre_db, self.settings["ScopedSession"])
-            status = scanner.scan_status()[1]
+            scan_id, status, failed_path = scanner.scan_status()
             summary = scanner.summary()
             return {
                 "err": "ok",
                 "msg": _("成功"),
+                "task": scan_id,
                 "status": status,
                 "summary": summary,
+                "ignored_errors": failed_path,
                 "scanning": ScanService.static_is_scanning,
                 "importing": ScanService.static_is_importing,
             }

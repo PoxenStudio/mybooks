@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
-
+import errno
 import hashlib
 import os
 import logging
@@ -25,6 +25,7 @@ CONF = loader.get_settings()
 class ScanService(AsyncService):
     static_is_scanning = False
     static_is_importing = False
+    invalid_folder: set[str] = set()
 
     @staticmethod
     def is_scanning():
@@ -33,6 +34,22 @@ class ScanService(AsyncService):
     @staticmethod
     def is_importing():
         return ScanService.static_is_importing
+
+    @staticmethod
+    def get_invalid_folders():
+        logging.info(f"Invalid folders#0: {ScanService.invalid_folder}")
+        return list(ScanService.invalid_folder)
+
+    @staticmethod
+    def os_walk_error_handler(e):
+        if e.errno == errno.EACCES:
+            logging.error(f"[SCAN]权限不足，跳过目录: {e.filename}")
+            ScanService.invalid_folder.add(e.filename)
+        elif e.errno == errno.ENOENT:
+            logging.error(f"[SCAN]目录消失: {e.filename}")
+        else:
+            ScanService.invalid_folder.add(e.filename)
+            logging.error(f"[SCAN]访问目录时发生错误: {e.filename}, 错误码: {e.errno}")
 
     def save_or_rollback(self, row):
         bid = "[ book-id=%s ]" % row.book_id if row.book_id else ""
@@ -64,6 +81,7 @@ class ScanService(AsyncService):
             logging.error("Scanning is running, please wait...")
             return
 
+        ScanService.invalid_folder.clear()
         ScanService.static_is_scanning = True
 
         # 创建后台任务
@@ -95,38 +113,38 @@ class ScanService(AsyncService):
     def do_scan_internal(self, path_dir, task_id=None):
         from calibre.ebooks.metadata.meta import get_metadata
 
-        logging.info("<%s> we are: db=%s, session=%s", self, self.db, self.session)
-        logging.info("start to scan %s", path_dir)
+        logging.info("[SCAN]<%s> we are: db=%s, session=%s", self, self.db, self.session)
+        logging.info("[SCAN]start to scan %s", path_dir)
 
         # 生成任务（粗略扫描），前端可以调用API查询进展
         tasks = []
-        for dirpath, __, filenames in os.walk(path_dir):
+        for dirpath, __, filenames in os.walk(path_dir, onerror=ScanService.os_walk_error_handler):
             for fname in filenames:
+                fmt = fname.split(".")[-1].lower()
+                if not fmt or fmt not in SCAN_EXT or fmt[0] == '.':
+                    logging.info("[SCAN]Ignore: [%s] %s", fmt, fname)
+                    continue
                 fpath = os.path.join(dirpath, fname)
                 if not os.path.isfile(fpath):
-                    continue
-
-                fmt = fpath.split(".")[-1].lower()
-                if fmt not in SCAN_EXT:
-                    # logging.debug("bad format: [%s] %s", fmt, fpath)
+                    logging.info("[SCAN]not a file, skip: %s", fpath)
                     continue
                 tasks.append((fname, fpath, fmt))
 
         # 生成任务ID
         scan_id = int(time.time())
-        logging.info("========== start to check files size & name ============")
+        logging.info("[SCAN]========== start to check files size & name ============")
 
         rows = []
         inserted_hash = set()
         for fname, fpath, fmt in tasks:
             samefiles = self.session.query(ScanFile).filter(ScanFile.path == fpath)
-            logging.info("Checking same files for path: %s, return count:%d", fpath, samefiles.count())
+            logging.info("[SCAN]Checking same files for path: %s, return count:%d", fpath, samefiles.count())
             if samefiles.count() > 0:
                 # 如果已经有相同的文件记录，则跳过
                 found_book = False
                 for row in samefiles:
                     if row.status == ScanFile.NEW:
-                        logging.warning("Got same file path: %s, scan_id:%d, path:%s", fpath, row.scan_id, row.path)
+                        logging.warning("[SCAN]Got same file path: %s, scan_id:%d, path:%s", fpath, row.scan_id, row.path)
                         found_book = True
                         # 将已存在记录的hash加入集合，避免后续被误删
                         if row.hash:
@@ -134,26 +152,26 @@ class ScanService(AsyncService):
                         rows.append(row)
                         break
                     elif row.status == ScanFile.IMPORTED and self.db.get_data_as_dict(ids=[row.book_id]):
-                        logging.warning("File already exists in Scan & library: %s, status=%s", fpath, row.status)
+                        logging.warning("[SCAN]File already exists in Scan & library: %s, status=%s", fpath, row.status)
                         found_book = True
                         break
                     else:
-                        logging.warning("File already exists in Scan DB, but missed in library, try to import again")
+                        logging.warning("[SCAN]File already exists in Scan DB, but missed in library, try to import again")
 
                 if found_book:
-                    logging.warning("File already exists in Scan & Book DB: %s, status=%s", fpath, row.status)
+                    logging.warning("[SCAN]File already exists in Scan & Book DB: %s, status=%s", fpath, row.status)
                     continue
 
             # New record should be added
-            logging.info("Processing new file: %s", fpath)
+            logging.info("[SCAN]Processing new file: %s", fpath)
             stat = os.stat(fpath)
             md5 = hashlib.md5(fname.encode("UTF-8")).hexdigest()
             hash = "fstat:%s/%s" % (stat.st_size, md5)
             if hash in inserted_hash:
-                logging.error("Duplicated processing book, skip: %s", fpath)
+                logging.error("[SCAN]Duplicated processing book, skip: %s", fpath)
                 continue
             if self.session.query(ScanFile).filter(ScanFile.hash == hash).count() > 0:
-                logging.error("maybe have same book, skip: %s, due to same hash", fpath)
+                logging.error("[SCAN]maybe have same book, skip: %s, due to same hash", fpath)
                 continue
 
             row = ScanFile(fpath, hash, scan_id)
@@ -162,7 +180,7 @@ class ScanService(AsyncService):
                 continue
             rows.append(row)
 
-        logging.info("========== start to check files hash & meta ============")
+        logging.info("[SCAN]========== start to check files hash & meta ============")
         # 检查文件哈希值，检查DB重复情况
         scanning_index = 0
         for row in rows:
@@ -177,7 +195,7 @@ class ScanService(AsyncService):
                         progress_data={"stage": "scanning", "path": path_dir}
                     )
                 except Exception as e:
-                    logging.error(f"Failed to update task progress: {e}")
+                    logging.error("[SCAN]Failed to update task progress: %s", e)
 
             if row.status == ScanFile.DROP:
                 continue
@@ -193,21 +211,21 @@ class ScanService(AsyncService):
                         sha256.update(byte_block)
             except FileNotFoundError:
                 row.status = ScanFile.MISSED
-                logging.error("File not found when calculating hash: %s", fpath)
+                logging.error("[SCAN]File not found when calculating hash: %s", fpath)
                 if not self.save_or_rollback(row):
-                    logging.error("Failed to save row status: %s", fpath)
+                    logging.error("[SCAN]Failed to save row status: %s", fpath)
                 continue
             except PermissionError:
                 row.status = ScanFile.PERMISSION
-                logging.error("Permission denied when reading file: %s", fpath)
+                logging.error("[SCAN]Permission denied when reading file: %s", fpath)
                 if not self.save_or_rollback(row):
-                    logging.error("Failed to save row status: %s", fpath)
+                    logging.error("[SCAN]Failed to save row status: %s", fpath)
                 continue
             except Exception as e:
                 row.status = ScanFile.DROP
-                logging.error("Error reading file %s: %s", fpath, e)
+                logging.error("[SCAN]Error reading file %s: %s", fpath, e)
                 if not self.save_or_rollback(row):
-                    logging.error("Failed to save row status: %s", fpath)
+                    logging.error("[SCAN]Failed to save row status: %s", fpath)
                 continue
 
             hash = "sha256:" + sha256.hexdigest()
@@ -228,14 +246,14 @@ class ScanService(AsyncService):
             if should_drop:
                 # 如果已经有相同的哈希值，则删掉本任务
                 row.status = ScanFile.DROP
-                logging.warning("Duplicate detected: %s, drop it.", hash)
+                logging.warning("[SCAN]Duplicate detected: %s, drop it.", hash)
             else:
                 # 或者，更新为真实的哈希值
                 row.hash = hash
 
             inserted_hash.add(hash)
             if not self.save_or_rollback(row):
-                logging.error("Failed to save row: %s", fpath)
+                logging.error("[SCAN]Failed to save row: %s", fpath)
                 continue
 
             if row.status == ScanFile.DROP:
@@ -250,16 +268,16 @@ class ScanService(AsyncService):
                     mi.title = utils.super_strip(mi.title)
                     mi.authors = [utils.super_strip(s) for s in mi.authors]
             except Exception as e:
-                logging.error("Error reading metadata from file %s: %s", fpath, e)
+                logging.error("[SCAN]Error reading metadata from file %s: %s", fpath, e)
                 continue
 
             row.status = ScanFile.READY  # 设置为可处理
             if mi.title and mi.title == CALIBRE_ERROR_FLAG:
-                logging.error("Failed to get metadata for %s, reason:%s", fpath, mi.comments)
+                logging.error("[SCAN]Failed to get metadata for %s, reason:%s", fpath, mi.comments)
                 row.status = ScanFile.INVALID
                 row.title = None
                 if not self.save_or_rollback(row):
-                    logging.error("Failed to save row status: %s", fpath)
+                    logging.error("[SCAN]Failed to save row status: %s", fpath)
                 continue
 
             if fmt == "txt":
@@ -287,7 +305,7 @@ class ScanService(AsyncService):
             if ids:
                 for bid in ids:
                     b = self.db.get_metadata(bid, index_is_id=True)
-                    logging.info(f" book info: {b}")
+                    logging.info("[SCAN] book info: %s", b)
                     # 如果是实体书，则跳过
                     if b.get(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK) == BOOK_TYPE_PHYSICAL:
                         continue
@@ -308,16 +326,18 @@ class ScanService(AsyncService):
                     progress_data={"stage": "completed", "path": path_dir}
                 )
             except Exception as e:
-                logging.error(f"Failed to update task progress: {e}")
+                logging.error("[SCAN]Failed to update task progress: %s", e)
 
         ScanService.static_is_scanning = False
-        logging.info("scan task %d completed.", scan_id)
+        logging.info("[SCAN] scan task %d completed.", scan_id)
 
     @AsyncService.register_service
     def do_import(self, hashlist, user_id):
         if ScanService.static_is_importing:
             logging.error("Importing is running, please wait...")
             return
+
+        ScanService.invalid_folder.clear()
         ScanService.static_is_importing = True
 
         task_id = None

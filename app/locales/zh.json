@@ -294,7 +294,9 @@
         "batch_add_select_file": "选择CSV文件",
         "batch_add_start": "开始导入",
         "batch_add_processing": "正在处理...",
-        "batch_add_no_file": "请选择CSV文件"
+        "batch_add_no_file": "请选择CSV文件",
+        "ignored_errors_title": "以下目录在扫描过程中无法访问，已跳过：",
+        "ignored_errors_hint": "这些目录可能存在权限问题或其他访问异常，请检查目录权限后重新扫描。"
     },
     "book": {
         "edit": {

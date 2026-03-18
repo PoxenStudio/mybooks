@@ -147,6 +147,17 @@
             </template>
         </v-data-table>
 
+        <!-- Ignored Errors from scan -->
+        <v-card-text v-if="ignored_errors.length > 0">
+            <v-alert type="warning" dense outlined icon="mdi-alert">
+                <div class="mb-1">{{ $t('imports.ignored_errors_title') }}</div>
+                <ul class="mt-1 mb-0">
+                    <li v-for="(dir, i) in ignored_errors" :key="i" class="text-body-2">{{ dir }}</li>
+                </ul>
+                <div class="mt-1 caption">{{ $t('imports.ignored_errors_hint') }}</div>
+            </v-alert>
+        </v-card-text>
+
         <!-- Batch Add Dialog -->
         <v-dialog v-model="batchAddDialog" max-width="600px">
             <v-card>
@@ -202,6 +213,7 @@ export default {
         count_done: 0,
         count_total: 0,
         count_processed: 0,
+        ignored_errors: [],
         headers: [
             { text: "ID", sortable: true, value: "id" },
             { text: "状态", sortable: true, value: "status" },
@@ -291,6 +303,9 @@ export default {
                     this.count_total = 0;
                     this.scanning = rsp.scanning;
                     this.importing = rsp.importing;
+                    if (rsp.ignored_errors && rsp.ignored_errors.length > 0) {
+                        this.ignored_errors = rsp.ignored_errors;
+                    }
                 })
                 .finally(() => {
                     this.loading = false;
@@ -449,6 +464,11 @@ export default {
                                 if (rsp.importing) {
                                     this.checkImportState();
                                 }
+                                if (rsp.ignored_errors && rsp.ignored_errors.length > 0) {
+                                    this.ignored_errors = rsp.ignored_errors;
+                                } else {
+                                    this.ignored_errors = [];
+                                }
                                 return false;
                             }
                             this.loading = true;
@@ -457,6 +477,11 @@ export default {
                     } else if (rsp.status && rsp.importing) {
                         // check importing status
                         this.checkImportState();
+                    }
+                    if (rsp.ignored_errors && rsp.ignored_errors.length > 0) {
+                        this.ignored_errors = rsp.ignored_errors;
+                    } else {
+                        this.ignored_errors = [];
                     }
                 });
 

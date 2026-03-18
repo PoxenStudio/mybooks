@@ -291,7 +291,9 @@
         "batch_add_select_file": "Select CSV File",
         "batch_add_start": "Start Import",
         "batch_add_processing": "Processing...",
-        "batch_add_no_file": "Please select a CSV file"
+        "batch_add_no_file": "Please select a CSV file",
+        "ignored_errors_title": "The following directories could not be accessed during scanning and were skipped:",
+        "ignored_errors_hint": "These directories may have permission issues or other access errors. Please check the directory permissions and scan again."
     },
     "settings": {
             "trash_management": "Space cleanup",
