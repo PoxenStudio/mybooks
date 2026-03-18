@@ -33,17 +33,12 @@
                             </div>
                             <slot name="introduce" :book="book"></slot>
                             <div class="book-comments flex-grow-1">
-                                <v-tooltip v-if="book.comments && shouldShowCommentTooltip(book.comments)"
-                                    :right="!isRightmostCard(idx)"
-                                    :left="isRightmostCard(idx)"
-                                    max-width="420px"
-                                    color="#003153"
-                                >
-                                    <template v-slot:activator="{ on, attrs }">
-                                        <p v-html="book.comments" v-bind="attrs" v-on="on" class="comment-tooltip-activator"></p>
-                                    </template>
-                                    <span>{{ buildCommentPreview(book.comments) }}</span>
-                                </v-tooltip>
+                                <p v-if="book.comments && shouldShowCommentTooltip(book.comments)"
+                                    v-html="book.comments"
+                                    class="comment-tooltip-activator"
+                                    @mouseenter="showTooltip($event, book.comments)"
+                                    @mouseleave="hideTooltip"
+                                ></p>
                                 <p v-else-if="book.comments" v-html="book.comments"></p>
                                 <p v-else>{{ $t('bookCards.browseDetails') }}</p>
                             </div>
@@ -114,17 +109,73 @@ export default {
             let text = String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/gi, ' ').trim();
             return text.length > 80;
         },
-        isRightmostCard(idx) {
-            const bp = this.$vuetify.breakpoint;
-            let cols;
-            if (bp.xl) cols = 6;       // xl=2 -> 12/2 = 6 columns
-            else if (bp.lgAndUp) cols = 4;  // lg=3 -> 12/3 = 4 columns
-            else if (bp.mdAndUp) cols = 3;  // md=4 -> 12/4 = 3 columns
-            else if (bp.smAndUp) cols = 2;  // sm=6 -> 12/6 = 2 columns
-            else cols = 1;             // xs=12 -> 1 column
-            if (cols <= 1) return true; // 单列时也用左侧tooltip
-            return (idx + 1) % cols === 0;
-        }
+        getOrCreateTooltipEl() {
+            let el = document.getElementById('bc-global-tooltip');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'bc-global-tooltip';
+                el.style.cssText = [
+                    'position:fixed',
+                    'z-index:9999',
+                    'background:#003153',
+                    'color:#fff',
+                    'border-radius:4px',
+                    'padding:6px 10px',
+                    'font-size:12px',
+                    'line-height:1.5',
+                    'max-width:360px',
+                    'white-space:normal',
+                    'word-break:break-word',
+                    'pointer-events:none',
+                    'box-shadow:0 2px 12px rgba(0,0,0,0.3)',
+                    'display:none',
+                ].join(';');
+                document.body.appendChild(el);
+            }
+            return el;
+        },
+        showTooltip(event, html) {
+            const text = this.buildCommentPreview(html);
+            const el = this.getOrCreateTooltipEl();
+            el.textContent = text;
+            el.style.transform = '';
+            el.style.display = 'block';
+            const rect = event.currentTarget.getBoundingClientRect();
+            const gap = 8;
+            const vpW = window.innerWidth;
+            const ttW = el.offsetWidth;
+            let left = rect.left + rect.width / 2 - ttW / 2;
+            left = Math.max(8, Math.min(left, vpW - ttW - 8));
+            el.style.left = left + 'px';
+            const ttH = el.offsetHeight;
+            if (rect.top - ttH - gap < 8) {
+                el.style.top = (rect.bottom + gap) + 'px';
+            } else {
+                el.style.top = (rect.top - ttH - gap) + 'px';
+            }
+        },
+        hideTooltip() {
+            const el = document.getElementById('bc-global-tooltip');
+            if (el) el.style.display = 'none';
+        },
+    },
+    beforeDestroy() {
+        this.hideTooltip();
+    },
+    // vue3 compatible alias
+    beforeUnmount() {
+        this.hideTooltip();
+    },
+    // hide on scroll
+    mounted() {
+        this._scrollHide = () => this.hideTooltip();
+        window.addEventListener('scroll', this._scrollHide, true);
+    },
+    destroyed() {
+        window.removeEventListener('scroll', this._scrollHide, true);
+    },
+    unmounted() {
+        window.removeEventListener('scroll', this._scrollHide, true);
     },
     data: () => {
         return {
