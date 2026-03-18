@@ -232,6 +232,7 @@ class BooksCollection(VirtualCollection):
 
     def get_dynamic_members(self):
         books = []
+        other_soled_ids = self.provider.others_soled_books_id(self.environ)
         # Use cache.get_metadata() to fetch each book's metadata
         # Note: this is less efficient than batch fetch but cache API doesn't have batch method
         # The cache should have internal optimization
@@ -242,6 +243,10 @@ class BooksCollection(VirtualCollection):
                     # Get metadata for this book
                     mi = self.provider.cache.get_metadata(book_id, get_cover=False, get_user_categories=False)
                     if not mi or mi.is_null('title'):
+                        continue
+
+                    if book_id in other_soled_ids:
+                        logging.info(f"Skipping book ID {book_id} because it's not in sold IDs")
                         continue
 
                     logging.info(f"Fetching book ID {book_id}, title: {mi.title}, id:{mi.id}")
@@ -340,6 +345,26 @@ class TalebookProvider(DAVProvider):
         except Exception as e:
             logging.error(f"Error initializing sync folder: {e}")
             self.enable_sync_folder = False
+
+    def others_soled_books_id(self, environ):
+        """获取其他用户标记私藏的书籍ID列表"""
+        user_id = self._get_user_id_from_environ(environ)
+        if not user_id:
+            return set()
+        try:
+            if not self.get_session_func:
+                logging.warning("No session function provided, cannot fetch soled books")
+                return set()
+
+            from webserver.models import Item
+            session = self.get_session_func()
+            items = session.query(Item).filter(Item.sole == 1, Item.collector_id != user_id).all()
+            soled_ids = set(i.book_id for i in items)
+            logging.info(f"Fetched {len(soled_ids)} soled book IDs by others (not {user_id}) from database, {soled_ids}")
+            return soled_ids
+        except Exception as e:
+            logging.error(f"Error fetching soled books: {e}")
+            return set()
 
     def _ensure_sync_folder(self):
         """确保sync目录存在并设置正确的权限"""

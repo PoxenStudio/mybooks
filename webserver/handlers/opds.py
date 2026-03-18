@@ -8,6 +8,7 @@ __docformat__ = "restructuredtext en"
 import binascii
 import hashlib
 import sys
+import time
 from collections import defaultdict
 from functools import partial
 from gettext import gettext as _
@@ -26,6 +27,7 @@ from lxml.builder import ElementMaker
 from tornado import web
 from webserver import loader
 from webserver.handlers.base import BaseHandler
+from webserver.models import Item
 
 CONF = loader.get_settings()
 
@@ -428,6 +430,9 @@ class CategoryGroupFeed(NavFeed):
 
 
 class OpdsHandler(BaseHandler):
+    cached_sole_ids = None
+    cached_sole_ids_time = 0
+
     def send_error_of_not_invited(self):
         self.set_header("WWW-Authenticate", "Basic")
         self.set_status(401)
@@ -436,6 +441,14 @@ class OpdsHandler(BaseHandler):
     def check_opds_enabled(self):
         if not CONF.get("ENABLE_OPDS_SERVICE", True):
             raise web.HTTPError(503, reason="OPDS service is not enabled")
+
+    def all_soled_ids(self):
+        current_time = time.time()
+        if self.cached_sole_ids is None or current_time - self.cached_sole_ids_time > 30:
+            items = self.sqlite_session.query(Item).filter(Item.sole == 1).all()
+            self.cached_sole_ids = set(i.book_id for i in items)
+            self.cached_sole_ids_time = current_time
+        return self.cached_sole_ids
 
     def get_opds_acquisition_feed(
         self,
@@ -449,6 +462,11 @@ class OpdsHandler(BaseHandler):
         feed_title=None,
     ):
         idx = self.calibre_db.FIELD_MAP["id"]
+        if not ids:
+            raise web.HTTPError(404, reason="No books found")
+        # remove sole ids
+        sole_ids = self.all_soled_ids()
+        ids = [i for i in ids if i not in sole_ids]
         if not ids:
             raise web.HTTPError(404, reason="No books found")
         items = [x for x in self.calibre_db.data.iterall() if x[idx] in ids]
