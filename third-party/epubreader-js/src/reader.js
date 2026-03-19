@@ -83,7 +83,7 @@ export class Reader {
 
 		this.book.ready.then(() => {
 			this.emit("bookready", this.settings);
-			console.log("Book is ready");
+			console.log("Book is ready to show");
 			const cfi = localStorage.getItem("lastReadPosition");
 			this.rendition.display(cfi || this.display_url).then(() => {
 				this.loading = !1, this.rendition.on("relocated", (o) => {
@@ -327,9 +327,7 @@ export class Reader {
 					}
 				};
 			}
-
 			this.rendition.themes.default(contentStyles);
-
 			if (actualFontName) {
 				this.injectFontWithRetry(actualFontName);
 			}

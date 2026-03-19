@@ -71,3 +71,60 @@
    - `Reader` 类是一个完善的事件总线。若需调试某些生命周期，可以在 `reader.js` 的 `init` 方法末尾临时增加类似 `this.on("layout", console.log)` 的代码以追踪 ePub.js 内部派发的事件（如 `selected`, `relocated`, `rendered`）。
 4. **跨域或 iframe 内部调试**:
    - 因为电子书内容是渲染在一个或多个内部套嵌的 `iframe` 中的，要审查元素文本或通过控制台测试 DOM 获取，务必先在 DevTools 的 Context 下拉菜单中将当前执行环境从 `top` 切换为特定的 `iframe`。这在调试自定义注入字体或黑暗主题 CSS 特效时非常关键。
+
+## 5. 类依赖关系
+
+本节从**继承**、**组合/实例化**和**事件通信**三个维度梳理各类之间的依赖关系。
+
+### 5.1 三种依赖类型说明
+
+| 类型 | 含义 |
+|------|------|
+| **继承 (Inheritance)** | 子类 `extends` 父类，获得其全部方法和属性 |
+| **组合 (Composition)** | 一个类在构造函数内 `new` 出另一个类的实例，强生命周期绑定 |
+| **事件依赖 (Event)** | 一个类通过 `reader.emit()` 发布事件；另一个类通过 `reader.on()` 订阅并响应 |
+
+### 5.2 ui.js 类继承树
+
+`ui.js` 内定义了一套完整的 UI 组件继承体系，根类为 `UIElement`.
+
+### 5.3 业务类组合关系图
+
+`Reader` 是整个系统的中枢，持有所有 UI 组件的实例，并通过继承 `EventEmitter` 充当全局事件总线。
+![class diagrams](class_diagrams.png)
+
+### 5.4 事件驱动通信总表
+
+`Reader`（继承自 `EventEmitter`）是唯一的事件总线。下表完整列出所有事件的发布者与订阅者：
+
+| 事件名 | 发布者 | 主要订阅者 | 说明 |
+|--------|--------|-----------|------|
+| `bookready` | `Reader` | `Content`, `AnnotationsPanel`, `SettingsPanel` | 书籍解析完毕，携带 `settings` 配置 |
+| `bookloaded` | `Reader` | `Content` | 首次渲染完成，隐藏加载动画 |
+| `metadata` | `Reader` | `MetadataPanel` | 书籍元数据就绪 |
+| `navigation` | `Reader` | `TocPanel` | 目录树就绪 |
+| `relocated` | `Reader` (来自 rendition) | `Toolbar`, `Content`, `BookmarksPanel` | 翻页/跳转完成，携带位置信息 |
+| `layout` | `Reader` (来自 rendition) | `Content`, `SettingsPanel` | 页面布局属性变化 |
+| `selected` | `Reader` (来自 rendition) | `NoteDlg` | 用户在 iframe 内选中文字 |
+| `unselected` | `Reader` (来自 rendition click) | `NoteDlg` | 用户取消文字选择 |
+| `prev` | `Toolbar`, `Content`, `Reader` (键盘) | `Reader` | 请求翻上一页 |
+| `next` | `Toolbar`, `Content`, `Reader` (键盘) | `Reader` | 请求翻下一页 |
+| `sidebaropener` | `Toolbar`, `Content`, `Sidebar` | `Sidebar`, `Content` | 打开/关闭侧边栏 |
+| `bookmarked` | `Toolbar`, `BookmarksPanel` | `Toolbar`, `BookmarksPanel` | 添加/移除书签 |
+| `noteadded` | `NoteDlg` | `AnnotationsPanel` | 用户新增一条高亮笔记 |
+| `styleschanged` | `SettingsPanel`, `Reader` (键盘) | `Reader` | 字体或字号变更 |
+| `themechanged` | `SettingsPanel` | `Reader` | 主题切换 (light/dark/eyecare) |
+| `flowchanged` | `SettingsPanel` | `Reader`, `Content` | 排版模式切换 (paginated/scrolled) |
+| `spreadchanged` | `SettingsPanel` | `Reader` | 双页布局参数变化 |
+| `languagechanged` | `SettingsPanel` | `Reader`, `Strings`, `Toolbar`, `Sidebar` 及所有面板 | 界面语言切换，触发所有 UI 组件刷新文本 |
+| `viewercleanup` | `Reader` | `Content` | 重新加载书籍前清空 `#viewer` 容器 |
+
+### 5.5 外部依赖一览
+
+| 依赖 | 引入方式 | 用途 |
+|------|---------|------|
+| `ePub.js` (v0.3.93) | 全局变量 `ePub()` | EPUB 解析、分页渲染、CFI 定位 |
+| `event-emitter` | `import EventEmitter` | 为 `Reader.prototype` 混入事件总线能力 |
+| `js-md5` | 全局变量 `md5()` | 书籍路径取哈希，生成 `localStorage` 的 key |
+| `IndexedDB` (浏览器内置) | `Storage` 类封装 | 缓存本地上传的 EPUB 文件 (ArrayBuffer) |
+| `localStorage` (浏览器内置) | `Reader` 直接调用 | 持久化阅读进度、书签、笔记、主题等配置 |

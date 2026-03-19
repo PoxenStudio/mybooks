@@ -46,21 +46,22 @@ export class Content {
 		container.add([loader, divider, overlay]);
 		document.body.appendChild(container.dom);
 
+		viewer.setClass(settings.flow);
+
 		//-- events --//
-
 		reader.on("bookready", (cfg) => {
-
+			console.log("[Content] book is ready")
 			viewer.setClass(cfg.flow);
 			loader.dom.style.display = "block";
 		});
 
 		reader.on("bookloaded", () => {
-
+			console.log("[Content] book is loaded")
 			loader.dom.style.display = "none";
 		});
 
 		reader.on("layout", (props) => {
-
+			console.log("[Content] try to layout")
 			if (props.spread && props.width > props.spreadWidth) {
 				divider.dom.style.display = "block";
 			} else {
@@ -69,7 +70,7 @@ export class Content {
 		});
 
 		reader.on("flowchanged", (value) => {
-			
+
 			viewer.setClass(value);
 		});
 
