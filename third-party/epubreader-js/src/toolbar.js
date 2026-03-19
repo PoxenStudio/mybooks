@@ -154,10 +154,19 @@ export class Toolbar {
 			menu2.add(fullscreenBox);
 		}
 
-		container.add([menu1, menu2]);
+		const menuCenter = new UIDiv().setClass("menu-center");
+		const chapterTitle = new UIDiv().setClass("chapter-title");
+		menuCenter.add(chapterTitle);
+
+		container.add([menu1, menuCenter, menu2]);
 		document.body.appendChild(container.dom);
 
 		//-- events --//
+
+		reader.on("chapterChanged", (title) => {
+
+			chapterTitle.dom.textContent = title;
+		});
 
 		reader.on("relocated", (location) => {
 
