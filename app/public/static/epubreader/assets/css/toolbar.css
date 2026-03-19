@@ -4,6 +4,7 @@
 	padding: 0;
 	z-index: 10;
 	display: grid;
+	grid-template-columns: auto 1fr auto;
 	position: relative;
 }
 
@@ -13,9 +14,27 @@
 	justify-content: left;
 }
 
+#toolbar .menu-center {
+	grid-column: 2;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+	padding: 0 8px;
+}
+
+#toolbar .chapter-title {
+	font-size: 14px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 100%;
+	opacity: 0.75;
+}
+
 #toolbar .menu-2 {
 	display: flex;
-	grid-column: 2;
+	grid-column: 3;
 	justify-content: right;
 }
 

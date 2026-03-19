@@ -75,7 +75,7 @@ body {
 	top: 58px;    /* Leave space for top toolbar */
 	bottom: 58px; /* Leave space for bottom toolbar */
 	width: 10%; /* Or whatever width is comfortable for clicking */
-	max-width: 100px; /* Prevent it from being too large on wide screens */
+	max-width: 45px; /* Prevent it from being too large on wide screens */
 	display: flex;
 	align-items: center;
 	justify-content: center;

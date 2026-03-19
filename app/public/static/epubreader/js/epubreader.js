@@ -1753,10 +1753,19 @@ class Toolbar {
 			menu2.add(fullscreenBox);
 		}
 
-		container.add([menu1, menu2]);
+		const menuCenter = new UIDiv().setClass("menu-center");
+		const chapterTitle = new UIDiv().setClass("chapter-title");
+		menuCenter.add(chapterTitle);
+
+		container.add([menu1, menuCenter, menu2]);
 		document.body.appendChild(container.dom);
 
 		//-- events --//
+
+		reader.on("chapterChanged", (title) => {
+
+			chapterTitle.dom.textContent = title;
+		});
 
 		reader.on("relocated", (location) => {
 
@@ -1865,21 +1874,22 @@ class Content {
 		container.add([loader, divider, overlay]);
 		document.body.appendChild(container.dom);
 
+		viewer.setClass(settings.flow);
+
 		//-- events --//
-
 		reader.on("bookready", (cfg) => {
-
+			console.log("[Content] book is ready")
 			viewer.setClass(cfg.flow);
 			loader.dom.style.display = "block";
 		});
 
 		reader.on("bookloaded", () => {
-
+			console.log("[Content] book is loaded")
 			loader.dom.style.display = "none";
 		});
 
 		reader.on("layout", (props) => {
-
+			console.log("[Content] try to layout")
 			if (props.spread && props.width > props.spreadWidth) {
 				divider.dom.style.display = "block";
 			} else {
@@ -1888,7 +1898,7 @@ class Content {
 		});
 
 		reader.on("flowchanged", (value) => {
-			
+
 			viewer.setClass(value);
 		});
 
@@ -2893,7 +2903,7 @@ class Reader {
 
 		this.book.ready.then(() => {
 			this.emit("bookready", this.settings);
-			console.log("Book is ready");
+			console.log("Book is ready to show");
 			const cfi = localStorage.getItem("lastReadPosition");
 			this.rendition.display(cfi || this.display_url).then(() => {
 				this.loading = !1, this.rendition.on("relocated", (o) => {
@@ -2953,7 +2963,7 @@ class Reader {
 			}
 		});
 
-		this.rendition.on("keydown", this.keyboardHandler.bind(this));
+		this.rendition.on("keyup", this.keyboardHandler.bind(this));
 
 		this.on("prev", () => {
 			if (this.book.package.metadata.direction === "rtl") {
@@ -2975,9 +2985,10 @@ class Reader {
 			const location = this.rendition.currentLocation();
 			if (location && location.start) {
 				const navItem = this.book.navigation.get(location.start.href);
-				const title = navItem ? navItem.label : location.start.href;
+				const title = navItem ? navItem.label : "";
 				location.start.title = title.trim();
 				console.log("Location:", JSON.stringify(location.start));
+				this.emit("chapterChanged", title.trim());
 			}
 		});
 
@@ -3137,9 +3148,7 @@ class Reader {
 					}
 				};
 			}
-
 			this.rendition.themes.default(contentStyles);
-
 			if (actualFontName) {
 				this.injectFontWithRetry(actualFontName);
 			}

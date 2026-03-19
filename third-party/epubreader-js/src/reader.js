@@ -143,7 +143,7 @@ export class Reader {
 			}
 		});
 
-		this.rendition.on("keydown", this.keyboardHandler.bind(this));
+		this.rendition.on("keyup", this.keyboardHandler.bind(this));
 
 		this.on("prev", () => {
 			if (this.book.package.metadata.direction === "rtl") {
