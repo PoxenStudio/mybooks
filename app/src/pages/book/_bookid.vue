@@ -282,11 +282,11 @@
                                     <v-icon>mdi-file-sync</v-icon>
                                     {{ $t('book.saveMetaToFile') }}
                                 </v-list-item>
-                                <v-list-item @click="convert_book" :enabled="hasEpubOrKindleFormats">
+                                <v-list-item @click="convert_book" :disabled="!hasEpubOrKindleFormats">
                                     <v-icon>mdi-swap-horizontal</v-icon>
                                     {{ $t('book.convert') }}
                                 </v-list-item>
-                                <v-list-item @click="convert_to_pdf" :enabled="!hasPDF">
+                                <v-list-item @click="convert_to_pdf" :disabled="!hasEpubOrKindleFormats || hasPDF">
                                     <v-icon>mdi-swap-horizontal</v-icon>
                                     {{ $t('book.convert_to_pdf') }}
                                 </v-list-item>
@@ -298,7 +298,7 @@
                                     <v-icon>mdi-file-document-remove-outline</v-icon>
                                     {{ $t('book.deleteFormat') }}
                                 </v-list-item>
-                                <v-list-item @click="show_upload_format_dialog">
+                                <v-list-item @click="show_upload_format_dialog" :disabled="book.book_type==this.BOOK_TYPE.PHYSICAL">
                                     <v-icon>mdi-file-upload-outline</v-icon>
                                     {{ $t('book.uploadNewFormat') }}
                                 </v-list-item>
@@ -346,8 +346,8 @@
                                     <v-icon>mdi-email-send</v-icon>
                                     {{ $t('book.shareToEmail') }}
                                 </v-list-item>
-                                <v-list-item @click="generate_share_card">
-                                    <v-icon>mdi-card-account-details-outline</v-icon>
+                                <v-list-item @click="generate_share_card" :disabled="book.book_type==this.BOOK_TYPE.PHYSICAL">
+                                    <v-icon>mdi-card-bulleted-outline</v-icon>
                                     {{ $t('book.generateShareCard') }}
                                 </v-list-item>
                                 <v-list-item @click="delete_book">
@@ -1263,11 +1263,17 @@ export default {
         },
 
         hasEpubOrKindleFormats() {
-            if (!this.book || !this.book.files) return false;
-            return this.book.files.some(file => {
+            if (!this.book || !this.book.files) {
+                return false;
+            }
+            if (this.book.files.length === 0) {
+                return false;
+            }
+            const has_no_pdf = this.book.files.some(file => {
                 const format = file.format.toLowerCase();
                 return format === 'epub' || format === 'azw3' || format === 'mobi' || format === 'txt';
             });
+            return has_no_pdf;
         },
 
         hasPDF() {
