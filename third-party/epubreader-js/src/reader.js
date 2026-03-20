@@ -37,8 +37,8 @@ export class Reader {
 		this.settings = undefined;
 		this.isMobile = detectMobile();
 		this.storage = new Storage();
-		this.bid = window.location.href.split("/").pop() || "000";
-		this.lastLocatinKey = this.bid + "-last-location";
+		this.bid = md5(bookPath).toString().slice(0, 8);
+		this.lastLocatinKey = this.bid + "-location";
 		const openbook = settings && settings.openbook;
 
 		if (this.storage.indexedDB && (!settings || openbook)) {
@@ -85,7 +85,6 @@ export class Reader {
 
 		this.book.ready.then(() => {
 			this.emit("bookready", this.settings);
-			console.log("Book is ready to show");
 			const cfi = localStorage.getItem(this.lastLocatinKey);
 			this.rendition.display(cfi || this.display_url).then(() => {
 				this.loading = !1, this.rendition.on("relocated", (o) => {

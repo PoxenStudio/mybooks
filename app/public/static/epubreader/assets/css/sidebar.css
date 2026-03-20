@@ -464,121 +464,21 @@ only screen and (height: 375px) and (orientation: landscape) {
 	}
 }
 
-/**
- * iPhone 5 : 320 x 568
- */
-@media
-only screen and (width: 320px) and (orientation: portrait),
-only screen and (height: 320px) and (orientation: landscape) {
+@media only screen and (max-width: 480px) {
 	#sidebar {
-		width: 300px;
-		transform: translateX(-300px);
-		grid-template-rows: 52px;
-	}
-
-	#sidebar .menu {
-		height: 52px;
+		width: min(80vw, 390px);
+		transform: translateX(calc(-1 * min(80vw, 390px)));
 	}
 
 	#sidebar .tabs {
-		width: 52px;
+		width: 50px;
 	}
 
 	#sidebar .panels {
-		width: 258px;
-	}
-
-	#sidebar .panel .box.header {
-		grid-template: 30px / auto 116px;
-	}
-
-	#sidebar .panel .box.header span.label {
-		font-size: 16px;
-	}
-
-	#sidebar .panel .box.header input[type="button"] {
-		height: 30px;
-	}
-
-	#sidebar .panel .box input[type="search"] {
-		height: 30px;
-		padding: 6px 10px;
+		width: calc(min(80vw, 390px) - 50px);
 	}
 
 	#sidebar .tab-selector {
 		display: none;
-	}
-
-	#sidebar .list-container {
-		height: calc(100% - 67px);
-	}
-}
-
-/**
- * iPhone 6/7/8 : 375 x 667
- * iPhone 11    : 375 x 812
- */
-@media
-only screen and (width: 375px) and (orientation: portrait),
-only screen and (height: 375px) and (orientation: landscape) {
-	#sidebar {
-		width: 350px;
-		transform: translateX(-350px);
-	}
-
-	#sidebar .panels {
-		width: 300px;
-	}
-
-	#sidebar .tab-selector {
-		display: none;
-	}
-}
-
-/**
- * Pixel 7 : 412 x 915
- */
-@media
-only screen and (width: 412px) and (orientation: portrait),
-only screen and (height: 412px) and (orientation: landscape) {
-	#sidebar {
-		width: 395px;
-		transform: translateX(-395px);
-	}
-
-	#sidebar .panels {
-		width: 344px;
-	}
-}
-
-/**
- * iPhone 6/7/8 Plus : 414 x 736
- */
-@media
-only screen and (width: 414px) and (orientation: portrait),
-only screen and (height: 414px) and (orientation: landscape) {
-	#sidebar {
-		width: 395px;
-		transform: translateX(-395px);
-	}
-
-	#sidebar .panels {
-		width: 356px;
-	}
-}
-
-/**
- * iPhone 14/15 Pro Max : 430 x 932
- */
-@media
-only screen and (width: 430px) and (orientation: portrait),
-only screen and (height: 430px) and (orientation: landscape) {
-	#sidebar {
-		width: 410px;
-		transform: translateX(-410px);
-	}
-
-	#sidebar .panels {
-		width: 362px;
 	}
 }
