@@ -346,6 +346,10 @@
                                     <v-icon>mdi-email-send</v-icon>
                                     {{ $t('book.shareToEmail') }}
                                 </v-list-item>
+                                <v-list-item @click="generate_share_card">
+                                    <v-icon>mdi-card-account-details-outline</v-icon>
+                                    {{ $t('book.generateShareCard') }}
+                                </v-list-item>
                                 <v-list-item @click="delete_book">
                                     <v-icon>delete_forever</v-icon>
                                     {{ $t('book.deleteBook') }}
@@ -1036,6 +1040,37 @@
     </v-dialog>
 
     <!-- 发送到邮箱对话框 -->
+    <!-- 读书分享卡片对话框 -->
+    <v-dialog v-model="dialog_share_card" max-width="640">
+        <v-card>
+            <v-card-title class="headline">
+                <v-icon class="mr-2">mdi-card-account-details-outline</v-icon>
+                {{ $t('book.generateShareCard') }}
+            </v-card-title>
+            <v-card-text class="text-center" style="min-height: 200px; display: flex; align-items: center; justify-content: center; flex-direction: column;">
+                <div v-if="share_card_generating" class="d-flex flex-column align-center">
+                    <v-progress-circular indeterminate color="primary" size="48"></v-progress-circular>
+                    <p class="mt-4 grey--text">{{ $t('book.shareCardGenerating') }}</p>
+                </div>
+                <div v-else-if="share_card_image_url"
+                     style="background: #0f0f12; border-radius: 24px; display: inline-block; line-height: 0;">
+                    <img :src="share_card_image_url"
+                         style="max-width: 100%; display: block;"
+                         :alt="book.title" />
+                </div>
+            </v-card-text>
+            <v-card-actions>
+                <v-spacer></v-spacer>
+                <v-btn text @click="dialog_share_card = false">{{ $t('common.close') }}</v-btn>
+                <v-btn v-if="share_card_image_url && !share_card_generating"
+                       color="primary" @click="download_share_card">
+                    <v-icon left>mdi-download</v-icon>
+                    {{ $t('book.downloadShareCard') }}
+                </v-btn>
+            </v-card-actions>
+        </v-card>
+    </v-dialog>
+
     <v-dialog v-model="dialog_send_to_email" persistent max-width="500">
         <v-card>
             <v-card-title class="headline">
@@ -1089,6 +1124,7 @@
 
 <script>
 import BookCards from "~/components/BookCards.vue";
+import QRCode from "qrcode";
 
 export default {
     components: {
@@ -1349,6 +1385,10 @@ export default {
             { text: '文石Boox', value: 'boox' },
             { text: '当当阅读器', value: 'dangdang' },
         ],
+        // 读书分享卡片
+        dialog_share_card: false,
+        share_card_generating: false,
+        share_card_image_url: null,
         // 发送到邮箱对话框
         dialog_send_to_email: false,
         sending_to_email: false,
@@ -2617,6 +2657,319 @@ export default {
         isValidEmail(email) {
             const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
             return emailPattern.test(email);
+        },
+
+        // 生成读书分享卡片
+        async generate_share_card() {
+            this.share_card_image_url = null;
+            this.share_card_generating = true;
+            this.dialog_share_card = true;
+
+            try {
+                const CARD_W = 300;
+                const PADDING = 16;
+                const CARD_RADIUS = 24;
+                const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif';
+                const ACCENT = '#e2b870';
+                const TEXT_COLOR = '#f5f0e8';
+                const MUTED_COLOR = '#b0b8c5';
+                const COVER_RADIUS = 10;
+                const TEXT_W = CARD_W - 2 * PADDING;
+
+                // Section layout heights
+                const HEADER_H = 22;
+                const HEADER_GAP = 8;
+                const DIVIDER_GAP = 10;
+                const TITLE_LINE_H = 28;
+                const MAX_TITLE_LINES = 2;
+                const TITLE_GAP = 10;
+                const MEDIA_H = 200;
+                const MEDIA_GAP = 12;
+                const DESC_LINE_H = 18;
+                const MAX_DESC_LINES = 5;
+
+                // Pre-calculate title and description line counts for dynamic card height
+                // Title pre-measure
+                let titleLineCount = 0;
+                {
+                    const tmpCanvas = document.createElement('canvas');
+                    tmpCanvas.width = CARD_W;
+                    tmpCanvas.height = 10;
+                    const tmpCtx = tmpCanvas.getContext('2d');
+                    tmpCtx.font = `bold 20px ${FONT}`;
+                    const chars = Array.from(this.book.title || '');
+                    let idx = 0;
+                    while (idx < chars.length && titleLineCount < MAX_TITLE_LINES) {
+                        let line = '';
+                        while (idx < chars.length) {
+                            const next = line + chars[idx];
+                            if (tmpCtx.measureText(next).width > TEXT_W) break;
+                            line = next;
+                            idx++;
+                        }
+                        if (!line) { idx++; } else { titleLineCount++; }
+                    }
+                    if (titleLineCount === 0) titleLineCount = 1;
+                }
+
+                // Description pre-measure
+                const commentText = (this.book.comments || '').replace(/<[^>]*>/g, '').trim();
+                const hasComments = !!(commentText && commentText !== '暂无简介');
+                let descLineCount = 0;
+                if (hasComments) {
+                    const tmpCanvas = document.createElement('canvas');
+                    tmpCanvas.width = CARD_W;
+                    tmpCanvas.height = 10;
+                    const tmpCtx = tmpCanvas.getContext('2d');
+                    tmpCtx.font = `12px ${FONT}`;
+                    const chars = Array.from(commentText);
+                    let idx = 0;
+                    while (idx < chars.length && descLineCount < MAX_DESC_LINES) {
+                        let line = '';
+                        while (idx < chars.length) {
+                            const next = line + chars[idx];
+                            if (tmpCtx.measureText(next).width > TEXT_W) break;
+                            line = next;
+                            idx++;
+                        }
+                        if (!line) { idx++; } else { descLineCount++; }
+                    }
+                }
+
+                // Compute total card height based on content
+                let CARD_H = PADDING
+                    + HEADER_H + HEADER_GAP + 1 + DIVIDER_GAP
+                    + titleLineCount * TITLE_LINE_H + TITLE_GAP
+                    + MEDIA_H;
+                if (descLineCount > 0) {
+                    CARD_H += MEDIA_GAP + descLineCount * DESC_LINE_H;
+                }
+                CARD_H += PADDING;
+
+                // Helper: rounded rect path
+                const roundedRectPath = (c, x, y, w, h, r) => {
+                    c.beginPath();
+                    c.moveTo(x + r, y);
+                    c.lineTo(x + w - r, y);
+                    c.quadraticCurveTo(x + w, y, x + w, y + r);
+                    c.lineTo(x + w, y + h - r);
+                    c.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+                    c.lineTo(x + r, y + h);
+                    c.quadraticCurveTo(x, y + h, x, y + h - r);
+                    c.lineTo(x, y + r);
+                    c.quadraticCurveTo(x, y, x + r, y);
+                    c.closePath();
+                };
+
+                // Helper: truncated multi-line text
+                const fillTruncatedText = (text, x, y, maxW, lineH, maxLines) => {
+                    const chars = Array.from(text);
+                    let idx = 0;
+                    const lines = [];
+                    while (idx < chars.length && lines.length < maxLines) {
+                        let line = '';
+                        while (idx < chars.length) {
+                            const next = line + chars[idx];
+                            if (ctx.measureText(next).width > maxW) break;
+                            line = next;
+                            idx++;
+                        }
+                        if (!line) { line = chars[idx] || ''; idx++; }
+                        lines.push(line);
+                    }
+                    if (idx < chars.length && lines.length > 0) {
+                        const ellipsis = '…';
+                        let last = Array.from(lines[lines.length - 1]);
+                        while (last.length > 0 && ctx.measureText(last.join('') + ellipsis).width > maxW) last.pop();
+                        lines[lines.length - 1] = last.join('') + ellipsis;
+                    }
+                    lines.forEach((l, i) => ctx.fillText(l, x, y + i * lineH));
+                    return lines.length;
+                };
+
+                // Create canvas (transparent by default — corners stay transparent after clip)
+                const canvas = document.createElement('canvas');
+                canvas.width = CARD_W;
+                canvas.height = CARD_H;
+                const ctx = canvas.getContext('2d');
+
+                ctx.shadowColor = 'transparent';
+                ctx.shadowBlur = 0;
+
+                // Background with rounded clip so corners remain transparent in PNG
+                ctx.save();
+                roundedRectPath(ctx, 0, 0, CARD_W, CARD_H, CARD_RADIUS);
+                ctx.clip();
+
+                const grad = ctx.createLinearGradient(0, 0, CARD_W, CARD_H);
+                grad.addColorStop(0, '#0f0f12');
+                grad.addColorStop(1, '#1e1e1e');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, CARD_W, CARD_H);
+
+                // Subtle noise texture
+                ctx.fillStyle = 'rgba(255,255,255,0.02)';
+                for (let i = 0; i < 80; i++) {
+                    ctx.fillRect(Math.random() * CARD_W, Math.random() * CARD_H, 1, 1);
+                }
+
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'top';
+                let curY = PADDING;
+
+                // --- Section 1: Header (siteTitle left + date right) ---
+                const siteTitle = localStorage.getItem('sys_title') || 'Talebook';
+                ctx.font = `500 12px ${FONT}`;
+                ctx.fillStyle = TEXT_COLOR;
+                ctx.fillText(siteTitle, PADDING, curY + Math.round((HEADER_H - 12) / 2));
+
+                const now = new Date();
+                const dateStr = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`;
+                ctx.font = `10px ${FONT}`;
+                ctx.fillStyle = MUTED_COLOR;
+                const dateW = ctx.measureText(dateStr).width;
+                ctx.fillText(dateStr, CARD_W - PADDING - dateW, curY + Math.round((HEADER_H - 10) / 2));
+
+                curY += HEADER_H + HEADER_GAP;
+
+                // Divider line (full width)
+                ctx.strokeStyle = ACCENT + '60';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(PADDING, curY);
+                ctx.lineTo(CARD_W - PADDING, curY);
+                ctx.stroke();
+                curY += 1 + DIVIDER_GAP;
+
+                // --- Section 2: Book title (up to MAX_TITLE_LINES lines, centered) ---
+                ctx.font = `bold 20px ${FONT}`;
+                ctx.fillStyle = TEXT_COLOR;
+                ctx.textAlign = 'center';
+                fillTruncatedText(this.book.title || '', CARD_W / 2, curY, TEXT_W, TITLE_LINE_H, MAX_TITLE_LINES);
+                ctx.textAlign = 'left';
+                curY += titleLineCount * TITLE_LINE_H + TITLE_GAP;
+
+                // --- Section 3: Cover (left half) + QR (right half), height = MEDIA_H ---
+                const mediaY = curY;
+                const HALF_W = Math.floor(TEXT_W / 2);
+
+                // Cover: centered in left half, proportional to natural book ratio (11:15)
+                const coverMaxW = HALF_W - 12;
+                const coverRenderH = Math.min(MEDIA_H - 8, Math.round(coverMaxW * 15 / 11));
+                const coverRenderW = Math.round(coverRenderH * 11 / 15);
+                const coverX = Math.round(PADDING + (HALF_W - coverRenderW) / 2);
+                const coverY = Math.round(mediaY + (MEDIA_H - coverRenderH) / 2);
+
+                const loadImg = (src) => new Promise((resolve) => {
+                    const img = new Image();
+                    img.crossOrigin = 'anonymous';
+                    img.onload = () => resolve(img);
+                    img.onerror = () => resolve(null);
+                    img.src = src;
+                });
+
+                const coverImg = await loadImg(this.book.img);
+                if (coverImg) {
+                    ctx.save();
+                    ctx.shadowColor = 'rgba(0,0,0,0.4)';
+                    ctx.shadowBlur = 10;
+                    ctx.shadowOffsetX = 2;
+                    ctx.shadowOffsetY = 4;
+                    roundedRectPath(ctx, coverX, coverY, coverRenderW, coverRenderH, COVER_RADIUS);
+                    ctx.clip();
+                    ctx.drawImage(coverImg, coverX, coverY, coverRenderW, coverRenderH);
+                    ctx.restore();
+
+                    ctx.save();
+                    ctx.shadowBlur = 0;
+                    ctx.strokeStyle = ACCENT + '40';
+                    ctx.lineWidth = 1.5;
+                    roundedRectPath(ctx, coverX, coverY, coverRenderW, coverRenderH, COVER_RADIUS);
+                    ctx.stroke();
+                    ctx.restore();
+                } else {
+                    ctx.fillStyle = '#2a2a2e';
+                    roundedRectPath(ctx, coverX, coverY, coverRenderW, coverRenderH, COVER_RADIUS);
+                    ctx.fill();
+                    ctx.fillStyle = MUTED_COLOR;
+                    ctx.font = `10px ${FONT}`;
+                    ctx.textAlign = 'center';
+                    ctx.fillText('📖', coverX + coverRenderW / 2, coverY + coverRenderH / 2);
+                    ctx.textAlign = 'left';
+                }
+
+                // QR: centered in right half
+                const QR_SIZE = Math.min(90, HALF_W - 20);
+                const QR_LABEL_H = 14;
+                const qrHalfW = TEXT_W - HALF_W;
+                const qrCenterX = PADDING + HALF_W + Math.round(qrHalfW / 2);
+                const qrX = Math.round(qrCenterX - QR_SIZE / 2);
+                const qrTotalH = QR_SIZE + 6 + QR_LABEL_H;
+                const qrY = Math.round(mediaY + (MEDIA_H - qrTotalH) / 2);
+
+                // Light background panel behind QR for readability
+                const qrBgPad = 4;
+                ctx.fillStyle = '#f5efe5';
+                roundedRectPath(ctx, qrX - qrBgPad, qrY - qrBgPad, QR_SIZE + qrBgPad * 2, QR_SIZE + qrBgPad * 2, 8);
+                ctx.fill();
+
+                const readUrl = `${window.location.origin}/read/${this.book.id}`;
+                const qrCanvas = document.createElement('canvas');
+                await QRCode.toCanvas(qrCanvas, readUrl, {
+                    width: QR_SIZE,
+                    margin: 1,
+                    color: { dark: '#1f1f28', light: '#f5efe5' },
+                });
+                ctx.drawImage(qrCanvas, qrX, qrY, QR_SIZE, QR_SIZE);
+
+                ctx.font = `10px ${FONT}`;
+                ctx.fillStyle = MUTED_COLOR;
+                ctx.textAlign = 'center';
+                ctx.fillText('扫码阅读', qrCenterX, qrY + QR_SIZE + 6);
+                ctx.textAlign = 'left';
+
+                curY = mediaY + MEDIA_H;
+
+                // --- Section 4: Description (up to 5 lines) ---
+                if (descLineCount > 0) {
+                    curY += MEDIA_GAP;
+                    ctx.font = `12px ${FONT}`;
+                    ctx.globalAlpha = 0.87;
+                    ctx.fillStyle = TEXT_COLOR;
+                    fillTruncatedText(commentText, PADDING, curY, TEXT_W, DESC_LINE_H, MAX_DESC_LINES);
+                    ctx.globalAlpha = 1;
+                }
+
+                ctx.restore(); // Restore clip (transparent corners preserved)
+
+                // Outer glow border
+                ctx.save();
+                ctx.shadowBlur = 0;
+                ctx.strokeStyle = ACCENT + '30';
+                ctx.lineWidth = 2;
+                roundedRectPath(ctx, 2, 2, CARD_W - 4, CARD_H - 4, CARD_RADIUS);
+                ctx.stroke();
+                ctx.restore();
+
+                this.share_card_image_url = canvas.toDataURL('image/png');
+
+            } catch (err) {
+                console.error('生成读书卡片失败:', err);
+                this.$alert('error', this.$t('book.shareCardFailed'));
+                this.dialog_share_card = false;
+            } finally {
+                this.share_card_generating = false;
+            }
+        },
+
+        // 下载读书分享卡片
+        download_share_card() {
+            if (!this.share_card_image_url) return;
+            const a = document.createElement('a');
+            const safeName = (this.book.title || 'book').replace(/[/\\:*?"<>|]/g, '_');
+            a.download = `${safeName}_分享卡片.png`;
+            a.href = this.share_card_image_url;
+            a.click();
         },
 
         // 关闭邮箱对话框

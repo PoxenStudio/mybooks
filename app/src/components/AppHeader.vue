@@ -388,8 +388,6 @@
 </template>
 
 <script>
-import { colors } from 'vuetify/lib';
-
 export default {
     data() {
         let sidebar = false;
@@ -562,6 +560,7 @@ export default {
             this.$store.state.ai_enabled = rsp.sys.aiEnabled;
             this.$store.state.default_page_size = rsp.sys.defaultPageSize;
             this.$store.state.index_page = rsp.sys.indexPage;
+            localStorage.setItem('sys_title', rsp.sys.title);
             if (rsp.sys.language !== '') {
                 this.$i18n.locale = rsp.sys.language;
             }
