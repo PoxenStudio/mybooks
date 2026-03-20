@@ -37,7 +37,8 @@ export class Reader {
 		this.settings = undefined;
 		this.isMobile = detectMobile();
 		this.storage = new Storage();
-		this.bid = window.location.href.split("/").pop();
+		this.bid = window.location.href.split("/").pop() || "000";
+		this.lastLocatinKey = this.bid + "-last-location";
 		const openbook = settings && settings.openbook;
 
 		if (this.storage.indexedDB && (!settings || openbook)) {
@@ -85,11 +86,11 @@ export class Reader {
 		this.book.ready.then(() => {
 			this.emit("bookready", this.settings);
 			console.log("Book is ready to show");
-			const cfi = localStorage.getItem("lastReadPosition");
+			const cfi = localStorage.getItem(this.lastLocatinKey);
 			this.rendition.display(cfi || this.display_url).then(() => {
 				this.loading = !1, this.rendition.on("relocated", (o) => {
 					console.log("Relocated:", o);
-					localStorage.setItem("lastReadPosition", o.start.cfi);
+					localStorage.setItem(this.lastLocatinKey, o.start.cfi);
 				});
 			});
 			// Apply styles (theme + font) after book is ready
@@ -118,12 +119,10 @@ export class Reader {
 		});
 
 		this.rendition.on("selected", (cfiRange, contents) => {
-			this.setLocation(cfiRange);
 			this.emit("selected", cfiRange, contents);
 		});
 
 		this.rendition.on("relocated", (location) => {
-			this.setLocation(location.start.cfi);
 			this.emit("relocated", location);
 			// Re-inject font when page changes
 			const fontName = this.settings.styles.font === "default" ? "" : this.settings.styles.font;
@@ -545,20 +544,6 @@ export class Reader {
 		delete cfg.pagination;
 		delete cfg.fullscreen;
 		localStorage.setItem(this.entryKey, JSON.stringify(cfg));
-	}
-
-	setLocation(cfi) {
-
-		const baseUrl = this.book.archived ? undefined : this.book.url;
-		const url = new URL(window.location, baseUrl);
-		url.hash = "#" + cfi;
-
-		// Update the History Location
-		if (this.settings.history && window.location.hash !== url.hash) {
-			// Add CFI fragment to the history
-			window.history.replaceState({}, "", url);
-			this.currentLocationCfi = cfi;
-		}
 	}
 
 	//-- event handlers --//
