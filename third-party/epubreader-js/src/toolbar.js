@@ -1,4 +1,5 @@
 import { UIDiv, UIInput } from "./ui.js";
+import { detectMobile } from "./utils.js";
 
 export class Toolbar {
 
@@ -6,6 +7,8 @@ export class Toolbar {
 
 		const strings = reader.strings;
 		const settings = reader.settings;
+
+		this.isMobile = detectMobile();
 
 		const container = new UIDiv().setId("toolbar");
 		const keys = [
@@ -15,7 +18,8 @@ export class Toolbar {
 			"toolbar/openbook",
 			"toolbar/openbook/error",
 			"toolbar/bookmark",
-			"toolbar/fullscreen"
+			"toolbar/fullscreen",
+			"toolbar/close"
 		];
 		const menu1 = new UIDiv().setClass("menu-1");
 		const openerBox = new UIDiv().setId("btn-m").setClass("box");
@@ -68,7 +72,7 @@ export class Toolbar {
 					reader.unload();
 					reader.init(e.target.result);
 					const url = new URL(window.location.origin);
-					window.history.pushState({}, "", url);
+					window.history.replaceState({}, "", url);
 				});
 			};
 			const onerror = (e) => {
@@ -106,7 +110,7 @@ export class Toolbar {
 		if (settings.bookmarks) {
 			bookmarkBox = new UIDiv().setId("btn-b").setClass("box");
 			bookmarkBtn = new UIInput("button");
-			bookmarkBtn.setTitle(strings.get(keys[5]));
+			bookmarkBtn.setTitle(strings.get(keys[6]));
 			bookmarkBtn.dom.onclick = (e) => {
 
 				const cfi = this.locationCfi;
@@ -152,6 +156,22 @@ export class Toolbar {
 			};
 			fullscreenBox.add(fullscreenBtn);
 			menu2.add(fullscreenBox);
+		}
+
+		if (this.isMobile) {
+			console.log("Mobile device detected, hiding spread and pagination options.");
+			let closingBox, closingBtn;
+			closingBox = new UIDiv().setId("btn-e").setClass("box");
+			closingBtn = new UIInput("button");
+			closingBtn.setTitle(strings.get(keys[7]));
+			closingBtn.dom.onclick = (e) => {
+				// Close the reader on mobile devices
+				window.history.back();
+				e.preventDefault();
+				closingBtn.dom.blur();
+			};
+			closingBox.add(closingBtn);
+			menu2.add(closingBox);
 		}
 
 		const menuCenter = new UIDiv().setClass("menu-center");

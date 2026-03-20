@@ -37,6 +37,7 @@ export class Reader {
 		this.settings = undefined;
 		this.isMobile = detectMobile();
 		this.storage = new Storage();
+		this.bid = window.location.href.split("/").pop();
 		const openbook = settings && settings.openbook;
 
 		if (this.storage.indexedDB && (!settings || openbook)) {
@@ -169,6 +170,7 @@ export class Reader {
 				location.start.title = title.trim();
 				console.log("Location:", JSON.stringify(location.start));
 				this.emit("chapterChanged", title.trim());
+				const url = new URL(window.location.origin);
 			}
 		});
 
@@ -554,7 +556,7 @@ export class Reader {
 		// Update the History Location
 		if (this.settings.history && window.location.hash !== url.hash) {
 			// Add CFI fragment to the history
-			window.history.pushState({}, "", url);
+			window.history.replaceState({}, "", url);
 			this.currentLocationCfi = cfi;
 		}
 	}

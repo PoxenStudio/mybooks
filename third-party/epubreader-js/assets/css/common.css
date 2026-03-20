@@ -18,7 +18,7 @@
 	width: 36px;
 	height: 36px;
 	border: 0;
-	margin: 0 11px;
+	margin: 0 2px;
 	cursor: pointer;
 	padding: 0;
 	outline: none;
@@ -66,6 +66,10 @@
 
 #btn-b.box input {
 	background-image: url("../img/bookmark.svg");
+}
+
+#btn-e.box input {
+	background-image: url("../img/close.svg");
 }
 
 #btn-b.box.bookmarked input {

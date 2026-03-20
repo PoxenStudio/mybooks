@@ -471,8 +471,8 @@ only screen and (height: 375px) and (orientation: landscape) {
 only screen and (width: 320px) and (orientation: portrait),
 only screen and (height: 320px) and (orientation: landscape) {
 	#sidebar {
-		width: 320px;
-		transform: translateX(-320px);
+		width: 300px;
+		transform: translateX(-300px);
 		grid-template-rows: 52px;
 	}
 
@@ -485,7 +485,7 @@ only screen and (height: 320px) and (orientation: landscape) {
 	}
 
 	#sidebar .panels {
-		width: 268px;
+		width: 258px;
 	}
 
 	#sidebar .panel .box.header {
@@ -522,12 +522,12 @@ only screen and (height: 320px) and (orientation: landscape) {
 only screen and (width: 375px) and (orientation: portrait),
 only screen and (height: 375px) and (orientation: landscape) {
 	#sidebar {
-		width: 375px;
-		transform: translateX(-375px);
+		width: 350px;
+		transform: translateX(-350px);
 	}
 
 	#sidebar .panels {
-		width: 317px;
+		width: 300px;
 	}
 
 	#sidebar .tab-selector {
@@ -542,12 +542,12 @@ only screen and (height: 375px) and (orientation: landscape) {
 only screen and (width: 412px) and (orientation: portrait),
 only screen and (height: 412px) and (orientation: landscape) {
 	#sidebar {
-		width: 412px;
-		transform: translateX(-412px);
+		width: 395px;
+		transform: translateX(-395px);
 	}
 
 	#sidebar .panels {
-		width: 354px;
+		width: 344px;
 	}
 }
 
@@ -558,8 +558,8 @@ only screen and (height: 412px) and (orientation: landscape) {
 only screen and (width: 414px) and (orientation: portrait),
 only screen and (height: 414px) and (orientation: landscape) {
 	#sidebar {
-		width: 414px;
-		transform: translateX(-414px);
+		width: 395px;
+		transform: translateX(-395px);
 	}
 
 	#sidebar .panels {
@@ -574,11 +574,11 @@ only screen and (height: 414px) and (orientation: landscape) {
 only screen and (width: 430px) and (orientation: portrait),
 only screen and (height: 430px) and (orientation: landscape) {
 	#sidebar {
-		width: 430px;
-		transform: translateX(-430px);
+		width: 410px;
+		transform: translateX(-410px);
 	}
 
 	#sidebar .panels {
-		width: 372px;
+		width: 362px;
 	}
 }
