@@ -277,19 +277,19 @@ class BookBarnService(AsyncService):
                             self.add_msg(uid, "info", message)
 
             if not CONF.get("ENABLE_BOOKBARN", False) or not CONF.get("ENABLE_RECEIVING_BOOKS", False):
-                time.sleep(15 * 60)
+                time.sleep(30 * 60)
                 continue
 
             if self.checked_day is not None:
                 today = datetime.datetime.now().strftime("%Y-%m-%d")
                 if self.checked_day <= today:
                     # Has checked for today update
-                    time.sleep(15 * 60)
+                    time.sleep(30 * 60)
                     continue
 
             current_token = CONF.get("BOOKBARN_TOKEN", "")
             if len(current_token) == 0:
-                time.sleep(10 * 60)
+                time.sleep(30 * 60)
                 logging.info("[BARN]Daily books checking, not set token")
                 continue
             if self.token != current_token:
@@ -302,7 +302,7 @@ class BookBarnService(AsyncService):
                 if output_hour != current_hour:
                     logging.info(f"[BARN]Not target time {hour}, now is {current_hour}")
                     output_hour = current_hour
-                time.sleep(5 * 60)
+                time.sleep(30 * 60)
                 continue
 
             ok, err = self.client.checkToken(self.token)
@@ -314,7 +314,7 @@ class BookBarnService(AsyncService):
                     if len(admin_uids) > 0:
                         for uid in admin_uids:
                             self.add_msg(uid, "error", _(f"[书栈]书栈Token无效, 加入taleboook公众号私信管理员或者更新Token! 错误信息: {err}"))
-                time.sleep(10 * 60)
+                time.sleep(30 * 60)
                 continue
             else:
                 token_invalid_message = False
@@ -327,8 +327,7 @@ class BookBarnService(AsyncService):
                 self.process_daily_books(book_list)
                 self.client.setCheckingDone(self.token)
                 self.checked_day = datetime.datetime.now().strftime("%Y-%m-%d")
-                time.sleep(10 * 60)
-
+                time.sleep(30 * 60)
         logging.info("Exit the daily books checking")
 
     def process_daily_books(self, book_list):

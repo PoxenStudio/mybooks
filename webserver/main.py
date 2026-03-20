@@ -87,7 +87,6 @@ def init_calibre():
     try:
         import calibre  # noqa: F401
     except Exception as e:
-        import traceback
         logging.error(traceback.format_exc())
         raise ImportError(_("Can not import calibre. Please set the corrent options.\n%s" % e))
 
@@ -343,7 +342,6 @@ def make_app():
         logging.info("WebDAV service initialized successfully")
     except Exception as e:
         logging.error(f"Failed to initialize WebDAV service: {e}")
-        import traceback
         logging.error(traceback.format_exc())
         webdav_routes = []
 
