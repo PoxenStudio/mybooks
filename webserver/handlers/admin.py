@@ -8,7 +8,6 @@ import re
 import shutil
 import ssl
 import subprocess
-import sys
 import tempfile
 import threading
 import time
