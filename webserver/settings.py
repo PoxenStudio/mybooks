@@ -84,6 +84,8 @@ settings = {
     "CANDLE_READER_SERVER": "https://brs.talebook.org",
     "PDF_VIEWER": "/static/pdfjs/web/viewer.html?file=%(pdf_url)s",
     "WEBDAV_SYNC_FOLDER": False,
+    "ALLOW_NEW_USER_MANAGE_BOOK": True,
+    "ALLOW_NEW_USER_PUSH_BOOK": True,
 
     "PDF_TILE_WITH_FILE_NAME": False,
 

@@ -337,6 +337,8 @@ export default {
           { icon: "", key: "ALLOW_GUEST_DOWNLOAD", label: "settings.allow_guest_download", type: 'checkbox' },
           { icon: "", key: "ALLOW_GUEST_UPLOAD", label: "settings.allow_guest_upload", type: 'checkbox' },
           { icon: "", key: "ALLOW_GUEST_PUSH", label: "settings.allow_guest_push", type: 'checkbox' },
+          { icon: "", key: "ALLOW_NEW_USER_MANAGE_BOOK", label: "settings.allow_new_user_manage_book", type: 'checkbox' },
+          { icon: "", key: "ALLOW_NEW_USER_PUSH_BOOK", label: "settings.allow_new_user_push_book", type: 'checkbox' },
         ],
         groups: [
           {

@@ -136,7 +136,16 @@ class SignUp(BaseHandler):
         user = self.sqlite_session.query(Reader).filter(Reader.username == username).first()
         if user:
             return {"err": "params.username.exist", "msg": _(u"用户名已被使用")}
+        user = self.sqlite_session.query(Reader).filter(Reader.email == email).first()
+        if user:
+            return {"err": "params.email.exist", "msg": _(u"邮箱地址已被使用")}
+
         user = Reader()
+        user.permission = Reader.DEFAULT_PERMISSION
+        if not CONF.get("ALLOW_NEW_USER_MANAGE_BOOK", True):
+            user.permission = user.permission + Reader.DISABLE_MANAGE
+        if not CONF.get("ALLOW_NEW_USER_PUSH_BOOK", True):
+            user.permission = user.permission + Reader.DISABLE_PUSH
         user.username = username
         user.name = nickname
         user.email = email
@@ -181,8 +190,16 @@ class UserNew(BaseHandler):
         user = self.sqlite_session.query(Reader).filter(Reader.username == username).first()
         if user:
             return {"err": "params.username.exist", "msg": _(u"用户名已被使用")}
+        user = self.sqlite_session.query(Reader).filter(Reader.email == email).first()
+        if user:
+            return {"err": "params.email.exist", "msg": _(u"邮箱地址已被使用")}
 
         user = Reader()
+        user.permission = Reader.DEFAULT_PERMISSION
+        if not CONF.get("ALLOW_NEW_USER_MANAGE_BOOK", True):
+            user.permission = user.permission + Reader.DISABLE_MANAGE
+        if not CONF.get("ALLOW_NEW_USER_PUSH_BOOK", True):
+            user.permission = user.permission + Reader.DISABLE_PUSH
         user.username = username
         user.name = nickname
         user.email = email
