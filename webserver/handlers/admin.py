@@ -453,6 +453,7 @@ class AdminInstall(BaseHandler):
             user.create_time = datetime.datetime.now()
 
         # 设置admin user的信息
+        user.permission = ""  # Full permission
         user.email = email
         user.avatar = "reader.svg"
         user.update_time = datetime.datetime.now()
