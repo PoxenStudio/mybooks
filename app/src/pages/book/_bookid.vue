@@ -2674,7 +2674,7 @@ export default {
             try {
                 const CARD_W = 480;
                 const PADDING = 26;
-                const CARD_RADIUS = 3;
+                const CARD_RADIUS = 0;
                 const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif';
                 const ACCENT = '#e2b870';
                 const TEXT_COLOR = '#f5f0e8';
@@ -2808,15 +2808,19 @@ export default {
                 ctx.clip();
 
                 const grad = ctx.createLinearGradient(0, 0, CARD_W, CARD_H);
-                grad.addColorStop(0, '#0f0f12');
-                grad.addColorStop(1, '#1e1e1e');
+                grad.addColorStop(0, '#2d4333');
+                grad.addColorStop(1, '#134e5e');
                 ctx.fillStyle = grad;
                 ctx.fillRect(0, 0, CARD_W, CARD_H);
 
                 // Subtle noise texture
-                ctx.fillStyle = 'rgba(255,255,255,0.02)';
                 for (let i = 0; i < 80; i++) {
-                    ctx.fillRect(Math.random() * CARD_W, Math.random() * CARD_H, 1, 1);
+                    const alpha = (0.1 + Math.random() * 0.3).toFixed(2);
+                    ctx.fillStyle = `rgba(255,62,47,${alpha})`;
+                    const r = 1 + Math.random() * 10;
+                    ctx.beginPath();
+                    ctx.arc(Math.random() * CARD_W, Math.random() * CARD_H, r, 0, Math.PI * 2);
+                    ctx.fill();
                 }
 
                 ctx.textAlign = 'left';
