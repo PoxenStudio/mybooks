@@ -83,13 +83,9 @@ class MutableDict(Mutable, dict):
 
 
 class Reader(Base, SQLAlchemyMixin):
-    # 权限位
-    SPECIAL = 0b00000001  # 未开启说明是默认权限
-    LOGIN = 0b00000010  # 登录
-    VIEW = 0b00000100  # 浏览
-    READ = 0b00001000  # 阅读
-    UPLOAD = 0b00010000  # 上传
-    DOWNLOAD = 0b00100000  # 下载
+    DEFAULT_PERMISSION = ""
+    DISABLE_MANAGE = "USED"
+    DISABLE_PUSH = "P"
 
     OVERSIZE_SHRINK_RATE = 0.8
     SQLITE_MAX_LENGTH = 32 * 1024.0

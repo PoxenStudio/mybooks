@@ -325,6 +325,8 @@
         "allow_guest_push": "Allow unrestricted book pushing (no registration or login required)",
         "allow_guest_upload": "Allow guests to upload books (no registration or login required, please ensure you understand the risks of enabling this)",
         "allow_guest_register": "Allow guests to register accounts via email",
+        "allow_new_user_manage_book": "Newly registered users are enabled to upload and download by default",
+        "allow_new_user_push_book": "Newly registered users are enabled to push books to reading devices by default",
         "signup_mail_title": "Activation Email Title",
         "signup_mail_content": "Activation Email Content",
         "reset_mail_title": "Password Reset Email Title",

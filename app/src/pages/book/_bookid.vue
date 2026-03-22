@@ -1039,12 +1039,11 @@
         </v-card>
     </v-dialog>
 
-    <!-- 发送到邮箱对话框 -->
     <!-- 读书分享卡片对话框 -->
     <v-dialog v-model="dialog_share_card" max-width="640">
         <v-card>
             <v-card-title class="headline">
-                <v-icon class="mr-2">mdi-card-account-details-outline</v-icon>
+                <v-icon class="mr-2">mdi-card-bulleted-outline</v-icon>
                 {{ $t('book.generateShareCard') }}
             </v-card-title>
             <v-card-text class="text-center" style="min-height: 200px; display: flex; align-items: center; justify-content: center; flex-direction: column;">
@@ -1071,6 +1070,7 @@
         </v-card>
     </v-dialog>
 
+    <!-- 发送到邮箱对话框 -->
     <v-dialog v-model="dialog_send_to_email" persistent max-width="500">
         <v-card>
             <v-card-title class="headline">
@@ -2674,7 +2674,7 @@ export default {
             try {
                 const CARD_W = 480;
                 const PADDING = 26;
-                const CARD_RADIUS = 38;
+                const CARD_RADIUS = 3;
                 const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif';
                 const ACCENT = '#e2b870';
                 const TEXT_COLOR = '#f5f0e8';
