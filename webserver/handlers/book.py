@@ -467,9 +467,6 @@ class BookSetSole(BaseHandler):
         if not self.current_user.can_edit() or not (self.is_admin() or self.is_book_owner(bid, cid)):
             return {"err": "permission", "msg": _(u"无权操作")}
 
-        if not self.current_user.can_delete() or not (self.is_admin() or self.is_book_owner(bid, cid)):
-            return {"err": "permission", "msg": _(u"无权操作")}
-
         succeed = False
         try:
             self.sqlite_session.query(Item).filter(Item.book_id == bid).update({"sole": not book["sole"]})
@@ -752,6 +749,8 @@ class BookRefer(BaseHandler):
             except Exception as e:
                 logging.error(f"Error parsing metadata JSON: {e}")
                 return {"err": "params.invalid", "msg": _(u"无效的metadata参数")}
+        if not self.current_user.can_edit() or not (self.is_admin() or self.is_book_owner(bid, cid)):
+            return {"err": "permission", "msg": _(u"无权操作")}
 
         book_id = int(id)
         mi = self.calibre_db.get_metadata(book_id, index_is_id=True)

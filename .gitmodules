@@ -4,3 +4,6 @@
 [submodule "third-party/epub.js"]
 	path = third-party/epub.js
 	url = git@github.com:PoxenStudio/epub.js.git
+[submodule "webserver/pdf-craft"]
+	path = webserver/pdf-craft
+	url = https://github.com/PoxenStudio/pdf-craft.git
