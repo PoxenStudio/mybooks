@@ -528,7 +528,7 @@
         "douban_max_count": "豆瓣插件API查询结果数量",
         "douban_plugin_description": "若需要启用豆瓣插件，请参阅安装文档的说明。若出现失败，可尝试更换镜像，例如 talebook/douban-api-rs",
         "import_and_upload": "导入与上传",
-        "category_with_folder": "使用第一级目录为自定义类别名称",
+        "category_with_folder": "使用第一级目录为自定义类别名称 (如导入目录下a/b/c.epub导入后, 类别为a。目录名不要有特殊字符，超过10个字符会被忽略)",
         "auto_importing":"监控导入目录，自动进行导入",
         "advanced_settings": "高级配置项",
         "enable_physical_books": "启用添加实体书功能",

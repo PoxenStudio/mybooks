@@ -14,7 +14,7 @@ from webserver import utils
 from webserver.models import Item, ScanFile
 from webserver.services import AsyncService
 from webserver.services.autofill import AutoFillService
-from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_ERROR_FLAG, BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL
+from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_CATEGORY, CALIBRE_ERROR_FLAG, BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL
 from webserver.services.background_service import BackgroundService, BackgroundTask
 from webserver import loader
 
@@ -476,6 +476,20 @@ class ScanService(AsyncService):
                         except Exception as err:
                             logging.error("save link error: %s", err)
 
+                        # 如果settings中IMPORT_CATEGORY_WITH_FOLDER开启，则使用当前文件在scan_upload_path目录下的第一级目录名作为书籍的自定义分类
+                        # 如果目录名含有特殊字符，如,:等，则跳过分类设置，避免calibre库出问题
+                        if CONF.get("IMPORT_CATEGORY_WITH_FOLDER", False):
+                            scan_upload_path = os.path.realpath(CONF.get("scan_upload_path", ""))
+                            rel = os.path.relpath(os.path.realpath(fpath), scan_upload_path)
+                            first_dir = rel.split(os.sep)[0] if os.sep in rel else ""
+                            if first_dir and len(first_dir) < 10 and not any(c in first_dir for c in ',:;|/\\\'"\t '):
+                                try:
+                                    self.db.new_api.set_field(CALIBRE_COLUMN_CATEGORY, {row.book_id: first_dir})
+                                    logging.info("[SCAN] Set category '%s' for book_id=%d", first_dir, row.book_id)
+                                except Exception as cat_err:
+                                    logging.warning("[SCAN] Failed to set category for book_id=%d: %s", row.book_id, cat_err)
+                            else:
+                                logging.warning("[SCAN] Skipping category setting for file %s due to invalid directory name: '%s'", fpath, first_dir)
                 except Exception as err:
                     row.status = ScanFile.INVALID
                     logging.error("Failed to process file %s: %s", fpath, err)
