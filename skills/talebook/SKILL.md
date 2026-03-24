@@ -21,7 +21,7 @@ TALEBOOK_USER="admin"
 TALEBOOK_PASSWORD="your_password"
 
 然后按如下方式执行：
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh <tool-name> '<json-args>'
+<skill-installation-path>/scripts/talebook_api.py <tool-name> '<json-args>'
 ```
 
 ## 通用响应格式与认证方式
@@ -64,7 +64,7 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh <tool-name> '<json-args>
 
 **执行脚本**：
 ```bash
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh get_user_info '{}'
+<skill-installation-path>/scripts/talebook_api.py get_user_info '{}'
 ```
 
 **响应示例**：
@@ -86,7 +86,7 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh get_user_info '{}'
 
 **执行脚本**：
 ```bash
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh library_stats '{}'
+<skill-installation-path>/scripts/talebook_api.py library_stats '{}'
 ```
 
 **响应示例**：
@@ -115,7 +115,7 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh library_stats '{}'
 
 **执行脚本**：
 ```bash
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh reading_stats '{}'
+<skill-installation-path>/scripts/talebook_api.py reading_stats '{}'
 ```
 
 **响应示例**：
@@ -151,7 +151,7 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh reading_stats '{}'
 
 **执行脚本**：
 ```bash
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh search_books '{"name":"三体"}'
+<skill-installation-path>/scripts/talebook_api.py search_books '{"name":"三体"}'
 ```
 
 **响应示例**：
@@ -180,7 +180,7 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh search_books '{"name":"�
 
 **执行脚本**：
 ```bash
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh search_by_category '{"category":"科幻"}'
+<skill-installation-path>/scripts/talebook_api.py search_by_category '{"category":"科幻"}'
 ```
 
 ---
@@ -197,7 +197,7 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh search_by_category '{"ca
 
 **执行脚本**：
 ```bash
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh get_book '{"book_id":42}'
+<skill-installation-path>/scripts/talebook_api.py get_book '{"book_id":42}'
 ```
 
 **响应示例**：
@@ -257,7 +257,7 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh get_book '{"book_id":42}
 
 **执行脚本**：
 ```bash
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh edit_book '{"book_id":42,"tags":["小说","中国文学"],"category":"现代文学"}'
+<skill-installation-path>/scripts/talebook_api.py edit_book '{"book_id":42,"tags":["小说","中国文学"],"category":"现代文学"}'
 ```
 
 **响应示例**：
@@ -287,10 +287,10 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh edit_book '{"book_id":42
 **执行脚本**：
 ```bash
 # 更新单本书
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh book_fill '{"idlist":[42]}'
+<skill-installation-path>/scripts/talebook_api.py book_fill '{"idlist":[42]}'
 
 # 批量更新
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh book_fill '{"idlist":[42,43,44]}'
+<skill-installation-path>/scripts/talebook_api.py book_fill '{"idlist":[42,43,44]}'
 ```
 
 **响应示例**：
@@ -317,7 +317,7 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh book_fill '{"idlist":[42
 
 **执行脚本**：
 ```bash
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh mailto '{"book_id":42,"email":"user@kindle.com"}'
+<skill-installation-path>/scripts/talebook_api.py mailto '{"book_id":42,"email":"user@kindle.com"}'
 ```
 
 **响应示例**：
@@ -356,11 +356,11 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh mailto '{"book_id":42,"e
 **执行脚本**：
 ```bash
 # 发送到多看设备
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh send_to_device \
+<skill-installation-path>/scripts/talebook_api.py send_to_device \
   '{"book_id":42,"device_type":"duokan","device_url":"192.168.1.100"}'
 
 # 发送到 Kindle（通过邮件）
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh send_to_device \
+<skill-installation-path>/scripts/talebook_api.py send_to_device \
   '{"book_id":42,"device_type":"kindle","mailbox":"mykindle@kindle.cn"}'
 ```
 
@@ -379,7 +379,7 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh send_to_device \
 
 **执行脚本**：
 ```bash
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh categories '{}'
+<skill-installation-path>/scripts/talebook_api.py categories '{}'
 ```
 
 **响应示例**：
@@ -407,7 +407,7 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh categories '{}'
 
 **执行脚本**：
 ```bash
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh list_authors '{}'
+<skill-installation-path>/scripts/talebook_api.py list_authors '{}'
 ```
 
 **响应示例**：
@@ -440,7 +440,7 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh list_authors '{}'
 
 **执行脚本**：
 ```bash
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh get_author_books '{"author_name":"余华"}'
+<skill-installation-path>/scripts/talebook_api.py get_author_books '{"author_name":"余华"}'
 ```
 
 ---
@@ -459,7 +459,7 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh get_author_books '{"auth
 
 **执行脚本**：
 ```bash
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh book_upload '{"file_path":"/path/to/book.epub"}'
+<skill-installation-path>/scripts/talebook_api.py book_upload '{"file_path":"/path/to/book.epub"}'
 ```
 
 **响应示例**：
@@ -483,7 +483,7 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh book_upload '{"file_path
 
 **执行脚本**：
 ```bash
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh book_add_by_isbn '{"isbn":"9787020024759"}'
+<skill-installation-path>/scripts/talebook_api.py book_add_by_isbn '{"isbn":"9787020024759"}'
 ```
 
 **响应示例**（新增）：
@@ -511,7 +511,7 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh book_add_by_isbn '{"isbn
 
 **执行脚本**：
 ```bash
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh wants '{"book_id":42}'
+<skill-installation-path>/scripts/talebook_api.py wants '{"book_id":42}'
 ```
 
 ---
@@ -524,7 +524,7 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh wants '{"book_id":42}'
 
 **执行脚本**：
 ```bash
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh list_wants '{}'
+<skill-installation-path>/scripts/talebook_api.py list_wants '{}'
 ```
 
 ---
@@ -542,7 +542,7 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh list_wants '{}'
 
 **执行脚本**：
 ```bash
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh favorite '{"book_id":42}'
+<skill-installation-path>/scripts/talebook_api.py favorite '{"book_id":42}'
 ```
 
 ---
@@ -555,7 +555,7 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh favorite '{"book_id":42}
 
 **执行脚本**：
 ```bash
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh list_favorites '{}'
+<skill-installation-path>/scripts/talebook_api.py list_favorites '{}'
 ```
 
 ---
@@ -574,7 +574,7 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh list_favorites '{}'
 **执行脚本**：
 ```bash
 # 标记为在读
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh reading '{"book_id":42,"read_state":1}'
+<skill-installation-path>/scripts/talebook_api.py reading '{"book_id":42,"read_state":1}'
 ```
 
 ---
@@ -587,7 +587,7 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh reading '{"book_id":42,"
 
 **执行脚本**：
 ```bash
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh list_reading '{}'
+<skill-installation-path>/scripts/talebook_api.py list_reading '{}'
 ```
 
 ---
@@ -604,7 +604,7 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh list_reading '{}'
 
 **执行脚本**：
 ```bash
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh read_done '{"book_id":42}'
+<skill-installation-path>/scripts/talebook_api.py read_done '{"book_id":42}'
 ```
 
 ---
@@ -617,7 +617,7 @@ $HOME/.openclaw/skills/talebook/scripts/talebook_api.sh read_done '{"book_id":42
 
 **执行脚本**：
 ```bash
-$HOME/.openclaw/skills/talebook/scripts/talebook_api.sh list_read_done '{}'
+<skill-installation-path>/scripts/talebook_api.py list_read_done '{}'
 ```
 
 ---
