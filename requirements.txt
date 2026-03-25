@@ -31,3 +31,4 @@ pyzbar
 requests_toolbelt
 WsgiDAV>=4.0.0
 jieba
+inotify_simple

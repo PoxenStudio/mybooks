@@ -76,9 +76,17 @@ class ScanService(AsyncService):
         return query
 
     @AsyncService.register_service
-    def do_scan(self, path_dir):
+    def do_scan(self, path_dirs):
         if ScanService.static_is_scanning:
             logging.error("Scanning is running, please wait...")
+            return
+
+        # 统一为列表，过滤不存在的目录
+        if isinstance(path_dirs, str):
+            path_dirs = [path_dirs]
+        valid_dirs = [d for d in path_dirs if os.path.isdir(d)]
+        if not valid_dirs:
+            logging.error("[SCAN] 所有指定目录均不存在: %s", path_dirs)
             return
 
         ScanService.invalid_folder.clear()
@@ -92,14 +100,14 @@ class ScanService(AsyncService):
                 service_type=BackgroundTask.SERVICE_TYPE_SCAN,
                 service_item=service_item,
                 progress=0,
-                progress_data={"stage": "scanning", "path": path_dir}
+                progress_data={"stage": "scanning", "dirs": valid_dirs}
             )
             task_id = task.id
         except Exception as e:
             logging.error(f"Failed to create background task: {e}")
 
         try:
-            self.do_scan_internal(path_dir, task_id)
+            self.do_scan_internal(valid_dirs, task_id)
             if task_id:
                 BackgroundService().complete_task(task_id=task_id)
             logging.info("Scanning completed")
@@ -110,25 +118,29 @@ class ScanService(AsyncService):
             logging.error(traceback.format_exc())
         ScanService.static_is_scanning = False
 
-    def do_scan_internal(self, path_dir, task_id=None):
+    def do_scan_internal(self, path_dirs, task_id=None):
         from calibre.ebooks.metadata.meta import get_metadata
 
         logging.info("[SCAN]<%s> we are: db=%s, session=%s", self, self.db, self.session)
-        logging.info("[SCAN]start to scan %s", path_dir)
+        logging.info("[SCAN]start to scan dirs: %s", path_dirs)
 
         # 生成任务（粗略扫描），前端可以调用API查询进展
         tasks = []
-        for dirpath, __, filenames in os.walk(path_dir, onerror=ScanService.os_walk_error_handler):
-            for fname in filenames:
-                fmt = fname.split(".")[-1].lower()
-                if not fmt or fmt not in SCAN_EXT or fmt[0] == '.':
-                    logging.info("[SCAN]Ignore: [%s] %s", fmt, fname)
-                    continue
-                fpath = os.path.join(dirpath, fname)
-                if not os.path.isfile(fpath):
-                    logging.info("[SCAN]not a file, skip: %s", fpath)
-                    continue
-                tasks.append((fname, fpath, fmt))
+        for path_dir in path_dirs:
+            if not os.path.isdir(path_dir):
+                logging.warning("[SCAN] 目录不存在，跳过: %s", path_dir)
+                continue
+            for dirpath, __, filenames in os.walk(path_dir, onerror=ScanService.os_walk_error_handler):
+                for fname in filenames:
+                    fmt = fname.split(".")[-1].lower()
+                    if not fmt or fmt not in SCAN_EXT or fmt[0] == '.':
+                        logging.info("[SCAN]Ignore: [%s] %s", fmt, fname)
+                        continue
+                    fpath = os.path.join(dirpath, fname)
+                    if not os.path.isfile(fpath):
+                        logging.info("[SCAN]not a file, skip: %s", fpath)
+                        continue
+                    tasks.append((fname, fpath, fmt))
 
         # 生成任务ID
         scan_id = int(time.time())
@@ -192,7 +204,7 @@ class ScanService(AsyncService):
                     BackgroundService().update_progress(
                         task_id=task_id,
                         progress=progress,
-                        progress_data={"stage": "scanning", "path": path_dir}
+                        progress_data={"stage": "scanning", "dirs": path_dirs}
                     )
                 except Exception as e:
                     logging.error("[SCAN]Failed to update task progress: %s", e)
@@ -323,7 +335,7 @@ class ScanService(AsyncService):
                 BackgroundService().update_progress(
                     task_id=task_id,
                     progress=100,
-                    progress_data={"stage": "completed", "path": path_dir}
+                    progress_data={"stage": "completed", "dirs": path_dirs}
                 )
             except Exception as e:
                 logging.error("[SCAN]Failed to update task progress: %s", e)

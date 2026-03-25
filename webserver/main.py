@@ -409,6 +409,10 @@ def make_app():
         cache_clean_service.setup(cache)
         cache_clean_service.start()
 
+    if CONF.get("MONITOR_SCAN_UPLOAD_PATH", True):
+        from webserver.services.monitor_service import get_monitor_service
+        get_monitor_service().start()
+
     return app
 
 
