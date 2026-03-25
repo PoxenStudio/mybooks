@@ -165,6 +165,7 @@ class ScanList(BaseHandler):
                 "name": ScanFile.name,
                 "create_time": ScanFile.create_time,
                 "update_time": ScanFile.update_time,
+                "status": ScanFile.status,
             }.get(sort, ScanFile.create_time)
             order = order.asc() if desc == "false" else order.desc()
             query = self.sqlite_session.query(ScanFile).order_by(order)
