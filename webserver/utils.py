@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 import datetime
+import logging
 import re
 from gettext import gettext as _
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT, CALIBRE_COLUMN_CATEGORY
@@ -16,6 +17,31 @@ def remove_zlibrary_suffix(text):
     if not text:
         return text
     return ZLIBRARY_PATTERN.sub('', text).strip()
+
+
+def ascii_text(orig):
+    from calibre.utils.localization import get_udc
+    from calibre.constants import preferred_encoding
+    udc = get_udc()
+    try:
+        ascii = udc.decode(orig)
+    except Exception:
+        if isinstance(orig, str):
+            orig = orig.encode('ascii', 'replace')
+        ascii = orig.decode(preferred_encoding, 'replace')
+    if isinstance(ascii, bytes):
+        ascii = ascii.decode('ascii', 'replace')
+    return ascii
+
+
+def get_title_sort(title):
+    if not title:
+        return title
+    try:
+        return ascii_text(title).lower()
+    except Exception as e:
+        logging.error(f"Error converting title to ASCII for sorting: {e}")
+        return title
 
 
 class SimpleBookFormatter:

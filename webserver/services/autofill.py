@@ -134,6 +134,7 @@ class AutoFillService(AsyncService):
             # 第三阶段：批量写入更新（减少数据库锁持有次数）
             for book_id, mi in updates:
                 try:
+                    mi.title_sort = utils.get_title_sort(mi.title)
                     self.db.set_metadata(book_id, mi, ignore_errors=True)
                     logging.info(_("自动更新书籍 id=[%d] 的信息，title=%s"), book_id, mi.title)
                     self.count_done += 1
@@ -205,6 +206,7 @@ class AutoFillService(AsyncService):
         # 保留书名不修改（万一出BUG，还能抢救一下）
         title = utils.remove_zlibrary_suffix(mi.title)
         refer_mi.title = title
+        refer_mi.title_sort = utils.get_title_sort(refer_mi.title)
 
         mi.smart_update(refer_mi, replace_metadata=True)
         self.db.set_metadata(book_id, mi, ignore_errors=True)

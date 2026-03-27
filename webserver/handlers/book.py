@@ -1429,6 +1429,7 @@ class BookEdit(BaseHandler):
             else:
                 logging.error("Too many characters in the category, ignore it!")
         mi.timestamp = nowf()
+        mi.title_sort = utils.get_title_sort(mi.title)
         self.calibre_db.set_metadata(bid, mi, force_changes=True)
         return True
 
@@ -1841,6 +1842,7 @@ class BookAddByISBN(BaseHandler):
                 return {"err": "book.notfound", "msg": _(u"未找到该ISBN号对应的图书")}
 
             # 通过上面返回的book metadata, 添加图书到calibre中（不需要文件，仅metadata）
+            book_data.title_sort = utils.get_title_sort(book_data.title)
             book_id = self.calibre_db.create_book_entry(book_data)
             if book_id is None:
                 return {"err": "book.duplicate", "msg": _(u"该图书已存在或创建失败")}
@@ -1874,6 +1876,7 @@ class BookUpload(BaseHandler):
             return s.group(0)
 
     def _add_new_book(self, mi, fpaths):
+        mi.title_sort = utils.get_title_sort(mi.title)
         book_id = self.calibre_db.import_book(mi, fpaths)
         self.increase_history_count("upload_history")
         item = Item()
@@ -2053,6 +2056,7 @@ class BookUploadChunk(BaseHandler):
     """Handler for chunked file upload"""
 
     def _add_new_book(self, mi, fpaths):
+        mi.title_sort = utils.get_title_sort(mi.title)
         book_id = self.calibre_db.import_book(mi, fpaths)
         self.increase_history_count("upload_history")
         item = Item()
@@ -2703,6 +2707,7 @@ class BookSperate(BaseHandler):
 
             # 创建新书籍
             fpaths = [upload_path]
+            mi.title_sort = utils.get_title_sort(mi.title)
             new_book_id = self.calibre_db.import_book(mi, fpaths)
 
             if new_book_id is None:

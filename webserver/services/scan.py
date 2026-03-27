@@ -476,6 +476,7 @@ class ScanService(AsyncService):
                     if not existed_ebook:
                         # 未找到重复电子书时，导入新书
                         logging.info("import [%s] from %s", repr(mi.title), fpath)
+                        mi.title_sort = utils.get_title_sort(mi.title)
                         row.book_id = self.db.import_book(mi, [fpath])
                         row.status = ScanFile.IMPORTED
 
@@ -736,6 +737,7 @@ class ScanService(AsyncService):
                         row.status = ScanFile.IMPORTED
                 if not existed_ebook:
                     logging.info("[SCAN_IMPORT] Importing new book [%s] from %s", repr(mi.title), fpath)
+                    mi.title_sort = utils.get_title_sort(mi.title)
                     row.book_id = self.db.import_book(mi, [fpath])
                     row.status = ScanFile.IMPORTED
 

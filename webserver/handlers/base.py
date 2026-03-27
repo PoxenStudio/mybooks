@@ -903,7 +903,7 @@ class ListHandler(BaseHandler):
             elif sort_fields == "title":
                 # 获取所有books，排序后再抽取当前页
                 all_books_data = self.get_books(ids=ids)
-                self.do_sort(all_books_data, "title", True)
+                self.do_sort(all_books_data, "title_sort", True)
                 books = all_books_data[start : start + delta]
             else:
                 # 按照输入的ids顺序排序
