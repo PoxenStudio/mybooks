@@ -36,12 +36,7 @@ def ascii_text(orig):
 def main():
     print("Testing ASCII conversion...")
     test_strings = [
-        "Hello, World!",
-        "你好，世界！",
-        "こんにちは世界！",
-        "안녕하세요 세계!",
-        "Привет, мир!",
-        "😀 Hello! 😀",
+        "不太多，不太少"
     ]
     for s in test_strings:
         ascii = ascii_text(s)

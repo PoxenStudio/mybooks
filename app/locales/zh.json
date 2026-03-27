@@ -181,7 +181,7 @@
             "kindleConvertAllConfirm": "会遍历所有书籍，将有Kindle格式（azw3/mobi）但没有EPUB格式的书籍转换为EPUB格式。这个操作可能需要较长时间，确认继续？",
             "updateTitleSort": "更新书名拼音信息",
             "updateTitleSortSelectedConfirm": "将为选中的 {count} 本书更新书名拼音信息，确认继续？",
-            "updateTitleSortAllConfirm": "将为所有 title_sort 等于 title 的书籍更新书名拼音信息，确认继续？",
+            "updateTitleSortAllConfirm": "将为所有缺少拼音信息的书籍更新书名拼音信息，确认继续？",
             "clearRareTagsConfirm": "会将少于3本书的标签所对应的书籍重新更新标签。此操作可能需要一些时间，确认继续？",
             "deleteSelected": "删除选中图书",
             "selectedCount": "已选中 {count} 条",
