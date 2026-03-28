@@ -740,7 +740,7 @@ class AdminBookConvert(BaseHandler):
             idlist = list(self.calibre_db_cache.all_book_ids())
 
         BatchConvertService().convert_all(self.current_user.id, idlist)
-        return {"err": "ok", "msg": _(u"Kindle转EPUB任务已启动，左上角可以查看进度")}
+        return {"err": "ok", "msg": _(u"Kindle转EPUB任务已启动，右上角可以查看进度")}
 
 
 class AdminBookUpdateTitleSort(BaseHandler):
@@ -780,7 +780,7 @@ class AdminBookUpdateTitleSort(BaseHandler):
             idlist = list(self.calibre_db_cache.all_book_ids())
 
         BatchTitleSortUpdateService().update_all(self.current_user.id, idlist)
-        return {"err": "ok", "msg": _(u"更新书名信息任务已启动，左上角可以查看进度")}
+        return {"err": "ok", "msg": _(u"更新书名信息任务已启动，右上角可以查看进度")}
 
 
 class AdminBookbarnTokenApply(BaseHandler):
