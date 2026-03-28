@@ -52,11 +52,9 @@ class BatchTitleSortUpdateService(AsyncService):
                 if not mi:
                     continue
                 title = mi.title
-                title_sort = mi.title_sort
                 if not title:
                     continue
-                if title_sort == title or len(title_sort) < len(title):
-                    books_to_update.append((book_id, title))
+                books_to_update.append((book_id, title))
             except Exception as e:
                 logging.error("[BatchTitleSort] Failed to check book id=%d: %s", book_id, e)
 
