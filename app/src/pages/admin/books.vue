@@ -35,18 +35,6 @@
                             </v-btn>
                         </template>
                         <v-list>
-                            <v-list-item @click="ai_fill" :disabled="books_selected.length === 0">
-                                <v-list-item-icon>
-                                    <v-icon>mdi-robot</v-icon>
-                                </v-list-item-icon>
-                                <v-list-item-title>{{ $t('admin.books.aiUpdate') }}</v-list-item-title>
-                            </v-list-item>
-                            <v-list-item @click="show_exchange_type_dialog" :disabled="books_selected.length === 0">
-                                <v-list-item-icon>
-                                    <v-icon>mdi-swap-horizontal</v-icon>
-                                </v-list-item-icon>
-                                <v-list-item-title>{{ $t('admin.books.exchangeType') }}</v-list-item-title>
-                            </v-list-item>
                             <v-list-item @click="show_clear_rare_tags_dialog">
                                 <v-list-item-icon>
                                     <v-icon>mdi-tag-remove-outline</v-icon>
@@ -64,6 +52,18 @@
                                     <v-icon>mdi-sort-alphabetical-ascending</v-icon>
                                 </v-list-item-icon>
                                 <v-list-item-title>{{ $t('admin.books.updateTitleSort') }}</v-list-item-title>
+                            </v-list-item>
+                            <v-list-item @click="ai_fill" :disabled="books_selected.length === 0">
+                                <v-list-item-icon>
+                                    <v-icon>mdi-robot</v-icon>
+                                </v-list-item-icon>
+                                <v-list-item-title>{{ $t('admin.books.aiUpdate') }}</v-list-item-title>
+                            </v-list-item>
+                            <v-list-item @click="show_exchange_type_dialog" :disabled="books_selected.length === 0">
+                                <v-list-item-icon>
+                                    <v-icon>mdi-swap-horizontal</v-icon>
+                                </v-list-item-icon>
+                                <v-list-item-title>{{ $t('admin.books.exchangeType') }}</v-list-item-title>
                             </v-list-item>
                         </v-list>
                     </v-menu>

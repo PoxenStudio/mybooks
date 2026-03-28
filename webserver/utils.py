@@ -31,7 +31,7 @@ def ascii_text(orig):
         ascii = orig.decode(preferred_encoding, 'replace')
     if isinstance(ascii, bytes):
         ascii = ascii.decode('ascii', 'replace')
-    return ascii
+    return ascii.strip()
 
 
 def get_title_sort(title):

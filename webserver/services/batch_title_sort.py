@@ -35,45 +35,24 @@ class BatchTitleSortUpdateService(AsyncService):
             "task_id": self.task_id,
         }
 
-    def _collect_books_to_update(self, idlist: list) -> list:
-        """收集需要更新title_sort的书籍列表"""
-        books_to_update = []
-
-        if not idlist:
-            all_book_ids = list(self.db.all_book_ids())
-            logging.info("[BatchTitleSort] Scanning all %d books", len(all_book_ids))
-        else:
-            all_book_ids = idlist
-            logging.info("[BatchTitleSort] Scanning %d specified books", len(all_book_ids))
-
-        for book_id in all_book_ids:
-            try:
-                mi = self.db.get_metadata(book_id, index_is_id=True)
-                if not mi:
-                    continue
-                title = mi.title
-                if not title:
-                    continue
-                books_to_update.append((book_id, title))
-            except Exception as e:
-                logging.error("[BatchTitleSort] Failed to check book id=%d: %s", book_id, e)
-
-        logging.info("[BatchTitleSort] Found %d books needing title_sort update", len(books_to_update))
-        return books_to_update
-
-    def _update_one_book(self, book_id: int, title: str) -> bool:
+    def _update_one_book(self, book_id: int):
         try:
-            new_sort = utils.get_title_sort(title)
             mi = self.db.get_metadata(book_id, index_is_id=True)
             if not mi:
-                return False
+                self.count_skip += 1
+                return
+            title = mi.title
+            new_sort = utils.get_title_sort(title)
+            if new_sort == mi.title_sort:
+                self.count_skip += 1
+                return
             mi.title_sort = new_sort
             self.db.set_metadata(book_id, mi, commit=True)
-            logging.info("[BatchTitleSort] Updated book id=%d title_sort: %r -> %r", book_id, title, new_sort)
-            return True
+            self.count_done += 1
+            return
         except Exception as e:
             logging.error("[BatchTitleSort] Failed to update book id=%d: %s", book_id, e)
-            return False
+            self.count_fail += 1
 
     @AsyncService.register_service
     def update_all(self, user_id, idlist: list):
@@ -85,14 +64,8 @@ class BatchTitleSortUpdateService(AsyncService):
 
         logging.info("[BatchTitleSort] Starting batch title_sort update task")
         self.add_msg(user_id, "success", _(u"更新书名信息任务已启动"))
-        books_to_update = self._collect_books_to_update(idlist)
+        books_to_update = idlist if idlist else list(self.db.all_book_ids())
         self.count_total = len(books_to_update)
-
-        if self.count_total == 0:
-            logging.info("[BatchTitleSort] No books need title_sort update")
-            self.is_running = False
-            self.add_msg(user_id, "success", _(u"更新书名信息任务已结束，未找到需要更新的书籍"))
-            return
 
         try:
             task = BackgroundService().update_task(
@@ -110,17 +83,17 @@ class BatchTitleSortUpdateService(AsyncService):
             logging.error("[BatchTitleSort] Failed to create background task: %s", e)
             self.task_id = None
 
-        for book_id, title in books_to_update:
+        index = 0
+        for book_id in books_to_update:
             self.current_book_id = book_id
-            ok = self._update_one_book(book_id, title)
-            if ok:
-                self.count_done += 1
-            else:
-                self.count_fail += 1
-            self._update_task_progress()
+            self._update_one_book(book_id)
+            if index % 10 == 0:
+                self._update_task_progress()
+            index += 1
 
+        self._update_task_progress()
         self._finish_task()
-        msg = _(u"更新书名信息任务已完成，成功更新%d本书，%d本书更新失败" % (self.count_done, self.count_fail))
+        msg = _(u"更新书名信息任务已完成，成功更新%d本书，%d本书更新失败, %d本书被跳过" % (self.count_done, self.count_fail, self.count_skip))
         if self.count_fail > 0:
             self.add_msg(user_id, "warning", msg)
         else:
@@ -135,14 +108,14 @@ class BatchTitleSortUpdateService(AsyncService):
         if not self.task_id:
             return
         try:
-            processed = self.count_done + self.count_fail
+            processed = self.count_done + self.count_skip + self.count_fail
             progress = int(processed * 100 / self.count_total) if self.count_total else 100
             BackgroundService().update_progress(
                 task_id=self.task_id,
                 progress=progress,
                 progress_data={
                     "total": self.count_total,
-                    "done": self.count_done,
+                    "done": self.count_done + self.count_skip,
                     "fail": self.count_fail,
                     "current_book_id": self.current_book_id,
                 },
