@@ -282,11 +282,11 @@
                                     <v-icon>mdi-file-sync</v-icon>
                                     {{ $t('book.saveMetaToFile') }}
                                 </v-list-item>
-                                <v-list-item @click="convert_book" :disabled="!hasEpubOrKindleFormats">
+                                <v-list-item @click="convert_book" :disabled="!hasEBooks">
                                     <v-icon>mdi-swap-horizontal</v-icon>
                                     {{ $t('book.convert') }}
                                 </v-list-item>
-                                <v-list-item @click="convert_to_pdf" :disabled="!hasEpubOrKindleFormats || hasPDF">
+                                <v-list-item @click="convert_to_pdf" :disabled="!hasEBooks || hasPDF">
                                     <v-icon>mdi-swap-horizontal</v-icon>
                                     {{ $t('book.convert_to_pdf') }}
                                 </v-list-item>
@@ -1262,18 +1262,14 @@ export default {
             });
         },
 
-        hasEpubOrKindleFormats() {
+        hasEBooks() {
             if (!this.book || !this.book.files) {
                 return false;
             }
             if (this.book.files.length === 0) {
                 return false;
             }
-            const has_no_pdf = this.book.files.some(file => {
-                const format = file.format.toLowerCase();
-                return format === 'epub' || format === 'azw3' || format === 'mobi' || format === 'txt';
-            });
-            return has_no_pdf;
+            return true;
         },
 
         hasPDF() {

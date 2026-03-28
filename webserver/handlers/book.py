@@ -390,21 +390,22 @@ class BookConverter(BaseHandler):
 
         fmts = []
         paths = []
-        for fmt in ["epub", "azw3", "mobi", "azw", "txt"]:
+        for fmt in ["epub", "azw3", "mobi", "azw", "txt", "pdf"]:
             book_path = book.get("fmt_%s" % fmt, None)
             if book_path:
                 fmts.append(fmt)
                 paths.append(book_path)
 
-        if len(fmts) == 0:
-            return {"err": "params.book.invalid", "msg": _(u"本书不支持转换，仅支持EPUB,TXT以及Kindle使用的格式")}
         if ('epub' in fmts) and ('azw3' in fmts):
-            return {"err": "params.book.invalid", "msg": _(u"本书已有EPUB和Kindle版本, 不需要转换")}
+            return {"err": "params.book.invalid", "msg": _(u"本书已有EPUB及Kindle版本, 不需要转换")}
 
         if fmts[0] == "epub":
             fmt = "azw3"
+        elif fmts[0] == "pdf":
+            fmt = "epub"
         else:
             fmt = "epub"
+
         fpath = paths[0]
 
         service = ConvertService()
