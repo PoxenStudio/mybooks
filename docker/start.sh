@@ -3,6 +3,9 @@
 PUID=${PUID:-0}
 PGID=${PGID:-0}
 
+# 显式补全基础路径，避免有些环境下 gosu/supervisord 下找不到命令
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH}"
+
 groupmod -o -g "${PGID}" talebook
 usermod -o -u "${PUID}" talebook
 
@@ -19,7 +22,7 @@ if [ ! -d "/data/log" ]; then
   cp -rf /prebuilt/log /data/
 fi
 
-if [ ! -d "/data/log/ngix" ]; then
+if [ ! -d "/data/log/nginx" ]; then
   mkdir -p /data/log/nginx
   chown -R talebook:talebook /data/log/nginx
 fi
@@ -78,17 +81,52 @@ fi
 
 # 启动
 export PYTHONDONTWRITEBYTECODE=1
+
+PYTHON_BIN="$(command -v python3 2>/dev/null || true)"
+if [ -z "$PYTHON_BIN" ]; then
+  for candidate in /usr/bin/python3 /usr/local/bin/python3; do
+    if [ -x "$candidate" ]; then
+      PYTHON_BIN="$candidate"
+      break
+    fi
+  done
+fi
+
+if [ -z "$PYTHON_BIN" ]; then
+  echo "python3 not found. PATH=$PATH"
+  exit 1
+fi
+
+USE_GOSU=0
+if command -v gosu >/dev/null 2>&1; then
+  if gosu talebook:talebook /bin/true >/dev/null 2>&1; then
+    USE_GOSU=1
+  else
+    echo "warning: gosu probe failed, fallback to current user"
+  fi
+else
+  echo "warning: gosu not found, fallback to current user"
+fi
+
+run_as_talebook() {
+  if [ "$USE_GOSU" = "1" ]; then
+    gosu talebook:talebook "$@"
+  else
+    "$@"
+  fi
+}
+
 echo
 echo "====== Check config ===="
 nginx -t || exit 1
 
 echo
 echo "====== Sync DB Scheme ===="
-gosu talebook:talebook /var/www/talebook/server.py --syncdb
+run_as_talebook "$PYTHON_BIN" /var/www/talebook/server.py --syncdb
 
 echo
 echo "====== Update Server Config ===="
-gosu talebook:talebook /var/www/talebook/server.py --update-config
+run_as_talebook "$PYTHON_BIN" /var/www/talebook/server.py --update-config
 
 echo
 echo "====== Start Server ===="
