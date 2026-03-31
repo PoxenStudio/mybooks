@@ -283,7 +283,7 @@ class ScanService(AsyncService):
                 logging.error("[SCAN]Error reading metadata from file %s: %s", fpath, e)
                 continue
 
-            row.status = ScanFile.READY  # 设置为可处理
+            row.status = ScanFile.READY
             if mi.title and mi.title == CALIBRE_ERROR_FLAG:
                 logging.error("[SCAN]Failed to get metadata for %s, reason:%s", fpath, mi.comments)
                 row.status = ScanFile.INVALID

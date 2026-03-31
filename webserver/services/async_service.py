@@ -160,7 +160,7 @@ class AsyncService(metaclass=SingletonType):
         def func_wrapper(ins: AsyncService, *args, **kwargs):
             s = AsyncService()
             ins.setup(s.db, s.scoped_session)
-            logging.error("[FUNC ] service call %s(%s, %s)", name, args, kwargs)
+            logging.info("[FUNC ] service call %s(%s, %s)", name, args, kwargs)
             return service_func(ins, *args, **kwargs)
 
         return func_wrapper
@@ -174,10 +174,10 @@ class AsyncService(metaclass=SingletonType):
             ins.setup(s.db, s.scoped_session)
 
             if not s.async_mode():
-                logging.error("[FUNC ] service call %s(%s, %s)", name, args, kwargs)
+                logging.info("[FUNC ] service call %s(%s, %s)", name, args, kwargs)
                 return service_func(ins, *args, **kwargs)
 
-            logging.error("[ASYNC] service call %s", name)
+            logging.info("[ASYNC] service call %s", name)
             q = ins.start_service(service_func)
             q.put((args, kwargs))
             return None
