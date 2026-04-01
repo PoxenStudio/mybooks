@@ -142,14 +142,14 @@
             :server-items-length="total"
             :loading="loading"
             :items-per-page="100"
-            :footer-props="{ 'items-per-page-options': [10, 50, 100, 1000] }"
+            :footer-props="{ 'items-per-page-options': [10, 50, 100, 200, 500, 1000] }"
             :mobile-breakpoint="600"
         >
             <template v-slot:top>
                 <v-data-footer
                     :options.sync="options"
                     :pagination="topPagination"
-                    :items-per-page-options="[10, 50, 100, 1000]"
+                    :items-per-page-options="[10, 50, 100, 200, 500, 1000]"
                     @update:options="options = $event"
                 >
                     <template v-slot:prepend>
