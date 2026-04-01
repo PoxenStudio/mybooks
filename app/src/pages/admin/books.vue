@@ -558,22 +558,24 @@ export default {
         responsiveHeaders: function() {
             // 根据屏幕宽度返回不同的headers配置
             if (this.$vuetify.breakpoint.xs) {
-                // 超小屏幕（手机）：显示封面、ID、书名、作者和操作
+                // 超小屏幕（手机）：显示封面、ID、书名、作者、分类和操作
                 return [
                     { text: "封面", sortable: false, value: "img", width: "40px" },
                     { text: "ID", sortable: true, value: "id", width: "50px" },
                     { text: "书名", sortable: true, value: "title" },
                     { text: "作者", sortable: true, value: "author", width: "80px" },
+                    { text: "分类", sortable: false, value: "category", width: "70px" },
                     { text: "操作", sortable: false, value: "actions", width: "60px" },
                 ];
             } else if (this.$vuetify.breakpoint.sm) {
-                // 小屏幕（平板）：显示核心信息
+                // 小屏幕（平板）：显示核心信息（含分类）
                 return [
                     { text: "封面", sortable: false, value: "img", width: "70px" },
                     { text: "ID", sortable: true, value: "id", width: "60px" },
                     { text: "类型", sortable: false, value: "book_type", width: "70px" },
                     { text: "书名", sortable: true, value: "title" },
                     { text: "作者", sortable: true, value: "author", width: "100px" },
+                    { text: "分类", sortable: false, value: "category", width: "80px" },
                     { text: "操作", sortable: false, value: "actions", width: "80px" },
                 ];
             } else {
