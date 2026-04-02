@@ -42,6 +42,7 @@ from webserver.plugins.meta.calibre import CalibreMetadataApi
 from webserver.plugins.meta.bookbarn_tags import BookBarnTags
 from webserver.plugins.parser.txt import get_content_encoding
 from webserver.handlers.audio import AudioUtils
+from webserver import constants
 from webserver.constants import COLUMN_CATEGORY, CALIBRE_COLUMN_CATEGORY
 from webserver.constants import CALIBRE_ERROR_FLAG, SUPPORTED_EBOOK_FORMATS
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT
@@ -347,6 +348,25 @@ class BookCategoryBatch(BaseHandler):
 
 
 class BookCategories(BaseHandler):
+    def _filter_categories_by_reading_range(self, categories):
+        """根据当前用户的阅读范围设置过滤分类列表，管理员和未登录用户不过滤"""
+        user = self.current_user
+        if not user:
+            # 未登录用户只能看到未设置分类的书籍，因此只能看到一个空分类
+            return []
+        if not user or self.is_admin():
+            return categories
+        read_limit = getattr(user, 'read_limit', 0) or 0
+        if read_limit == 0:
+            return categories
+        limit_cats = set(filter(None, (user.limit_categories or "").split(',')))
+        if not limit_cats:
+            return categories
+        if read_limit == 1:
+            return [c for c in categories if c["name"] in limit_cats]
+        # read_limit == 2: 黑名单
+        return [c for c in categories if c["name"] not in limit_cats]
+
     @js
     def get(self):
         # Find the custom column for category
@@ -370,6 +390,10 @@ class BookCategories(BaseHandler):
             with self.db_lock:
                 rows = self.calibre_db_cache.backend.conn.get(sql)
             categories = [{"name": row[0], "count": row[1]} for row in rows]
+
+            if CONF.get(constants.ALLOW_READ_RANGE_SETTING, False):
+                categories = self._filter_categories_by_reading_range(categories)
+
             return {"err": "ok", "categories": categories}
         except Exception as e:
             logging.error(f"Error fetching categories: {e}")

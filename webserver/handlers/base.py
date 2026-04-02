@@ -19,6 +19,7 @@ from webserver import loader, utils
 
 # import social_tornado.handlers
 from webserver.models import Item, Message, Reader
+from webserver import constants
 
 messages = defaultdict(list)
 CONF = loader.get_settings()
@@ -616,13 +617,52 @@ class BaseHandler(web.RequestHandler):
             else:
                 book.update(maps.get(book["id"], empty_item))
 
+
         if len(soled_books) > 0 and len(books) > 0:
             books = [b for b in books if b["id"] not in soled_books]
+
+        # Apply per-user reading range filter (only when read_limit is set)
+        if CONF.get(constants.ALLOW_READ_RANGE_SETTING, False):
+            user = self.current_user
+            if not user:
+                # For guests, only show books without categories and tags
+                books = [b for b in books if not b.get('tags') and not b.get(constants.CALIBRE_COLUMN_CATEGORY)]
+            elif getattr(user, 'read_limit', 0) > 0:
+                books = [b for b in books if self.is_book_in_reading_range(b, user)]
 
         logging.info(
             "[%5d ms] select books from database (count = %d)" % (int(1000 * (time.time() - _ts)), len(books))
         )
         return books
+
+    def is_book_in_reading_range(self, book, user) -> bool:
+        """Check whether a book is accessible for the given user based on their reading range.
+
+        read_limit values:
+            0 - no restriction (always accessible)
+            1 - whitelist: only books matching limit_categories or limit_tags are accessible
+            2 - blacklist: books matching limit_categories or limit_tags are blocked
+        """
+        read_limit = getattr(user, 'read_limit', 0) or 0
+        if read_limit == 0:
+            return True
+
+        limit_categories = set(filter(None, (user.limit_categories or "").split(',')))
+        limit_tags = set(filter(None, (user.limit_tags or "").split(',')))
+
+        from webserver.constants import CALIBRE_COLUMN_CATEGORY
+        book_category = (book.get(CALIBRE_COLUMN_CATEGORY) or "")
+        book_tags = set(book.get('tags') or [])
+
+        matched = (
+            (limit_categories and book_category in limit_categories) or
+            bool(limit_tags and book_tags & limit_tags)
+        )
+
+        if read_limit == 1:
+            return matched          # whitelist: must match at least one
+        else:
+            return not matched      # blacklist: must not match any
 
     def count_increase(self, book_id, **kwargs):
         try:

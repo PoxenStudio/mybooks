@@ -8,7 +8,9 @@ from gettext import gettext as _
 from webserver import utils
 from webserver.handlers.base import ListHandler, js
 from webserver.models import StickyItem
+from webserver import loader, constants
 
+CONF = loader.get_settings()
 
 class LanguageNameUtil:
     """工具类，用于转换calibre language code to name and vice versa"""
@@ -98,6 +100,19 @@ class PubBooksUpdate(ListHandler):
 
 
 class MetaList(ListHandler):
+    def _filter_tags(self, tag_list):
+        if not self.current_user:
+            return []
+        read_limit = getattr(self.current_user, 'read_limit', 0) or 0
+        if read_limit == 0:
+            return tag_list
+        limit_tags = set(filter(None, (self.current_user.limit_tags or "").split(',')))
+        if not limit_tags:
+            return tag_list
+        if read_limit == 1:
+            return [t for t in tag_list if t["name"] in limit_tags]
+        return [t for t in tag_list if t["name"] not in limit_tags]
+
     @js
     def get(self, meta):
         SHOW_NUMBER = 300
@@ -137,6 +152,11 @@ class MetaList(ListHandler):
                 else:
                     # 如果items中没有，count为0
                     pins.append({"name": sticky.value, "count": 0})
+
+        if CONF.get(constants.ALLOW_READ_RANGE_SETTING, False) and meta == "tag":
+            # 如果启用了阅读范围设置，过滤掉用户不可见的标签, 包括items & pins
+            items = self._filter_tags(items)
+            pins = self._filter_tags(pins)
 
         if items:
             if meta == "rating":
