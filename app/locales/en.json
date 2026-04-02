@@ -267,7 +267,14 @@
             "reading_range_tags_hint": "Type to search tags",
             "reading_range_tags_no_result": "No matching tags found",
             "reading_range_save": "Save",
-            "reading_range_save_ok": "Reading range saved"
+            "reading_range_save_ok": "Reading range saved",
+            "change_password": "Change Password",
+            "change_password_dialog_title": "Change User Password",
+            "new_password": "New Password",
+            "confirm_new_password": "Confirm New Password",
+            "change_password_save": "Confirm",
+            "change_password_ok": "Password changed successfully",
+            "password_mismatch": "Passwords do not match"
         }
     },
     "imports": {

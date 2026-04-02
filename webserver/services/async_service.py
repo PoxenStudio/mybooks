@@ -83,11 +83,11 @@ class AsyncService(metaclass=SingletonType):
                 """))
                 need_sync_item_time = True
                 changed = True
-            if 'src_path' not in columns:
-                self.session.execute(text("""
-                    ALTER TABLE items ADD COLUMN src_path STRING(4096) DEFAULT ''
-                """))
-                changed = True
+        if 'src_path' not in columns:
+            self.session.execute(text("""
+                ALTER TABLE items ADD COLUMN src_path STRING(4096) DEFAULT ''
+            """))
+            changed = True
         return need_sync_item_time, changed
 
     def adjust_reader_table(self):

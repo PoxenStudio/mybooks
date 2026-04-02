@@ -153,6 +153,12 @@ class AdminUsers(BaseHandler):
         if "limit_tags" in data:
             user.limit_tags = data["limit_tags"]
 
+        if "password" in data:
+            new_password = (data["password"] or "").strip()
+            if len(new_password) < 6 or len(new_password) > 20 or not re.match(Reader.RE_PASSWORD, new_password):
+                return {"err": "params.password.invalid", "msg": _(u"密码无效，长度须在6~20位之间")}
+            user.set_secure_password(new_password)
+
         p = data.get("permission", "")
         if not isinstance(p, str):
             return {"err": "params.permission.invalid", "msg": _(u"权限参数不对")}

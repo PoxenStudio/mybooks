@@ -686,6 +686,20 @@ class BaseHandler(web.RequestHandler):
             use_virtual_library=False,
         )
 
+    def _filter_tags(self, tags):
+        user = self.current_user
+        if not user:
+            return {}  # 未登录用户：隐藏所有标签
+        read_limit = getattr(user, 'read_limit', 0) or 0
+        if read_limit == 0:
+            return tags
+        limit_tags = set(filter(None, (user.limit_tags or "").split(',')))
+        if not limit_tags:
+            return tags
+        if read_limit == 1:
+            return {tag: count for tag, count in tags.items() if tag in limit_tags}      # 白名单
+        return {tag: count for tag, count in tags.items() if tag not in limit_tags}      # 黑名单
+
     def all_tags_with_count(self):
         sql = """SELECT tags.name, count(distinct book) as count
         FROM tags left join books_tags_link on tags.id = books_tags_link.tag
@@ -695,13 +709,16 @@ class BaseHandler(web.RequestHandler):
             with self.db_lock:
                 tags = dict((i[0], i[1]) for i in self.calibre_db_cache.backend.conn.get(sql))
             BaseHandler._query_fallback_cache[cache_key] = tags
-            return tags
         except Exception as e:
-            cached = BaseHandler._query_fallback_cache.get(cache_key, {})
+            tags = BaseHandler._query_fallback_cache.get(cache_key, {})
             logging.error("all_tags_with_count query failed: %s", str(e))
-            if cached:
-                logging.warning("all_tags_with_count fallback to cache, count=%d", len(cached))
-            return cached
+            if tags:
+                logging.warning("all_tags_with_count fallback to cache, count=%d", len(tags))
+
+        # 过滤掉不在当前用户阅读范围的标签
+        if CONF.get(constants.ALLOW_READ_RANGE_SETTING, False):
+            tags = self._filter_tags(tags)
+        return tags
 
     def get_category_with_count(self, field):
         table = field if field in ["series"] else field + "s"
@@ -884,6 +901,24 @@ class ListHandler(BaseHandler):
             else set()
         )
         books = [b for b in books if b["id"] not in sole_book_ids]
+
+        # 应用阅读范围过滤
+        if CONF.get(constants.ALLOW_READ_RANGE_SETTING, False):
+            # get_data_as_dict 返回自定义栏位时使用整数 colnum 作为 key，需先映射为字段名
+            if not hasattr(self, '_custom_column_map'):
+                self._custom_column_map = {}
+                for key, meta in self.calibre_db.field_metadata.items():
+                    if meta['is_custom']:
+                        self._custom_column_map[meta['colnum']] = key
+            for book in books:
+                for colnum, key in self._custom_column_map.items():
+                    if colnum in book:
+                        book[key] = book.pop(colnum)
+            user = self.current_user
+            if not user:
+                books = [b for b in books if not b.get('tags') and not b.get(constants.CALIBRE_COLUMN_CATEGORY)]
+            elif getattr(user, 'read_limit', 0) > 0:
+                books = [b for b in books if self.is_book_in_reading_range(b, user)]
 
         # 只查询剩余书籍的Item信息
         item = Item()

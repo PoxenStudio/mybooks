@@ -29,7 +29,7 @@
                 <span v-if="item.vipquota"> {{ $t('admin.users.vipquota', { count: item.vipquota }) }} </span>
             </template>
             <template v-slot:item.actions="{ item }">
-                <v-btn small color="#336666" class="white--text" @click="openReadingRangeDialog(item)" v-if="allowReadRangeSetting">{{ $t('admin.users.set_reading_range') }}</v-btn>
+                <v-btn small color="#3EC18A" class="white--text" @click="openReadingRangeDialog(item)" v-if="allowReadRangeSetting">{{ $t('admin.users.set_reading_range') }}</v-btn>
                 <v-menu offset-y right>
                     <template v-slot:activator="{ on }">
                         <v-btn color="primary" small v-on="on">{{ $t('admin.users.actions') }} <v-icon small>more_vert</v-icon></v-btn>
@@ -103,6 +103,11 @@
                             "
                         >
                             <v-list-item-title> {{ $t('admin.users.set_admin') }} </v-list-item-title>
+                        </v-list-item>
+                        <v-list-item
+                            @click="openChangePasswordDialog(item)"
+                        >
+                            <v-list-item-title> {{ $t('admin.users.change_password') }} </v-list-item-title>
                         </v-list-item>
                         <v-list-item
                             @click="
@@ -196,6 +201,47 @@
                     <v-spacer></v-spacer>
                     <v-btn text @click="showReadingRangeDialog = false">{{ $t('admin.users.cancel') }}</v-btn>
                     <v-btn color="primary" @click="saveReadingRange" :loading="savingReadingRange">{{ $t('admin.users.reading_range_save') }}</v-btn>
+                </v-card-actions>
+            </v-card>
+        </v-dialog>
+
+        <!-- Change Password Dialog -->
+        <v-dialog v-model="showChangePasswordDialog" max-width="420px" persistent>
+            <v-card>
+                <v-card-title>
+                    {{ $t('admin.users.change_password_dialog_title') }}
+                    <v-spacer></v-spacer>
+                    <v-btn icon @click="closeChangePasswordDialog">
+                        <v-icon>mdi-close</v-icon>
+                    </v-btn>
+                </v-card-title>
+                <v-card-text>
+                    <v-form ref="changePasswordForm" @submit.prevent="submitChangePassword">
+                        <v-text-field
+                            v-model="changePassword.password"
+                            :label="$t('admin.users.new_password')"
+                            type="password"
+                            prepend-icon="lock"
+                            autocomplete="new-password"
+                            :rules="[rules.pass]"
+                            required
+                        ></v-text-field>
+                        <v-text-field
+                            v-model="changePassword.password2"
+                            :label="$t('admin.users.confirm_new_password')"
+                            type="password"
+                            prepend-icon="lock_outline"
+                            autocomplete="new-password2"
+                            :rules="[validateChangePassword]"
+                            required
+                        ></v-text-field>
+                    </v-form>
+                    <v-alert v-if="changePasswordError" type="error" class="mt-2">{{ changePasswordError }}</v-alert>
+                </v-card-text>
+                <v-card-actions>
+                    <v-spacer></v-spacer>
+                    <v-btn text @click="closeChangePasswordDialog">{{ $t('admin.users.cancel') }}</v-btn>
+                    <v-btn color="primary" @click="submitChangePassword" :loading="changingPassword">{{ $t('admin.users.change_password_save') }}</v-btn>
                 </v-card-actions>
             </v-card>
         </v-dialog>
@@ -299,6 +345,12 @@ export default {
         loadingTags: false,
         tagSearchTimer: null,
         allowReadRangeSetting: false,
+        // Change password dialog
+        showChangePasswordDialog: false,
+        changingPassword: false,
+        changePasswordUserId: null,
+        changePasswordError: "",
+        changePassword: { password: "", password2: "" },
         newUser: {
             username: "",
             password: "",
@@ -439,6 +491,43 @@ export default {
                 return '最少6个字符';
             }
             return v == this.newUser.password || "密码不匹配";
+        },
+        openChangePasswordDialog(item) {
+            this.changePasswordUserId = item.id;
+            this.changePassword = { password: "", password2: "" };
+            this.changePasswordError = "";
+            this.showChangePasswordDialog = true;
+            this.$nextTick(() => {
+                if (this.$refs.changePasswordForm) this.$refs.changePasswordForm.resetValidation();
+            });
+        },
+        closeChangePasswordDialog() {
+            this.showChangePasswordDialog = false;
+            this.changePasswordError = "";
+            this.changePassword = { password: "", password2: "" };
+            if (this.$refs.changePasswordForm) this.$refs.changePasswordForm.resetValidation();
+        },
+        validateChangePassword(v) {
+            if (v.length < 6) return '最少6个字符';
+            return v === this.changePassword.password || this.$t('admin.users.password_mismatch');
+        },
+        submitChangePassword() {
+            if (!this.$refs.changePasswordForm.validate()) return;
+            this.changingPassword = true;
+            this.changePasswordError = "";
+            this.$backend("/admin/users", {
+                body: JSON.stringify({ id: this.changePasswordUserId, password: this.changePassword.password }),
+                method: "POST",
+            })
+            .then(rsp => {
+                if (rsp.err !== "ok") {
+                    this.changePasswordError = rsp.msg;
+                } else {
+                    this.$alert("success", this.$t('admin.users.change_password_ok'));
+                    this.closeChangePasswordDialog();
+                }
+            })
+            .finally(() => { this.changingPassword = false; });
         },
         closeAddUserDialog() {
             this.showAddUserDialog = false;

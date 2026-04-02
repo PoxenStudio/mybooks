@@ -264,13 +264,20 @@
             "reading_range_dialog_title": "设置阅读范围",
             "reading_range_all": "允许阅读所有书籍",
             "reading_range_whitelist": "只允许阅读指定分类/标签的书籍",
-            "reading_range_blacklist": "不允许阅读指定分类/标签的书籍",
+            "reading_range_blacklist": "禁止阅读指定分类/标签的书籍",
             "reading_range_categories_label": "允许/禁止的分类",
             "reading_range_tags_label": "允许/禁止的标签",
             "reading_range_tags_hint": "输入关键词搜索标签",
             "reading_range_tags_no_result": "未找到匹配标签",
             "reading_range_save": "保存",
-            "reading_range_save_ok": "阅读范围设置已保存"
+            "reading_range_save_ok": "阅读范围设置已保存",
+            "change_password": "修改密码",
+            "change_password_dialog_title": "修改用户密码",
+            "new_password": "新密码",
+            "confirm_new_password": "确认新密码",
+            "change_password_save": "确认修改",
+            "change_password_ok": "密码修改成功",
+            "password_mismatch": "两次输入的密码不一致"
         }
     },
     "imports": {
