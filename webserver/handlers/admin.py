@@ -107,7 +107,9 @@ class AdminUsers(BaseHandler):
             else:
                 d["extra"]["upload_history_count"] = user.extra.get("upload_history_count", 0)
             items.append(d)
-        return {"err": "ok", "users": {"items": items, "total": total}}
+            user_config = {}
+            user_config["allow_read_range_setting"] = CONF.get("ALLOW_READ_RANGE_SETTING", False)
+        return {"err": "ok", "users": {"items": items, "total": total}, "settings": user_config}
 
     @js
     @auth
@@ -380,6 +382,7 @@ class AdminSettings(BaseHandler):
             "PDF_TILE_WITH_FILE_NAME",
             "ALLOW_NEW_USER_MANAGE_BOOK",
             "ALLOW_NEW_USER_PUSH_BOOK",
+            "ALLOW_READ_RANGE_SETTING",
             "IMPORT_BY_INOTIFY",
             "IMPORT_CATEGORY_WITH_FOLDER",
         ]

@@ -341,6 +341,7 @@
         "allow_guest_register": "Allow guests to register accounts via email",
         "allow_new_user_manage_book": "Newly registered users are enabled to upload and download by default",
         "allow_new_user_push_book": "Newly registered users are enabled to push books to reading devices by default",
+        "allow_read_range_setting": "Allow setting user's reading range (restricting visible or invisible categories or tags)",
         "signup_mail_title": "Activation Email Title",
         "signup_mail_content": "Activation Email Content",
         "reset_mail_title": "Password Reset Email Title",

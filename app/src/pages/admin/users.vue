@@ -29,7 +29,7 @@
                 <span v-if="item.vipquota"> {{ $t('admin.users.vipquota', { count: item.vipquota }) }} </span>
             </template>
             <template v-slot:item.actions="{ item }">
-                <v-btn small color="#336666" class="white--text" @click="openReadingRangeDialog(item)">{{ $t('admin.users.set_reading_range') }}</v-btn>
+                <v-btn small color="#336666" class="white--text" @click="openReadingRangeDialog(item)" v-if="allowReadRangeSetting">{{ $t('admin.users.set_reading_range') }}</v-btn>
                 <v-menu offset-y right>
                     <template v-slot:activator="{ on }">
                         <v-btn color="primary" small v-on="on">{{ $t('admin.users.actions') }} <v-icon small>more_vert</v-icon></v-btn>
@@ -298,6 +298,7 @@ export default {
         tagSuggestions: [],
         loadingTags: false,
         tagSearchTimer: null,
+        allowReadRangeSetting: false,
         newUser: {
             username: "",
             password: "",
@@ -511,6 +512,7 @@ export default {
                     }
                     this.items = rsp.users.items;
                     this.total = rsp.users.total;
+                    this.allowReadRangeSetting = rsp.settings?.allow_read_range_setting || false;
                 })
                 .finally(() => {
                     this.loading = false;

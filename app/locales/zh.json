@@ -512,6 +512,7 @@
         "allow_guest_register": "允许访客以邮箱注册账号",
         "allow_new_user_manage_book": "新注册用户默认启用书籍管理权限，包括上传、编辑、删除、下载。",
         "allow_new_user_push_book": "新注册用户默认启用推送到阅读设备权限",
+        "allow_read_range_setting": "允许设置用户的阅读范围（限制用户可见或不可见的分类或标签）",
         "signup_mail_title": "激活邮件标题",
         "signup_mail_content": "激活邮件正文",
         "reset_mail_title": "重置密码邮件标题",

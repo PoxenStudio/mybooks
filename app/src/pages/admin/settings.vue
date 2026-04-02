@@ -340,6 +340,7 @@ export default {
           { icon: "", key: "ALLOW_GUEST_PUSH", label: "settings.allow_guest_push", type: 'checkbox' },
           { icon: "", key: "ALLOW_NEW_USER_MANAGE_BOOK", label: "settings.allow_new_user_manage_book", type: 'checkbox' },
           { icon: "", key: "ALLOW_NEW_USER_PUSH_BOOK", label: "settings.allow_new_user_push_book", type: 'checkbox' },
+          { icon: "", key: "ALLOW_READ_RANGE_SETTING", label: "settings.allow_read_range_setting", type: 'checkbox' },
         ],
         groups: [
           {
