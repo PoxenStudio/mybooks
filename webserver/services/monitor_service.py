@@ -52,6 +52,10 @@ class MonitorService:
         self._merge_pending: set[str] = set()
         self._last_event_time: float = 0.0
 
+        # 目录重命名 cookie 跟踪：cookie -> (old_path, timestamp)
+        self._move_lock = threading.Lock()
+        self._pending_moves: dict[int, tuple[str, float]] = {}
+
         self._running = False
         self._monitor_thread: threading.Thread | None = None
         self._scheduler_thread: threading.Thread | None = None
@@ -84,8 +88,7 @@ class MonitorService:
         self._running = True
         self._add_watch_recursive(watch_path)
 
-        self._monitor_thread = threading.Thread(
-            target=self._monitor_loop,
+        self._monitor_thread = threading.Thread(target=self._monitor_loop,
             name="MonitorService.inotify",
             daemon=True,
         )
@@ -121,6 +124,7 @@ class MonitorService:
             | inotify_simple.flags.CLOSE_WRITE
             | inotify_simple.flags.DELETE_SELF
             | inotify_simple.flags.MOVE_SELF
+            | inotify_simple.flags.MOVED_FROM
             | inotify_simple.flags.MOVED_TO
         )
 
@@ -172,6 +176,7 @@ class MonitorService:
         CLOSE_WRITE_MASK = int(F.CLOSE_WRITE)
         DELETE_SELF_MASK = int(F.DELETE_SELF)
         MOVE_SELF_MASK = int(F.MOVE_SELF)
+        MOVED_FROM_MASK = int(F.MOVED_FROM)
         MOVED_TO_MASK = int(F.MOVED_TO)
         IGNORED_MASK = int(F.IGNORED)
 
@@ -209,9 +214,30 @@ class MonitorService:
                     continue
 
                 is_dir = bool(mask & IS_DIR_MASK)
+
+                # 目录被移走（MOVED_FROM）：记录旧路径等待匹配 MOVED_TO cookie
+                # 排除非目录的 MOVED_FROM（文件移走不涉及分类更新）
+                if is_dir and (mask & MOVED_FROM_MASK):
+                    if event.cookie:
+                        with self._move_lock:
+                            self._pending_moves[event.cookie] = (full_path, time.monotonic())
+                    continue
+
                 if is_dir and (mask & (CREATE_MASK | MOVED_TO_MASK)):
                     if os.path.isdir(full_path):
                         self._add_watch_recursive(full_path)
+                    # MOVED_TO：尝试匹配 MOVED_FROM cookie
+                    # 匹配成功 → 目录在监控树内重命名/移动（非新建、非从外部移入）
+                    if (mask & MOVED_TO_MASK) and event.cookie:
+                        with self._move_lock:
+                            old_entry = self._pending_moves.pop(event.cookie, None)
+                            # 顺带清理超时 cookie（>5s 无匹配视为移出监控树）
+                            now = time.monotonic()
+                            stale = [c for c, (_, t) in self._pending_moves.items() if now - t > 5]
+                            for c in stale:
+                                self._pending_moves.pop(c, None)
+                        if old_entry:
+                            self._on_dir_rename(old_entry[0], full_path)
                     continue
 
                 if (mask & (CREATE_MASK | CLOSE_WRITE_MASK)) and not is_dir:
@@ -228,6 +254,15 @@ class MonitorService:
             self._pending_files.add(file_path)
             self._last_event_time = time.monotonic()
         logging.debug("[Monitor] 文件变更记录: %s", file_path)
+
+    def _on_dir_rename(self, old_path: str, new_path: str) -> None:
+        """目录在监控树内重命名/移动时调用，按配置更新受影响书籍的分类。"""
+        if not CONF.get("UPDATE_CATEGORY_WITH_FOLDER_RENAME", False):
+            logging.debug("[Monitor] UPDATE_CATEGORY_WITH_FOLDER_RENAME 未启用，跳过分类更新")
+            return
+        scan_upload_path = os.path.realpath(CONF.get("scan_upload_path", ""))
+        logging.info("[Monitor] 目录重命名: %s -> %s", old_path, new_path)
+        ScanService().do_rename_category(old_path, new_path, scan_upload_path)
 
     def _scheduler_loop(self) -> None:
         while self._running:

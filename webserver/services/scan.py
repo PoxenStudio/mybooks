@@ -782,3 +782,61 @@ class ScanService(AsyncService):
         if imported:
             logging.info("[SCAN_IMPORT] Starting auto-fill for %d imported books", len(imported))
             AutoFillService().auto_fill_all(imported)
+
+    @AsyncService.register_service
+    def do_rename_category(self, old_dir_path, new_dir_path, scan_upload_path):
+        """目录重命名/移动后，将 src_path 在旧目录下的书籍分类更新为新目录对应的一级子目录名"""
+        old_dir_path = os.path.realpath(old_dir_path)
+        new_dir_path = os.path.realpath(new_dir_path)
+        scan_upload_path = os.path.realpath(scan_upload_path)
+
+        # 计算新分类名：新路径在 scan_upload_path 下的第一级子目录名
+        try:
+            rel = os.path.relpath(new_dir_path, scan_upload_path)
+        except ValueError:
+            logging.warning("[RENAME] 新目录不在 scan_upload_path 下: %s", new_dir_path)
+            return
+
+        parts = rel.split(os.sep)
+        new_category = parts[0] if parts else ""
+
+        if not new_category or new_category in ('.', '..'):
+            logging.warning("[RENAME] 无效的分类名: %s", new_category)
+            return
+        if len(new_category) >= 10 or any(c in new_category for c in ',:;|/\'"\t '):
+            logging.warning("[RENAME] 分类名含非法字符或过长，跳过: '%s'", new_category)
+            return
+
+        # 查找 src_path 在旧目录下的所有 Item
+        sep = os.sep
+        all_items = self.session.query(Item).all()
+        affected = [
+            item for item in all_items
+            if item.src_path and (
+                os.path.realpath(item.src_path) == old_dir_path or
+                os.path.realpath(item.src_path).startswith(old_dir_path + sep)
+            )
+        ]
+
+        if not affected:
+            logging.info("[RENAME] 未找到 src_path 在 '%s' 下的书籍，无需更新", old_dir_path)
+            return
+
+        logging.info("[RENAME] 找到 %d 本书籍，分类更新为 '%s'", len(affected), new_category)
+        for item in affected:
+            try:
+                self.db.new_api.set_field(CALIBRE_COLUMN_CATEGORY, {item.book_id: new_category})
+                # 同步更新 src_path 为新路径，方便后续重命名链式追踪
+                suffix = os.path.realpath(item.src_path)[len(old_dir_path):]
+                item.src_path = new_dir_path + suffix
+                logging.info("[RENAME] book_id=%d 分类->%s, src_path->%s",
+                             item.book_id, new_category, item.src_path)
+            except Exception as e:
+                logging.error("[RENAME] 更新 book_id=%d 失败: %s", item.book_id, e)
+
+        try:
+            self.session.commit()
+            logging.info("[RENAME] 分类批量更新提交完成")
+        except Exception as e:
+            logging.error("[RENAME] 提交失败: %s", e)
+            self.session.rollback()
