@@ -327,23 +327,25 @@ def make_app():
     logging.info("Now, Running...")
     need_sync_item_time = AsyncService().setup(book_db, ScopedSession)
 
-    # Initialize WebDAV service
-    from webserver.webdav.server import create_webdav_app
-    from webserver.webdav.handler import WebDAVHandler
+    webdav_routes = []
+    if CONF.get("ENABLE_WEBDAV_SERVICE", False):
+        # Initialize WebDAV service
+        from webserver.webdav.server import create_webdav_app
+        from webserver.webdav.handler import WebDAVHandler
 
-    try:
-        logging.info("Initializing WebDAV service on /books path...")
-        webdav_app = create_webdav_app(cache, ScopedSession)
+        try:
+            logging.info("Initializing WebDAV service on /books path...")
+            webdav_app = create_webdav_app(cache, ScopedSession)
 
-        # Create routes with WebDAV at /books/*
-        webdav_routes = [
-            (r"/books/?(.*)", WebDAVHandler, dict(wsgi_app=webdav_app)),
-        ]
-        logging.info("WebDAV service initialized successfully")
-    except Exception as e:
-        logging.error(f"Failed to initialize WebDAV service: {e}")
-        logging.error(traceback.format_exc())
-        webdav_routes = []
+            # Create routes with WebDAV at /books/*
+            webdav_routes = [
+                (r"/books/?(.*)", WebDAVHandler, dict(wsgi_app=webdav_app)),
+            ]
+            logging.info("WebDAV service initialized successfully")
+        except Exception as e:
+            logging.error(f"Failed to initialize WebDAV service: {e}")
+            logging.error(traceback.format_exc())
+            webdav_routes = []
 
     # Assemble routes carefully:
     # WebDAV must come before files.routes() because files has a catch-all (r"/(.*)")

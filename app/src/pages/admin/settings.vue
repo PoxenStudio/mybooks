@@ -464,6 +464,7 @@ export default {
           { icon: "info", key: "convert_timeout", label: "settings.convert_timeout" },
           { icon: "mdi-file-pdf-box", key: "PDF_TILE_WITH_FILE_NAME", label: "settings.pdf_tile_with_file_name", type: 'checkbox' },
           { icon: "mdi-bookshelf", key: "ENABLE_PHYSICAL_BOOKS", label: "settings.enable_physical_books", type: 'checkbox' },
+          { icon: "mdi-cloud-sync", key: "ENABLE_WEBDAV_SERVICE", label: "settings.enable_webdav_service", type: 'checkbox' },
           { icon: "mdi-cloud-arrow-up-outline", key: "WEBDAV_SYNC_FOLDER", label: "settings.enable_webdav_sync", type: 'checkbox' },
           { icon: "mdi-cloud-print-outline", key: "ENABLE_OPDS_SERVICE", label: "settings.enable_opds_service", type: 'checkbox' },
           { icon: "mdi-restart", key: "autoreload", label: "settings.autoreload", type: 'checkbox' },

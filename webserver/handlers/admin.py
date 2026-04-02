@@ -375,6 +375,7 @@ class AdminSettings(BaseHandler):
             "MAIN_PAGE_RECENT_COUNT",
             "INDEX_PAGE_TYPE",
             "DEFAULT_PAGE_SIZE",
+            "ENABLE_WEBDAV_SERVICE"
             "WEBDAV_SYNC_FOLDER",
             "ENABLE_AUDIO_CONVERSION_LOG",
             "ENABLE_OPDS_SERVICE",
