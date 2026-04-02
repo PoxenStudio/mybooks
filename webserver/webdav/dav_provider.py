@@ -233,6 +233,7 @@ class BooksCollection(VirtualCollection):
     def get_dynamic_members(self):
         books = []
         other_soled_ids = self.provider.others_soled_books_id(self.environ)
+        read_limit, limit_cats, limit_tags = self.provider._get_user_reading_range(self.environ)
         # Use cache.get_metadata() to fetch each book's metadata
         # Note: this is less efficient than batch fetch but cache API doesn't have batch method
         # The cache should have internal optimization
@@ -247,6 +248,10 @@ class BooksCollection(VirtualCollection):
 
                     if book_id in other_soled_ids:
                         logging.info(f"Skipping book ID {book_id} because it's not in sold IDs")
+                        continue
+
+                    if not self.provider._is_book_in_reading_range(mi, read_limit, limit_cats, limit_tags):
+                        logging.info(f"Skipping book ID {book_id} due to reading range restriction")
                         continue
 
                     logging.info(f"Fetching book ID {book_id}, title: {mi.title}, id:{mi.id}")
@@ -457,7 +462,7 @@ class TalebookProvider(DAVProvider):
             return None
 
         if section == "分类":
-            return self.handle_custom(path, environ, parts)
+            return self.handle_category(path, environ, parts)
         elif section == "标签":
             return self.handle_tags(path, environ, parts)
         elif section == "作者":
@@ -487,7 +492,7 @@ class TalebookProvider(DAVProvider):
                     logging.error(f"Failed to handle as filesystem path: {e}")
             return None
 
-    def handle_custom(self, path, environ, parts):
+    def handle_category(self, path, environ, parts):
         if len(parts) == 1:
             children = []
             try:
@@ -509,6 +514,14 @@ class TalebookProvider(DAVProvider):
                 logging.error(f"Error getting categories: {e}")
                 import traceback
                 logging.error(traceback.format_exc())
+
+            # 按阅读范围过滤分类列表
+            read_limit, limit_cats, _ = self._get_user_reading_range(environ)
+            if read_limit != 0 and limit_cats:
+                if read_limit == 1:
+                    children = [c for c in children if c.title in limit_cats]
+                else:
+                    children = [c for c in children if c.title not in limit_cats]
 
             return VirtualCollection(path, environ, "分类", self, children)
 
@@ -560,6 +573,15 @@ class TalebookProvider(DAVProvider):
             except Exception as e:
                 logging.error(f"Error getting tags: {e}")
                 pass
+
+            # 按阅读范围过滤标签列表
+            read_limit, _, limit_tags = self._get_user_reading_range(environ)
+            if read_limit != 0 and limit_tags:
+                if read_limit == 1:
+                    children = [c for c in children if c.title in limit_tags]
+                else:
+                    children = [c for c in children if c.title not in limit_tags]
+
             return VirtualCollection(path, environ, "标签", self, children)
         elif len(parts) == 2:
             tag_name = unquote(parts[1])  # Ensure decoded
@@ -640,6 +662,43 @@ class TalebookProvider(DAVProvider):
         except Exception as e:
             logging.error(f"Error getting user ID: {e}")
             return None
+
+    def _get_user_reading_range(self, environ):
+        """获取当前用户的阅读范围设置，返回 (read_limit, limit_categories_set, limit_tags_set)"""
+        username = environ.get('wsgidav.auth.user_name', None)
+        if not username or not self.get_session_func:
+            return 0, set(), set()
+        try:
+            from webserver.models import Reader
+            session = self.get_session_func()
+            user = session.query(Reader).filter(Reader.username == username).first()
+            if not user:
+                return 0, set(), set()
+            read_limit = getattr(user, 'read_limit', 0) or 0
+            limit_cats = set(filter(None, (user.limit_categories or "").split(',')))
+            limit_tags = set(filter(None, (user.limit_tags or "").split(',')))
+            return read_limit, limit_cats, limit_tags
+        except Exception as e:
+            logging.error(f"Error getting user reading range: {e}")
+            return 0, set(), set()
+
+    def _is_book_in_reading_range(self, mi, read_limit, limit_cats, limit_tags):
+        """检查书籍是否在用户的阅读范围内"""
+        if read_limit == 0:
+            return True
+        book_category = ""
+        try:
+            cat_val = mi.get('#category')
+            if cat_val:
+                book_category = str(cat_val)
+        except Exception:
+            pass
+        book_tags = set(mi.tags or [])
+        matched = (
+            (limit_cats and book_category in limit_cats) or
+            bool(limit_tags and book_tags & limit_tags)
+        )
+        return matched if read_limit == 1 else not matched
 
     def _get_reading_state_books(self, environ, filter_func, title):
         """获取符合条件的阅读状态书籍"""
