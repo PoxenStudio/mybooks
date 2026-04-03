@@ -204,7 +204,7 @@
                 </v-col>
                 <v-col class='py-0' cols=12 sm=3>
                   <v-text-field small hide-details single-line
-                    v-model="settings['SOCIAL_AUTH_' + s.value.toUpperCase() + '_KEY']" :label="Key" placeholder="Key"
+                    v-model="settings['SOCIAL_AUTH_' + s.value.toUpperCase() + '_KEY']" :label="Key" placeholder="Key/AppID"
                     type="text"></v-text-field>
                 </v-col>
                 <v-col class='py-0' cols=12 sm=7>
