@@ -495,6 +495,7 @@ export default {
                         { icon: "mdi-account", href: "/admin/users", text: "appHeader.userManagement", color: "primary"},
                         { icon: "mdi-library-shelves", href: "/admin/books", text: "appHeader.bookManagement", color: "primary"},
                         { icon: "mdi-import", href: "/admin/imports", text: "appHeader.importBooks", color: "primary"},
+                        { icon: "mdi-math-log", href: "/syslog", text: "appHeader.syslog", color: "primary"},
                         { icon: "sms_failed", action: "openFeedback", text: "appHeader.feedback", color: "primary"},
                     ],
                 },

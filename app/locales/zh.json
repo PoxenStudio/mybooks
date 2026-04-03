@@ -706,6 +706,7 @@
         "audioBooks": "有声书",
         "systemVersion": "系统版本",
         "userCount": "用户数",
+        "syslog": "系统日志",
         "opdsIntroduction": "OPDS介绍",
         "webdavIntroduction": "WebDAV访问",
         "search": "搜索",
@@ -820,5 +821,14 @@
         "dailyLimitExceeded": "今日已下载过此音频合集，请明天再试",
         "purchaseHint": "购买后解锁全部章节及下载功能",
         "downloadFailed": "下载失败，请稍后重试"
+    },
+    "syslog": {
+        "title": "系统日志",
+        "subtitle": "（最近 1000 行）",
+        "refresh": "刷新",
+        "download": "下载",
+        "empty": "（暂无日志）",
+        "fetchFailed": "获取日志失败",
+        "pageTitle": "系统日志"
     }
 }

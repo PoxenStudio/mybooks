@@ -700,6 +700,7 @@
         "audioBooks": "Audio Books",
         "systemVersion": "Revision",
         "userCount": "User Count",
+        "syslog": "System Log",
         "opdsIntroduction": "About OPDS",
         "webdavIntroduction": "About WebDAV",
         "search": "Search",
@@ -813,5 +814,14 @@
         "dailyLimitExceeded": "You have already downloaded this audio collection today, please try again tomorrow",
         "purchaseHint": "Purchase to unlock all chapters and download functionality",
         "downloadFailed": "Download failed, please try again later"
+    },
+    "syslog": {
+        "title": "System Log",
+        "subtitle": "(last 1000 lines)",
+        "refresh": "Refresh",
+        "download": "Download",
+        "empty": "(No logs available)",
+        "fetchFailed": "Failed to fetch logs",
+        "pageTitle": "System Log"
     }
 }

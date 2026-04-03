@@ -39,6 +39,7 @@ USER_UPDATE_TS_MAP = {}
 ENABLE_VIP_QUOTA_KEY = "ENABLE_VIP_QUOTA"
 META_ALL_SOURCES = ["douban", "baidu", "google", "amazon", "xinhua"]
 DEFAULT_META_SOURCES = ["douban", "baidu", "xinhua"]
+LOG_PATH = "/data/log/talebook.log"
 
 
 class AdminUsers(BaseHandler):
@@ -1045,6 +1046,45 @@ class LibraryStats(BaseHandler):
         return {"err": "ok", "stats": stats}
 
 
+class AdminSyslog(BaseHandler):
+    MAX_LINES = 1500
+
+    @js
+    @is_admin
+    def get(self):
+        try:
+            if not os.path.exists(LOG_PATH):
+                return {"err": "ok", "lines": []}
+            with open(LOG_PATH, "r", encoding="utf-8", errors="replace") as f:
+                lines = f.readlines()
+            return {"err": "ok", "lines": [l.rstrip("\n") for l in lines[-self.MAX_LINES:]]}
+        except Exception as e:
+            logging.error("Failed to read syslog: %s", e)
+            return {"err": "failed", "msg": str(e), "href": self.cdn_url + "/api/admin/syslog/download"}
+
+
+class AdminSyslogDownload(BaseHandler):
+    @is_admin
+    def get(self):
+        today = datetime.datetime.now().strftime("%Y_%m_%d")
+        filename = f"talebook_log_{today}.log"
+        try:
+            if not os.path.exists(LOG_PATH):
+                content = b""
+            else:
+                with open(LOG_PATH, "rb") as f:
+                    content = f.read()
+        except Exception as e:
+            logging.error("Failed to read syslog for download: %s", e)
+            self.set_status(500)
+            self.finish(str(e))
+            return
+        self.set_header("Content-Type", "text/plain; charset=utf-8")
+        self.set_header("Content-Disposition", f"attachment; filename=\"{filename}\"")
+        self.set_header("Content-Length", len(content))
+        self.finish(content)
+
+
 def routes():
     return [
         (r"/api/admin/ssl", AdminSSL),
@@ -1066,4 +1106,6 @@ def routes():
         (r"/api/admin/trash/size", AdminTrashSize),
         (r"/api/admin/trash/clear", AdminTrashClear),
         (r"/api/library/stats", LibraryStats),
+        (r"/api/admin/syslog", AdminSyslog),
+        (r"/api/admin/syslog/download", AdminSyslogDownload),
     ]
