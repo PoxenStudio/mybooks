@@ -294,11 +294,6 @@ class AdminSettings(BaseHandler):
         sns = [
             {"value": "qq", "text": "QQ", "link": "https://connect.qq.com/"},
             {
-                "value": "amazon",
-                "text": "Amazon",
-                "link": "https://developer.amazon.com/zh/docs/login-with-amazon/web-docs.html",
-            },
-            {
                 "value": "github",
                 "text": "Github",
                 "link": "https://github.com/settings/applications/new",
@@ -309,7 +304,7 @@ class AdminSettings(BaseHandler):
                 "link": "http://open.weibo.com/developers",
             },
             {
-                "value": "wechat",
+                "value": "weixin",
                 "text": u"微信",
                 "link": "https://developers.weixin.qq.com/doc/offiaccount/OA_Web_Apps/Wechat_webpage_authorization.html",
             },

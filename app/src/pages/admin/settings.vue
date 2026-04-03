@@ -204,12 +204,12 @@
                 </v-col>
                 <v-col class='py-0' cols=12 sm=3>
                   <v-text-field small hide-details single-line
-                    v-model="settings['SOCIAL_AUTH_' + s.value.toUpperCase() + '_KEY']" :label="Key"
+                    v-model="settings['SOCIAL_AUTH_' + s.value.toUpperCase() + '_KEY']" :label="Key" placeholder="Key"
                     type="text"></v-text-field>
                 </v-col>
                 <v-col class='py-0' cols=12 sm=7>
                   <v-text-field small hide-details single-line
-                    v-model="settings['SOCIAL_AUTH_' + s.value.toUpperCase() + '_SECRET']" :label="Secert"
+                    v-model="settings['SOCIAL_AUTH_' + s.value.toUpperCase() + '_SECRET']" :label="Secert" placeholder="Secret"
                     type="text"></v-text-field>
                 </v-col>
               </v-row>
@@ -618,7 +618,7 @@ export default {
     },
     show_sns_config: function (s) {
       var msg = `${this.$t('settings.sns_config_message', { text: s.text, link: s.link, site_url: this.site_url, value: s.value })}`;
-      this.$alert("success", msg);
+      this.$alert("warning", msg);
     },
     apply_bookbarn_token() {
       this.appliedToken = true;

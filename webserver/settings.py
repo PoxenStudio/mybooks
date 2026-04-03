@@ -103,6 +103,7 @@ settings = {
         'social_core.backends.weibo.WeiboOAuth2',
         'social_core.backends.amazon.AmazonOAuth2',
         'social_core.backends.github.GithubOAuth2',
+        'social_core.backends.weixin.WeixinOAuth2',
     ),
 
     # See: http://open.weibo.com/developers
