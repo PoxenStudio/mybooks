@@ -484,7 +484,7 @@
                                 </v-chip>
                             </div>
                             <div class="tag-chips" style="margin-top: 5px;">
-                                <v-chip rounded smallF color="#003153" class="white--text"
+                                <v-chip rounded smallF color="indigo" class="white--text"
                                         @click="ai_fill_book" :loading="ai_filling">
                                     <v-icon left>mdi-robot</v-icon>
                                     {{ $t('book.aiUpdate') }}
@@ -506,7 +506,7 @@
                             </div>
                             <div class="tag-chips">
                                 <v-chip v-if="book.ext_link" dark color="indigo" :href="book.ext_link" target="_blank" rel="noopener noreferrer">
-                                    <v-icon left>mdi-link</v-icon>
+                                    <v-icon left>mdi-link-variant</v-icon>
                                     {{ $t('book.ext_link')}}
                                 </v-chip>
                                 <template v-for="(author, index) in book.authors" :key="'author-' + index">
