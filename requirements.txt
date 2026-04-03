@@ -20,7 +20,7 @@ beautifulsoup4==4.12.3
 EbookLib==0.19
 mutagen==1.47.0
 openai
-requests==2.32.4
+requests==2.32.5
 edge-tts==7.2.7
 pydub==0.25.1
 wyoming==1.6.0
