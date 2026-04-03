@@ -1601,10 +1601,10 @@ class SearchBook(ListHandler):
     CALIBRE_KEYS = ("title:", "authors:", "comments:", "publisher:", "isbn:", "publisher:", "series:", "tags:", "author:")
 
     def _clear(self, text):
-        # 去除字串中的()，以免影响查询
+        # 去除字串中的括号及其内容，以免影响查询
         if not text:
             return text
-        text = text.replace("(", " ").replace(")", " ")
+        text = re.sub(r"\([^)]*\)|（[^）]*）", " ", text)
         return text.strip()
 
     def _add_books(self, result_ids, ids, seen):
