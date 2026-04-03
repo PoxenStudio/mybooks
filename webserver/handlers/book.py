@@ -48,6 +48,7 @@ from webserver.constants import CALIBRE_ERROR_FLAG, SUPPORTED_EBOOK_FORMATS
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT
 from webserver.constants import BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL, AUTO_FILL_META
 from webserver.constants import META_SOURCE_GOOGLE, META_SOURCE_AMAZON
+from webserver.constants import COLUMN_EXT_LINK, CALIBRE_COLUMN_EXT_LINK
 
 
 CONF = loader.get_settings()
@@ -1380,6 +1381,14 @@ class BookEdit(BaseHandler):
                 self.calibre_db_cache.set_field(CALIBRE_COLUMN_CATEGORY, {bid: category})
             else:
                 logging.error("Too many characters in the category, ignore it!")
+        if COLUMN_EXT_LINK in data:
+            ext_link = data[COLUMN_EXT_LINK].strip()
+            if len(ext_link) < 500 and (ext_link.startswith('http://') or ext_link.startswith('https://')):
+                mi.set(CALIBRE_COLUMN_EXT_LINK, ext_link)
+                self.calibre_db_cache.set_field(CALIBRE_COLUMN_EXT_LINK, {bid: ext_link})
+            else:
+                logging.error("Too many characters in the external link, ignore it!")
+
         mi.timestamp = nowf()
         mi.title_sort = utils.get_title_sort(mi.title)
         self.calibre_db.set_metadata(bid, mi, force_changes=True)
@@ -1591,6 +1600,13 @@ class RecentBook(ListHandler):
 class SearchBook(ListHandler):
     CALIBRE_KEYS = ("title:", "authors:", "comments:", "publisher:", "isbn:", "publisher:", "series:", "tags:", "author:")
 
+    def _clear(self, text):
+        # 去除字串中的()，以免影响查询
+        if not text:
+            return text
+        text = text.replace("(", " ").replace(")", " ")
+        return text.strip()
+
     def _add_books(self, result_ids, ids, seen):
         if not result_ids:
             return
@@ -1654,8 +1670,12 @@ class SearchBook(ListHandler):
         title = _(u"搜索：%(name)s") % {"name": name}
         ids = []
         seen = set()
-
         seg_or_query = None
+
+        if not calibre_query:
+            book_title = self._clear(book_title)
+            name = self._clear(name)
+
         # 只有当 seg=1 时才进行分词搜索
         if seg == 1 and title_search and not calibre_query:
             # 分词搜索：当name长度在2-10之间且jieba可用时

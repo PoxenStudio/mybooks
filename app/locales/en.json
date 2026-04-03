@@ -476,6 +476,8 @@
                 "pubdate": "Publication Date",
                 "isbn": "ISBN",
                 "language": "Language",
+                "ext_link": "Book Link",
+                "ext_link_invalid": "Please enter a URL starting with http:// or https://",
                 "tags": {
                     "noData": "Please enter a new tag name",
                     "add": "Add Tag"
@@ -597,7 +599,8 @@
         "formatAlreadyExists": "This format file already exists",
         "uploadSuccess": "Format uploaded successfully",
         "uploadFailed": "Upload failed",
-        "uploadFailedNetwork": "Network error"
+        "uploadFailedNetwork": "Network error",
+        "ext_link": "External Link"
     },
     "reader": {
         "tip": {

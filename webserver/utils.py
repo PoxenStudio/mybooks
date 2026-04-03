@@ -4,7 +4,8 @@ import datetime
 import logging
 import re
 from gettext import gettext as _
-from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT, CALIBRE_COLUMN_CATEGORY
+from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT
+from webserver.constants import CALIBRE_COLUMN_EXT_LINK, CALIBRE_COLUMN_CATEGORY
 from webserver.constants import BOOK_TYPE_EBOOK
 
 
@@ -83,6 +84,7 @@ class SimpleBookFormatter:
         category = self.val(CALIBRE_COLUMN_CATEGORY, '').strip()
         book_type = self.val(CALIBRE_COLUMN_BOOK_TYPE, self.book.get("book_type", BOOK_TYPE_EBOOK))
         book_count = self.val(CALIBRE_COLUMN_PHY_COUNT, self.book.get("book_count", 1))
+        ext_link = self.val(CALIBRE_COLUMN_EXT_LINK, '').strip()
         return {
             "id": b["id"],
             "title": b["title"],
@@ -111,6 +113,7 @@ class SimpleBookFormatter:
             "book_count": self.book.get("book_count", book_count),
             "state": self.book.get("state", {}),
             'category': category,
+            'ext_link': ext_link,
             'files': self.get_files()
         }
 

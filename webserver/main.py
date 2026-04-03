@@ -24,6 +24,7 @@ from webserver.services import AsyncService
 from webserver.services.book_barn import BookBarnService
 from webserver.services.item_sync import ItemSyncService
 from webserver.constants import COLUMN_CATEGORY, COLUMN_PHY_COUNT, COLUMN_BOOK_TYPE
+from webserver.constants import COLUMN_EXT_LINK
 from webserver.version import VERSION
 
 CONF = loader.get_settings()
@@ -269,6 +270,7 @@ def make_app():
         added_category = add_meta_in_calibre(cache, COLUMN_CATEGORY, "Book Category", "text")
         added_phy_count = add_meta_in_calibre(cache, COLUMN_PHY_COUNT, "Physical Book Count", "int")
         added_source = add_meta_in_calibre(cache, COLUMN_BOOK_TYPE, "Book Type", "int")
+        _ = add_meta_in_calibre(cache, COLUMN_EXT_LINK, "External Link", "text")
         if added_source or added_category or added_phy_count:
             need_sync_item_to_calibre = True
             # reload the db to make the new columns take effect

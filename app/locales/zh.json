@@ -337,6 +337,8 @@
                 "pubdate": "出版日期",
                 "isbn": "ISBN编号",
                 "language": "语言",
+                "ext_link": "图书链接",
+                "ext_link_invalid": "无效的链接",
                 "tags": {
                     "noData": "请输入新的标签名称",
                     "add": "添加标签"
@@ -458,7 +460,8 @@
         "formatAlreadyExists": "该格式文件已存在",
         "uploadSuccess": "格式上传成功",
         "uploadFailed": "上传失败",
-        "uploadFailedNetwork": "网络错误"
+        "uploadFailedNetwork": "网络错误",
+        "ext_link": "图书链接"
     },
     "reader": {
         "tip": {

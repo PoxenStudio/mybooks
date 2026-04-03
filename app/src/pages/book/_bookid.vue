@@ -505,6 +505,10 @@
                                 </v-menu>
                             </div>
                             <div class="tag-chips">
+                                <v-chip v-if="book.ext_link" dark color="indigo" :href="book.ext_link" target="_blank" rel="noopener noreferrer">
+                                    <v-icon left>mdi-link</v-icon>
+                                    {{ $t('book.ext_link')}}
+                                </v-chip>
                                 <template v-for="(author, index) in book.authors" :key="'author-' + index">
                                     <v-chip
                                         rounded
@@ -517,7 +521,7 @@
                                         {{ author }}
                                     </v-chip>
                                 </template>
-                                <v-chip rounded small dark color="indigo"
+                                <v-chip rounded dark color="indigo"
                                         :to="'/publisher/' + encodeURIComponent(book.publisher)">
                                     <v-icon>group</v-icon>
                                     {{ $t('book.publisher') }}：{{ book.publisher }}

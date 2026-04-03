@@ -74,7 +74,7 @@
                                 <v-col class='py-0' cols=12>
                                     <!-- TAGS -->
                                     <v-combobox v-model="book.tags" :items="book.tags" :label="$t('book.edit.fields.tags')"
-                                                :search-input.sync="tag_input" hide-selected multiple small-chips>
+                                                :search-input.sync="tag_input" hide-selected multiple small-chips">
                                         <template v-slot:no-data>
                                             <v-list-item>
                                                 <span v-if="! tag_input">{{ $t('book.edit.fields.tags.noData') }}</span>
@@ -96,6 +96,13 @@
                                             </v-chip>
                                         </template>
                                     </v-combobox>
+                                </v-col>
+                                <v-col>
+                                    <v-text-field
+                                        :label="$t('book.edit.fields.ext_link')"
+                                        v-model="book.ext_link"
+                                        :rules="[v => !v || /^https?:\/\/.+/.test(v) || $t('book.edit.fields.ext_link_invalid')]"
+                                    >{{ book.ext_link }}</v-text-field>
                                 </v-col>
                                 <v-col class='py-0' cols="12">
                                     <v-textarea small outlined rows="15" :label="$t('book.edit.fields.comments')" v-model="book.comments"
