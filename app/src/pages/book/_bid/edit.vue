@@ -74,15 +74,14 @@
                                 <v-col class='py-0' cols=12>
                                     <!-- TAGS -->
                                     <v-combobox v-model="book.tags" :items="book.tags" :label="$t('book.edit.fields.tags')"
-                                                :search-input.sync="tag_input" hide-selected multiple small-chips">
+                                                :search-input.sync="tag_input" hide-selected multiple small-chips>
                                         <template v-slot:no-data>
                                             <v-list-item>
-                                                <span v-if="! tag_input">{{ $t('book.edit.fields.tags.noData') }}</span>
+                                                <span v-if="!tag_input">{{ $t('book.edit.fields.tags.noData') }}</span>
                                                 <div v-else>
                                                     <span class="subheading">{{ $t('book.edit.fields.tags.add') }}</span>
-                                                    <v-chip color="green lighten-3" label small rounded> {{
-                                                            tag_input
-                                                        }}
+                                                    <v-chip color="green lighten-3" label small rounded>
+                                                        {{tag_input}}
                                                     </v-chip>
                                                 </div>
                                             </v-list-item>
