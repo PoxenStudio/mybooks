@@ -71,10 +71,13 @@
             </template>
 
             <template v-for="g in card.groups">
-              <v-checkbox :key="g.label" small hide-details v-model="settings[g.key]" :label="$t(g.label)"></v-checkbox>
+              <v-checkbox :key="g.label" small hide-details v-model="settings[g.key]" :label="$t(g.label)" :prepend-icon="g.icon">
+              </v-checkbox>
               <template v-if="settings[g.key]">
                 <template v-for="f in g.fields">
-                  <v-textarea outlined v-if="f.type === 'textarea'" :prepend-icon="f.icon" v-model="settings[f.key]"
+                  <v-checkbox small hide-details v-if="f.type === 'checkbox'" :prepend-icon="f.icon" v-model="settings[f.key]"
+                    :key="f.key + '-checkbox'" :label="$t(f.label)"></v-checkbox>
+                  <v-textarea outlined v-else-if="f.type === 'textarea'" :prepend-icon="f.icon" v-model="settings[f.key]"
                     :key="f.key" :label="$t(f.label)"></v-textarea>
                   <v-text-field v-else :prepend-icon="f.icon" v-model="settings[f.key]" :key="f.key + '-text'"
                     :label="$t(f.label)" type="text"></v-text-field>
@@ -334,23 +337,24 @@ export default {
         show: false,
         title: "settings.user_settings",
         fields: [
-          { icon: "info", key: "ALLOW_GUEST_READ", label: "settings.allow_guest_read", type: 'checkbox' },
-          { icon: "info", key: "ALLOW_GUEST_DOWNLOAD", label: "settings.allow_guest_download", type: 'checkbox' },
-          { icon: "info", key: "ALLOW_GUEST_UPLOAD", label: "settings.allow_guest_upload", type: 'checkbox' },
-          { icon: "info", key: "ALLOW_GUEST_PUSH", label: "settings.allow_guest_push", type: 'checkbox' },
-          { icon: "info", key: "ALLOW_NEW_USER_MANAGE_BOOK", label: "settings.allow_new_user_manage_book", type: 'checkbox' },
-          { icon: "info", key: "ALLOW_NEW_USER_PUSH_BOOK", label: "settings.allow_new_user_push_book", type: 'checkbox' },
+          { icon: "mdi-read", key: "ALLOW_GUEST_READ", label: "settings.allow_guest_read", type: 'checkbox' },
+          { icon: "mdi-download", key: "ALLOW_GUEST_DOWNLOAD", label: "settings.allow_guest_download", type: 'checkbox' },
+          { icon: "mdi-upload", key: "ALLOW_GUEST_UPLOAD", label: "settings.allow_guest_upload", type: 'checkbox' },
+          { icon: "mdi-send", key: "ALLOW_GUEST_PUSH", label: "settings.allow_guest_push", type: 'checkbox' },
+          { icon: "mdi-book-multiple", key: "ALLOW_NEW_USER_MANAGE_BOOK", label: "settings.allow_new_user_manage_book", type: 'checkbox' },
+          { icon: "mdi-tablet-cellphone", key: "ALLOW_NEW_USER_PUSH_BOOK", label: "settings.allow_new_user_push_book", type: 'checkbox' },
           { icon: "info", key: "ALLOW_READ_RANGE_SETTING", label: "settings.allow_read_range_setting", type: 'checkbox' },
         ],
         groups: [
           {
+            icon: "mdi-at",
             key: "ALLOW_REGISTER",
             label: "settings.allow_guest_register",
             fields: [
-              { icon: "info", key: "SIGNUP_MAIL_TITLE", label: "settings.signup_mail_title" },
-              { icon: "info", key: "SIGNUP_MAIL_CONTENT", label: "settings.signup_mail_content", type: 'textarea' },
-              { icon: "info", key: "RESET_MAIL_TITLE", label: "settings.reset_mail_title" },
-              { icon: "info", key: "RESET_MAIL_CONTENT", label: "settings.reset_mail_content", type: 'textarea' },
+              { icon: "mdi-format-title", key: "SIGNUP_MAIL_TITLE", label: "settings.signup_mail_title" },
+              { icon: "mdi-subtitles-outline", key: "SIGNUP_MAIL_CONTENT", label: "settings.signup_mail_content", type: 'textarea' },
+              { icon: "mdi-format-title", key: "RESET_MAIL_TITLE", label: "settings.reset_mail_title" },
+              { icon: "mdi-subtitles-outline", key: "RESET_MAIL_CONTENT", label: "settings.reset_mail_content", type: 'textarea' },
             ],
           },
         ],
@@ -442,9 +446,17 @@ export default {
           { icon: "info", key: "MAX_UPLOAD_SIZE", label: "settings.max_upload_size" },
           { icon: "info", key: "CHUNK_UPLOAD_SIZE", label: "settings.chunk_upload_size" },
           { icon: "mdi-shape-plus", key: "IMPORT_CATEGORY_WITH_FOLDER", label: "settings.category_with_folder", type: 'checkbox'},
-          { icon: "mdi-crosshairs-gps", key: "IMPORT_BY_INOTIFY", label: "settings.auto_importing", type: 'checkbox'},
-          { icon: "info", key: "UPDATE_CATEGORY_WITH_FOLDER_RENAME", label: "settings.update_category_with_folder_rename", type: 'checkbox'},
-        ]
+        ],
+        groups: [
+          {
+            icon: "mdi-crosshairs-gps",
+            key: "IMPORT_BY_INOTIFY",
+            label: "settings.auto_importing",
+            fields: [
+              { icon: "mdi-swap-horizontal", key: "UPDATE_CATEGORY_WITH_FOLDER_RENAME", label: "settings.update_category_with_folder_rename", type: 'checkbox'},
+            ],
+          },
+        ],
       },
 
       {

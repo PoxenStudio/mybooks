@@ -555,7 +555,7 @@
         "import_and_upload": "导入与上传",
         "category_with_folder": "使用第一级目录为自定义类别名称 (如导入目录下a/b/c.epub导入后, 类别为a。目录名不要有特殊字符，超过10个字符会被忽略)",
         "auto_importing":"监控导入目录，自动进行导入 (只处理新增入库，删除文件没有影响。如果放入的文件不完整，会被忽略。尽量保留导入记录，避免重复处理)",
-        "update_category_with_folder_rename":"启用监控导入目录后，重命名第一级目录会更新已导入书籍的类别",
+        "update_category_with_folder_rename":"监控导入目录后，重命名第一级目录或文件移动到新的目录时使用最新的一级目录名更新已导入书籍的类别",
         "advanced_settings": "高级配置项",
         "enable_physical_books": "启用添加实体书功能",
         "cdn_domain": "CDN域名",
