@@ -150,7 +150,7 @@ class ScanService(AsyncService):
         inserted_hash = set()
         for fname, fpath, fmt in tasks:
             samefiles = self.session.query(ScanFile).filter(ScanFile.path == fpath)
-            logging.info("[SCAN]Checking same files for path: %s, return count:%d", fpath, samefiles.count())
+            logging.info("[SCAN]Checking same files for path: %s (fname:%s), return count:%d", fpath, fname, samefiles.count())
             if samefiles.count() > 0:
                 # 如果已经有相同的文件记录，则跳过
                 found_book = False
@@ -213,6 +213,7 @@ class ScanService(AsyncService):
                 continue
 
             fpath = row.path
+            fname = os.path.basename(row.path)
 
             # 读取文件，计算哈希值
             sha256 = hashlib.sha256()
@@ -290,11 +291,13 @@ class ScanService(AsyncService):
                 row.title = None
                 if not self.save_or_rollback(row):
                     logging.error("[SCAN]Failed to save row status: %s", fpath)
+                logging.info("[SCAN]Failed to get metadata for file %s, mark as invalid", fpath)
                 continue
 
             if fmt == "txt":
                 mi.title = utils.remove_zlibrary_suffix(fname.replace("." + fmt, ""))
                 mi.authors = [_(u"佚名")]
+                logging.info("[SCAN]Parsed metadata for txt file %s: title=%s", fpath, mi.title)
             elif fmt == "pdf":
                 if CONF.get("PDF_TILE_WITH_FILE_NAME", False):
                     mi.title = utils.remove_zlibrary_suffix(fname.replace("." + fmt, ""))
