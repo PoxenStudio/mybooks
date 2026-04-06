@@ -226,6 +226,24 @@ class BaseHandler(web.RequestHandler):
         self.login_user(user)
         return True
 
+    def process_auth_token(self):
+        token = self.get_argument("token", None) or self.request.headers.get(
+            "X-TALEBOOK-TOKEN", None
+        )
+        if not token:
+            return False
+        user = (
+            self.sqlite_session.query(Reader)
+            .filter(Reader.podcast_token == token)
+            .first()
+        )
+        if not user:
+            logging.warning("Invalid podcast token: %s", token)
+            return False
+        logging.info("Valid podcast token: %s for user %s", token, user.username)
+        self.login_user(user)
+        return True
+
     def send_error_of_not_invited(self):
         self.write({"err": "not_invited"})
         self.set_status(200)
@@ -266,6 +284,7 @@ class BaseHandler(web.RequestHandler):
         self.set_hosts()
         self.set_i18n()
         self.process_auth_header()
+        self.process_auth_token()
         self.should_be_installed()
         self.should_be_invited()
 
