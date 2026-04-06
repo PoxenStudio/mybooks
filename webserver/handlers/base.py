@@ -37,12 +37,18 @@ def website_format(value):
     for link in value.split(";"):
         if link.startswith("douban://"):
             douban_id = link.split("//")[-1]
-            links.append(u"<a target='_blank' href='https://book.douban.com/subject/%s/'>豆瓣</a> " % douban_id)
+            links.append(
+                "<a target='_blank' href='https://book.douban.com/subject/%s/'>豆瓣</a> "
+                % douban_id
+            )
         elif link.startswith("isbn://"):
             douban_id = link.split("//")[-1]
-            links.append(u"<a target='_blank' href='https://book.douban.com/isbn/%s/'>豆瓣</a> " % douban_id)
+            links.append(
+                "<a target='_blank' href='https://book.douban.com/isbn/%s/'>豆瓣</a> "
+                % douban_id
+            )
         elif link.startswith("http://"):
-            links.append(u"<a target='_blank' href='%s'>参考链接</a> " % link)
+            links.append("<a target='_blank' href='%s'>参考链接</a> " % link)
     return ";".join(links)
 
 
@@ -60,7 +66,8 @@ def js(func):
         except Exception as e:
             logging.error(traceback.format_exc())
             msg = (
-                'Exception:<br><pre style="white-space:pre-wrap;word-break:keep-all">%s</pre>' % traceback.format_exc()
+                'Exception:<br><pre style="white-space:pre-wrap;word-break:keep-all">%s</pre>'
+                % traceback.format_exc()
             )
             rsp = {"err": "exception", "msg": msg}
             if isinstance(e, web.Finish):
@@ -79,7 +86,7 @@ def js(func):
 def auth(func):
     def do(self, *args, **kwargs):
         if not self.current_user:
-            return {"err": "user.need_login", "msg": _(u"请先登录")}
+            return {"err": "user.need_login", "msg": _("请先登录")}
         return func(self, *args, **kwargs)
 
     return do
@@ -88,9 +95,12 @@ def auth(func):
 def is_admin(func):
     def do(self, *args, **kwargs):
         if not self.current_user:
-            return {"err": "user.need_login", "msg": _(u"请先登录")}
+            return {"err": "user.need_login", "msg": _("请先登录")}
         if not self.admin_user:
-            return {"err": "permission.not_admin", "msg": _(u"当前用户非管理员, 无权限操作")}
+            return {
+                "err": "permission.not_admin",
+                "msg": _("当前用户非管理员, 无权限操作"),
+            }
         return func(self, *args, **kwargs)
 
     return do
@@ -123,7 +133,7 @@ class BaseHandler(web.RequestHandler):
 
     def get_argument(self, name, default=None, strip=True):
         value = super().get_argument(name, default, strip)
-        if value == 'null':
+        if value == "null":
             return default
         return value
 
@@ -141,13 +151,13 @@ class BaseHandler(web.RequestHandler):
         if not cookie:
             return None
         raw = cookie.value
-        if not raw or '|' not in raw:
+        if not raw or "|" not in raw:
             return None
         # segments are length-prefixed (len:data)
-        for segment in raw.split('|'):
-            if ':' not in segment:
+        for segment in raw.split("|"):
+            if ":" not in segment:
                 continue
-            length_str, data = segment.split(':', 1)
+            length_str, data = segment.split(":", 1)
             if not length_str.isdigit():
                 continue
             length = int(length_str)
@@ -199,9 +209,15 @@ class BaseHandler(web.RequestHandler):
         auth_header = self.request.headers.get("Authorization", "")
         if not auth_header.startswith("Basic "):
             return False
-        auth_decoded = base64.decodebytes(auth_header[6:].encode("ascii")).decode("UTF-8")
+        auth_decoded = base64.decodebytes(auth_header[6:].encode("ascii")).decode(
+            "UTF-8"
+        )
         username, password = auth_decoded.split(":", 2)
-        user = self.sqlite_session.query(Reader).filter(Reader.username == username).first()
+        user = (
+            self.sqlite_session.query(Reader)
+            .filter(Reader.username == username)
+            .first()
+        )
         if not user:
             return False
         if user.get_secure_password(password) != str(user.password):
@@ -243,6 +259,7 @@ class BaseHandler(web.RequestHandler):
     def prepare(self):
         # 性能分析：记录请求开始时间
         from webserver.constants import ENABLE_PROFILE
+
         if CONF.get(ENABLE_PROFILE) is True:
             self._request_start_time = time.time()
 
@@ -280,6 +297,7 @@ class BaseHandler(web.RequestHandler):
     def on_finish(self):
         # 性能分析：记录请求耗时
         from webserver.constants import ENABLE_PROFILE
+
         if CONF.get(ENABLE_PROFILE) is True and self._request_start_time is not None:
             try:
                 duration = time.time() - self._request_start_time
@@ -288,6 +306,7 @@ class BaseHandler(web.RequestHandler):
 
                 # 记录到ProfileService
                 from webserver.services.profile_service import get_profile_service
+
                 profile_service = get_profile_service()
                 profile_service.record_request(endpoint, method, duration)
             except Exception as e:
@@ -315,7 +334,10 @@ class BaseHandler(web.RequestHandler):
             # Double check with user_id cookie, 飞牛应用中Docker登录会使用旧的lt cookie
             login_time = self.get_secure_cookie_timestamp("user_id")
             if not login_time or int(login_time) < int(time.time()) - 7 * 86400:
-                logging.info("Login time cookie is missing or expired. login_time: %s", login_time)
+                logging.info(
+                    "Login time cookie is missing or expired. login_time: %s",
+                    login_time,
+                )
                 return None
         uid = self.get_secure_cookie("user_id")
         return int(uid) if uid and uid.isdigit() else None
@@ -359,7 +381,9 @@ class BaseHandler(web.RequestHandler):
         return self.current_user.is_admin()
 
     def login_user(self, user):
-        logging.info("LOGIN: %s - %d - %s" % (self.request.remote_ip, user.id, user.username))
+        logging.info(
+            "LOGIN: %s - %d - %s" % (self.request.remote_ip, user.id, user.username)
+        )
         self.set_secure_cookie("user_id", str(user.id))
         self.set_secure_cookie("lt", str(int(time.time())))
         # 确保user对象在当前会话中，避免"already attached to session"错误
@@ -468,7 +492,9 @@ class BaseHandler(web.RequestHandler):
         if field not in self.calibre_db.field_metadata.sortable_field_keys():
             raise web.HTTPError(400, "%s is not a valid sort field" % field)
 
-        keyg = CSSortKeyGenerator([(field, order)], self.calibre_db.field_metadata, self.calibre_db.prefs)
+        keyg = CSSortKeyGenerator(
+            [(field, order)], self.calibre_db.field_metadata, self.calibre_db.prefs
+        )
         items.sort(key=keyg)
 
     def get_template_path(self):
@@ -498,8 +524,11 @@ class BaseHandler(web.RequestHandler):
         if now - BaseHandler._physical_books_count_cache_time < 300:
             return BaseHandler._physical_books_count_cache
         from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_PHYSICAL
+
         try:
-            result = self.calibre_db_cache.search(f"{CALIBRE_COLUMN_BOOK_TYPE}:={BOOK_TYPE_PHYSICAL}")
+            result = self.calibre_db_cache.search(
+                f"{CALIBRE_COLUMN_BOOK_TYPE}:={BOOK_TYPE_PHYSICAL}"
+            )
             BaseHandler._physical_books_count_cache = len(result)
             BaseHandler._physical_books_count_cache_time = now
             return BaseHandler._physical_books_count_cache
@@ -524,7 +553,9 @@ class BaseHandler(web.RequestHandler):
         if request.user:
             request.user_extra = self.current_user.extra
             if not request.user.avatar:
-                request.user.avatar = "//tva1.sinaimg.cn/default/images/default_avatar_male_50.gif"
+                request.user.avatar = (
+                    "//tva1.sinaimg.cn/default/images/default_avatar_male_50.gif"
+                )
             else:
                 request.user.avatar = request.user.avatar.replace("http://", "//")
 
@@ -532,7 +563,9 @@ class BaseHandler(web.RequestHandler):
         page_vars = {
             "db": self.calibre_db,
             "messages": self.pop_messages(),
-            "count_all_users": self.sqlite_session.query(sql_func.count(Reader.id)).scalar(),
+            "count_all_users": self.sqlite_session.query(
+                sql_func.count(Reader.id)
+            ).scalar(),
             "count_hot_users": self.sqlite_session.query(sql_func.count(Reader.id))
             .filter(Reader.access_time > last_week)
             .scalar(),
@@ -549,7 +582,7 @@ class BaseHandler(web.RequestHandler):
         books = self.get_books(ids=[int(book_id)])
         if not books:
             if raise_exception:
-                self.write({"err": "not_found", "msg": _(u"抱歉，这本书不存在")})
+                self.write({"err": "not_found", "msg": _("抱歉，这本书不存在")})
                 self.set_status(200)
                 raise web.Finish()
             else:
@@ -572,29 +605,37 @@ class BaseHandler(web.RequestHandler):
 
         # The custom column is returned as int key, e.g. { 1: 'value' }
         # We need to convert it to { '#field': 'value' }
-        if not hasattr(self, '_custom_column_map'):
+        if not hasattr(self, "_custom_column_map"):
             self._custom_column_map = {}
             for key, meta in self.calibre_db.field_metadata.items():
-                if meta['is_custom']:
-                    self._custom_column_map[meta['colnum']] = key
+                if meta["is_custom"]:
+                    self._custom_column_map[meta["colnum"]] = key
 
         # Get audio book ids set once for better performance
         audio_book_ids = set()
         try:
             from webserver.handlers.audio import AudioBooksCache
+
             audio_book_ids = AudioBooksCache.get_audio_book_ids_set()
         except Exception as e:
             logging.error(f"Error getting audio book ids: {e}")
 
         logging.info(
-            "[%5d ms] select books from library (count = %d)" % (int(1000 * (time.time() - _ts)), len(books))
+            "[%5d ms] select books from library (count = %d)"
+            % (int(1000 * (time.time() - _ts)), len(books))
         )
 
         item = Item()
         empty_item = item.to_dict()
-        empty_item["collector"] = self.sqlite_session.query(Reader).order_by(Reader.id).first()
+        empty_item["collector"] = (
+            self.sqlite_session.query(Reader).order_by(Reader.id).first()
+        )
         ids = [book["id"] for book in books]
-        items = self.sqlite_session.query(Item).filter(Item.book_id.in_(ids)).all() if ids else []
+        items = (
+            self.sqlite_session.query(Item).filter(Item.book_id.in_(ids)).all()
+            if ids
+            else []
+        )
         maps = {}
         for b in items:
             d = b.to_dict()
@@ -625,12 +666,18 @@ class BaseHandler(web.RequestHandler):
             user = self.current_user
             if not user:
                 # For guests, only show books without categories and tags
-                books = [b for b in books if not b.get('tags') and not b.get(constants.CALIBRE_COLUMN_CATEGORY)]
-            elif getattr(user, 'read_limit', 0) > 0:
+                books = [
+                    b
+                    for b in books
+                    if not b.get("tags")
+                    and not b.get(constants.CALIBRE_COLUMN_CATEGORY)
+                ]
+            elif getattr(user, "read_limit", 0) > 0:
                 books = [b for b in books if self.is_book_in_reading_range(b, user)]
 
         logging.info(
-            "[%5d ms] select books from database (count = %d)" % (int(1000 * (time.time() - _ts)), len(books))
+            "[%5d ms] select books from database (count = %d)"
+            % (int(1000 * (time.time() - _ts)), len(books))
         )
         return books
 
@@ -642,26 +689,26 @@ class BaseHandler(web.RequestHandler):
             1 - whitelist: only books matching limit_categories or limit_tags are accessible
             2 - blacklist: books matching limit_categories or limit_tags are blocked
         """
-        read_limit = getattr(user, 'read_limit', 0) or 0
+        read_limit = getattr(user, "read_limit", 0) or 0
         if read_limit == 0:
             return True
 
-        limit_categories = set(filter(None, (user.limit_categories or "").split(',')))
-        limit_tags = set(filter(None, (user.limit_tags or "").split(',')))
+        limit_categories = set(filter(None, (user.limit_categories or "").split(",")))
+        limit_tags = set(filter(None, (user.limit_tags or "").split(",")))
 
         from webserver.constants import CALIBRE_COLUMN_CATEGORY
-        book_category = (book.get(CALIBRE_COLUMN_CATEGORY) or "")
-        book_tags = set(book.get('tags') or [])
 
-        matched = (
-            (limit_categories and book_category in limit_categories)
-            or bool(limit_tags and book_tags & limit_tags)
+        book_category = book.get(CALIBRE_COLUMN_CATEGORY) or ""
+        book_tags = set(book.get("tags") or [])
+
+        matched = (limit_categories and book_category in limit_categories) or bool(
+            limit_tags and book_tags & limit_tags
         )
 
         if read_limit == 1:
-            return matched          # whitelist: must match at least one
+            return matched  # whitelist: must match at least one
         else:
-            return not matched      # blacklist: must not match any
+            return not matched  # blacklist: must not match any
 
     def count_increase(self, book_id, **kwargs):
         try:
@@ -689,15 +736,19 @@ class BaseHandler(web.RequestHandler):
         user = self.current_user
         if not user:
             return {}  # 未登录用户：隐藏所有标签
-        read_limit = getattr(user, 'read_limit', 0) or 0
+        read_limit = getattr(user, "read_limit", 0) or 0
         if read_limit == 0:
             return tags
-        limit_tags = set(filter(None, (user.limit_tags or "").split(',')))
+        limit_tags = set(filter(None, (user.limit_tags or "").split(",")))
         if not limit_tags:
             return tags
         if read_limit == 1:
-            return {tag: count for tag, count in tags.items() if tag in limit_tags}      # 白名单
-        return {tag: count for tag, count in tags.items() if tag not in limit_tags}      # 黑名单
+            return {
+                tag: count for tag, count in tags.items() if tag in limit_tags
+            }  # 白名单
+        return {
+            tag: count for tag, count in tags.items() if tag not in limit_tags
+        }  # 黑名单
 
     def all_tags_with_count(self):
         sql = """SELECT tags.name, count(distinct book) as count
@@ -706,13 +757,17 @@ class BaseHandler(web.RequestHandler):
         cache_key = "all_tags_with_count"
         try:
             with self.db_lock:
-                tags = dict((i[0], i[1]) for i in self.calibre_db_cache.backend.conn.get(sql))
+                tags = dict(
+                    (i[0], i[1]) for i in self.calibre_db_cache.backend.conn.get(sql)
+                )
             BaseHandler._query_fallback_cache[cache_key] = tags
         except Exception as e:
             tags = BaseHandler._query_fallback_cache.get(cache_key, {})
             logging.error("all_tags_with_count query failed: %s", str(e))
             if tags:
-                logging.warning("all_tags_with_count fallback to cache, count=%d", len(tags))
+                logging.warning(
+                    "all_tags_with_count fallback to cache, count=%d", len(tags)
+                )
 
         # 过滤掉不在当前用户阅读范围的标签
         if CONF.get(constants.ALLOW_READ_RANGE_SETTING, False):
@@ -745,9 +800,15 @@ class BaseHandler(web.RequestHandler):
             return items
         except Exception as e:
             cached = BaseHandler._query_fallback_cache.get(cache_key, [])
-            logging.error("get_category_with_count query failed for %s: %s", cache_key, str(e))
+            logging.error(
+                "get_category_with_count query failed for %s: %s", cache_key, str(e)
+            )
             if cached:
-                logging.warning("get_category_with_count fallback to cache for %s, count=%d", cache_key, len(cached))
+                logging.warning(
+                    "get_category_with_count fallback to cache for %s, count=%d",
+                    cache_key,
+                    len(cached),
+                )
             return cached
 
     def books_by_id(self):
@@ -765,7 +826,11 @@ class BaseHandler(web.RequestHandler):
         return max(0, start)
 
     def get_user_upload_cnt(self, user_id):
-        return self.sqlite_session.query(sql_func.count(Item.collector_id)).filter(Item.collector_id == user_id).scalar()
+        return (
+            self.sqlite_session.query(sql_func.count(Item.collector_id))
+            .filter(Item.collector_id == user_id)
+            .scalar()
+        )
 
     def find_phy_books_by_isbn(self, isbn):
         """
@@ -791,9 +856,11 @@ class BaseHandler(web.RequestHandler):
     def save_book_meta(self, book_id, fmt=None):
         book = self.get_book(book_id, raise_exception=False)
         if not book:
-            return {"err": "book.not_found", "msg": _(u"书籍不存在")}
+            return {"err": "book.not_found", "msg": _("书籍不存在")}
 
-        logging.info(f"[SAVE_META] save meta for book id:{book_id}, fmt:{fmt if fmt else 'ALL'}")
+        logging.info(
+            f"[SAVE_META] save meta for book id:{book_id}, fmt:{fmt if fmt else 'ALL'}"
+        )
 
         # 检查是否有支持的格式（可按 fmt 过滤）
         supported_formats = []
@@ -808,16 +875,19 @@ class BaseHandler(web.RequestHandler):
             if fmt:
                 return {
                     "err": "format.not_supported",
-                    "msg": _(u"书籍没有指定的格式：%s") % fmt.upper(),
+                    "msg": _("书籍没有指定的格式：%s") % fmt.upper(),
                 }
-            return {"err": "format.not_supported", "msg": _(u"书籍没有支持的格式（需要 EPUB、AZW3 或 PDF）")}
+            return {
+                "err": "format.not_supported",
+                "msg": _("书籍没有支持的格式（需要 EPUB、AZW3 或 PDF）"),
+            }
         try:
             from calibre.ebooks.metadata.meta import set_metadata
 
             # 获取当前书籍的元数据
             mi = self.calibre_db.get_metadata(book_id, index_is_id=True)
             if not mi:
-                return {"err": "book.meta.not_found", "msg": _(u"无法获取书籍元数据")}
+                return {"err": "book.meta.not_found", "msg": _("无法获取书籍元数据")}
 
             success_formats = []
             failed_formats = []
@@ -838,29 +908,40 @@ class BaseHandler(web.RequestHandler):
                     # 获取封面数据（cover 方法直接返回字节数据）
                     cover_data = self.calibre_db.cover(book_id, index_is_id=True)
                     if cover_data:
-                        mi.cover_data = ('jpeg', cover_data)
-                        logging.info(f"[SAVE_META] Cover data added for {f.upper()}, size: {len(cover_data)} bytes")
+                        mi.cover_data = ("jpeg", cover_data)
+                        logging.info(
+                            f"[SAVE_META] Cover data added for {f.upper()}, size: {len(cover_data)} bytes"
+                        )
 
                     # 将元数据写入文件（包含封面）
                     with open(file_path, "rb+") as stream:
                         set_metadata(stream, mi, stream_type=f)
 
-                    logging.info(f"[SAVE_META] Successfully saved metadata to {f.upper()} file for book {book_id}")
+                    logging.info(
+                        f"[SAVE_META] Successfully saved metadata to {f.upper()} file for book {book_id}"
+                    )
                     success_formats.append(f.upper())
                 except Exception as e:
-                    logging.error(f"[SAVE_META] Failed to save metadata to {f.upper()} file for book {book_id}: {e}")
+                    logging.error(
+                        f"[SAVE_META] Failed to save metadata to {f.upper()} file for book {book_id}: {e}"
+                    )
                     logging.error(traceback.format_exc())
                     failed_formats.append(f.upper())
 
             if success_formats:
-                msg = _(u"成功将元数据同步到文件：%s") % ", ".join(success_formats)
+                msg = _("成功将元数据同步到文件：%s") % ", ".join(success_formats)
                 if failed_formats:
-                    msg += _(u"；失败：%s") % ", ".join(failed_formats)
-                return {"err": "ok", "msg": msg, "success_formats": success_formats, "failed_formats": failed_formats}
+                    msg += _("；失败：%s") % ", ".join(failed_formats)
+                return {
+                    "err": "ok",
+                    "msg": msg,
+                    "success_formats": success_formats,
+                    "failed_formats": failed_formats,
+                }
             else:
                 return {
                     "err": "save.failed",
-                    "msg": _(u"同步元数据失败：%s") % ", ".join(failed_formats),
+                    "msg": _("同步元数据失败：%s") % ", ".join(failed_formats),
                     "success_formats": [],
                     "failed_formats": failed_formats,
                 }
@@ -868,7 +949,7 @@ class BaseHandler(web.RequestHandler):
         except Exception as e:
             logging.error(f"[SAVE_META] Error saving metadata for book {book_id}: {e}")
             logging.error(traceback.format_exc())
-            return {"err": "internal", "msg": _(u"同步元数据时发生错误: %s") % str(e)}
+            return {"err": "internal", "msg": _("同步元数据时发生错误: %s") % str(e)}
 
 
 class ListHandler(BaseHandler):
@@ -904,27 +985,40 @@ class ListHandler(BaseHandler):
         # 应用阅读范围过滤
         if CONF.get(constants.ALLOW_READ_RANGE_SETTING, False):
             # get_data_as_dict 返回自定义栏位时使用整数 colnum 作为 key，需先映射为字段名
-            if not hasattr(self, '_custom_column_map'):
+            if not hasattr(self, "_custom_column_map"):
                 self._custom_column_map = {}
                 for key, meta in self.calibre_db.field_metadata.items():
-                    if meta['is_custom']:
-                        self._custom_column_map[meta['colnum']] = key
+                    if meta["is_custom"]:
+                        self._custom_column_map[meta["colnum"]] = key
             for book in books:
                 for colnum, key in self._custom_column_map.items():
                     if colnum in book:
                         book[key] = book.pop(colnum)
             user = self.current_user
             if not user:
-                books = [b for b in books if not b.get('tags') and not b.get(constants.CALIBRE_COLUMN_CATEGORY)]
-            elif getattr(user, 'read_limit', 0) > 0:
+                books = [
+                    b
+                    for b in books
+                    if not b.get("tags")
+                    and not b.get(constants.CALIBRE_COLUMN_CATEGORY)
+                ]
+            elif getattr(user, "read_limit", 0) > 0:
                 books = [b for b in books if self.is_book_in_reading_range(b, user)]
 
         # 只查询剩余书籍的Item信息
         item = Item()
         empty_item = item.to_dict()
-        empty_item["collector"] = self.sqlite_session.query(Reader).order_by(Reader.id).first()
+        empty_item["collector"] = (
+            self.sqlite_session.query(Reader).order_by(Reader.id).first()
+        )
         remaining_ids = [book["id"] for book in books]
-        items = self.sqlite_session.query(Item).filter(Item.book_id.in_(remaining_ids)).all() if remaining_ids else []
+        items = (
+            self.sqlite_session.query(Item)
+            .filter(Item.book_id.in_(remaining_ids))
+            .all()
+            if remaining_ids
+            else []
+        )
         maps = {}
         for b in items:
             d = b.to_dict()
@@ -955,7 +1049,9 @@ class ListHandler(BaseHandler):
             self.do_sort(items, "id", False)
         return None
 
-    def get_book_list(self, all_books, ids=None, title=None, sort_fields=None, include_comments=True):
+    def get_book_list(
+        self, all_books, ids=None, title=None, sort_fields=None, include_comments=True
+    ):
         """Get a list of books."""
         start = self.get_argument_start()
         try:
@@ -982,7 +1078,9 @@ class ListHandler(BaseHandler):
             else:
                 # 按照输入的ids顺序排序
                 books = self.get_books(ids=ids[start : start + delta])
-                books = sorted(books, key=lambda x: ids.index(x["id"]) if x["id"] in ids else -1)
+                books = sorted(
+                    books, key=lambda x: ids.index(x["id"]) if x["id"] in ids else -1
+                )
         else:
             count = len(all_books)
             books = all_books[start : start + delta]
