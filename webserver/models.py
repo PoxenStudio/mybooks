@@ -17,9 +17,9 @@ from webserver.constants import BOOK_TYPE_EBOOK
 
 
 # 阅读状态常量
-READ_STATE_UNREAD = 0      # 未读
-READ_STATE_READING = 1     # 在读
-READ_STATE_FINISHED = 2    # 已读完
+READ_STATE_UNREAD = 0  # 未读
+READ_STATE_READING = 1  # 在读
+READ_STATE_FINISHED = 2  # 已读完
 
 Base = declarative_base()
 
@@ -111,12 +111,24 @@ class Reader(Base, SQLAlchemyMixin):
     extra = Column(MutableDict.as_mutable(JSONType), default={})
     vipquota = Column(Integer, default=0)  # VIP用户的下载配额
     vipexpire = Column(DateTime)  # VIP用户的到期时间
-    read_limit = Column(Integer, default=0)  # 阅读限制，0:不限制, 1:只允许设置的范围(白名单), 2:排除设置的范围(黑名单)
-    limit_categories = Column(String(512), default="")  # 阅读限制的范围，逗号分隔的分类列表
+    read_limit = Column(
+        Integer, default=0
+    )  # 阅读限制，0:不限制, 1:只允许设置的范围(白名单), 2:排除设置的范围(黑名单)
+    limit_categories = Column(
+        String(512), default=""
+    )  # 阅读限制的范围，逗号分隔的分类列表
     limit_tags = Column(String(512), default="")  # 阅读限制的范围，逗号分隔的标签列表
+    podcast_token = Column(
+        String(64), default=""
+    )  # Podcast订阅认证token，用于podcast播放器鉴权
 
     def __str__(self):
-        return "<id=%d, username=%s, email=%s, admin:%d>" % (self.id, self.username, self.email, self.admin)
+        return "<id=%d, username=%s, email=%s, admin:%d>" % (
+            self.id,
+            self.username,
+            self.email,
+            self.admin,
+        )
 
     def shrink_column_extra(self):
         # Clear the unused item in the extra
@@ -137,7 +149,7 @@ class Reader(Base, SQLAlchemyMixin):
 
     def init_default_user(self):
         class DefaultUserInfo:
-            extra_data = {"username": _(u"默认用户")}
+            extra_data = {"username": _("默认用户")}
             provider = "qq"
             uid = 123456789
 
@@ -172,7 +184,10 @@ class Reader(Base, SQLAlchemyMixin):
         self.avatar = url.replace("http://q.qlogo.cn", "//q.qlogo.cn")
 
         if social_user.provider == "github":
-            self.avatar = "https://avatars.githubusercontent.com/u/%s" % social_user.extra_data["id"]
+            self.avatar = (
+                "https://avatars.githubusercontent.com/u/%s"
+                % social_user.extra_data["id"]
+            )
 
     def get_active_code(self):
         return self.get_secure_password(self.create_time.strftime("%Y-%m-%d %H:%M:%S"))
@@ -338,7 +353,9 @@ class Message(Base, SQLAlchemyMixin):
             if message.data.get("message") == msg_content:
                 session.delete(message)
                 removed_count += 1
-            elif message.update_time < datetime.datetime.now() - datetime.timedelta(days=days):
+            elif message.update_time < datetime.datetime.now() - datetime.timedelta(
+                days=days
+            ):
                 session.delete(message)
                 removed_count += 1
 
@@ -526,6 +543,7 @@ class ReadingState(Base, SQLAlchemyMixin):
 
 class Device(Base, SQLAlchemyMixin):
     """用户阅读设备"""
+
     __tablename__ = "devices"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -541,7 +559,16 @@ class Device(Base, SQLAlchemyMixin):
 
     reader = relationship(Reader, backref="devices")
 
-    def __init__(self, reader_id, name, device_type="duokan", ip="", port=12121, schema="http", mailbox=""):
+    def __init__(
+        self,
+        reader_id,
+        name,
+        device_type="duokan",
+        ip="",
+        port=12121,
+        schema="http",
+        mailbox="",
+    ):
         super(Device, self).__init__()
         self.reader_id = reader_id
         self.name = name
@@ -566,6 +593,7 @@ class Device(Base, SQLAlchemyMixin):
 
 class StickyItem(Base, SQLAlchemyMixin):
     """置顶项目 - 用于置顶作者或标签"""
+
     __tablename__ = "sticky_item"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -587,6 +615,7 @@ class StickyItem(Base, SQLAlchemyMixin):
 
 class ExpectedItem(Base, SQLAlchemyMixin):
     """缺书登记项目"""
+
     __tablename__ = "expected_item"
 
     id = Column(Integer, primary_key=True, autoincrement=True)

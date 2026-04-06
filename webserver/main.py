@@ -30,13 +30,40 @@ from webserver.version import VERSION
 CONF = loader.get_settings()
 define("host", default="", type=str, help=_("The host address on which to listen"))
 define("port", default=8080, type=int, help=_("The port on which to listen."))
-define("path-calibre", default="/usr/lib/calibre", type=str, help=_("Path to calibre package."))
-define("path-resources", default="/usr/share/calibre", type=str, help=_("Path to calibre resources."))
-define("path-plugins", default="/usr/lib/calibre/calibre/plugins", type=str, help=_("Path to calibre plugins."))
-define("path-bin", default="/usr/bin", type=str, help=_("Path to calibre binary programs."))
-define("with-library", default=CONF["with_library"], type=str, help=_("Path to the library folder"))
+define(
+    "path-calibre",
+    default="/usr/lib/calibre",
+    type=str,
+    help=_("Path to calibre package."),
+)
+define(
+    "path-resources",
+    default="/usr/share/calibre",
+    type=str,
+    help=_("Path to calibre resources."),
+)
+define(
+    "path-plugins",
+    default="/usr/lib/calibre/calibre/plugins",
+    type=str,
+    help=_("Path to calibre plugins."),
+)
+define(
+    "path-bin", default="/usr/bin", type=str, help=_("Path to calibre binary programs.")
+)
+define(
+    "with-library",
+    default=CONF["with_library"],
+    type=str,
+    help=_("Path to the library folder"),
+)
 define("syncdb", default=False, type=bool, help=_("Create all tables"))
-define("update-config", default=False, type=bool, help=_("update config when system upgrade"))
+define(
+    "update-config",
+    default=False,
+    type=bool,
+    help=_("update config when system upgrade"),
+)
 
 
 # Set the maximum memory allocation for Qt image processing to prevent crashes with large images
@@ -46,7 +73,7 @@ os.environ["QT_IMAGEIO_MAXALLOC"] = "400"
 def add_meta_in_calibre(calibre_db, key, name, datatype):
     found = False
     for k, v in calibre_db.field_metadata.items():
-        if k.startswith('#') and k.lstrip('#') == key:
+        if k.startswith("#") and k.lstrip("#") == key:
             found = True
             break
     if found:
@@ -54,11 +81,7 @@ def add_meta_in_calibre(calibre_db, key, name, datatype):
         return False
     try:
         calibre_db.create_custom_column(
-            label=key,
-            name=name,
-            datatype=datatype,
-
-            is_multiple=False
+            label=key, name=name, datatype=datatype, is_multiple=False
         )
     except Exception as e:
         logging.error(f"Error creating custom field: {e}")
@@ -68,13 +91,19 @@ def add_meta_in_calibre(calibre_db, key, name, datatype):
 
 def config_calibre():
     from calibre.db.backend import DB
+
     db = DB(options.with_library)
     if not db:
         return
-    if 'expire_old_trash_after' in db.prefs and db.prefs['expire_old_trash_after'] == 7 * 24 * 3600:
-        logging.info("Calibre trash expire time already set to 7 days, no need to update.")
+    if (
+        "expire_old_trash_after" in db.prefs
+        and db.prefs["expire_old_trash_after"] == 7 * 24 * 3600
+    ):
+        logging.info(
+            "Calibre trash expire time already set to 7 days, no need to update."
+        )
         return
-    db.prefs['expire_old_trash_after'] = 7 * 24 * 3600
+    db.prefs["expire_old_trash_after"] = 7 * 24 * 3600
     logging.info("Set calibre trash expire time to 7 days.")
 
 
@@ -89,7 +118,9 @@ def init_calibre():
         import calibre  # noqa: F401
     except Exception as e:
         logging.error(traceback.format_exc())
-        raise ImportError(_("Can not import calibre. Please set the corrent options.\n%s" % e))
+        raise ImportError(
+            _("Can not import calibre. Please set the corrent options.\n%s" % e)
+        )
 
     if not options.with_library:
         sys.stderr.write(
@@ -125,7 +156,7 @@ def utf8_construct_path_name(book_id, title, author):
     except IndexError:
         author = ""
     if not author:
-        author = _(u"佚名")
+        author = _("佚名")
     if author.upper() in WINDOWS_RESERVED_NAMES:
         author += "w"
     return "%s/%s%s" % (author, title, book_id)
@@ -174,9 +205,10 @@ def configure_amazon_plugin():
     """配置 Amazon 插件，将 server 选项设置为 'amazon'"""
     try:
         from calibre.customize.ui import metadata_plugins
-        for plugin in metadata_plugins({'identify'}):
-            if plugin.name == 'Amazon.com':
-                plugin.prefs['server'] = 'amazon'
+
+        for plugin in metadata_plugins({"identify"}):
+            if plugin.name == "Amazon.com":
+                plugin.prefs["server"] = "amazon"
                 break
     except Exception as e:
         logging.error("配置 Amazon 插件失败: %s" % e)
@@ -196,16 +228,56 @@ def make_app():
     banner_lines = [
         "",
         border_top,
-        "|" + "    ____                                 _____   __                __    _        ".center(banner_width) + "|",
-        "|" + "   / __ \\  ____    _  __  ___    ____   / ___/  / /_  __  __  ____/ /   (_)  ____ ".center(banner_width) + "|",
-        "|" + "  / /_/ / / __ \\  | |/_/ / _ \\  / __ \\  \\__ \\  / __/ / / / / / __  /   / /  / __ \\".center(banner_width) + "|",
-        "|" + " / ____/ / /_/ / _>  <  /  __/ / / / / ___/ / / /_  / /_/ / / /_/ /   / /  / /_/ /".center(banner_width) + "|",
-        "|" + "/_/      \\____/ /_/|_|  \\___/ /_/ /_/ /____/  \\__/  \\__,_/  \\__,_/   /_/   \\____/ ".center(banner_width) + "|",
-        "|" + "  ______            __          __                    __   ".center(banner_width) + "|",
-        "|" + " /_  __/  ____ _   / /  ___    / /_   ____   ____    / /__ ".center(banner_width) + "|",
-        "|" + "  / /    / __ `/  / /  / _ \\  / __ \\ / __ \\ / __ \\  / //_/ ".center(banner_width) + "|",
-        "|" + " / /    / /_/ /  / /  /  __/ / /_/ // /_/ // /_/ / / ,<    ".center(banner_width) + "|",
-        "|" + "/_/     \\__,_/  /_/   \\___/ /_.___/ \\____/ \\____/ /_/|_|   ".center(banner_width) + "|",
+        "|"
+        + "    ____                                 _____   __                __    _        ".center(
+            banner_width
+        )
+        + "|",
+        "|"
+        + "   / __ \\  ____    _  __  ___    ____   / ___/  / /_  __  __  ____/ /   (_)  ____ ".center(
+            banner_width
+        )
+        + "|",
+        "|"
+        + "  / /_/ / / __ \\  | |/_/ / _ \\  / __ \\  \\__ \\  / __/ / / / / / __  /   / /  / __ \\".center(
+            banner_width
+        )
+        + "|",
+        "|"
+        + " / ____/ / /_/ / _>  <  /  __/ / / / / ___/ / / /_  / /_/ / / /_/ /   / /  / /_/ /".center(
+            banner_width
+        )
+        + "|",
+        "|"
+        + "/_/      \\____/ /_/|_|  \\___/ /_/ /_/ /____/  \\__/  \\__,_/  \\__,_/   /_/   \\____/ ".center(
+            banner_width
+        )
+        + "|",
+        "|"
+        + "  ______            __          __                    __   ".center(
+            banner_width
+        )
+        + "|",
+        "|"
+        + " /_  __/  ____ _   / /  ___    / /_   ____   ____    / /__ ".center(
+            banner_width
+        )
+        + "|",
+        "|"
+        + "  / /    / __ `/  / /  / _ \\  / __ \\ / __ \\ / __ \\  / //_/ ".center(
+            banner_width
+        )
+        + "|",
+        "|"
+        + " / /    / /_/ /  / /  /  __/ / /_/ // /_/ // /_/ / / ,<    ".center(
+            banner_width
+        )
+        + "|",
+        "|"
+        + "/_/     \\__,_/  /_/   \\___/ /_.___/ \\____/ \\____/ /_/|_|   ".center(
+            banner_width
+        )
+        + "|",
         "|" + (" " * 60 + f"{VERSION}").center(banner_width) + "|",
         border_bottom,
     ]
@@ -215,6 +287,7 @@ def make_app():
         logging.info("updating configs ...")
         # 触发一次空白配置更新
         from webserver.handlers.admin import SettingsSaverLogic
+
         logic = SettingsSaverLogic()
         logic.update_nuxtjs_env()
         logging.info("done")
@@ -224,13 +297,16 @@ def make_app():
     engine = create_engine(auth_db_path, **CONF["db_engine_args"])
 
     if auth_db_path.startswith("sqlite"):
+
         @event.listens_for(engine, "connect")
         def set_sqlite_pragma(db_connection, connection_record):
             cursor = db_connection.cursor()
             cursor.execute("PRAGMA busy_timeout=30000")
             cursor.close()
 
-    ScopedSession = scoped_session(sessionmaker(bind=engine, autoflush=True, autocommit=False))
+    ScopedSession = scoped_session(
+        sessionmaker(bind=engine, autoflush=True, autocommit=False)
+    )
     try:
         models.bind_session(ScopedSession)
         init_social(models.Base, ScopedSession, CONF)
@@ -255,20 +331,25 @@ def make_app():
     from calibre.db.legacy import LibraryDatabase
     from calibre.utils.date import fromtimestamp
     from calibre.ebooks.metadata.sources.update import patch_plugins
+
     need_sync_item_to_calibre = False
     try:
         logging.info("Initializing library database...")
         book_db = LibraryDatabase(os.path.expanduser(options.with_library))
         cache = book_db.new_api
         try:
-            if hasattr(cache.backend, 'prefs'):
-                cache.backend.prefs.set('fts_enabled', False)
+            if hasattr(cache.backend, "prefs"):
+                cache.backend.prefs.set("fts_enabled", False)
                 logging.info("FTS disabled successfully")
         except Exception as e:
             logging.warning(f"Failed to disable FTS: {e}")
 
-        added_category = add_meta_in_calibre(cache, COLUMN_CATEGORY, "Book Category", "text")
-        added_phy_count = add_meta_in_calibre(cache, COLUMN_PHY_COUNT, "Physical Book Count", "int")
+        added_category = add_meta_in_calibre(
+            cache, COLUMN_CATEGORY, "Book Category", "text"
+        )
+        added_phy_count = add_meta_in_calibre(
+            cache, COLUMN_PHY_COUNT, "Physical Book Count", "int"
+        )
         added_source = add_meta_in_calibre(cache, COLUMN_BOOK_TYPE, "Book Type", "int")
         _ = add_meta_in_calibre(cache, COLUMN_EXT_LINK, "External Link", "text")
         if added_source or added_category or added_phy_count:
@@ -295,6 +376,7 @@ def make_app():
     # hook 2: don't force GUI
     logging.info("Patching calibre GUI requirement...")
     from calibre import gui2
+
     old_must_use_qt = gui2.must_use_qt
 
     def new_must_use_qt(headless=True):
@@ -302,6 +384,7 @@ def make_app():
             old_must_use_qt(headless)
         except Exception:
             pass
+
     gui2.must_use_qt = new_must_use_qt
 
     logging.info("Loading default cover image...")
@@ -312,6 +395,7 @@ def make_app():
     # Initialize database lock for thread-safe calibre database access
     import threading
     from webserver.handlers.base import BaseHandler
+
     BaseHandler.db_lock = threading.RLock()
 
     app_settings = dict(CONF)
@@ -322,7 +406,7 @@ def make_app():
             "ScopedSession": ScopedSession,
             "build_time": fromtimestamp(os.stat(path).st_mtime),
             "default_cover": default_cover,
-            "autoreload": VERSION == "v0.0.1"
+            "autoreload": VERSION == "v0.0.1",
         }
     )
 
@@ -352,7 +436,19 @@ def make_app():
     # Assemble routes carefully:
     # WebDAV must come before files.routes() because files has a catch-all (r"/(.*)")
     # We need to get routes from handlers module without files, add webdav, then add files
-    from webserver.handlers import assistant, mcp, admin, barcode, scan, opds, book, user, meta, audio, files
+    from webserver.handlers import (
+        assistant,
+        mcp,
+        admin,
+        barcode,
+        scan,
+        opds,
+        book,
+        user,
+        meta,
+        audio,
+        files,
+    )
 
     app_routes = []
     app_routes += social_routes.SOCIAL_AUTH_ROUTES
@@ -366,6 +462,22 @@ def make_app():
     app_routes += user.routes()
     app_routes += meta.routes()
     app_routes += audio.routes()
+
+    # Podcast service routes (conditionally loaded)
+    podcast_routes = []
+    if CONF.get("ENABLE_PODCAST_SERVICE", False):
+        try:
+            from webserver.handlers.podcast import routes as podcast_route_func
+
+            podcast_routes = podcast_route_func()
+            logging.info(
+                "Podcast service initialized with %d routes", len(podcast_routes)
+            )
+        except Exception as e:
+            logging.error(f"Failed to initialize Podcast service: {e}")
+            logging.error(traceback.format_exc())
+    app_routes += podcast_routes
+
     # Insert WebDAV routes BEFORE files.routes()
     app_routes += webdav_routes
     # files.routes() contains catch-all r"/(.*)" so must be last
@@ -402,19 +514,23 @@ def make_app():
 
     # Start performance profiling service if enabled
     from webserver.constants import ENABLE_PROFILE
+
     if CONF.get(ENABLE_PROFILE) is True:
         from webserver.services.profile_service import get_profile_service
+
         profile_service = get_profile_service()
         profile_service.start()
 
     if CONF.get("CALIBRE_CACHE_CLEAN_ENABLED", True):
         from webserver.services.calibre_cache_clean import get_cache_clean_service
+
         cache_clean_service = get_cache_clean_service()
         cache_clean_service.setup(cache)
         cache_clean_service.start()
 
     if CONF.get("IMPORT_BY_INOTIFY", False):
         from webserver.services.monitor_service import get_monitor_service
+
         get_monitor_service().start()
 
     return app
@@ -440,11 +556,11 @@ def setup_logging():
     logger = logging.getLogger()
     if options.log_file_prefix:
         # remove tornado default file handler to avoid duplicate logs
-        logger.handlers = [h for h in logger.handlers if not isinstance(h, logging.FileHandler)]
+        logger.handlers = [
+            h for h in logger.handlers if not isinstance(h, logging.FileHandler)
+        ]
         file_handler = RotatingFileHandler(
-            options.log_file_prefix,
-            maxBytes=5 * 1024 * 1024,
-            backupCount=5
+            options.log_file_prefix, maxBytes=5 * 1024 * 1024, backupCount=5
         )
         file_handler.setLevel(logging.INFO)
         file_handler.setFormatter(tornado.log.LogFormatter())
@@ -466,7 +582,9 @@ def main():
         sys.exit(1)
 
     logging.info("Starting server...")
-    http_server = tornado.httpserver.HTTPServer(app, xheaders=True, max_buffer_size=get_upload_size())
+    http_server = tornado.httpserver.HTTPServer(
+        app, xheaders=True, max_buffer_size=get_upload_size()
+    )
     http_server.listen(options.port, options.host)
     tornado.ioloop.IOLoop.instance().start()
     from flask.ext.sqlalchemy import _EngineDebuggingSignalEvents

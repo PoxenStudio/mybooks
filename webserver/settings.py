@@ -83,6 +83,7 @@ settings = {
     "EPUB_VIEWER": "epubjs.html",
     "CANDLE_READER_SERVER": "https://brs.talebook.org",
     "PDF_VIEWER": "/static/pdfjs/web/viewer.html?file=%(pdf_url)s",
+    "ENABLE_PODCAST_SERVICE": True,
     "ENABLE_WEBDAV_SERVICE": True,
     "WEBDAV_SYNC_FOLDER": False,
     "ALLOW_NEW_USER_MANAGE_BOOK": True,
