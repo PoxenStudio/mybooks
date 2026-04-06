@@ -152,17 +152,16 @@ class PodcastIndex(PodcastBaseHandler):
         self.check_podcast_enabled()
         site_url = self._get_full_site_url()
         provider = _get_provider(self)
-
-        categories = provider.get_categories()
-        tags = provider.get_tags()
-        authors = provider.get_authors()
-
         html = []
 
         token_to_use = None
         user = self.current_user
         if user and hasattr(user, "podcast_token") and user.podcast_token:
             token_to_use = user.podcast_token
+
+        categories = provider.get_categories(self.current_user)
+        tags = provider.get_tags(self.current_user)
+        authors = provider.get_authors()
 
         if token_to_use:
             feed_map = {
@@ -211,18 +210,21 @@ class PodcastIndex(PodcastBaseHandler):
             html.append(
                 "<strong>📌 个人订阅</strong>：收藏、待读、在读、已读 等个人订阅需要在 &lt;<strong>我的设置</strong>&gt; 中生成 Podcast Token，"
             )
-            html.append(f"然后使用 <code>{site_url}/podcast/&lt;TOKEN&gt;/</code> 等地址访问。")
+            html.append(
+                f"然后使用 <code>{site_url}/podcast/&lt;TOKEN&gt;/</code> 等地址访问。"
+            )
             html.append("</div>")
 
-        html.append('<div class="section">')
-        html.append("<h2>全部有声书</h2>")
+        if CONF.get("SHOW_ALL_IN_PODCAST", False):
+            html.append('<div class="section">')
+            html.append("<h2>全部有声书</h2>")
 
-        all_url = f"{site_url}/podcast/all"
-        if token_to_use:
-            all_url += f"?token={token_to_use}"
+            all_url = f"{site_url}/podcast/all"
+            if token_to_use:
+                all_url += f"?token={token_to_use}"
 
-        html.append(f'<p><a class="feed-url" href="{all_url}">{all_url}</a></p>')
-        html.append("</div>")
+            html.append(f'<p><a class="feed-url" href="{all_url}">{all_url}</a></p>')
+            html.append("</div>")
 
         if categories:
             html.append('<div class="section"><h2>分类</h2><ul>')

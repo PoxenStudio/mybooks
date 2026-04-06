@@ -13,6 +13,7 @@ import time
 from urllib.parse import quote
 
 from webserver import loader
+from webserver import constants
 
 CONF = loader.get_settings()
 AUDIO_OUTPUT_FOLDER = CONF.get("audio_output_folder", "/data/books/audios/")
@@ -310,7 +311,7 @@ class PodcastProvider:
         _aggregate_cache["authors"] = authors
         _aggregate_cache["timestamp"] = now
 
-    def get_categories(self):
+    def get_categories(self, user=None):
         """
         Get categories that contain audiobooks.
 
@@ -318,9 +319,22 @@ class PodcastProvider:
             dict of {category_name: [book_ids]}
         """
         self._refresh_aggregations()
-        return _aggregate_cache["categories"]
 
-    def get_tags(self):
+        categories = _aggregate_cache["categories"]
+        if CONF.get(constants.ALLOW_READ_RANGE_SETTING, False):
+            if not user:
+                return []
+            read_limit = getattr(user, "read_limit", 0) or 0
+            if read_limit > 0:
+                limit_categories = set(filter(None, (user.limit_categories or "").split(",")))
+                if read_limit == 1:
+                    # books = [b for b in books if self.is_book_in_reading_range(b, user)]
+                    categories = [category for category in categories if category in limit_categories]
+                else:
+                    categories = [category for category in categories if category not in limit_categories]
+        return categories
+
+    def get_tags(self, user=None):
         """
         Get tags that contain audiobooks.
 
@@ -328,7 +342,18 @@ class PodcastProvider:
             dict of {tag_name: [book_ids]}
         """
         self._refresh_aggregations()
-        return _aggregate_cache["tags"]
+        tags = _aggregate_cache["tags"]
+        if CONF.get(constants.ALLOW_READ_RANGE_SETTING, False):
+            if not user:
+                return []
+            read_limit = getattr(user, "read_limit", 0) or 0
+            if read_limit > 0:
+                limit_tags = set(filter(None, (user.limit_tags or "").split(",")))
+                if read_limit == 1:
+                    tags = [tag for tag in tags if tag in limit_tags]
+                else:
+                    tags = [tag for tag in tags if tag not in limit_tags]
+        return tags
 
     def get_authors(self):
         """
