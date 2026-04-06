@@ -92,6 +92,59 @@ class PodcastBaseHandler(BaseHandler):
         """Skip invite check for podcast endpoints."""
         return
 
+    def render_html_page(self, title, body_html, show_back=True):
+        html = [
+            "<!DOCTYPE html><html><head>",
+            '<meta charset="utf-8">',
+            '<meta name="viewport" content="width=device-width, initial-scale=1">',
+            f"<title>{title}</title>",
+            "<style>body{font-family:system-ui,-apple-system,sans-serif;max-width:800px;",
+            "margin:40px auto;padding:0 20px;background:#f8f9fa;color:#333}",
+            "h1{color:#1a73e8}h2{color:#555;border-bottom:1px solid #ddd;padding-bottom:8px}",
+            "ul{list-style:none;padding:0}li{margin:8px 0; background:#fff; padding: 12px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1)}",
+            "a{color:#1a73e8;text-decoration:none}a:hover{text-decoration:underline}",
+            ".feed-url{font-family:monospace;background:#e8f0fe;padding:8px;",
+            "border-radius:4px;font-size:13px; display:block; margin-top:8px; word-break: break-all;}",
+            ".section{margin:24px 0}",
+            ".token-info{background:#fff3cd;padding:12px;border-radius:8px;margin:16px 0}",
+            ".book-meta{color:#666; font-size:14px; margin-top:4px}",
+            "</style></head><body>",
+            f"<h1>🎧 {title}</h1>",
+        ]
+        if show_back:
+            html.append('<p><a href="/podcast">🔙 返回 Podcast 首页</a></p>')
+        html.append(body_html)
+        html.append("</body></html>")
+
+        self.set_header("Content-Type", "text/html; charset=UTF-8")
+        self.write("\n".join(html))
+
+    def render_book_list(self, page_title, description, entries):
+        html = []
+        if description:
+            html.append(f"<p>{description}</p>")
+
+        if not entries:
+            html.append("<p>暂无有声书</p>")
+        else:
+            html.append("<ul>")
+            for book in entries:
+                authors = ", ".join(book.get("authors", [])) or "未知作者"
+                book_title = book.get("title", "未知书名")
+                feed_url = book.get("feed_url", "")
+                html.append("<li>")
+                html.append(
+                    f'<strong>{book_title}</strong> <span class="book-meta">({authors})</span>'
+                )
+                html.append(
+                    f'<div class="book-meta">请复制以下XML订阅地址，并在您的Podcast播放器中添加订阅：</div>'
+                )
+                html.append(f'<a class="feed-url" href="{feed_url}">{feed_url}</a>')
+                html.append("</li>")
+            html.append("</ul>")
+
+        self.render_html_page(page_title, "\n".join(html))
+
 
 class PodcastIndex(PodcastBaseHandler):
     """Root podcast page — lists all available feeds as a simple HTML page."""
@@ -105,31 +158,21 @@ class PodcastIndex(PodcastBaseHandler):
         tags = provider.get_tags()
         authors = provider.get_authors()
 
-        html = [
-            "<!DOCTYPE html><html><head>",
-            '<meta charset="utf-8">',
-            '<meta name="viewport" content="width=device-width, initial-scale=1">',
-            f'<title>{CONF.get("site_title", "Talebook")} - Podcast</title>',
-            "<style>body{font-family:system-ui,-apple-system,sans-serif;max-width:800px;",
-            "margin:40px auto;padding:0 20px;background:#f8f9fa;color:#333}",
-            "h1{color:#1a73e8}h2{color:#555;border-bottom:1px solid #ddd;padding-bottom:8px}",
-            "ul{list-style:none;padding:0}li{margin:8px 0}",
-            "a{color:#1a73e8;text-decoration:none}a:hover{text-decoration:underline}",
-            ".feed-url{font-family:monospace;background:#e8f0fe;padding:4px 8px;",
-            "border-radius:4px;font-size:13px}",
-            ".section{margin:24px 0}",
-            ".token-info{background:#fff3cd;padding:12px;border-radius:8px;margin:16px 0}",
-            "</style></head><body>",
-            f'<h1>🎧 {CONF.get("site_title", "Talebook")} Podcast</h1>',
-            '<div class="section">',
-            "<h2>全部有声书</h2>",
-            f'<p><a class="feed-url" href="{site_url}/podcast/all">{site_url}/podcast/all</a></p>',
-            "</div>",
-            '<div class="token-info">',
-            "<strong>📌 个人订阅</strong>：收藏、待读、在读、已读 等个人订阅需要在用户设置中生成 Podcast Token，",
-            f"然后使用 <code>{site_url}/podcast/TOKEN/favorite</code> 等地址订阅。",
-            "</div>",
-        ]
+        html = []
+        html.append('<div class="section">')
+        html.append("<h2>全部有声书</h2>")
+        html.append(
+            f'<p><a class="feed-url" href="{site_url}/podcast/all">{site_url}/podcast/all</a></p>'
+        )
+        html.append("</div>")
+        html.append('<div class="token-info">')
+        html.append(
+            "<strong>📌 个人订阅</strong>：收藏、待读、在读、已读 等个人订阅需要在用户设置中生成 Podcast Token，"
+        )
+        html.append(
+            f"然后使用 <code>{site_url}/podcast/TOKEN/favorite</code> 等地址订阅。"
+        )
+        html.append("</div>")
 
         if categories:
             html.append('<div class="section"><h2>按分类</h2><ul>')
@@ -155,9 +198,8 @@ class PodcastIndex(PodcastBaseHandler):
                 html.append(f'<li><a href="{url}">{author}</a> ({count}本)</li>')
             html.append("</ul></div>")
 
-        html.append("</body></html>")
-        self.set_header("Content-Type", "text/html; charset=UTF-8")
-        self.write("\n".join(html))
+        title = f'{CONF.get("site_title", "Talebook")} Podcast'
+        self.render_html_page(title, "\n".join(html), show_back=False)
 
 
 class PodcastAll(PodcastBaseHandler):
@@ -172,16 +214,7 @@ class PodcastAll(PodcastBaseHandler):
         entries = provider.get_catalog_entries(book_ids, site_url)
 
         title = f"{self._get_site_title()} - 全部有声书"
-        feed_xml = build_catalog_feed(
-            title,
-            "所有有声书合集",
-            entries,
-            site_url,
-            site_title=self._get_site_title(),
-        )
-
-        self.set_rss_headers()
-        self.write(feed_xml)
+        self.render_book_list(title, "所有有声书合集", entries)
 
 
 class PodcastBook(PodcastBaseHandler):
@@ -230,16 +263,7 @@ class PodcastCategory(PodcastBaseHandler):
 
         entries = provider.get_catalog_entries(book_ids, site_url)
         title = f"{self._get_site_title()} - 分类：{name}"
-        feed_xml = build_catalog_feed(
-            title,
-            f"分类「{name}」下的有声书",
-            entries,
-            site_url,
-            site_title=self._get_site_title(),
-        )
-
-        self.set_rss_headers()
-        self.write(feed_xml)
+        self.render_book_list(title, f"分类「{name}」下的有声书", entries)
 
 
 class PodcastTag(PodcastBaseHandler):
@@ -260,16 +284,7 @@ class PodcastTag(PodcastBaseHandler):
 
         entries = provider.get_catalog_entries(book_ids, site_url)
         title = f"{self._get_site_title()} - 标签：{name}"
-        feed_xml = build_catalog_feed(
-            title,
-            f"标签「{name}」下的有声书",
-            entries,
-            site_url,
-            site_title=self._get_site_title(),
-        )
-
-        self.set_rss_headers()
-        self.write(feed_xml)
+        self.render_book_list(title, f"标签「{name}」下的有声书", entries)
 
 
 class PodcastAuthor(PodcastBaseHandler):
@@ -290,16 +305,7 @@ class PodcastAuthor(PodcastBaseHandler):
 
         entries = provider.get_catalog_entries(book_ids, site_url)
         title = f"{self._get_site_title()} - 作者：{name}"
-        feed_xml = build_catalog_feed(
-            title,
-            f"作者「{name}」的有声书",
-            entries,
-            site_url,
-            site_title=self._get_site_title(),
-        )
-
-        self.set_rss_headers()
-        self.write(feed_xml)
+        self.render_book_list(title, f"作者「{name}」的有声书", entries)
 
 
 # ------------------------------------------------------------------
@@ -367,12 +373,7 @@ class PodcastTokenCatalog(PodcastBaseHandler):
 
         title = f"{self._get_site_title()} - {user.name}的{label}"
         description = f"{user.name} 的{label}有声书"
-        feed_xml = build_catalog_feed(
-            title, description, entries, site_url, site_title=self._get_site_title()
-        )
-
-        self.set_rss_headers()
-        self.write(feed_xml)
+        self.render_book_list(title, description, entries)
 
 
 class PodcastAudioFile(PodcastBaseHandler):

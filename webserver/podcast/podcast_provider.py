@@ -153,14 +153,28 @@ class PodcastProvider:
                 title = parts[1]
             title = title.replace("_", " ")
 
-            # Try to get duration using mutagen
+            # Try to get metadata and duration using mutagen
             duration = 0
+            author = None
             try:
                 from mutagen.mp3 import MP3
 
                 audio = MP3(file_path)
                 duration = int(audio.info.length)
-            except Exception:
+
+                if audio.tags:
+                    if "TIT2" in audio.tags and audio.tags["TIT2"].text:
+                        title_tag = audio.tags["TIT2"].text[0]
+                        if title_tag:
+                            title = str(title_tag)
+                    if "TPE1" in audio.tags and audio.tags["TPE1"].text:
+                        author_tag = audio.tags["TPE1"].text[0]
+                        if author_tag:
+                            author = str(author_tag)
+            except Exception as e:
+                logging.warning(
+                    f"Failed to read audio metadata for {file_path} via mutagen: {e}"
+                )
                 # Estimate duration: ~128kbps average for MP3
                 duration = int(file_size / (128 * 1024 / 8))
 
@@ -176,6 +190,7 @@ class PodcastProvider:
             episodes.append(
                 {
                     "title": title,
+                    "author": author,
                     "url": audio_url,
                     "size": file_size,
                     "duration": duration,

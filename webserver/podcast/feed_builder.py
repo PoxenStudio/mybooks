@@ -169,6 +169,12 @@ def build_book_feed(book_info, episodes, site_url, site_title="Talebook"):
         # Description
         ET.SubElement(item, "description").text = ep_title
 
+        # Item Author
+        ep_author = ep.get("author")
+        if ep_author:
+            ET.SubElement(item, "author").text = ep_author
+            ET.SubElement(item, f"{{{ITUNES_NS}}}author").text = ep_author
+
         # iTunes episode metadata
         duration = ep.get("duration", 0)
         if duration:
