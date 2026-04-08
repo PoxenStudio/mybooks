@@ -5,7 +5,7 @@ import hashlib
 import logging
 import traceback
 
-from gettext import gettext as _
+from webserver.i18n import _
 
 from webserver import loader
 from webserver.services import AsyncService

@@ -4,7 +4,7 @@
 import logging
 import requests
 import traceback
-from gettext import gettext as _
+from webserver.i18n import _
 from webserver.constants import CHROME_HEADERS, META_SOURCE_GOOGLE, META_SOURCE_AMAZON
 
 KEY = "Calibre"

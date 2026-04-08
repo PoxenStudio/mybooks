@@ -3,7 +3,7 @@
 import logging
 import re
 import requests
-from gettext import gettext as _
+from webserver.i18n import _
 
 from webserver.plugins.meta.douban import str2date
 from webserver.constants import CHROME_MOBILE_HEADERS

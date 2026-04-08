@@ -17,7 +17,7 @@ import asyncio
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from gettext import gettext as _
+from webserver.i18n import _
 
 try:
     import jieba
@@ -2279,7 +2279,7 @@ class TxtRead(BaseHandler):
         logging.info(book)
         fpath = book.get("fmt_txt", None)
         if not fpath:
-            return {"err": "format error", "msg": "非txt书籍"}
+            return {"err": "format error", "msg": _("非txt书籍")}
         with open(fpath, mode='rb') as file:
             # 移动文件指针到起始位置
             file.seek(start)
@@ -2289,7 +2289,7 @@ class TxtRead(BaseHandler):
                 # 读取从起始位置到结束位置的内容
                 content = file.read(end - start)
         if not content:
-            return {"err": "format error", "msg": "空文件"}
+            return {"err": "format error", "msg": _("空文件")}
         encode = get_content_encoding(content)
         content = content.decode(encoding=encode, errors='ignore').replace("\r", "").replace("\n", "<br>")
         return {"err": "ok", "content": content}
@@ -2303,7 +2303,7 @@ class BookTxtInit(BaseHandler):
         book = self.get_book(bid)
         fpath = book.get("fmt_txt", None)
         if not fpath:
-            return {"err": "format error", "msg": "非text书籍"}
+            return {"err": "format error", "msg": _("非text书籍")}
         # 解压后的目录
         fdir = os.path.join(CONF["extract_path"], str(book["id"]))
         # txt 解析出的目录文件
@@ -2312,19 +2312,19 @@ class BookTxtInit(BaseHandler):
         if is_ready:
             with open(content_path, 'r', encoding='utf8') as f:
                 meta = json.loads(f.read())
-            return {"err": "ok", "msg": "parsed", "data": {
+            return {"err": "ok", "msg": _("parsed"), "data": {
                 "content": meta['toc'],
                 "encoding": meta['encoding'],
                 "name": book["title"]
             }}
         if test_ready != "0":
-            return {"err": "ok", "msg": "not parsed"}
+            return {"err": "ok", "msg": _("not parsed")}
 
         # 若未解析则计算预计等待时间，至少2分钟
         wait = min(120, os.path.getsize(fpath) / (1024 * 1024) * 15)
         ExtractService().parse_txt_content(bid, fpath)
         que_len = ExtractService().get_queue('parse_txt_content').qsize()
-        return {"err": "ok", "msg": "已加入队列", "data": {
+        return {"err": "ok", "msg": _("已加入队列"), "data": {
             "wait": wait,
             "name": book["title"],
             "path": content_path,

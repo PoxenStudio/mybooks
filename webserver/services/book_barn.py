@@ -14,7 +14,7 @@ from webserver import loader, utils
 from webserver.version import VERSION
 from webserver.models import Reader, Item
 from webserver.constants import AUTO_FILL_META
-from gettext import gettext as _
+from webserver.i18n import _
 import platform
 
 

@@ -10,6 +10,7 @@ import json
 
 from webserver import loader
 from webserver.handlers.base import BaseHandler, ListHandler, js
+from webserver.i18n import _
 from webserver.version import VERSION
 
 from webserver.mcp.mcp_service import MCPService
@@ -66,7 +67,7 @@ class MCPHandler(ListHandler):
             body = self.request.body
             if not body:
                 self.set_status(400)
-                return {"err": "params", "msg": "No request body"}
+                return {"err": "params", "msg": _("No request body")}
 
             request_data = json.loads(body)
             logging.info(f"HTTP stream request: {request_data}")

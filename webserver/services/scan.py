@@ -7,7 +7,7 @@ import logging
 import time
 import traceback
 
-from gettext import gettext as _
+from webserver.i18n import _
 from sqlalchemy.exc import IntegrityError
 
 from webserver import utils

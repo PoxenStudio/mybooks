@@ -3,7 +3,7 @@
 
 import logging
 import traceback
-from gettext import gettext as _
+from webserver.i18n import _
 
 import sqlalchemy
 import tornado

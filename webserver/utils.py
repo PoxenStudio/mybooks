@@ -3,7 +3,7 @@
 import datetime
 import logging
 import re
-from gettext import gettext as _
+from webserver.i18n import _
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT
 from webserver.constants import CALIBRE_COLUMN_EXT_LINK, CALIBRE_COLUMN_CATEGORY
 from webserver.constants import BOOK_TYPE_EBOOK

@@ -4,7 +4,7 @@ import re
 import logging
 import time
 import pwd
-from gettext import gettext as _
+from webserver.i18n import _
 from io import BytesIO
 from urllib.parse import unquote
 from wsgidav.dav_provider import DAVProvider, DAVCollection, DAVNonCollection

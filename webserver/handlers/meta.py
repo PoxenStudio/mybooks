@@ -3,7 +3,7 @@
 import math
 import sys
 from functools import cmp_to_key
-from gettext import gettext as _
+from webserver.i18n import _
 
 from webserver import utils
 from webserver.handlers.base import ListHandler, js

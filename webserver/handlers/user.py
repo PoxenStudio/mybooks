@@ -5,7 +5,7 @@ import datetime
 import logging
 import re
 import os
-from gettext import gettext as _
+from webserver.i18n import _
 
 import tornado.escape
 from tornado import web
@@ -308,7 +308,7 @@ class SignIn(BaseHandler):
         logging.debug("PERM = %s", user.permission)
 
         self.login_user(user)
-        return {"err": "ok", "msg": "ok"}
+        return {"err": "ok", "msg": _("ok")}
 
 
 class UserReset(BaseHandler):
@@ -618,7 +618,7 @@ class UserAvatar(BaseHandler):
             raise web.HTTPError(403, reason="请先登录")
         fileinfo = self.request.files.get("avatar")
         if not fileinfo:
-            return {"err": "params.invalid", "msg": "未上传头像文件"}
+            return {"err": "params.invalid", "msg": _("未上传头像文件")}
         fileinfo = fileinfo[0]
         avatar_dir = os.path.join(CONF["static_path"], "avatar")
         os.makedirs(avatar_dir, exist_ok=True)

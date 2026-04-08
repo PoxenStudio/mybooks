@@ -3,7 +3,7 @@
 
 import logging
 import re
-from gettext import gettext as _
+from webserver.i18n import _
 
 from webserver import loader
 from webserver.plugins.meta import baike, douban

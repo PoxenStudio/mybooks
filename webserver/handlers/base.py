@@ -10,7 +10,7 @@ import random
 import time
 import traceback
 from collections import defaultdict
-from gettext import gettext as _
+from webserver.i18n import _, choose_language, set_language
 
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import func as sql_func
@@ -289,15 +289,10 @@ class BaseHandler(web.RequestHandler):
         self.should_be_invited()
 
     def set_i18n(self):
-        return
-        # TODO set correct language package
-        # import gettext
-        # accept = self.request.headers.get("Accept-Language", "")
-        # langs = [v.strip().split(";")[0] for v in accept.split(",") if v.strip()]
-        # logging.debug("choose lang: %s" % langs)
-        # if not langs: langs = ["zh_CN"]
-        # lang = gettext.translation('messages', localedir=CONF['i18n_path'], languages=langs, fallback=True)
-        # lang.install(unicode=True)
+        accept = self.request.headers.get("Accept-Language", "")
+        site_lang = CONF.get("site_language", "")
+        lang = choose_language(site_language=site_lang, accept_language=accept)
+        set_language(lang)
 
     def initialize(self):
         # 初始化数据库及calibre backends连接, 在main.py中构建

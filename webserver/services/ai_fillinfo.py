@@ -2,7 +2,7 @@
 # -*- coding: UTF-8 -*-
 import logging
 import time
-from gettext import gettext as _
+from webserver.i18n import _
 
 from webserver import loader, utils
 from webserver.assistant.book_ai_client import AIBookInfo, BookAIClient

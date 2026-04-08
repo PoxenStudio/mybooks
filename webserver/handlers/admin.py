@@ -13,7 +13,7 @@ import threading
 import time
 import traceback
 import uuid
-from gettext import gettext as _
+from webserver.i18n import _
 from sqlalchemy import func, extract
 
 import tornado
@@ -658,7 +658,7 @@ class SSLHandlerLogic:
                 "msg": _("NGINX重新加载配置异常: %s") % err,
             }
 
-        return {"err": "ok", "msg": "Succeed"}
+        return {"err": "ok", "msg": _("成功")}
 
 
 class AdminSSL(BaseHandler):
@@ -737,7 +737,7 @@ class AdminBookFill(BaseHandler):
         status = s.status()
         return {
             "err": "ok",
-            "msg": "ok",
+            "msg": _("ok"),
             "status": {
                 "total": status["count_total"],
                 "skip": status["count_skip"],

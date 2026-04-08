@@ -7,7 +7,7 @@ import logging
 import time
 import json
 import os
-from gettext import gettext as _
+from webserver.i18n import _
 
 from social_sqlalchemy.storage import JSONType, SQLAlchemyMixin
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String

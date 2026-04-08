@@ -14,7 +14,7 @@ import secrets
 import base64
 import os
 import re
-from gettext import gettext as _
+from webserver.i18n import _
 from typing import Any, Sequence, Dict, Optional
 
 from mcp.server import Server

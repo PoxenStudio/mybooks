@@ -5,7 +5,7 @@ import os
 import logging
 import traceback
 
-from gettext import gettext as _
+from webserver.i18n import _
 import subprocess
 import time
 import psutil

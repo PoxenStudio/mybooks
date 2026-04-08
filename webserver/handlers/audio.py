@@ -12,7 +12,7 @@ import traceback
 import urllib.parse
 import uuid
 import zipfile
-from gettext import gettext as _
+from webserver.i18n import _
 from webserver.version import VERSION
 
 import tornado
@@ -1152,11 +1152,11 @@ class AudioPurchase(BaseHandler):
                                 vip_notes = f.read()
                     except Exception as e:
                         logging.error(f"Error reading vip_notes.txt: {e}")
-                        vip_notes = "无法读取VIP说明文件"
+                        vip_notes = _("无法读取VIP说明文件")
 
                     return {
                         "err": "vip.expired",
-                        "msg": "非VIP用户或VIP已过期，无法购买音频",
+                        "msg": _("非VIP用户或VIP已过期，无法购买音频"),
                         "vipexpired": (
                             user.vipexpire.strftime("%Y-%m-%d %H:%M:%S")
                             if user.vipexpire
@@ -1181,11 +1181,11 @@ class AudioPurchase(BaseHandler):
                                 vip_notes = f.read()
                     except Exception as e:
                         logging.error(f"Error reading vip_notes.txt: {e}")
-                        vip_notes = "无法读取VIP说明文件"
+                        vip_notes = _("无法读取VIP说明文件")
 
                     return {
                         "err": "vip.quota_insufficient",
-                        "msg": "购买的额度不足",
+                        "msg": _("购买的额度不足"),
                         "notes": vip_notes,
                     }
 

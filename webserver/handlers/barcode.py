@@ -8,6 +8,7 @@ from pyzbar.pyzbar import decode
 from PIL import Image
 
 from webserver.handlers.base import BaseHandler, auth, js
+from webserver.i18n import _
 
 
 class BarcodeRecognition(BaseHandler):
@@ -19,7 +20,7 @@ class BarcodeRecognition(BaseHandler):
             # 获取上传的图片文件
             fileinfo = self.request.files.get('barcode_image')
             if not fileinfo:
-                return {"err": "no_file", "msg": "未选择图片文件"}
+                return {"err": "no_file", "msg": _("未选择图片文件")}
 
             fileinfo = fileinfo[0]
             img_data = fileinfo['body']
@@ -35,7 +36,7 @@ class BarcodeRecognition(BaseHandler):
                 decoded_objects = decode(image)
 
                 if not decoded_objects:
-                    return {"err": "no_barcode", "msg": "未在图片中识别到条形码"}
+                    return {"err": "no_barcode", "msg": _("未在图片中识别到条形码")}
 
                 # 查找13位或10位的ISBN条形码
                 isbn_candidates = []
@@ -58,7 +59,10 @@ class BarcodeRecognition(BaseHandler):
                 else:
                     # 如果没有找到标准长度的ISBN，返回第一个识别到的条形码
                     first_barcode = decoded_objects[0].data.decode('utf-8', errors='ignore')
-                    return {"err": "no_isbn", "msg": f"识别到条形码但不是标准ISBN格式: {first_barcode}"}
+                    return {
+                        "err": "no_isbn",
+                        "msg": _("识别到条形码但不是标准ISBN格式: %s") % first_barcode,
+                    }
 
             finally:
                 # 清理临时文件
@@ -67,7 +71,10 @@ class BarcodeRecognition(BaseHandler):
 
         except Exception as e:
             logging.error(f"条形码识别失败: {str(e)}")
-            return {"err": "recognition_failed", "msg": f"条形码识别失败: {str(e)}"}
+            return {
+                "err": "recognition_failed",
+                "msg": _("条形码识别失败: %s") % str(e),
+            }
 
 
 def routes():

@@ -9,7 +9,7 @@ import re
 import urllib
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
-from gettext import gettext as _
+from webserver.i18n import _
 from tornado import web
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 from webserver import constants, loader

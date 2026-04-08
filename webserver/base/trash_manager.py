@@ -5,7 +5,7 @@ import logging
 import shutil
 import threading
 import time
-from gettext import gettext as _
+from webserver.i18n import _
 
 from webserver import loader
 CONF = loader.get_settings()

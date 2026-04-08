@@ -5,7 +5,7 @@ import logging
 import re
 import time
 import traceback
-from gettext import gettext as _
+from webserver.i18n import _
 
 from webserver import loader, utils
 from webserver.plugins.meta import baike, douban
