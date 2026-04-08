@@ -1313,6 +1313,69 @@ export default {
             return [
                 v => !!v || this.$t('book.emailRequired'),
                 v => this.isValidEmail(v) || this.$t('book.emailInvalid')
+            ]
+        },
+        deviceTypes() {
+            return [
+                { text: this.$t('device.duokan'), value: 'duokan' },
+                { text: this.$t('device.ireader'), value: 'ireader' },
+                { text: this.$t('device.hanwang'), value: 'hanwang' },
+                { text: this.$t('device.boox'), value: 'boox' },
+                { text: this.$t('device.dangdang'), value: 'dangdang' },
+                { text: 'Kindle', value: 'kindle' },
+                { text: 'PureLibro', value: 'purelibro' },
+            ];
+        },
+        voice_options() {
+            return [
+                {
+                    voice_name: "zh-CN-liaoning-XiaobeiNeural",
+                    display_name: this.$t('voice.xiaobei'),
+                    gender: "female",
+                    sample_file: "female/zh-CN-liaoning-XiaobeiNeural.mp3"
+                },
+                {
+                    voice_name: "zh-CN-XiaoxiaoNeural",
+                    display_name: this.$t('voice.xiaoxiao'),
+                    gender: "female",
+                    sample_file: "female/zh-CN-XiaoxiaoNeural.mp3"
+                },
+                {
+                    voice_name: "zh-CN-XiaoyiNeural",
+                    display_name: this.$t('voice.xiaoyi'),
+                    gender: "female",
+                    sample_file: "female/zh-CN-XiaoyiNeural.mp3"
+                },
+                {
+                    voice_name: "zh-HK-HiuGaaiNeural",
+                    display_name: this.$t('voice.xiaojia'),
+                    gender: "female",
+                    sample_file: "female/zh-HK-HiuGaaiNeural.mp3"
+                },
+                {
+                    voice_name: "zh-CN-YunjianNeural",
+                    display_name: this.$t('voice.yunjian'),
+                    gender: "male",
+                    sample_file: "male/zh-CN-YunjianNeural.mp3"
+                },
+                {
+                    voice_name: "zh-CN-YunxiNeural",
+                    display_name: this.$t('voice.yunxi'),
+                    gender: "male",
+                    sample_file: "male/zh-CN-YunxiNeural.mp3"
+                },
+                {
+                    voice_name: "zh-CN-YunyangNeural",
+                    display_name: this.$t('voice.yunyang'),
+                    gender: "male",
+                    sample_file: "male/zh-CN-YunyangNeural.mp3"
+                },
+                {
+                    voice_name: "zh-HK-WanLungNeural",
+                    display_name: this.$t('voice.yunlong'),
+                    gender: "male",
+                    sample_file: "male/zh-HK-WanLungNeural.mp3"
+                }
             ];
         }
     },
@@ -1384,15 +1447,7 @@ export default {
             ip: '',
             port: ''
         },
-        deviceTypes: [
-            { text: this.$t('device.duokan'), value: 'duokan' },
-            { text: this.$t('device.ireader'), value: 'ireader' },
-            { text: this.$t('device.hanwang'), value: 'hanwang' },
-            { text: this.$t('device.boox'), value: 'boox' },
-            { text: this.$t('device.dangdang'), value: 'dangdang' },
-            { text: 'Kindle', value: 'kindle' },
-            { text: 'PureLibro', value: 'purelibro' },
-        ],
+
         // 读书分享卡片
         dialog_share_card: false,
         share_card_generating: false,
@@ -1426,56 +1481,7 @@ export default {
         currentAudioFile: null,
         // Progress polling timer
         progressTimer: null,
-        voice_options: [
-            {
-                voice_name: "zh-CN-liaoning-XiaobeiNeural",
-                display_name: this.$t('voice.xiaobei'),
-                gender: "female",
-                sample_file: "female/zh-CN-liaoning-XiaobeiNeural.mp3"
-            },
-            {
-                voice_name: "zh-CN-XiaoxiaoNeural",
-                display_name: this.$t('voice.xiaoxiao'),
-                gender: "female",
-                sample_file: "female/zh-CN-XiaoxiaoNeural.mp3"
-            },
-            {
-                voice_name: "zh-CN-XiaoyiNeural",
-                display_name: this.$t('voice.xiaoyi'),
-                gender: "female",
-                sample_file: "female/zh-CN-XiaoyiNeural.mp3"
-            },
-            {
-                voice_name: "zh-HK-HiuGaaiNeural",
-                display_name: this.$t('voice.xiaojia'),
-                gender: "female",
-                sample_file: "female/zh-HK-HiuGaaiNeural.mp3"
-            },
-            {
-                voice_name: "zh-CN-YunjianNeural",
-                display_name: this.$t('voice.yunjian'),
-                gender: "male",
-                sample_file: "male/zh-CN-YunjianNeural.mp3"
-            },
-            {
-                voice_name: "zh-CN-YunxiNeural",
-                display_name: this.$t('voice.yunxi'),
-                gender: "male",
-                sample_file: "male/zh-CN-YunxiNeural.mp3"
-            },
-            {
-                voice_name: "zh-CN-YunyangNeural",
-                display_name: this.$t('voice.yunyang'),
-                gender: "male",
-                sample_file: "male/zh-CN-YunyangNeural.mp3"
-            },
-            {
-                voice_name: "zh-HK-WanLungNeural",
-                display_name: this.$t('voice.yunlong'),
-                gender: "male",
-                sample_file: "male/zh-HK-WanLungNeural.mp3"
-            }
-        ],
+
         email_rules: function (email) {
             var re = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
             return (email !== this.kindle_sender && re.test(email)) || "Invalid email format";

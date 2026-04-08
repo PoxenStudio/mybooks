@@ -5,13 +5,7 @@ import logging
 import os
 import re
 import sys
-from webserver.i18n import (
-    _,
-    apply_localized_default_settings,
-    detect_system_language,
-    normalize_language,
-    set_default_language,
-)
+from webserver.i18n import _
 from logging.handlers import RotatingFileHandler
 import traceback
 
@@ -579,17 +573,6 @@ def setup_logging():
 def main():
     tornado.options.parse_command_line()
     setup_logging()
-
-    if not CONF.get("installed", False):
-        configured_lang = normalize_language(CONF.get("site_language", ""))
-        if configured_lang in ("zh", "en"):
-            selected_lang = configured_lang
-        else:
-            selected_lang = detect_system_language()
-            CONF["site_language"] = selected_lang
-        set_default_language(selected_lang)
-        apply_localized_default_settings(CONF, selected_lang)
-        logging.info("Backend i18n language selected: %s", selected_lang)
 
     # 配置异步 HTTP 客户端的最大连接数
     AsyncHTTPClient.configure(None, max_clients=200)

@@ -10,6 +10,7 @@
         "adminEmail": "管理员Email",
         "privateLibraryMode": "开启私人图书馆模式",
         "accessCode": "访问码",
+        "accessCodeRule": "4 ~ 64 个字符",
         "completeSetup": "完成设置",
         "usernameRule": "3 ~ 20 个字符",
         "passwordRule": "6 ~ 20 个字符",
@@ -328,6 +329,7 @@
             "title": "编辑书籍信息",
             "cancel": "取消",
             "save": "保存",
+            "saveSuccess": "保存成功！",
             "fields": {
                 "title": "书名",
                 "rating": "评分",
@@ -732,7 +734,6 @@
         "opdsIntroduction": "OPDS介绍",
         "webdavIntroduction": "WebDAV访问",
         "search": "搜索",
-        "sys.title": "系统标题",
         "ok": "好的",
         "user_center": "我的账户",
         "user_setting": "我的设置",

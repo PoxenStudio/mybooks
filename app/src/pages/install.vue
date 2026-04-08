@@ -6,7 +6,7 @@
                     <v-toolbar-title>{{ $t('install.title') }}</v-toolbar-title>
                 </v-toolbar>
                 <v-card-text>
-                    <v-form ref="form" @submit.prevent="do_intall">
+                    <v-form dark ref="form" @submit.prevent="do_intall">
                         <v-text-field required prepend-icon="home" v-model="title" :label="$t('install.siteTitle')"
                             type="text"></v-text-field>
                         <v-select
@@ -26,7 +26,7 @@
                         <v-checkbox v-model="invite" :label="$t('install.privateLibraryMode')"></v-checkbox>
                         <template v-if="invite">
                             <v-text-field required prepend-icon="lock" v-model="code" :label="$t('install.accessCode')" type="text"
-                                autocomplete="new-code"></v-text-field>
+                                autocomplete="new-code" :rules="[rules.code]"></v-text-field>
                         </template>
                     </v-form>
                     <v-alert type="info" v-if="tips" v-html="tips"></v-alert>
@@ -60,6 +60,7 @@ export default {
             user: null,
             pass: null,
             email: null,
+            code: null,
         },
 
     }),
@@ -69,14 +70,16 @@ export default {
     created() {
         this.rules.user = (v) => (20 >= v.length && v.length >= 3) || this.$t('install.usernameRule');
         this.rules.pass = (v) => (20 >= v.length && v.length >= 6) || this.$t('install.passwordRule');
+        this.rules.code = (v) => (64 >= v.length && v.length >= 4) || this.$t('install.accessCodeRule');
         this.rules.email = (email) => {
-            var re = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+            var re = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
             return re.test(email) || this.$t('install.invalidEmail');
         };
         this.$store.commit("navbar", false);
         this.language = this.getDefaultLanguage();
-        // 为body添加install-page类名，应用背景图样式
+        // 设置默认为dark主题
         if (process.client) {
+            this.$vuetify.theme.dark = true;
             document.body.classList.add('install-page');
         }
     },
@@ -89,12 +92,16 @@ export default {
         getDefaultLanguage() {
             // Prefer current UI locale, then browser locale; support zh/en only.
             const locale = ((this.$i18n && this.$i18n.locale) || "").toLowerCase();
+            console.log("Local:", locale);
             if (locale.startsWith("en")) return "en";
             if (locale.startsWith("zh")) return "zh";
 
             if (process.client && navigator.language) {
                 const navLang = String(navigator.language).toLowerCase();
+                console.log("Nav:", navLang);
                 if (navLang.startsWith("en")) return "en";
+            } else {
+                console.log("No language found, use default zh");
             }
             return "zh";
         },
