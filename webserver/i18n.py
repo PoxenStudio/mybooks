@@ -75,6 +75,7 @@ You have just requested a password reset on the website. Please keep your new pa
 ''',
     'HEADER': '',
     'FOOTER': '',
+    "META_SELECTED_SOURCES": ["amazon"]
 }
 
 
