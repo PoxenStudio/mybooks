@@ -895,6 +895,12 @@ export default {
             label: "settings.chunk_upload_size",
           },
           {
+            icon: "mdi-file-pdf-box",
+            key: "PDF_TILE_WITH_FILE_NAME",
+            label: "settings.pdf_tile_with_file_name",
+            type: "checkbox",
+          },
+          {
             icon: "mdi-shape-plus",
             key: "IMPORT_CATEGORY_WITH_FOLDER",
             label: "settings.category_with_folder",
@@ -954,12 +960,6 @@ export default {
             icon: "info",
             key: "convert_timeout",
             label: "settings.convert_timeout",
-          },
-          {
-            icon: "mdi-file-pdf-box",
-            key: "PDF_TILE_WITH_FILE_NAME",
-            label: "settings.pdf_tile_with_file_name",
-            type: "checkbox",
           },
           {
             icon: "mdi-bookshelf",
