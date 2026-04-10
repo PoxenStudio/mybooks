@@ -118,6 +118,25 @@ class BaseHandler(web.RequestHandler):
     def get_site_url():
         return BaseHandler.site_url
 
+    def _sanitize_uploaded_filename(self, name):
+        """Normalize untrusted upload filename to a safe basename."""
+        if not name:
+            return ""
+        normalized = name.replace("\\", "/")
+        normalized = normalized.split("/")[-1]
+        normalized = normalized.strip().replace("\x00", "")
+        if normalized in ("", ".", ".."):
+            return ""
+        return normalized
+
+    def _safe_upload_path(self, filename):
+        """Join filename to upload dir and enforce it stays within upload dir."""
+        base_dir = os.path.realpath(CONF["upload_path"])
+        candidate = os.path.realpath(os.path.join(base_dir, filename))
+        if os.path.commonpath([base_dir, candidate]) != base_dir:
+            raise ValueError("invalid upload path")
+        return candidate
+
     def _request_summary(self) -> str:
         # Use cached values to avoid detached instance errors after session closes
         userid = self._cached_user_id or 0

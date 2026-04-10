@@ -1884,6 +1884,9 @@ class BookUpload(BaseHandler):
             return {"err": "params.filename", "msg": _(u"文件不存在或未选择文件")}
 
         name = re.sub(r"[\x80-\xFF]+", BookUpload.convert, name)
+        name = self._sanitize_uploaded_filename(name)
+        if not name:
+            return {"err": "params.filename", "msg": _(u"文件名不合法")}
         logging.info(f"Adding format to book {book_id}, file name = {repr(name)}")
 
         fmt = os.path.splitext(name)[1]
@@ -1902,7 +1905,10 @@ class BookUpload(BaseHandler):
                 "book_id": book_id
             }
 
-        fpath = os.path.join(CONF["upload_path"], name)
+        try:
+            fpath = self._safe_upload_path(name)
+        except ValueError:
+            return {"err": "params.filename", "msg": _(u"文件名不合法")}
         with open(fpath, "wb") as f:
             f.write(data)
         logging.info(f"Save format file to [{fpath}]")
@@ -1947,6 +1953,9 @@ class BookUpload(BaseHandler):
             return {"err": "params.filename", "msg": _(u"文件不存在或未选择文件")}
 
         name = re.sub(r"[\x80-\xFF]+", BookUpload.convert, name)
+        name = self._sanitize_uploaded_filename(name)
+        if not name:
+            return {"err": "params.filename", "msg": _(u"文件名不合法")}
         logging.error("upload book name = " + repr(name))
         fmt = os.path.splitext(name)[1]
         fmt = fmt[1:] if fmt else None
@@ -1957,7 +1966,10 @@ class BookUpload(BaseHandler):
             return {"err": "params.format.unsupported", "msg": _(u"不支持的书籍格式: %s" % fmt)}
 
         # save file
-        fpath = os.path.join(CONF["upload_path"], name)
+        try:
+            fpath = self._safe_upload_path(name)
+        except ValueError:
+            return {"err": "params.filename", "msg": _(u"文件名不合法")}
         with open(fpath, "wb") as f:
             f.write(data)
         logging.info("save upload file into [%s]", fpath)
@@ -2075,6 +2087,9 @@ class BookUploadChunk(BaseHandler):
         if not filename:
             return {"err": "params.filename", "msg": _(u"文件名不能为空")}
         filename = re.sub(r"[\x80-\xFF]+", BookUpload.convert, filename)
+        filename = self._sanitize_uploaded_filename(filename)
+        if not filename:
+            return {"err": "params.filename", "msg": _(u"文件名不合法")}
         logging.error("upload book name = " + repr(filename))
         fmt = os.path.splitext(filename)[1]
         fmt = fmt[1:] if fmt else None
@@ -2086,6 +2101,8 @@ class BookUploadChunk(BaseHandler):
 
         if not file_hash:
             return {"err": "params.hash", "msg": _(u"文件hash不能为空")}
+        if not re.fullmatch(r"[a-fA-F0-9]{8,128}", file_hash):
+            return {"err": "params.hash", "msg": _(u"文件hash不合法")}
 
         # Get the chunk data
         if "chunk" not in self.request.files:
@@ -2129,6 +2146,9 @@ class BookUploadChunk(BaseHandler):
         try:
             # Clean filename
             filename = re.sub(r"[\x80-\xFF]+", BookUpload.convert, filename)
+            filename = self._sanitize_uploaded_filename(filename)
+            if not filename:
+                return {"err": "params.filename", "msg": _(u"文件名不合法")}
             fmt = os.path.splitext(filename)[1]
             fmt = fmt[1:] if fmt else None
             if not fmt:
@@ -2136,7 +2156,10 @@ class BookUploadChunk(BaseHandler):
             fmt = fmt.lower()
 
             # Merge chunks into final file
-            final_path = os.path.join(CONF["upload_path"], filename)
+            try:
+                final_path = self._safe_upload_path(filename)
+            except ValueError:
+                return {"err": "params.filename", "msg": _(u"文件名不合法")}
             with open(final_path, "wb") as outfile:
                 for i in range(total_chunks):
                     chunk_path = os.path.join(temp_dir, f"chunk_{i}")
