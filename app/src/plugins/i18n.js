@@ -4,14 +4,20 @@ import VueI18n from 'vue-i18n';
 Vue.use(VueI18n);
 
 // vue-i18n locale -> Vuetify lang name
-const VUETIFY_LOCALE_MAP = { zh: 'zhHans', en: 'en' };
+const VUETIFY_LOCALE_MAP = { zh: 'zhHans', 'zh-TW': 'zhHant', en: 'en' };
 
 export default ({ app }) => {
   // 只在客户端环境使用navigator对象
   let defaultLanguage = 'zh';
   if (process.client) {
     const browserLanguage = navigator.language || navigator.languages[0];
-    defaultLanguage = browserLanguage.startsWith('zh') ? 'zh' : 'en';
+    if (browserLanguage.toLowerCase().replace('_', '-').match(/^zh-(tw|hant|hk|mo)/i)) {
+      defaultLanguage = 'zh-TW';
+    } else if (browserLanguage.startsWith('zh')) {
+      defaultLanguage = 'zh';
+    } else {
+      defaultLanguage = 'en';
+    }
   }
 
   app.i18n = new VueI18n({
@@ -19,6 +25,7 @@ export default ({ app }) => {
     fallbackLocale: 'zh',
     messages: {
       zh: require('../../locales/zh.json'),
+      'zh-TW': require('../../locales/zh-TW.json'),
       en: require('../../locales/en.json'),
     },
   });

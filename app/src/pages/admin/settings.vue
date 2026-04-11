@@ -592,6 +592,7 @@ export default {
             type: "select",
             items: [
               { text: this.$t('language.zh'), value: "zh" },
+              { text: this.$t('language.zh_TW'), value: "zh-TW" },
               { text: this.$t('language.en'), value: "en" },
             ],
           },

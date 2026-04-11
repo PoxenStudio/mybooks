@@ -66,6 +66,7 @@ export default {
     lang: {
       locales: {
         zhHans: require('vuetify/lib/locale/zh-Hans').default,
+        zhHant: require('vuetify/lib/locale/zh-Hans').default,
         en: require('vuetify/lib/locale/en').default,
       },
       current: 'zhHans',

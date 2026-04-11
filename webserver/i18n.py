@@ -10,7 +10,7 @@ import logging
 import os
 from typing import Dict
 
-SUPPORTED_LANGUAGES = ("zh", "en")
+SUPPORTED_LANGUAGES = ("zh", "zh-TW", "en")
 DEFAULT_LANGUAGE = "zh"
 TEXT_DOMAIN = "messages"
 
@@ -18,7 +18,7 @@ _current_language = contextvars.ContextVar("talebook_i18n_language", default=Non
 _catalog_cache: Dict[str, Dict[str, str]] = {}
 
 _DEFAULT_SETTINGS_ZH = {
-    "site_title": "书屋",
+    "site_title": "Talebook",
     "push_title": "%(site_title)s：推送给您一本书《%(title)s》",
     "push_content": "为您奉上一本《%(title)s》, 欢迎常来访问%(site_title)s！%(site_url)s",
     'BOOK_NAV': '''经济金融=经济学/管理/经济/金融/商业/投资/营销/理财/创业/广告/股票/企业史/策划/经济管理/中国经济/市场营销/财政/投资理财/金融学/个人理财/企业与企业家/企业管理/经管/世界经济/经济学理论/管理学/经济金融/商业模式/银行/各行业经济/货币/金融史/经济史/管理学理论/新经济/价值投资/投资 交易/金融危机/证券/财经/商业管理/零售/电商/宏观经济/流行财经读物/对冲基金/经济与管理/商战/投资交易/金融投资/货币史/贸易经济/经管经管
@@ -49,6 +49,38 @@ Hi, %(username)s！
 Hi, %(username)s！
 
 你刚刚在网站上提交了密码重置，请妥善保存你的新密码: %(password)s
+''',
+}
+
+_DEFAULT_SETTINGS_ZH_TW = {
+    "site_title": "Talebook",
+    "push_title": "%(site_title)s：推送給您一本書《%(title)s》",
+    "push_content": "为您奉上一本《%(title)s》, 欢迎常来访问%(site_title)s！%(site_url)s",
+    'BOOK_NAV': '''經濟金融=經濟學/管理/經濟/金融/商業/投資
+教育=小學書單/高中書單/初中書單/書單/小學語文閱讀推薦/教育/古籍/繪本/國學/音樂/戲劇/繪畫/藝術史/國學入門/少兒/童書/文藝/兒童/宋詞/唐詩
+心理學=心理學/心理/勵志/女性/自我管理/治癒/成長/個人成長/職場/溝通/成功/人生
+社科=人文社科/哲學/傳記/社會學/文化/設計/藝術/政治/社會/建築/宗教/電影/數學/政治學/回憶錄
+歷史=歷史/中國歷史/近代史/思想/二戰/考古/中國/世界歷史/美國/日本/英國/法國/世界史/史學理論
+科技=科普/網際網路/程式設計/科學
+文學=文學藝術/小說/外國文學/文學/隨筆/中國文學
+''',
+    "INVITE_MESSAGE": "本站為私人圖書館，需輸入密碼才可進行訪問",
+    'FRIENDS': [
+        {"text": "Google Books", "href": "https://books.google.com"},
+    ],
+    "SIGNUP_MAIL_TITLE": "歡迎註冊個人書屋",
+    "RESET_MAIL_TITLE": "密碼重置",
+    'SIGNUP_MAIL_CONTENT': '''
+Hi, %(username)s！
+歡迎註冊%(site_title)s，這裡雖然是個小小的圖書館，但是希望你找到所愛。
+
+點擊鏈接激活你的賬號: %(active_link)s
+''',
+
+    'RESET_MAIL_CONTENT': '''
+Hi, %(username)s！
+
+你剛剛在網站上提交了密碼重置，請妥善保存你的新密碼: %(password)s
 ''',
 }
 
@@ -85,6 +117,8 @@ def normalize_language(lang: str) -> str:
     if not lang:
         return ""
     lang = str(lang).strip().lower().replace("_", "-")
+    if lang in ("zh-tw", "zh-hant", "zh-hk", "zh-mo"):
+        return "zh-TW"
     if lang.startswith("zh"):
         return "zh"
     if lang.startswith("en"):
@@ -191,11 +225,24 @@ def choose_language(site_language: str = "", accept_language: str = "") -> str:
 
 def apply_localized_default_settings(conf: dict, lang: str):
     lang = normalize_language(lang)
-    if lang != "en":
+    if lang == "en":
+        target = _DEFAULT_SETTINGS_EN
+    elif lang == "zh-TW":
+        target = _DEFAULT_SETTINGS_ZH_TW
+    else:
         return
     for key, zh_val in _DEFAULT_SETTINGS_ZH.items():
-        if conf.get(key) == zh_val:
-            conf[key] = _DEFAULT_SETTINGS_EN[key]
+        if conf.get(key) == zh_val and key in target:
+            conf[key] = target[key]
+
+
+def get_default_settings(lang: str) -> dict:
+    lang = normalize_language(lang)
+    if lang == "en":
+        return dict(_DEFAULT_SETTINGS_EN)
+    if lang == "zh-TW":
+        return dict(_DEFAULT_SETTINGS_ZH_TW)
+    return dict(_DEFAULT_SETTINGS_ZH)
 
 
 def gettext(message: str) -> str:
@@ -203,6 +250,7 @@ def gettext(message: str) -> str:
     if lang == "zh" or not message:
         return message
     catalog = _load_catalog(lang)
+    # zh-TW falls back to zh (original) if no translation found
     return catalog.get(message, message)
 
 
