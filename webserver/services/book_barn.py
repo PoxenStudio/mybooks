@@ -136,8 +136,8 @@ class BookBarnClient:
                     logging.info(f"Current version is up-to-date, no release found for the platform {get_os()}-{get_arch()}")
             else:
                 logging.error(f"Failed to get latest release, status code {response.status_code}")
-        except Exception as e:
-            logging.error(f"Exception occurred while checking latest release: {str(e)}")
+        except Exception:
+            logging.error(f"Exception occurred while checking latest release.")
         return result
 
     def _updateAction(self, token, action):

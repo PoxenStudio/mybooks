@@ -36,7 +36,7 @@ from webserver.services.convert import ConvertService
 from webserver.services.extract import ExtractService
 from webserver.services.mail import MailService
 from webserver.handlers.base import BaseHandler, ListHandler, auth, js
-from webserver.models import Item, ReadingState
+from webserver.models import Item, ReadingState, ScanFile
 from webserver.plugins.meta import baike, douban, youshu, xhsd
 from webserver.plugins.meta.calibre import CalibreMetadataApi
 from webserver.plugins.meta.bookbarn_tags import BookBarnTags
@@ -1454,6 +1454,7 @@ class BookDelete(BaseHandler):
         except Exception as e:
             logging.error(f"删除书籍《{book['title']}》的Item记录失败: {e}")
 
+        # 删除书籍
         try:
             self.calibre_db.delete_book(bid)
             self.add_msg("success", _(u"删除书籍《%s》") % book["title"])
