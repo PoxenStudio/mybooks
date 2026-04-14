@@ -25,6 +25,7 @@ POLL_INTERVAL = 10
 # Event expired in s
 EVENT_EXPIRE_SECONDS = 0.15
 
+
 class MonitorService:
     _instance: "MonitorService | None" = None
     _instance_lock: threading.Lock = threading.Lock()
