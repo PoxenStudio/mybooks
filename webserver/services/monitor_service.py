@@ -22,6 +22,8 @@ DEBOUNCE_SECONDS = 3
 # ScanService 繁忙时的轮询间隔（秒）
 POLL_INTERVAL = 10
 
+# Event expired in s
+EVENT_EXPIRE_SECONDS = 0.15
 
 class MonitorService:
     _instance: "MonitorService | None" = None
@@ -118,6 +120,7 @@ class MonitorService:
 
         return (
             inotify_simple.flags.CREATE
+            | inotify_simple.flags.DELETE
             | inotify_simple.flags.CLOSE_WRITE
             | inotify_simple.flags.DELETE_SELF
             | inotify_simple.flags.MOVE_SELF
@@ -168,12 +171,13 @@ class MonitorService:
         try:
             with os.scandir(root) as it:
                 for entry in it:
-                    if entry.is_dir(follow_symlinks=False):
-                        base_name = os.path.basename(entry.path)
-                        if base_name.startswith(".") or base_name.startswith("~"):
-                            logging.info("[Monitor] Skipping hidden/temp folder: %s", entry.path)
-                            continue
-                        self._add_watch_recursive(entry.path)
+                    if not entry.is_dir(follow_symlinks=False):
+                        continue
+                    base_name = os.path.basename(entry.path)
+                    if base_name.startswith(".") or base_name.startswith("~"):
+                        logging.info("[Monitor] Skipping hidden/temp folder: %s", entry.path)
+                        continue
+                    self._add_watch_recursive(entry.path)
         except PermissionError as e:
             logging.warning("[Monitor] No permission to scan directory: %s", e)
         except OSError as e:
@@ -200,6 +204,7 @@ class MonitorService:
         F = inotify_simple.flags
         IS_DIR_MASK = int(F.ISDIR)  # 1073741824 (0x40000000)
         CREATE_MASK = int(F.CREATE)  # 256 (0x00000100)
+        DELETE_MASK = int(F.DELETE)  # 512 (0x00000200)
         CLOSE_WRITE_MASK = int(F.CLOSE_WRITE)  # 8 (0x00000008)
         DELETE_SELF_MASK = int(F.DELETE_SELF)  # 1024 (0x00000400)
         MOVE_SELF_MASK = int(F.MOVE_SELF)  # 2048 (0x00000800)
@@ -247,19 +252,21 @@ class MonitorService:
                         logging.info("[Monitor] Ignoring non-book file event: %s", full_path)
                         continue
 
-                # 被监听的目录自身被删除或移出，清理wd
-                if mask & (DELETE_SELF_MASK | MOVE_SELF_MASK | MOVED_FROM_MASK):
-                    logging.info("Watched folder was removed!! %s", full_path)
-                    if mask & MOVED_FROM_MASK:
-                        self._remove_watch_with_path(full_path)
-                    else:
-                        self._remove_wd(wd)
+                # 被监听的目录自身或下面的文件被删除或移出，清理wd
+                if mask & (DELETE_MASK | DELETE_SELF_MASK | MOVE_SELF_MASK | MOVED_FROM_MASK):
+                    logging.info("[Monitor] %s was removed!! %s", "Folder" if is_dir else "File", full_path)
+                    if is_dir:
+                        if mask & (MOVED_FROM_MASK | DELETE_MASK):
+                            self._remove_watch_with_path(full_path)
+                        else:
+                            self._remove_wd(wd)
 
                 # 目录被移走（MOVED_FROM）：记录旧路径等待匹配 MOVED_TO cookie
                 # 排除非目录的 MOVED_FROM（文件移走不涉及分类更新）
-                if mask & (MOVED_FROM_MASK | DELETE_SELF_MASK):
-                    logging.info("[Monitor] Folder: Moved/DeleteSelf %s", full_path)
-                    if (event.cookie and mask & MOVED_FROM_MASK) or mask & DELETE_SELF_MASK:
+                # MacOS下文件移动时，触发的事件是DELETE & CREATE, 没有MOVED_FROM/MOVED_TO
+                if mask & (MOVED_FROM_MASK | DELETE_SELF_MASK | DELETE_MASK):
+                    logging.info("[Monitor] Folder: Moved/Delete %s", full_path)
+                    if (event.cookie and mask & MOVED_FROM_MASK) or mask & (DELETE_SELF_MASK | DELETE_MASK):
                         with self._move_lock:
                             self._pending_moves[event.cookie] = (full_path, time.monotonic())
                     continue
@@ -275,10 +282,13 @@ class MonitorService:
                     # 匹配成功 → 目录在监控树内重命名/移动（非新建、非从外部移入）
                     if (event.cookie and mask & MOVED_TO_MASK) or mask & CREATE_MASK:
                         with self._move_lock:
-                            old_entry = self._pending_moves.pop(event.cookie, None)
-                            # 顺带清理超时 cookie（>0.15s 无匹配视为移出监控树）
                             now = time.monotonic()
-                            stale = [c for c, (_, t) in self._pending_moves.items() if now - t > 0.15]
+                            old_entry = self._pending_moves.pop(event.cookie, None)
+                            if old_entry and old_entry[1] < now - EVENT_EXPIRE_SECONDS:
+                                logging.info("[Monitor] Ignoring stale move cookie: %d", event.cookie)
+                                old_entry = None
+                            # 顺带清理超时 cookie（>0.15s 无匹配视为移出监控树）
+                            stale = [c for c, (_, t) in self._pending_moves.items() if now - t > EVENT_EXPIRE_SECONDS]
                             for c in stale:
                                 self._pending_moves.pop(c, None)
                         if old_entry:
@@ -288,8 +298,8 @@ class MonitorService:
                             logging.info("[Monitor] add watch for %s", full_path)
                             if os.path.isdir(full_path):
                                 self._add_watch_recursive(full_path)
-                    if (not is_dir and (mask & CREATE_MASK)) or ((mask & MOVED_TO_MASK) and not old_entry):
-                        # 文件新建或从监控树外移入，直接触发事件
+                    if not old_entry and not is_dir and (mask & (CREATE_MASK | MOVED_TO_MASK)):
+                        # file and not moving or renaming
                         self._on_file_event(full_path)
                     continue
 
