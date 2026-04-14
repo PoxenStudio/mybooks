@@ -301,14 +301,14 @@ def ACQUISITION_ENTRY(item, db, updated, CFM, CKEYS, prefix):
     ans.append(
         E.link(
             type="image/jpeg",
-            href=prefix + "/get/cover/%s.jpg" % item[FM["id"]],
+            href=prefix + "/get/thumb_200_300/%s.jpg?size=200x300" % item[FM["id"]],
             rel="http://opds-spec.org/cover",
         )
     )
     ans.append(
         E.link(
             type="image/jpeg",
-            href=prefix + "/get/thumb_200_160/%s.jpg?size=200x160" % item[FM["id"]],
+            href=prefix + "/get/thumb_120_200/%s.jpg?size=120x200" % item[FM["id"]],
             rel="http://opds-spec.org/thumbnail",
         )
     )
