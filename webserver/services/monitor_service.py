@@ -163,10 +163,16 @@ class MonitorService:
 
     def _add_watch_recursive(self, root: str) -> None:
         self._add_watch(root)
+        if not os.path.isdir(root):
+            return
         try:
             with os.scandir(root) as it:
                 for entry in it:
                     if entry.is_dir(follow_symlinks=False):
+                        base_name = os.path.basename(entry.path)
+                        if base_name.startswith(".") or base_name.startswith("~"):
+                            logging.info("[Monitor] Skipping hidden/temp folder: %s", entry.path)
+                            continue
                         self._add_watch_recursive(entry.path)
         except PermissionError as e:
             logging.warning("[Monitor] No permission to scan directory: %s", e)
@@ -234,6 +240,13 @@ class MonitorService:
                 if not is_dir:
                     is_dir = os.path.isdir(full_path) if os.path.exists(full_path) else False
 
+                if not is_dir:
+                    # Remove unsupported files according to file extension
+                    ext = full_path.rsplit(".", 1)[-1].lower() if "." in full_path else ""
+                    if ext not in SCAN_EXT:
+                        logging.info("[Monitor] Ignoring non-book file event: %s", full_path)
+                        continue
+
                 # 被监听的目录自身被删除或移出，清理wd
                 if mask & (DELETE_SELF_MASK | MOVE_SELF_MASK | MOVED_FROM_MASK):
                     logging.info("Watched folder was removed!! %s", full_path)
@@ -273,8 +286,9 @@ class MonitorService:
                             self._on_moved(old_entry[0], full_path, is_dir)
                             # Try to add watch again
                             logging.info("[Monitor] add watch for %s", full_path)
-                            self._add_watch_recursive(full_path)
-                    if not is_dir:
+                            if os.path.isdir(full_path):
+                                self._add_watch_recursive(full_path)
+                    if not is_dir and (mask & CREATE_MASK):
                         self._on_file_event(full_path)
                     continue
 

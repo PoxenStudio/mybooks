@@ -52,22 +52,24 @@ class ScanService(AsyncService):
             ScanService.invalid_folder.add(e.filename)
             logging.error(f"[SCAN]访问目录时发生错误: {e.filename}, 错误码: {e.errno}")
 
-    def save_or_rollback(self, row):
+    def save_or_rollback(self, row, session=None):
+        session = session or self.session
         bid = "[ book-id=%s ]" % row.book_id if row.book_id else ""
         logging.info("update: status=%-5s, path=%s %s", row.status, row.path, bid)
         try:
             row.save()
-            self.session.commit()
+            session.commit()
             return True
         except IntegrityError as err:
             logging.error("IntegrityError: Duplicate hash detected: %s, %s", row.hash, err)
         except Exception as err:
             logging.exception("save error: %s", err)
-        self.session.rollback()
+        session.rollback()
         return False
 
-    def build_query(self, hashlist):
-        query = self.session.query(ScanFile).filter(
+    def build_query(self, hashlist, session=None):
+        session = session or self.session
+        query = session.query(ScanFile).filter(
             ScanFile.status == ScanFile.READY
         )  # .filter(ScanFile.import_id == 0)
         if isinstance(hashlist, (list, tuple)):
@@ -122,7 +124,8 @@ class ScanService(AsyncService):
     def do_scan_internal(self, path_dirs, task_id=None):
         from calibre.ebooks.metadata.meta import get_metadata
 
-        logging.info("[SCAN]<%s> we are: db=%s, session=%s", self, self.db, self.session)
+        session = self.session
+        logging.info("[SCAN]<%s> we are: db=%s, session=%s", self, self.db, session)
         logging.info("[SCAN]start to scan dirs: %s", path_dirs)
 
         # 生成任务（粗略扫描），前端可以调用API查询进展
@@ -150,7 +153,7 @@ class ScanService(AsyncService):
         rows = []
         inserted_hash = set()
         for fname, fpath, fmt in tasks:
-            samefiles = self.session.query(ScanFile).filter(ScanFile.path == fpath)
+            samefiles = session.query(ScanFile).filter(ScanFile.path == fpath)
             logging.info("[SCAN]Checking same files for path: %s (fname:%s), return count:%d", fpath, fname, samefiles.count())
             if samefiles.count() > 0:
                 # 如果已经有相同的文件记录，则跳过
@@ -183,13 +186,13 @@ class ScanService(AsyncService):
             if hash in inserted_hash:
                 logging.error("[SCAN]Duplicated processing book, skip: %s", fpath)
                 continue
-            if self.session.query(ScanFile).filter(ScanFile.hash == hash).count() > 0:
+            if session.query(ScanFile).filter(ScanFile.hash == hash).count() > 0:
                 logging.error("[SCAN]maybe have same book, skip: %s, due to same hash", fpath)
                 continue
 
             row = ScanFile(fpath, hash, scan_id)
             inserted_hash.add(hash)
-            if not self.save_or_rollback(row):
+            if not self.save_or_rollback(row, session):
                 continue
             rows.append(row)
 
@@ -226,26 +229,26 @@ class ScanService(AsyncService):
             except FileNotFoundError:
                 row.status = ScanFile.MISSED
                 logging.error("[SCAN]File not found when calculating hash: %s", fpath)
-                if not self.save_or_rollback(row):
+                if not self.save_or_rollback(row, session):
                     logging.error("[SCAN]Failed to save row status: %s", fpath)
                 continue
             except PermissionError:
                 row.status = ScanFile.PERMISSION
                 logging.error("[SCAN]Permission denied when reading file: %s", fpath)
-                if not self.save_or_rollback(row):
+                if not self.save_or_rollback(row, session):
                     logging.error("[SCAN]Failed to save row status: %s", fpath)
                 continue
             except Exception as e:
                 row.status = ScanFile.DROP
                 logging.error("[SCAN]Error reading file %s: %s", fpath, e)
-                if not self.save_or_rollback(row):
+                if not self.save_or_rollback(row, session):
                     logging.error("[SCAN]Failed to save row status: %s", fpath)
                 continue
 
             hash = "sha256:" + sha256.hexdigest()
             should_drop = hash in inserted_hash
             if not should_drop:
-                hash_rows = self.session.query(ScanFile).filter(ScanFile.hash == hash)
+                hash_rows = session.query(ScanFile).filter(ScanFile.hash == hash)
                 should_drop = False
                 for hash_row in hash_rows:
                     if hash_row.status == ScanFile.IMPORTED and self.db.get_data_as_dict(ids=[hash_row.book_id]):
@@ -253,7 +256,7 @@ class ScanService(AsyncService):
                         break
                 if hash_rows.count() > 0 and not should_drop:
                     # 需要继续处理时，删除ScanDB中旧数据（排除当前记录）
-                    self.session.query(ScanFile).filter(
+                    session.query(ScanFile).filter(
                         ScanFile.hash == hash,
                         ScanFile.id != row.id
                     ).delete(synchronize_session=False)
@@ -266,7 +269,7 @@ class ScanService(AsyncService):
                 row.hash = hash
 
             inserted_hash.add(hash)
-            if not self.save_or_rollback(row):
+            if not self.save_or_rollback(row, session):
                 logging.error("[SCAN]Failed to save row: %s", fpath)
                 continue
 
@@ -290,7 +293,7 @@ class ScanService(AsyncService):
                 logging.error("[SCAN]Failed to get metadata for %s, reason:%s", fpath, mi.comments)
                 row.status = ScanFile.INVALID
                 row.title = None
-                if not self.save_or_rollback(row):
+                if not self.save_or_rollback(row, session):
                     logging.error("[SCAN]Failed to save row status: %s", fpath)
                 logging.info("[SCAN]Failed to get metadata for file %s, mark as invalid", fpath)
                 continue
@@ -329,7 +332,7 @@ class ScanService(AsyncService):
                         row.book_id = b.id
                         row.status = ScanFile.EXIST
                         break
-            if not self.save_or_rollback(row):
+            if not self.save_or_rollback(row, session):
                 continue
             pass
 
@@ -383,12 +386,13 @@ class ScanService(AsyncService):
     def do_import_internal(self, hashlist, user_id, task_id=None):
         from calibre.ebooks.metadata.meta import get_metadata
 
+        session = self.session
         # 生成任务ID
         import_id = int(time.time())
-        query = self.build_query(hashlist)
+        query = self.build_query(hashlist, session)
         query.update({ScanFile.import_id: import_id},
                      synchronize_session=False)
-        self.session.commit()
+        session.commit()
 
         imported = []
         batch_size = 20  # 每批处理的文件数量
@@ -511,14 +515,15 @@ class ScanService(AsyncService):
                 except Exception as err:
                     row.status = ScanFile.INVALID
                     logging.error("Failed to process file %s: %s", fpath, err)
+                    logging.error(traceback.format_exc())
 
             # 批量提交当前批次的更改
             try:
-                self.session.commit()
+                session.commit()
                 logging.info("Batch committed: %d-%d", batch_start + 1, batch_end)
             except Exception as err:
                 logging.error("Batch commit error: %s", err)
-                self.session.rollback()
+                session.rollback()
 
             # 更新任务进度
             if task_id:
@@ -538,11 +543,11 @@ class ScanService(AsyncService):
 
         # 最终提交，确保所有更改已保存
         try:
-            self.session.commit()
+            session.commit()
             logging.info("Final commit completed")
         except Exception as err:
             logging.error("Final commit error: %s", err)
-            self.session.rollback()
+            session.rollback()
 
         ScanService.static_is_importing = False
         if task_id:
@@ -597,6 +602,7 @@ class ScanService(AsyncService):
     def do_scan_import_internal(self, filelist, user_id, task_id=None):
         from calibre.ebooks.metadata.meta import get_metadata
 
+        session = self.session
         import_id = int(time.time())
         scan_upload_path = os.path.realpath(CONF.get("scan_upload_path", ""))
         total_count = len(filelist)
@@ -627,7 +633,7 @@ class ScanService(AsyncService):
                 continue
 
             # Step 1: 检查同路径文件是否已导入
-            same_path_rows = self.session.query(ScanFile).filter(ScanFile.path == fpath).all()
+            same_path_rows = session.query(ScanFile).filter(ScanFile.path == fpath).all()
             already_done = False
             for r in same_path_rows:
                 if r.status == ScanFile.IMPORTED and self.db.get_data_as_dict(ids=[r.book_id]):
@@ -658,13 +664,13 @@ class ScanService(AsyncService):
                 # 保留一条记录，方便在导入列表中展示错误状态
                 row = ScanFile(fpath, "", import_id)
                 row.status = bad_reason
-                self.save_or_rollback(row)
+                self.save_or_rollback(row, session)
                 continue
 
             hash_val = "sha256:" + sha256.hexdigest()
 
             # Step 3: 检查同 sha256 文件是否已导入
-            for hash_row in self.session.query(ScanFile).filter(ScanFile.hash == hash_val):
+            for hash_row in session.query(ScanFile).filter(ScanFile.hash == hash_val):
                 if hash_row.status == ScanFile.IMPORTED and self.db.get_data_as_dict(ids=[hash_row.book_id]):
                     logging.info("[SCAN_IMPORT] Already imported by hash: %s", fpath)
                     already_done = True
@@ -678,8 +684,8 @@ class ScanService(AsyncService):
                 row.hash = hash_val
             else:
                 # 删除同 hash 的旧记录（未导入），避免 unique 冲突
-                self.session.query(ScanFile).filter(ScanFile.hash == hash_val).delete(synchronize_session=False)
-                self.session.flush()
+                session.query(ScanFile).filter(ScanFile.hash == hash_val).delete(synchronize_session=False)
+                session.flush()
                 row = ScanFile(fpath, hash_val, import_id)
 
             # Step 5: 解析元数据
@@ -691,14 +697,14 @@ class ScanService(AsyncService):
             except Exception as e:
                 logging.error("[SCAN_IMPORT] Error reading metadata from %s: %s", fpath, e)
                 row.status = ScanFile.INVALID
-                self.save_or_rollback(row)
+                self.save_or_rollback(row, session)
                 continue
 
             if mi.title and mi.title == CALIBRE_ERROR_FLAG:
                 logging.error("[SCAN_IMPORT] Failed to get metadata for %s", fpath)
                 row.status = ScanFile.INVALID
                 row.title = None
-                self.save_or_rollback(row)
+                self.save_or_rollback(row, session)
                 continue
 
             if fmt == "txt":
@@ -769,7 +775,7 @@ class ScanService(AsyncService):
                 row.status = ScanFile.INVALID
                 logging.error("[SCAN_IMPORT] Failed to process file %s: %s", fpath, err)
 
-            self.save_or_rollback(row)
+            self.save_or_rollback(row, session)
 
         if task_id:
             try:
@@ -813,7 +819,8 @@ class ScanService(AsyncService):
 
         # 查找 src_path 在旧目录下的所有 Item
         sep = os.sep
-        all_items = self.session.query(Item).all()
+        session = self.session
+        all_items = session.query(Item).all()
         affected = [
             item for item in all_items
             if item.src_path and (
@@ -838,11 +845,11 @@ class ScanService(AsyncService):
                 logging.error("[RENAME DIR] Failed to update book_id=%d,: %s", item.book_id, e)
 
         try:
-            self.session.commit()
+            session.commit()
             logging.info("[RENAME DIR] category updated successfully")
         except Exception as e:
             logging.error("[RENAME DIR] Failed to commit: %s", e)
-            self.session.rollback()
+            session.rollback()
 
     @AsyncService.register_service
     def do_moved_file(self, old_file_path, new_file_path, scan_upload_path):
@@ -872,14 +879,15 @@ class ScanService(AsyncService):
             logging.warning("[RENAME FILE] 分类名含非法字符或过长，跳过: '%s'", new_category)
             return
 
-        affected = self.session.query(Item).filter(Item.src_path == old_file_path).all()
+        session = self.session
+        affected = session.query(Item).filter(Item.src_path == old_file_path).all()
         if not affected:
             # 尝试使用ScanFile表中的路径进行匹配，兼容之前未设置src_path的情况
             logging.info("[RENAME FILE] 在 Item 表中未找到 src_path 为 '%s' 的书籍，尝试在 ScanFile 表中查找", old_file_path)
-            scan_files = self.session.query(ScanFile).filter(ScanFile.path == old_file_path).all()
+            scan_files = session.query(ScanFile).filter(ScanFile.path == old_file_path).all()
             if scan_files:
                 book_ids = [sf.book_id for sf in scan_files if sf.book_id]
-                affected = self.session.query(Item).filter(Item.book_id.in_(book_ids)).all()
+                affected = session.query(Item).filter(Item.book_id.in_(book_ids)).all()
         if not affected:
             logging.info("[RENAME FILE] 未找到 src_path 为 '%s' 的书籍，无需更新", old_file_path)
             return
@@ -889,13 +897,13 @@ class ScanService(AsyncService):
             try:
                 self.db.new_api.set_field(CALIBRE_COLUMN_CATEGORY, {item.book_id: new_category})
                 item.src_path = new_file_path
-                logging.info("[RENAME] book_id=%d category->%s, src_path->%s", item.book_id, new_category, item.src_path)
+                logging.info("[RENAME FILE] book_id=%d category->%s, src_path->%s", item.book_id, new_category, item.src_path)
             except Exception as e:
-                logging.error("[RENAME] Failed to update book_id=%d, %s", item.book_id, e)
+                logging.error("[RENAME FILE] Failed to update book_id=%d, %s", item.book_id, e)
 
         try:
-            self.session.commit()
+            session.commit()
             logging.info("[RENAME FILE] Succeed to update categories")
         except Exception as e:
             logging.error("[RENAME FILE] Failed to commit: %s", e)
-            self.session.rollback()
+            session.rollback()
