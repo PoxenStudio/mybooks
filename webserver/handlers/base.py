@@ -653,7 +653,7 @@ class BaseHandler(web.RequestHandler):
         except Exception as e:
             logging.error(f"Error getting audio book ids: {e}")
 
-        logging.info(
+        logging.debug(
             "[%5d ms] select books from library (count = %d)"
             % (int(1000 * (time.time() - _ts)), len(books))
         )
@@ -707,7 +707,7 @@ class BaseHandler(web.RequestHandler):
             elif getattr(user, "read_limit", 0) > 0:
                 books = [b for b in books if self.is_book_in_reading_range(b, user)]
 
-        logging.info(
+        logging.debug(
             "[%5d ms] select books from database (count = %d)"
             % (int(1000 * (time.time() - _ts)), len(books))
         )

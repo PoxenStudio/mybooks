@@ -947,6 +947,16 @@ class AdminDeleteBooks(BaseHandler):
                 self.calibre_db.delete_book(book_id)
             except Exception as err:
                 logging.error(_("执行异常: %s"), err)
+
+        # Delete all Items whose id in idList
+        try:
+            items = self.sqlite_session.query(Item).filter(Item.book_id.in_(idlist)).all()
+            for item in items:
+                self.sqlite_session.delete(item)
+            self.sqlite_session.commit()
+        except Exception as e:
+            logging.error(f"删除书籍的Item记录失败: {e}")
+
         return {"err": "ok", "msg": _("删除成功")}
 
 
