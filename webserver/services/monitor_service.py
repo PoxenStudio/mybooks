@@ -288,7 +288,8 @@ class MonitorService:
                             logging.info("[Monitor] add watch for %s", full_path)
                             if os.path.isdir(full_path):
                                 self._add_watch_recursive(full_path)
-                    if not is_dir and (mask & CREATE_MASK):
+                    if (not is_dir and (mask & CREATE_MASK)) or ((mask & MOVED_TO_MASK) and not old_entry):
+                        # 文件新建或从监控树外移入，直接触发事件
                         self._on_file_event(full_path)
                     continue
 
