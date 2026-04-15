@@ -686,7 +686,7 @@ export default {
                 const data = JSON.parse(event.data);
                 if (data.type === 'start') {
                     this.ai_thinking = true;
-                    this.ai_messages.push({ role: 'assistant', content: '', status: '正在思考...', streaming: true });
+                    this.ai_messages.push({ role: 'assistant', content: '', status: '......', streaming: true });
                     this.scrollAiBottom();
                 } else if (data.type === 'content') {
                     const lastMsg = this.ai_messages[this.ai_messages.length - 1];
@@ -711,7 +711,7 @@ export default {
                     this.scrollAiBottom();
                 } else if (data.type === 'error') {
                     this.ai_thinking = false;
-                    this.ai_messages.push({ role: 'assistant', content: '出错了: ' + data.content, status: 'error' });
+                    this.ai_messages.push({ role: 'assistant', content: 'ERROR: ' + data.content, status: 'error' });
                     this.scrollAiBottom();
                 }
             };
@@ -719,7 +719,7 @@ export default {
             this.ai_ws.onerror = (error) => {
                 console.error('WebSocket error:', error);
                 console.error('Failed to connect to:', ws_url);
-                alert('AI连接失败，请检查服务器配置或登录状态');
+                alert(this.$t('appHeader.aiConnectionError'));
                 this.ai_ws = null;
                 this.ai_enabled = false;
                 this.ai_thinking = false;

@@ -768,7 +768,8 @@
         "taskTypeAudio": "音訊轉換",
         "taskTypeConvert": "格式轉換",
         "taskTypeAIFill": "AI 更新資訊",
-        "taskTypeTitleSortUpdate": "更新書名排序資訊"
+        "taskTypeTitleSortUpdate": "更新書名排序資訊",
+        "aiConnectionError": "AI連接失敗，請檢查伺服器配置或登入狀態"
     },
     "language": {
         "zh": "简体中文",
@@ -841,7 +842,17 @@
         "isbnInvalidFormat": "ISBN 號只能包含數字、連字號和 X",
         "addSuccess": "圖書添加成功",
         "barcodeRecognition": "條碼辨識",
-        "selectImageForBarcode": "選擇包含條碼的圖片"
+        "selectImageForBarcode": "選擇包含條碼的圖片",
+        "uploadSuccess":"上傳成功!",
+        "barcodeRecognitionFailed": "條碼識別服務出錯，請稍後重試",
+        "barcodeRecogizedFailed": "條碼識別失敗",
+        "noBarcodeFound": "未能識別到條碼，請確保圖片清晰且包含完整的ISBN條碼",
+        "invalidImageType": "請選擇圖片文件",
+        "imageTooLarge": "圖片文件不能超過10MB",
+        "addBookError": "添加圖書時發生錯誤",
+        "uploadFailed": "上傳失敗",
+        "uploadFailedDetail": "上傳失敗，請檢查是否文件過大或者已被刪除！",
+        "chunkUploadFailed": "分片上傳失敗"
     },
     "readingState": {
         "reading": "閱讀中",

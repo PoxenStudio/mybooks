@@ -763,7 +763,8 @@
         "taskTypeAudio": "Audio Conversion",
         "taskTypeConvert": "Ebook Conversion",
         "taskTypeAIFill": "AI Update Info",
-        "taskTypeTitleSortUpdate": "Update Pinyin Title Sort"
+        "taskTypeTitleSortUpdate": "Update Pinyin Title Sort",
+        "aiConnectionError": "AI connection failed, please check server configuration or login status"
     },
     "language": {
         "zh": "简体中文",
@@ -836,7 +837,17 @@
         "isbnInvalidFormat": "ISBN can only contain digits, hyphens and X",
         "addSuccess": "Book added successfully",
         "barcodeRecognition": "Barcode Recognition",
-        "selectImageForBarcode": "Select image containing barcode"
+        "selectImageForBarcode": "Select image containing barcode",
+        "uploadSuccess":"Upload successful!",
+        "barcodeRecognitionFailed": "Barcode recognition service error, please try again later",
+        "barcodeRecogizedFailed": "Barcode recognition failed",
+        "noBarcodeFound": "No barcode detected, please ensure the image is clear and contains a complete ISBN barcode",
+        "invalidImageType": "Please select an image file",
+        "imageTooLarge": "Image file cannot exceed 10MB",
+        "addBookError": "Error occurred while adding book",
+        "uploadFailed": "Upload failed",
+        "uploadFailedDetail": "Upload failed, please check if the file is too large or has been deleted!",
+        "chunkUploadFailed": "Chunk upload failed"
     },
     "readingState": {
         "reading": "Reading",

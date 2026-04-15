@@ -274,7 +274,7 @@ export default {
 
             // Check if file is selected
             if (!this.ebooks) {
-                this.$alert("error", "请选择要上传的文件");
+                this.$alert("error", this.$t('upload.selectFile'));
                 this.loading = false;
                 return;
             }
@@ -304,7 +304,7 @@ export default {
                 this.dialog = false;
                 this.handleUploadResponse(rsp);
             } catch (error) {
-                const msg = error.message ? "上传失败: " + error.message : "上传失败， 请检查是否文件过大或者已被删除！";
+                const msg = error.message ? this.$t('upload.uploadFailed') + ": " + error.message : this.$t('upload.uploadFailedDetail');
                 this.$alert("error", msg);
             } finally {
                 this.loading = false;
@@ -338,7 +338,7 @@ export default {
                     });
 
                     if (rsp.err !== 'ok') {
-                        throw new Error(rsp.msg || "块上传失败");
+                        throw new Error(rsp.msg || this.$t('upload.chunkUploadFailed'));
                     }
 
                     // Update progress (this is the final chunk response)
@@ -349,7 +349,7 @@ export default {
                     }
                 }
             } catch (error) {
-                const msg = error.message ? "分片上传失败: " + error.message : "上传失败， 请检查是否文件过大或者已被删除！";
+                const msg = error.message ? this.$t('upload.chunkUploadFailed') + ": " + error.message : this.$t('upload.uploadFailedDetail');
                 this.$alert("error", msg);
             } finally {
                 this.loading = false;
@@ -358,7 +358,7 @@ export default {
 
         handleUploadResponse(rsp) {
             if (rsp.err === 'ok') {
-                this.$alert("success", "上传成功！", "/book/" + rsp.book_id);
+                this.$alert("success", this.$t('upload.uploadSuccess'), "/book/" + rsp.book_id);
                 this.$router.push("/book/" + rsp.book_id);
             } else if (rsp.err === 'samebook') {
                 this.$alert("error", rsp.msg, "/book/" + rsp.book_id);
@@ -460,7 +460,7 @@ export default {
                     }
                 })
                 .catch((error) => {
-                    const msg = error.message ? "添加图书时发生错误: " + error.message : "上传失败， 请检查是否文件过大或者已被删除！";
+                    const msg = error.message ? this.$t('upload.addBookError') + ": " + error.message : this.$t('upload.addBookError');
                     this.$alert("error", msg);
                 })
                 .finally(() => {
@@ -498,13 +498,13 @@ export default {
 
             // 检查文件类型
             if (!file.type.startsWith('image/')) {
-                this.$alert("error", "请选择图片文件");
+                this.$alert("error", this.$t('upload.invalidImageType'));
                 return;
             }
 
             // 检查文件大小（限制为10MB）
             if (file.size > 10 * 1024 * 1024) {
-                this.$alert("error", "图片文件不能超过10MB");
+                this.$alert("error", this.$t('upload.imageTooLarge'));
                 return;
             }
 
@@ -530,16 +530,16 @@ export default {
                         this.$refs.isbnField && this.$refs.isbnField.validate();
                     });
                 } else if (response.err === 'no_barcode') {
-                    this.$alert("error", "未在图片中识别到条形码，请确保图片清晰且包含条形码");
+                    this.$alert("error", this.$t('upload.noBarcodeFound'));
                 } else if (response.err === 'no_isbn') {
                     this.$alert("warning", response.msg);
                 } else {
-                    this.$alert("error", response.msg || "条形码识别失败");
+                    this.$alert("error", response.msg || this.$t('upload.barcodeRecogizedFailed'));
                 }
             })
             .catch(error => {
-                console.error('条形码识别错误:', error);
-                this.$alert("error", "条形码识别服务出错，请稍后重试");
+                console.error('Failed to recognize barcode:', error);
+                this.$alert("error", this.$t('upload.barcodeRecognitionFailed'));
             })
             .finally(() => {
                 this.recognizing_barcode = false;

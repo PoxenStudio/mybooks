@@ -768,7 +768,8 @@
         "taskTypeAudio": "音频转换",
         "taskTypeConvert": "格式转换",
         "taskTypeAIFill": "AI更新信息",
-        "taskTypeTitleSortUpdate": "更新书名排序信息"
+        "taskTypeTitleSortUpdate": "更新书名排序信息",
+        "aiConnectionError": "AI连接失败，请检查服务器配置或登录状态"
     },
     "language": {
         "zh": "简体中文",
@@ -841,7 +842,17 @@
         "isbnInvalidFormat": "ISBN号只能包含数字、连字符和X",
         "addSuccess": "图书添加成功",
         "barcodeRecognition": "条形码识别",
-        "selectImageForBarcode": "选择包含条形码的图片"
+        "selectImageForBarcode": "选择包含条形码的图片",
+        "uploadSuccess":"上传成功!",
+        "barcodeRecognitionFailed": "条形码识别服务出错，请稍后重试",
+        "barcodeRecogizedFailed": "条形码识别失败",
+        "noBarcodeFound": "未能识别到条形码，请确保图片清晰且包含完整的ISBN条形码",
+        "invalidImageType": "请选择图片文件",
+        "imageTooLarge": "图片文件不能超过10MB",
+        "addBookError": "添加图书时发生错误",
+        "uploadFailed": "上传失败",
+        "uploadFailedDetail": "上传失败， 请检查是否文件过大或者已被删除！",
+        "chunkUploadFailed": "分片上传失败"
     },
     "readingState": {
         "reading": "在读",

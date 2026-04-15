@@ -2134,7 +2134,7 @@ class BookUploadChunk(BaseHandler):
             # Still waiting for more chunks
             return {
                 "err": "ok",
-                "msg": _(u"块上传成功"),
+                "msg": _(u"分块上传成功"),
                 "received_chunks": len(received_chunks),
                 "total_chunks": total_chunks
             }
