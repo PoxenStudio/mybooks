@@ -464,7 +464,15 @@
         "enable_audio_conversion_log": "Enable audio conversion logging (default off, enable to record detailed conversion logs)",
         "enable_opds_service": "Enable OPDS catalog service (allows readers to access the library via the OPDS protocol)",
         "enable_webdav_service": "Enable WebDAV service (allows readers to access the library via the WebDAV protocol)",
-        "enable_podcast_service": "Enable Podcast catalog service (allows readers to access the library via the Podcast protocol)"
+        "enable_podcast_service": "Enable Podcast catalog service (allows readers to access the library via the Podcast protocol)",
+        "extended_features": "Extended Features",
+        "enable_stamp_feature": "Enable cover stamp feature",
+        "stamp_image_hint": "Supports PNG format, image dimensions within 480x480 pixels, file size no more than 128KB. Recommended to use PNG images with transparent background for better results.",
+        "stamp_position_label": "Stamp Position",
+        "stamp_upload_success": "Stamp image uploaded successfully",
+        "stamp_image_format_error": "Only PNG format is supported",
+        "stamp_image_size_error": "Image file size must not exceed 128KB",
+        "stamp_image_dimension_error": "Image dimensions must not exceed 480x480 pixels"
     },
     "book": {
         "edit": {
@@ -541,6 +549,9 @@
         "saveMetaToFile": "Sync metadata to file",
         "saveMetaSuccess": "Metadata successfully synced to book file",
         "saveMetaFailed": "Failed to sync metadata",
+        "addStampToCover": "Add Stamp to Cover",
+        "addStampSuccess": "Stamp successfully added to cover",
+        "addStampFailed": "Failed to add stamp",
         "needEpubOrAzw3": "EPUB or AZW3 format required to sync metadata",
         "selectFormatToSeparate": "Select format to separate:",
         "separateHint": "After separation, the selected format will be removed from the current book and created as a new independent book.",

@@ -449,6 +449,8 @@ class AdminSettings(BaseHandler):
             "IMPORT_CATEGORY_WITH_FOLDER",
             "UPDATE_CATEGORY_WITH_FOLDER_RENAME",
             "LOG_LEVEL_DEBUG",
+            "ENABLE_STAMP_FEATURE",
+            "STAMP_POSITION",
         ]
 
         current_icon = CONF.get(
@@ -1094,9 +1096,73 @@ class AdminTrashClear(BaseHandler):
         return {"err": "ok", "msg": _("已清理Calibre回收站及上传目录")}
 
 
-class LibraryStats(BaseHandler):
-    _cache_data = None
-    _cache_time = 0
+class AdminStamp(BaseHandler):
+    @js
+    @auth
+    def get(self):
+        """获取图章图片"""
+        if not self.admin_user:
+            return {"err": "permission.not_admin", "msg": "Not admin user"}
+        
+        if not CONF.get("ENABLE_STAMP_FEATURE", False):
+            return {"err": "feature.disabled", "msg": "Stamp feature is not enabled"}
+
+    @auth
+    def post(self):
+        """上传图章图片"""
+        if not self.admin_user:
+            self.set_status(403)
+            return self.write({"err": "permission.not_admin", "msg": "Not admin user"})
+        
+        if not CONF.get("ENABLE_STAMP_FEATURE", False):
+            self.set_status(403)
+            return self.write({"err": "feature.disabled", "msg": "Stamp feature is not enabled"})
+        
+        if 'file' not in self.request.files:
+            self.set_status(400)
+            return self.write({"err": "params.missing", "msg": "File not found"})
+        
+        file_info = self.request.files['file'][0]
+        filename = file_info['filename']
+        content = file_info['body']
+        
+        # 验证文件格式
+        if not filename.lower().endswith('.png'):
+            self.set_status(400)
+            return self.write({"err": "file.invalid_format", "msg": "Only PNG format is supported"})
+        
+        # 验证文件大小
+        max_size = 128 * 1024  # 128KB
+        if len(content) > max_size:
+            self.set_status(400)
+            return self.write({"err": "file.too_large", "msg": "File size must not exceed 128KB"})
+        
+        # 验证图片尺寸
+        try:
+            from PIL import Image
+            import io
+            img = Image.open(io.BytesIO(content))
+            if img.width > 480 or img.height > 480:
+                self.set_status(400)
+                return self.write({"err": "file.dimension_too_large", "msg": "Image dimensions must not exceed 480x480 pixels"})
+        except Exception as e:
+            logging.error(f"Failed to validate image: {e}")
+            self.set_status(400)
+            return self.write({"err": "file.invalid", "msg": "Invalid image file"})
+        
+        # 保存图片
+        try:
+            logo_dir = os.path.join(CONF["static_path"], "logo")
+            os.makedirs(logo_dir, exist_ok=True)
+            stamp_path = os.path.join(logo_dir, "stamp.png")
+            with open(stamp_path, 'wb') as f:
+                f.write(content)
+            
+            self.write({"err": "ok", "msg": "Stamp image uploaded successfully"})
+        except Exception as e:
+            logging.error(f"Failed to save stamp image: {e}")
+            self.set_status(500)
+            self.write({"err": "file.save_failed", "msg": f"Failed to save image: {str(e)}"})
 
     def _get_stats(self):
         # 获取当前月份和年份
@@ -1245,6 +1311,7 @@ def routes():
         (r"/api/admin/tasks/running", AdminRunningTasks),
         (r"/api/admin/trash/size", AdminTrashSize),
         (r"/api/admin/trash/clear", AdminTrashClear),
+        (r"/api/admin/stamp", AdminStamp),
         (r"/api/library/stats", LibraryStats),
         (r"/api/admin/syslog", AdminSyslog),
         (r"/api/admin/syslog/download", AdminSyslogDownload),

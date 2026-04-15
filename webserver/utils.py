@@ -292,3 +292,96 @@ class ReadingStateFormatter:
                 "favorite_date": None,
                 "wants_date": None
             }
+
+
+class ImageHelper:
+    """图片处理辅助类，添加图章等操作"""
+
+    @staticmethod
+    def add_stamp_to_image(cover_data, stamp_path, position="bottom-right"):
+        try:
+            from PIL import Image
+            import io
+
+            # 加载原始封面
+            cover_img = Image.open(io.BytesIO(cover_data))
+            if cover_img.mode != 'RGB' and cover_img.mode != 'RGBA':
+                cover_img = cover_img.convert('RGBA')
+
+            # 加载图章
+            stamp_img = Image.open(stamp_path)
+            if stamp_img.mode != 'RGBA':
+                stamp_img = stamp_img.convert('RGBA')
+
+            # 获取封面尺寸
+            cover_width, cover_height = cover_img.size
+
+            # 将封面分成5x5网格
+            grid_width = cover_width // 5
+            grid_height = cover_height // 5
+
+            # 根据位置确定网格坐标（5x5网格）
+            position_map = {
+                "top-left": (0, 0),
+                "top-center": (2, 0),
+                "top-right": (4, 0),
+                "center-left": (0, 2),
+                "center": (2, 2),
+                "center-right": (4, 2),
+                "bottom-left": (0, 4),
+                "bottom-center": (2, 4),
+                "bottom-right": (4, 4),
+            }
+
+            grid_x, grid_y = position_map.get(position, (4, 4))  # 默认右下
+
+            # 计算网格区域
+            region_x = grid_x * grid_width
+            region_y = grid_y * grid_height
+
+            # 计算图章缩放尺寸（占网格区域的80%）
+            target_size = int(min(grid_width, grid_height) * 0.8)
+
+            # 保持图章宽高比缩放
+            stamp_width, stamp_height = stamp_img.size
+            if stamp_width > stamp_height:
+                new_width = target_size
+                new_height = int(stamp_height * target_size / stamp_width)
+            else:
+                new_height = target_size
+                new_width = int(stamp_width * target_size / stamp_height)
+
+            # 缩放图章
+            stamp_resized = stamp_img.resize((new_width, new_height), Image.LANCZOS)
+
+            # 计算图章在网格中居中的位置
+            paste_x = region_x + (grid_width - new_width) // 2
+            paste_y = region_y + (grid_height - new_height) // 2
+
+            # 确保坐标非负
+            paste_x = max(0, paste_x)
+            paste_y = max(0, paste_y)
+
+            # 创建新图片（确保是RGBA模式以支持透明度）
+            if cover_img.mode != 'RGBA':
+                cover_img = cover_img.convert('RGBA')
+
+            # 粘贴图章（使用alpha通道作为mask）
+            cover_img.paste(stamp_resized, (paste_x, paste_y), stamp_resized)
+
+            # 转换回RGB（如果原始是RGB）并保存
+            output = io.BytesIO()
+            if cover_data[:3] == b'\xff\xd8\xff':  # JPEG格式
+                if cover_img.mode == 'RGBA':
+                    cover_img = cover_img.convert('RGB')
+                cover_img.save(output, format='JPEG', quality=95)
+            else:  # PNG或其他格式
+                cover_img.save(output, format='PNG')
+
+            return output.getvalue()
+
+        except Exception as e:
+            logging.error(f"Error adding stamp to image: {e}")
+            import traceback
+            logging.error(traceback.format_exc())
+            return None

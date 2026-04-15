@@ -496,6 +496,77 @@
                 </v-btn>
               </div>
             </template>
+            <template v-if="card.show_stamp">
+              <v-checkbox
+                small
+                hide-details
+                v-model="settings['ENABLE_STAMP_FEATURE']"
+                :label="$t('settings.enable_stamp_feature')"
+              ></v-checkbox>
+              <div v-if="settings['ENABLE_STAMP_FEATURE']" style="margin-top: 16px;">
+                <v-row align="center">
+                  <v-col cols="12" sm="6">
+                    <div style="position: relative; width: 200px; height: 200px;">
+                      <v-img
+                        :src="stampPreviewUrl"
+                        width="200"
+                        height="200"
+                        style="border: 1px solid #ddd;"
+                        contain
+                      >
+                        <template v-slot:placeholder>
+                          <v-row
+                            class="fill-height ma-0"
+                            align="center"
+                            justify="center"
+                          >
+                            <v-icon size="80" color="grey lighten-2">mdi-image</v-icon>
+                          </v-row>
+                        </template>
+                      </v-img>
+                      <v-btn
+                        absolute
+                        bottom
+                        right
+                        fab
+                        small
+                        color="primary"
+                        @click="$refs.stampFileInput.click()"
+                        style="margin: 8px;"
+                      >
+                        <v-icon>mdi-upload</v-icon>
+                      </v-btn>
+                      <input
+                        ref="stampFileInput"
+                        type="file"
+                        accept=".png"
+                        style="display: none"
+                        @change="uploadStampImage"
+                      />
+                    </div>
+                    <p class="text-caption mt-2">
+                      {{ $t('settings.stamp_image_hint') }}
+                    </p>
+                  </v-col>
+                  <v-col cols="12" sm="6">
+                    <p class="mb-2">{{ $t('settings.stamp_position_label') }}</p>
+                    <div style="display: inline-grid; grid-template-columns: repeat(3, 60px); grid-gap: 8px;">
+                      <v-btn
+                        v-for="pos in stampPositions"
+                        :key="pos.value"
+                        :color="settings['STAMP_POSITION'] === pos.value ? 'primary' : ''"
+                        @click="settings['STAMP_POSITION'] = pos.value"
+                        small
+                        outlined
+                        style="min-width: 60px; height: 60px;"
+                      >
+                        <v-icon small>{{ pos.icon }}</v-icon>
+                      </v-btn>
+                    </div>
+                  </v-col>
+                </v-row>
+              </div>
+            </template>
             <template v-if="card.show_ssl">
               <ssl-manager />
             </template>
@@ -1015,6 +1086,12 @@ export default {
 
       {
         show: false,
+        title: "settings.extended_features",
+        fields: [],
+        show_stamp: true,
+      },
+      {
+        show: false,
         title: "settings.ssl_certificate_management",
         fields: [],
         show_ssl: true,
@@ -1124,6 +1201,18 @@ export default {
     trashSizeTexts: { trash: "", upload: "" },
     trashLoading: false,
     trashConfirmDialog: false,
+    stampPreviewUrl: "",
+    stampPositions: [
+      { value: "top-left", icon: "mdi-format-align-top" },
+      { value: "top-center", icon: "mdi-format-align-top" },
+      { value: "top-right", icon: "mdi-format-align-top" },
+      { value: "center-left", icon: "mdi-format-align-middle" },
+      { value: "center", icon: "mdi-format-align-middle" },
+      { value: "center-right", icon: "mdi-format-align-middle" },
+      { value: "bottom-left", icon: "mdi-format-align-bottom" },
+      { value: "bottom-center", icon: "mdi-format-align-bottom" },
+      { value: "bottom-right", icon: "mdi-format-align-bottom" },
+    ],
   }),
   computed: {
     metaSourceItems() {
@@ -1142,6 +1231,7 @@ export default {
   },
   mounted() {
     this.fetchTrashSize();
+    this.loadStampImage();
   },
   beforeDestroy() {
     // 页面销毁时移除settings-page类名
@@ -1304,6 +1394,60 @@ export default {
           this.$alert("error", rsp.msg);
         }
       });
+    },
+    uploadStampImage(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      // 验证文件类型
+      if (file.type !== 'image/png') {
+        this.$alert("error", this.$t('settings.stamp_image_format_error'));
+        return;
+      }
+
+      // 验证文件大小
+      const maxSize = 128 * 1024; // 128KB
+      if (file.size > maxSize) {
+        this.$alert("error", this.$t('settings.stamp_image_size_error'));
+        return;
+      }
+
+      // 验证图片尺寸
+      const img = new Image();
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        img.onload = () => {
+          if (img.width > 480 || img.height > 480) {
+            this.$alert("error", this.$t('settings.stamp_image_dimension_error'));
+            return;
+          }
+
+          // 验证通过，上传图片
+          const formData = new FormData();
+          formData.append('file', file);
+
+          this.$backend("/admin/stamp", {
+            method: "POST",
+            body: formData,
+          }).then((rsp) => {
+            if (rsp.err === "ok") {
+              this.$alert("success", this.$t('settings.stamp_upload_success'));
+              this.loadStampImage();
+            } else {
+              this.$alert("error", rsp.msg);
+            }
+          });
+        };
+        img.src = e.target.result;
+      };
+
+      reader.readAsDataURL(file);
+    },
+    loadStampImage() {
+      // 加载图章预览图片
+      const timestamp = new Date().getTime();
+      this.stampPreviewUrl = `${this.site_url}/logo/stamp.png?t=${timestamp}`;
     },
   },
 };

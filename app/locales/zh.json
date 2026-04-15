@@ -399,6 +399,9 @@
         "saveMetaToFile": "同步信息到文件",
         "saveMetaSuccess": "元数据已成功同步到书籍文件",
         "saveMetaFailed": "元数据同步失败",
+        "addStampToCover": "封面加盖图章",
+        "addStampSuccess": "图章已成功添加到封面",
+        "addStampFailed": "添加图章失败",
         "needEpubOrAzw3": "需要 EPUB 或 AZW3 格式才能同步元数据",
         "selectFormatToSeparate": "选择要抽出的格式：",
         "separateHint": "抽出后，选定的格式将从当前书籍中移除，并创建为一本新的独立书籍。",
@@ -641,7 +644,15 @@
         "enable_audio_conversion_log": "启用有声书转换日志记录（默认关闭，开启后记录转换的详细日志)",
         "enable_opds_service": "启用OPDS目录服务（用于阅读器通过OPDS协议访问书库）",
         "enable_webdav_service": "启用WebDAV服务（用于阅读器通过WebDAV协议访问书库）",
-        "enable_podcast_service": "启用Podcast订阅服务（用于播放器通过Podcast协议访问有声书）"
+        "enable_podcast_service": "启用Podcast订阅服务（用于播放器通过Podcast协议访问有声书）",
+        "extended_features": "扩展功能",
+        "enable_stamp_feature": "启用封面加盖图章功能",
+        "stamp_image_hint": "支持PNG格式，图片尺寸不超过480x480像素，文件大小不超过128KB。建议使用带透明背景的PNG图片以获得更好的效果。",
+        "stamp_position_label": "图章位置",
+        "stamp_upload_success": "图章图片上传成功",
+        "stamp_image_format_error": "只支持PNG格式的图片",
+        "stamp_image_size_error": "图片文件大小不能超过128KB",
+        "stamp_image_dimension_error": "图片尺寸不能超过480x480像素"
     },
     "user": {
         "avatar": "头像",

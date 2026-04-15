@@ -2760,10 +2760,77 @@ class BookSaveMeta(BaseHandler):
         return self.save_book_meta(book_id, fmt=fmt)
 
 
-class ClearRareTags(ListHandler):
+class BookAddStamp(BaseHandler):
     @js
     @auth
-    def post(self):
+    def post(self, bid):
+        """为书籍封面加盖图章"""
+        book_id = int(bid)
+        if not self.is_admin() and not self.is_book_owner(book_id, self.user_id()):
+            return {"err": "user.no_permission", "msg": "Permission denied"}
+        
+        # 检查功能是否启用
+        if not CONF.get("ENABLE_STAMP_FEATURE", False):
+            return {"err": "feature.disabled", "msg": "Stamp feature is not enabled"}
+        
+        # 检查图章文件是否存在
+        stamp_path = os.path.join(CONF["static_path"], "logo", "stamp.png")
+        if not os.path.exists(stamp_path):
+            return {"err": "stamp.not_found", "msg": "Stamp file not found"}
+        
+        # 获取书籍信息
+        book = self.get_book(book_id, raise_exception=False)
+        if not book:
+            return {"err": "book.not_found", "msg": "Book not found"}
+        
+        # 检查是否有支持的格式
+        supported_formats = []
+        for f in ["epub", "azw3", "pdf"]:
+            fmt_key = f"fmt_{f}"
+            if fmt_key in book:
+                supported_formats.append(f)
+        
+        if not supported_formats:
+            return {
+                "err": "format.not_supported",
+                "msg": "No supported format (EPUB, AZW3 or PDF required)",
+            }
+        
+        try:
+            # 获取当前封面
+            cover_data = self.calibre_db.cover(book_id, index_is_id=True)
+            if not cover_data:
+                return {"err": "cover.not_found", "msg": "Book cover not found"}
+            
+            # 获取图章位置
+            stamp_position = CONF.get("STAMP_POSITION", "bottom-right")
+            
+            # 使用ImageHelper添加图章
+            from webserver.utils import ImageHelper
+            helper = ImageHelper()
+            new_cover_data = helper.add_stamp_to_image(cover_data, stamp_path, stamp_position)
+            if not new_cover_data:
+                return {"err": "stamp.failed", "msg": "Failed to add stamp"}
+            
+            # 更新封面到数据库
+            self.calibre_db.set_cover(book_id, new_cover_data)
+            
+            # 更新元数据到文件
+            result = self.save_book_meta(book_id)
+            if result.get("err") != "ok":
+                # 即使保存到文件失败，封面已经更新到数据库
+                logging.warning(f"Failed to save metadata to file: {result.get('msg')}")
+                return {
+                    "err": "ok",
+                    "msg": f"Stamp added but failed to save to file: {result.get('msg', '')}",
+                }
+            
+            return {"err": "ok", "msg": "Stamp added to cover successfully"}
+            
+        except Exception as e:
+            logging.error(f"Error adding stamp to cover: {e}")
+            logging.error(traceback.format_exc())
+            return {"err": "error", "msg": f"Error adding stamp: {str(e)}"}
         """清理稀少标签, 对少于3本书的标签所对应的书籍重新更新标签"""
         if not self.is_admin():
             return {"err": "user.not_admin", "msg": _(u"无权限")}
@@ -2969,6 +3036,7 @@ def routes():
         (r"/api/book/([0-9]+)/suggestion", BookSuggestion),
         (r"/api/book/([0-9]+)/separate", BookSperate),
         (r"/api/book/([0-9]+)/savemeta", BookSaveMeta),
+        (r"/api/book/([0-9]+)/addstamp", BookAddStamp),
         (r"/api/book/exchange_type", BookExchangeType),
         (r"/api/clear_rare_tags", ClearRareTags),
     ]

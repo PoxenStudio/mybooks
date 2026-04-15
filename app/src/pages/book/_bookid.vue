@@ -282,6 +282,10 @@
                                     <v-icon>mdi-file-sync</v-icon>
                                     {{ $t('book.saveMetaToFile') }}
                                 </v-list-item>
+                                <v-list-item @click="add_stamp_to_cover" :disabled="!hasEpubAzw3OrPDF">
+                                    <v-icon>mdi-watermark</v-icon>
+                                    {{ $t('book.addStampToCover') }}
+                                </v-list-item>
                                 <v-list-item @click="convert_book" :disabled="!hasEBooks">
                                     <v-icon>mdi-swap-horizontal</v-icon>
                                     {{ $t('book.convert') }}
@@ -1980,6 +1984,27 @@ export default {
                 }
             }).catch((err) => {
                 this.$alert("error", this.$t('book.saveMetaFailed'));
+            });
+        },
+        add_stamp_to_cover() {
+            // 为封面加盖图章
+            if (!this.hasEpubAzw3OrPDF) {
+                this.$alert("error", this.$t('book.needEpubOrAzw3'));
+                return;
+            }
+
+            this.$backend("/book/" + this.book.id + "/addstamp", {
+                method: "POST",
+            }).then((rsp) => {
+                if (rsp.err === "ok") {
+                    this.$alert("success", rsp.msg || this.$t('book.addStampSuccess'));
+                    // 刷新页面以显示新的封面
+                    location.reload();
+                } else {
+                    this.$alert("error", rsp.msg || this.$t('book.addStampFailed'));
+                }
+            }).catch((err) => {
+                this.$alert("error", this.$t('book.addStampFailed'));
             });
         },
         show_delete_format_dialog() {

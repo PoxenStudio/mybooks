@@ -81,6 +81,9 @@ settings = {
 
     "META_SELECTED_SOURCES": ["douban", "baidu", "xinhua"],
 
+    "ENABLE_STAMP_FEATURE": False,
+    "STAMP_POSITION": "bottom-right",
+
     "EPUB_VIEWER": "epubjs.html",
     "CANDLE_READER_SERVER": "https://brs.talebook.org",
     "PDF_VIEWER": "/static/pdfjs/web/viewer.html?file=%(pdf_url)s",
