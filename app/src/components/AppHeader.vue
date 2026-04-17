@@ -138,7 +138,7 @@
                 <v-container fluid class="py-2">
                     <v-form @submit.prevent="doSearch">
                         <v-text-field
-                            flat
+                            text
                             solo-inverted
                             hide-details
                             @keyup.enter="doSearch"
@@ -162,7 +162,7 @@
                                         <v-btn
                                             v-bind="attrs"
                                             v-on="on"
-                                            flat
+                                            text
                                             class="category-selector"
                                             :class="isMobileFocused ? 'black--text' : 'white--text'"
                                             color="transparent"
@@ -211,7 +211,7 @@
             <v-spacer></v-spacer>
             <template v-if="$vuetify.breakpoint.smAndUp">
                 <v-text-field
-                    flat
+                    text
                     solo-inverted
                     hide-details
                     prepend-inner-icon="search"
@@ -237,7 +237,7 @@
                                 <v-btn
                                     v-bind="attrs"
                                     v-on="on"
-                                    flat
+                                    text
                                     rounded
                                     color="transparent"
                                     class="category-selector"

@@ -624,7 +624,7 @@
         "logo_adjustment_description": "若需要調整 Logo，請參閱安裝文件的說明。",
         "ssl_certificate_management": "SSL 憑證管理",
         "social_network_login": "社群網路登入",
-        "save": "儲存",
+        "save": "儲存設置",
         "save_hints": "注意：儲存將會重新啟動服務，當前正進行的後台處理，如匯入及聯網更新資訊等任務將會中斷！",
         "switch_language_to": "切換語言為",
         "save_error": "儲存失敗！",

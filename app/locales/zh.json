@@ -626,7 +626,7 @@
         "logo_adjustment_description": "若需要调整Logo，请参阅安装文档的说明。",
         "ssl_certificate_management": "SSL证书管理",
         "social_network_login": "社交网络登录",
-        "save": "保存",
+        "save": "保存设置",
         "save_hints": "注意：保存将会重启服务，当前正进行的后台处理，如导入及联网更新信息等任务将会中断！",
         "switch_language_to": "切换语言为",
         "save_error": "保存失败！",

@@ -584,9 +584,15 @@
     <br />
     <div class="text-center">
       <p>{{ $t("settings.save_hints") }}</p>
-      <v-btn color="primary" @click="save_settings">{{
-        $t("settings.save")
-      }}</v-btn>
+      <v-btn
+        color="primary"
+        @click="save_settings"
+        class="save-btn"
+        large
+        elevation="4"
+      >
+        {{ $t("settings.save") }}
+      </v-btn>
     </div>
   </div>
 </template>
@@ -1452,5 +1458,33 @@ export default {
 <style>
 .cursor-pointer {
   cursor: pointer;
+}
+
+.save-btn {
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  border-radius: 32px !important;
+  padding: 0 40px !important;
+  min-height: 48px !important;
+  background: linear-gradient(135deg, #1976d2 0%, #1565c0 50%, #0d47a1 100%) !important;
+  box-shadow: 0 4px 12px rgba(21, 101, 192, 0.45), 0 2px 4px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+  letter-spacing: 0.5px !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.save-btn:hover {
+  background: linear-gradient(135deg, #1e88e5 0%, #1976d2 50%, #1565c0 100%) !important;
+  box-shadow: 0 6px 18px rgba(21, 101, 192, 0.55), 0 3px 6px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+  transform: translateY(-1px) !important;
+}
+
+.save-btn:active {
+  box-shadow: 0 2px 6px rgba(21, 101, 192, 0.35), inset 0 1px 3px rgba(0, 0, 0, 0.15) !important;
+  transform: translateY(1px) !important;
+}
+
+.theme--dark .save-btn {
+  background: linear-gradient(135deg, #42a5f5 0%, #1e88e5 50%, #1565c0 100%) !important;
+  box-shadow: 0 4px 12px rgba(66, 165, 245, 0.35), 0 2px 4px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
 }
 </style>
