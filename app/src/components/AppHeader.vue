@@ -138,6 +138,19 @@
                 <v-container fluid>
                     <v-form @submit.prevent="doSearch">
                         <v-row>
+                            <v-col cols="12" class="mb-2">
+                                <v-select
+                                    v-model="searchCategory"
+                                    :items="searchCategories"
+                                    :item-text="item => $t(item.label)"
+                                    :item-value="item => item.value"
+                                    dense
+                                    outlined
+                                    rounded
+                                    hide-details
+                                    style="width: 100%;"
+                                ></v-select>
+                            </v-col>
                             <v-col cols="9">
                                 <v-text-field
                                     class="ma-0 pa-0"
@@ -188,10 +201,41 @@
                     v-model="search"
                     name="name"
                     :label="$t('appHeader.search')"
-                    class="d-none d-sm-flex ml-8"
                     :loading="ai_thinking"
                     :disabled="ai_thinking"
+                    class="d-none d-sm-flex ml-8"
                 >
+                    <template #prepend-inner>
+                        <v-menu
+                            v-model="categoryMenu"
+                            :close-on-content-click="true"
+                            :nudge-width="120"
+                            offset-y
+                        >
+                            <template #activator="{ on, attrs }">
+                                <v-btn
+                                    v-bind="attrs"
+                                    v-on="on"
+                                    flat
+                                    :color="isFocused ? 'white' : 'transparent'"
+                                    class="category-selector"
+                                    style="padding: 3px 8px; margin-right: 8px;"
+                                >
+                                    {{ $t(searchCategories.find(c => c.value === searchCategory)?.label || 'appHeader.searchAll') }}
+                                </v-btn>
+                            </template>
+                            <v-list>
+                                <v-list-item
+                                    v-for="category in searchCategories"
+                                    :key="category.value"
+                                    @click="selectCategory(category.value)"
+                                    class="category-item"
+                                >
+                                    <v-list-item-title>{{ $t(category.label) }}</v-list-item-title>
+                                </v-list-item>
+                            </v-list>
+                        </v-menu>
+                    </template>
                     <template #append>
                         <v-btn v-if="isAiFeatureEnabled" :color="isFocused ? (ai_enabled ? 'orange' : 'grey') : 'transparent'" class="black--text" rounded @click="toggleAi">AI</v-btn>
                     </template>
@@ -419,6 +463,16 @@ export default {
         right: null,
         btn_search: false,
         search: "",
+        searchCategory: 'all',
+        searchCategories: [
+            { value: 'all', label: 'appHeader.searchAll' },
+            { value: 'title', label: 'appHeader.searchTitle' },
+            { value: 'title_sort', label: 'appHeader.searchTitleSort' },
+            { value: 'author', label: 'appHeader.searchAuthor' },
+            { value: 'isbn', label: 'appHeader.searchISBN' },
+            { value: 'comments', label: 'appHeader.searchComments' },
+        ],
+        categoryMenu: false,
         isFocused: false,
         ai_enabled: false,
         ai_thinking: false,
@@ -556,6 +610,14 @@ export default {
         },
     },
     mounted() {
+        // Load saved search category from localStorage
+        if (process.client) {
+            const savedCategory = localStorage.getItem('searchCategory');
+            if (savedCategory) {
+                this.searchCategory = savedCategory;
+            }
+        }
+
         this.$backend("/user/info").then((rsp) => {
             this.err = rsp.err;
             this.sys = rsp.sys;
@@ -771,9 +833,30 @@ export default {
             }
             return r;
         },
+        selectCategory(category) {
+            this.searchCategory = category;
+            this.categoryMenu = false;
+            // Save the selected category to localStorage
+            if (process.client) {
+                localStorage.setItem('searchCategory', category);
+            }
+        },
         doSearch() {
             if (this.search.trim() !== "") {
-                this.$router.push("/search?name=" + this.search.trim());
+                let searchText = this.search.trim();
+
+                // Add the appropriate prefix based on selected category
+                if (this.searchCategory !== 'all') {
+                    searchText = searchText.replace(/^(title:|title_sort:|author:|isbn:|comments:|#)/i, '').trim();
+                    searchText = this.searchCategory + ':' + searchText;
+                }
+
+                // Save the selected category to localStorage
+                if (process.client) {
+                    localStorage.setItem('searchCategory', this.searchCategory);
+                }
+
+                this.$router.push("/search?name=" + searchText);
             } else {
                 const ref = this.$refs.mobile_search || this.$refs.search;
                 if (ref) {
