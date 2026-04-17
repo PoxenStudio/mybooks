@@ -164,7 +164,7 @@
                                             v-on="on"
                                             flat
                                             class="category-selector"
-                                            :class="isMobileFocused && !$vuetify.theme.dark ? 'black--text' : 'white--text'"
+                                            :class="isMobileFocused ? 'black--text' : 'white--text'"
                                             color="transparent"
                                             style="padding: 3px 8px; margin-right: 8px;"
                                             rounded
@@ -241,7 +241,7 @@
                                     rounded
                                     color="transparent"
                                     class="category-selector"
-                                    :class="isFocused && !$vuetify.theme.dark ? 'black--text' : 'white--text'"
+                                    :class="isFocused ? 'black--text' : 'white--text'"
                                     style="padding: 3px 8px; margin-right: 8px;"
                                 >
                                     {{ $t(searchCategories.find(c => c.value === searchCategory)?.label || 'appHeader.searchAll') }}
@@ -1313,6 +1313,9 @@ export default {
 </style>
 
 <style scoped>
+.category-selector {
+    border: 1px dashed rgba(255, 255, 255, 0.2) !important;
+}
 /* Search field highlight styles */
 .desktop-search-field :deep(.v-input__slot),
 .mobile-search-field :deep(.v-input__slot) {
@@ -1322,10 +1325,24 @@ export default {
     transition: border-color 0.25s ease, box-shadow 0.25s ease !important;
 }
 
+/* light theme focused: bg turns dark → white border */
 .desktop-search-field.v-input--is-focused :deep(.v-input__slot),
 .mobile-search-field.v-input--is-focused :deep(.v-input__slot) {
     border-color: rgba(255, 255, 255, 0.95) !important;
     box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2) !important;
+}
+
+/* dark theme focused: solo-inverted bg turns white/light → dark border */
+.theme--dark .desktop-search-field.v-input--is-focused :deep(.v-input__slot),
+.theme--dark .mobile-search-field.v-input--is-focused :deep(.v-input__slot) {
+    border-color: rgba(0, 0, 0, 0.6) !important;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* dark theme default: keep border visible against dark bg */
+.theme--dark .desktop-search-field :deep(.v-input__slot),
+.theme--dark .mobile-search-field :deep(.v-input__slot) {
+    border-color: rgba(255, 255, 255, 0.35) !important;
 }
 
 @keyframes blink {
