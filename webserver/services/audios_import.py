@@ -1,0 +1,302 @@
+#!/usr/bin/env python3
+# -*- coding: UTF-8 -*-
+
+import hashlib
+import logging
+import os
+import shutil
+import time
+import traceback
+
+from webserver import loader, utils, constants
+from webserver.i18n import _
+from webserver.models import ScanFile, Item
+from webserver.services import AsyncService
+from webserver.services.background_service import BackgroundService, BackgroundTask
+
+CONF = loader.get_settings()
+
+AUDIO_IMPORT_DIR = os.path.join(CONF.get("scan_upload_path", "/data/books/imports/"), constants.AUDIO_BOOK_IMPORTS)
+AUDIO_OUTPUT_DIR = CONF.get("audio_output_folder", "/data/books/audios/")
+
+COVER_NAMES = {"cover.jpg", "cover.jpeg", "cover.png"}
+
+
+def _find_cover(dir_path):
+    try:
+        for fname in os.listdir(dir_path):
+            if fname.lower() in COVER_NAMES:
+                return os.path.join(dir_path, fname)
+    except OSError:
+        pass
+    return None
+
+
+def _read_cover_data(cover_path):
+    try:
+        with open(cover_path, "rb") as f:
+            data = f.read()
+        ext = os.path.splitext(cover_path)[1].lstrip(".").lower()
+        if ext in ("jpg", "jpeg"):
+            ext = "jpeg"
+        return ext, data
+    except OSError:
+        return None, None
+
+
+def _extract_mp3_metadata(mp3_path, fallback_title):
+    try:
+        import mutagen
+        audio = mutagen.File(mp3_path, easy=True)
+        if audio is None:
+            return fallback_title, None
+        title = None
+        author = None
+        if hasattr(audio, "tags") and audio.tags:
+            title_tag = audio.tags.get("album") or audio.tags.get("title")
+            author_tag = audio.tags.get("artist") or audio.tags.get("albumartist")
+            if title_tag:
+                title = str(title_tag[0]).strip() if isinstance(title_tag, list) else str(title_tag).strip()
+            if author_tag:
+                author = str(author_tag[0]).strip() if isinstance(author_tag, list) else str(author_tag).strip()
+            logging.debug("[AUDIO_IMPORT] Extracted metadata from %s: title=%s, author=%s", mp3_path, title, author)
+        return title or fallback_title, author
+    except Exception as e:
+        logging.warning("[AUDIO_IMPORT] Failed to read mp3 metadata from %s: %s", mp3_path, e)
+        return fallback_title, None
+
+
+class AudioBookImporter(AsyncService):
+    static_is_running = False
+    static_status = {
+        "total": 0,
+        "imported": 0,
+        "exist": 0,
+        "skipped": 0,
+    }
+
+    @staticmethod
+    def is_running():
+        return AudioBookImporter.static_is_running
+
+    @staticmethod
+    def get_status():
+        return AudioBookImporter.static_status.copy()
+
+    def save_or_rollback(self, row):
+        try:
+            row.save()
+            self.session.commit()
+            return True
+        except Exception as err:
+            logging.error("[AUDIO_IMPORT] save error: %s", err)
+            self.session.rollback()
+            return False
+
+    def _add_new_book(self, user_id, mi, cover_path):
+        logging.debug("[AUDIO_IMPORT] Adding new book: title=%s, author=%s", mi.title, mi.authors[0] if mi.authors else "N/A")
+        book_id = None
+        try:
+            if cover_path:
+                ext, cover_data = _read_cover_data(cover_path)
+                if cover_data:
+                    mi.cover_data = (ext, cover_data)
+            book_id = self.db.create_book_entry(mi)
+        except Exception as err:
+            logging.error("[AUDIO_IMPORT] error creating book entry for %s: %s", mi.title, err)
+            logging.error(traceback.format_exc())
+            return None
+
+        if not book_id:
+            return None
+
+        # Add a Item record
+        try:
+            item = Item()
+            item.book_id = book_id
+            item.collector_id = user_id
+            item.save()
+        except Exception as err:
+            logging.error("[AUDIO_IMPORT] error updating book_type for book_id %s: %s", book_id, err)
+            logging.error(traceback.format_exc())
+            self.db.session.rollback()
+
+        return book_id
+
+    def _check_audio_exists(self, book_id):
+        audio_dir = os.path.join(AUDIO_OUTPUT_DIR, str(book_id))
+        if not os.path.isdir(audio_dir):
+            return False
+        audio_files = [f for f in os.listdir(audio_dir) if f.lower().endswith(".mp3")]
+        if audio_files:
+            return True
+        return False
+
+    @AsyncService.register_service
+    def do_import(self, user_id):
+        if AudioBookImporter.static_is_running:
+            logging.error("[AUDIO_IMPORT] already running, skip")
+            return
+
+        AudioBookImporter.static_is_running = True
+        AudioBookImporter.static_status = {
+            "total": 0,
+            "imported": 0,
+            "exist": 0,
+            "skipped": 0,
+        }
+
+        task_id = None
+        try:
+            task = BackgroundService().update_task(
+                service_type=BackgroundTask.SERVICE_TYPE_AUDIO_IMPORT,
+                service_item=_("导入有声书"),
+                progress=0,
+                progress_data={"total": 0, "imported": 0, "exist": 0},
+            )
+            task_id = task.id
+        except Exception as e:
+            logging.error("[AUDIO_IMPORT] Failed to create background task: %s", e)
+
+        try:
+            self._do_import_internal(user_id, task_id)
+            if task_id:
+                BackgroundService().complete_task(task_id=task_id)
+            logging.info("[AUDIO_IMPORT] completed")
+        except Exception as err:
+            logging.error("[AUDIO_IMPORT] failed: %s", err)
+            logging.error(traceback.format_exc())
+            if task_id:
+                BackgroundService().complete_task(task_id=task_id, error_message=str(err))
+        finally:
+            AudioBookImporter.static_is_running = False
+
+    def _do_import_internal(self, user_id, task_id=None):
+        from calibre.ebooks.metadata.book.base import Metadata
+        import_dir = AUDIO_IMPORT_DIR
+        output_dir = AUDIO_OUTPUT_DIR
+
+        if not os.path.isdir(import_dir):
+            logging.warning("[AUDIO_IMPORT] import dir does not exist: %s", import_dir)
+            return
+
+        subdirs = sorted([
+            d for d in os.listdir(import_dir)
+            if os.path.isdir(os.path.join(import_dir, d))
+        ])
+
+        total = len(subdirs)
+        AudioBookImporter.static_status["total"] = total
+        imported_ids = []
+        imported_without_cover = []
+
+        for idx, dir_name in enumerate(subdirs):
+            dir_path = os.path.join(import_dir, dir_name)
+            dir_hash = "audiodir:" + hashlib.md5(dir_path.encode("utf-8")).hexdigest()
+
+            existing = self.session.query(ScanFile).filter(ScanFile.hash == dir_hash).first()
+            if existing and existing.status in (ScanFile.IMPORTED, ScanFile.EXIST):
+                AudioBookImporter.static_status["skipped"] += 1
+                self._update_progress(task_id, idx + 1, total)
+                continue
+
+            mp3_files = sorted([
+                f for f in os.listdir(dir_path) if f.lower().endswith(".mp3")
+            ])
+            if not mp3_files:
+                logging.info("[AUDIO_IMPORT] no mp3 files in %s, skipping", dir_path)
+                AudioBookImporter.static_status["skipped"] += 1
+                self._update_progress(task_id, idx + 1, total)
+                continue
+
+            first_mp3 = os.path.join(dir_path, mp3_files[0])
+            title, author = _extract_mp3_metadata(first_mp3, dir_name)
+            if not author:
+                author = _("佚名")
+            title = utils.super_strip(title) if title else dir_name
+            author = utils.super_strip(author) if author else _("佚名")
+
+            cover_path = _find_cover(dir_path)
+            has_cover = cover_path is not None
+
+            row = existing or ScanFile(dir_path, dir_hash, 0)
+            row.import_type = constants.IMPORT_TYPE_AUDIOBOOK
+            row.title = title
+            row.author = author
+
+            mi = Metadata(title, [author])
+            mi.title_sort = utils.get_title_sort(title)
+
+            try:
+                ids = self.db.books_with_same_title(mi)
+                book_id = None
+                status = ScanFile.IMPORTED
+                if ids:
+                    for bid in ids:
+                        audio_exists = self._check_audio_exists(bid)
+                        if audio_exists:
+                            book_id = bid
+                            status = ScanFile.EXIST
+                            break
+                    logging.debug("[AUDIO_IMPORT] found existing books with same title '%s': %s, has_audio=%s, selected_book_id=%s",
+                                  title, ids, audio_exists, book_id)
+                if not audio_exists:
+                    # 没有找到已有的同名有声书，创建新书籍记录
+                    book_id = self._add_new_book(user_id, mi, cover_path)
+                    if book_id is None:
+                        logging.error("[AUDIO_IMPORT] failed to create book entry for %s", title)
+                        row.status = ScanFile.INVALID
+                        self.save_or_rollback(row)
+                        self._update_progress(task_id, idx + 1, total)
+                        continue
+
+                if status == ScanFile.IMPORTED:
+                    dest_dir = os.path.join(output_dir, str(book_id))
+                    if not os.path.exists(dest_dir):
+                        shutil.copytree(dir_path, dest_dir)
+                    else:
+                        for fname in os.listdir(dir_path):
+                            src = os.path.join(dir_path, fname)
+                            dst = os.path.join(dest_dir, fname)
+                            if os.path.isfile(src) and not os.path.exists(dst):
+                                shutil.copy2(src, dst)
+                    imported_ids.append(book_id)
+                    if not has_cover:
+                        imported_without_cover.append(book_id)
+                    AudioBookImporter.static_status["imported"] += 1
+                else:
+                    AudioBookImporter.static_status["exist"] += 1
+
+                row.book_id = book_id
+                row.status = status
+            except Exception as err:
+                logging.error("[AUDIO_IMPORT] error processing %s: %s", dir_path, err)
+                logging.error(traceback.format_exc())
+                row.status = ScanFile.INVALID
+
+            self.save_or_rollback(row)
+            self._update_progress(task_id, idx + 1, total)
+            time.sleep(0.1)
+
+        if imported_without_cover:
+            logging.info("[AUDIO_IMPORT] triggering autofill for %d books without cover", len(imported_without_cover))
+            from webserver.services.autofill import AutoFillService
+            AutoFillService().auto_fill_all(imported_without_cover)
+
+    def _update_progress(self, task_id, done, total):
+        if not task_id:
+            return
+        try:
+            status = AudioBookImporter.static_status
+            progress = int(done * 100 / total) if total else 100
+            BackgroundService().update_progress(
+                task_id=task_id,
+                progress=progress,
+                progress_data={
+                    "total": status["total"],
+                    "imported": status["imported"],
+                    "exist": status["exist"],
+                },
+            )
+        except Exception as e:
+            logging.error("[AUDIO_IMPORT] failed to update progress: %s", e)
