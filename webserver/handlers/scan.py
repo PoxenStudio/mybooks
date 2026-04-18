@@ -344,7 +344,7 @@ class ImportStatus(BaseHandler):
     def get(self):
         scanner = None
         try:
-            scanner = Scanner(self.calibre_db, self.settings["ScopedSession"])
+            scanner = Scanner(self.calibre_db, self.settings["ScopedSession"], self.user_id())
             status = scanner.import_status()[1]
             summary = scanner.summary()
             return {
@@ -448,7 +448,7 @@ class BatchAddStatus(BaseHandler):
 
         scanner = None
         try:
-            scanner = Scanner(self.calibre_db, self.settings["ScopedSession"])
+            scanner = Scanner(self.calibre_db, self.settings["ScopedSession"], self.user_id())
             summary = scanner.summary()
 
             service = BatchAddService()
