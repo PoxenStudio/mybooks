@@ -231,6 +231,7 @@ class AudioBookImporter(AsyncService):
                 ids = self.db.books_with_same_title(mi)
                 book_id = None
                 status = ScanFile.IMPORTED
+                audio_exists = False
                 if ids:
                     for bid in ids:
                         audio_exists = self._check_audio_exists(bid)

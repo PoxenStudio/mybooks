@@ -175,6 +175,9 @@ class MonitorService:
                     if not entry.is_dir(follow_symlinks=False):
                         continue
                     base_name = os.path.basename(entry.path)
+                    if base_name == constants.AUDIO_BOOK_IMPORTS:
+                        logging.info("[Monitor] Skipping imports folder: %s", entry.path)
+                        continue
                     if base_name.startswith(".") or base_name.startswith("~"):
                         logging.info("[Monitor] Skipping hidden/temp folder: %s", entry.path)
                         continue

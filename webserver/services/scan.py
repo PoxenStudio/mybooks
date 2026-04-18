@@ -879,7 +879,7 @@ class ScanService(AsyncService):
         if not new_category or new_category in ('.', '..'):
             logging.warning("[RENAME FILE] 无效的分类名: %s", new_category)
             return
-        if len(new_category) >= 10 or any(c in new_category for c in ',:;|/\'"\t '):
+        if len(new_category) > 10 or any(c in new_category for c in ',:;|/\'"\t '):
             logging.warning("[RENAME FILE] 分类名含非法字符或过长，跳过: '%s'", new_category)
             return
 
