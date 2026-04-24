@@ -372,6 +372,9 @@ class AdminSettings(BaseHandler):
     @js
     @auth
     def post(self):
+        if not self.admin_user:
+            return {"err": "permission.not_admin", "msg": _("当前用户非管理员")}
+
         data = tornado.escape.json_decode(self.request.body)
         KEYS = [
             "ALLOW_GUEST_DOWNLOAD",
@@ -464,6 +467,8 @@ class AdminSettings(BaseHandler):
         for key, val in data.items():
             if key.startswith("SOCIAL_AUTH"):
                 if key.endswith("_KEY") or key.endswith("_SECRET"):
+                    if not re.match(r'^[A-Za-z0-9_]+$', key):
+                        continue
                     args[key] = val
             elif key in KEYS:
                 args[key] = val

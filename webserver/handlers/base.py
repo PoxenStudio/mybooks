@@ -241,6 +241,8 @@ class BaseHandler(web.RequestHandler):
             return False
         if user.get_secure_password(password) != str(user.password):
             return False
+        if not user.active:
+            return False
         self.mark_invited()
         self.login_user(user)
         return True

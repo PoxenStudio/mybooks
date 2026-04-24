@@ -131,6 +131,9 @@ class SignUp(BaseHandler):
 
     @js
     def post(self):
+        if not CONF.get("ALLOW_REGISTER", False):
+            return {"err": "permission.denied", "msg": _("当前站点已关闭注册")}
+
         email = self.get_argument("email", "").strip()
         nickname = self.get_argument("nickname", "").strip()
         username = self.get_argument("username", "").strip().lower()
