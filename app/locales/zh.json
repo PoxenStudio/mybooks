@@ -611,6 +611,7 @@
         "pinyin_directory": "使用拼音字母目录名 (兼容性高)",
         "utf8_directory": "使用中文目录名 (UTF8编码，更美观)",
         "pdf_tile_with_file_name": "添加PDF文件时书名直接使用文件名 (如果导入的PDF文件元数据中的书名不是真实书名时使用，例如扫描的PDF文件)",
+        "enable_txt_to_txtz_plugin": "启用TXT转TXTZ插件（将TXT格式的书籍转换为TXTZ格式，TXTZ为内部格式，启用后导入TXT耗时较长）",
         "epub_viewer": "EPUB阅读器",
         "epubjs": "EPUB Reader（纯本地, 简洁清爽）",
         "creader": "Candle Reader（功能丰富，会联网，支持章评）",

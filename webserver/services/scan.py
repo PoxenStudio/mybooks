@@ -424,14 +424,17 @@ class ScanService(AsyncService):
 
             # 处理当前批次
             for row in batch_rows:
+                start_time = time.time()
                 fpath = row.path
                 fname = os.path.basename(row.path)
                 fmt = fpath.split(".")[-1].lower()
 
                 if not os.path.exists(fpath):
                     row.status = ScanFile.MISSED
-                    logging.error("file not exists: %s", fpath)
+                    logging.error("[IMPORT]file not exists: %s", fpath)
                     continue
+
+                logging.info("[IMPORT]Processing file: %s", fpath)
 
                 try:
                     with open(fpath, "rb") as stream:
@@ -440,9 +443,10 @@ class ScanService(AsyncService):
                         mi.title = utils.super_strip(mi.title)
                         mi.authors = [utils.super_strip(s) for s in mi.authors]
                     if mi.title and mi.title == CALIBRE_ERROR_FLAG:
-                        logging.error("Failed to get metadata for %s, reason:%s", fpath, mi.comments)
+                        logging.error("[IMPORT]Failed to get metadata for %s, reason:%s", fpath, mi.comments)
                         continue
 
+                    logging.info("[IMPORT]Parsed metadata for file %s: title=%s", fpath, mi.title)
                     # 非结构化的格式，calibre无法识别准确的信息，直接从文件名提取
                     if fmt == "txt":
                         mi.title = utils.remove_zlibrary_suffix(fname.replace("." + fmt, ""))
@@ -463,7 +467,7 @@ class ScanService(AsyncService):
                     # 再次检查是否有重复书籍
                     ids = self.db.books_with_same_title(mi)
                     existed_ebook = False
-                    logging.info(f"Found same title book ids: {ids} for file: {fpath}")
+                    logging.info(f"[IMPORT]Found same title book ids: {ids} for file: {fpath}")
                     if ids:
                         row.book_id = 0
                         for bid in ids:
@@ -478,16 +482,16 @@ class ScanService(AsyncService):
                                 break
                         if existed_ebook and row.status != ScanFile.EXIST:
                             # 找到电子书，但没有当前格式，添加格式
-                            logging.info(
-                                "import [%s] from %s with format %s", repr(mi.title), fpath, fmt)
+                            logging.info("[IMPORT]import [%s] from %s with format %s", repr(mi.title), fpath, fmt)
                             self.db.add_format(row.book_id, fmt.upper(), fpath, True)
                             row.status = ScanFile.IMPORTED
                     if not existed_ebook:
                         # 未找到重复电子书时，导入新书
-                        logging.info("import [%s] from %s", repr(mi.title), fpath)
+                        logging.info("[IMPORT]import [%s] from %s [cost:%.3f]", repr(mi.title), fpath, time.time() - start_time)
                         mi.title_sort = utils.get_title_sort(mi.title)
                         row.book_id = self.db.import_book(mi, [fpath])
                         row.status = ScanFile.IMPORTED
+                        logging.info("[IMPORT]imported [%s] from %s success, book_id=%d [cost:%.3f]", repr(mi.title), fpath, row.book_id, time.time() - start_time)
 
                         # 添加关联表
                         item = Item()
@@ -498,7 +502,8 @@ class ScanService(AsyncService):
                             item.save()
                             imported.append(row.book_id)
                         except Exception as err:
-                            logging.error("save link error: %s", err)
+                            logging.error("[IMPORT] save link error: %s", err)
+                        logging.info("[IMPORT] saved item for book_id=%d, user_id=%d [cost:%.3f]", row.book_id, user_id, time.time() - start_time)
 
                         # 如果settings中IMPORT_CATEGORY_WITH_FOLDER开启，则使用当前文件在scan_upload_path目录下的第一级目录名作为书籍的自定义分类
                         # 如果目录名含有特殊字符，如,:等，则跳过分类设置，避免calibre库出问题
@@ -508,22 +513,22 @@ class ScanService(AsyncService):
                             if first_dir and len(first_dir) < 10 and not any(c in first_dir for c in ',:;|/\\\'"\t '):
                                 try:
                                     self.db.new_api.set_field(CALIBRE_COLUMN_CATEGORY, {row.book_id: first_dir})
-                                    logging.info("[SCAN] Set category '%s' for book_id=%d", first_dir, row.book_id)
+                                    logging.info("[IMPORT] Set category '%s' for book_id=%d", first_dir, row.book_id)
                                 except Exception as cat_err:
-                                    logging.warning("[SCAN] Failed to set category for book_id=%d: %s", row.book_id, cat_err)
+                                    logging.warning("[IMPORT] Failed to set category for book_id=%d: %s", row.book_id, cat_err)
                             else:
-                                logging.warning("[SCAN] Skipping category setting for file %s due to invalid directory name: '%s'", fpath, first_dir)
+                                logging.warning("[IMPORT] Skipping category setting for file %s due to invalid directory name: '%s'", fpath, first_dir)
                 except Exception as err:
                     row.status = ScanFile.INVALID
-                    logging.error("Failed to process file %s: %s", fpath, err)
+                    logging.error("[IMPORT] Failed to process file %s: %s", fpath, err)
                     logging.error(traceback.format_exc())
 
             # 批量提交当前批次的更改
             try:
                 session.commit()
-                logging.info("Batch committed: %d-%d", batch_start + 1, batch_end)
+                logging.info("[IMPORT] Batch committed: %d-%d", batch_start + 1, batch_end)
             except Exception as err:
-                logging.error("Batch commit error: %s", err)
+                logging.error("[IMPORT] Batch commit error: %s", err)
                 session.rollback()
 
             # 更新任务进度
@@ -545,9 +550,9 @@ class ScanService(AsyncService):
         # 最终提交，确保所有更改已保存
         try:
             session.commit()
-            logging.info("Final commit completed")
+            logging.info("[IMPORT] Final commit completed")
         except Exception as err:
-            logging.error("Final commit error: %s", err)
+            logging.error("[IMPORT] Final commit error: %s", err)
             session.rollback()
 
         ScanService.static_is_importing = False

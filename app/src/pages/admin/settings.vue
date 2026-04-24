@@ -965,6 +965,12 @@ export default {
             type: "checkbox",
           },
           {
+            icon: "mdi-format-text",
+            key: "ENABLE_TXT_TO_TXTZ_PLUGIN",
+            label: "settings.enable_txt_to_txtz_plugin",
+            type: "checkbox",
+          },
+          {
             icon: "mdi-shape-plus",
             key: "IMPORT_CATEGORY_WITH_FOLDER",
             label: "settings.category_with_folder",

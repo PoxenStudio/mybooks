@@ -451,6 +451,7 @@ class AdminSettings(BaseHandler):
             "LOG_LEVEL_DEBUG",
             "ENABLE_STAMP_FEATURE",
             "STAMP_POSITION",
+            "ENABLE_TXT_TO_TXTZ_PLUGIN"
         ]
 
         current_icon = CONF.get(

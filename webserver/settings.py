@@ -78,6 +78,7 @@ settings = {
 
     "CALIBRE_CACHE_CLEAN_ENABLED": False,
     "CALIBRE_CACHE_CLEAN_INTERVAL": 1800,
+    "ENABLE_TXT_TO_TXTZ_PLUGIN": False,
 
     "META_SELECTED_SOURCES": ["douban", "baidu", "xinhua"],
 

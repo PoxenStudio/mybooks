@@ -193,17 +193,24 @@ def bind_topdir_book_names(cache):
     return
 
 
-def configure_amazon_plugin():
-    """配置 Amazon 插件，将 server 选项设置为 'amazon'"""
+def configure_plugins():
+    """
+      1. 配置 Amazon 插件，将 server 选项设置为 'amazon'
+      2. 禁用TXT to TXTZ插件，避免不必要的TXT文件处理
+    """
     try:
-        from calibre.customize.ui import metadata_plugins
+        from calibre.customize.ui import metadata_plugins, disable_plugin, enable_plugin
 
         for plugin in metadata_plugins({"identify"}):
             if plugin.name == "Amazon.com":
                 plugin.prefs["server"] = "amazon"
                 break
+        if not CONF.get("ENABLE_TXT_TO_TXTZ_PLUGIN", False):
+            disable_plugin('TXT to TXTZ')
+        else:
+            enable_plugin('TXT to TXTZ')
     except Exception as e:
-        logging.error("配置 Amazon 插件失败: %s" % e)
+        logging.error("[INIT]Failed to configure plugins: %s" % e)
 
 
 def make_app():
@@ -310,7 +317,7 @@ def make_app():
 
     # patch calibre plugins and config amazon plugins
     patch_plugins()
-    configure_amazon_plugin()
+    configure_plugins()
 
     # hook 1: 按字母作为第一级目录，解决书库子目录太多的问题
     logging.info("Patching calibre book names format...")
