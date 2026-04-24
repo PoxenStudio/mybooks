@@ -1,6 +1,7 @@
 [![GitHub License](https://img.shields.io/github/license/poxenstudio/talebook?style=flat-square)](https://github.com/poxenstudio/talebook/blob/master/LICENSE)
 [![Docker Pulls](https://img.shields.io/docker/pulls/poxenstudio/talebook.svg)](https://hub.docker.com/r/poxenstudio/talebook)
 ![GitHub stars](https://img.shields.io/github/stars/PoxenStudio/talebook.svg?logo=github)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/w/PoxenStudio/talebook?logo=github)
 
 
 # TaleBook: Personal Calibre WebServer
