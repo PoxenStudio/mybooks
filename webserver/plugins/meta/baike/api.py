@@ -75,6 +75,10 @@ class BaiduBaikeApi:
     def get_cover(cover_url):
         if not cover_url:
             return None
+        # 检测cover_url的有效性，只支持https协议
+        if not cover_url.lower().startswith("https://"):
+            logging.error("Invalid cover url: %s", cover_url)
+            return None
         img = requests.get(cover_url, timeout=10, headers=CHROME_MOBILE_HEADERS).content
         img_fmt = 'jpg' if cover_url.lower().endswith('.jpeg') else 'png'
         # Convert PNG to JPEG if necessary

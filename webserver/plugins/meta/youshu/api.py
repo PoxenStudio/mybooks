@@ -194,6 +194,9 @@ class YoushuApi:
     def get_cover(cover_url):
         if not cover_url:
             return None
+        if not cover_url.lower().startswith("https://"):
+            logging.error("Invalid cover url: %s", cover_url)
+            return None
         try:
             img = requests.get(cover_url, timeout=10, headers=CHROME_HEADERS).content
             img_fmt = cover_url.split(".")[-1]

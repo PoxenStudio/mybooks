@@ -160,6 +160,10 @@ class DoubanBookApi(object):
         img_fmt = get_extension_from_url(cover_url)
         if not img_fmt:
             return None
+        # 检测cover_url的有效性，只支持https协议
+        if not cover_url.lower().startswith("https://"):
+            logging.error("Invalid cover url: %s", cover_url)
+            return None
         headers = dict(CHROME_HEADERS)
         headers["Referer"] = cover_url
         response = requests.get(cover_url, headers=headers, verify=False, timeout=15)

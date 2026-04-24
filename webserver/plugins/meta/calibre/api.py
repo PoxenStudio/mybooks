@@ -60,6 +60,9 @@ class CalibreMetadataApi:
     def get_cover(cls, cover_url):
         if not cover_url:
             return None
+        if not cover_url.lower().startswith("https://"):
+            logging.error("Invalid cover url: %s", cover_url)
+            return None
         headers = dict(CHROME_HEADERS)
         headers["Referer"] = cover_url
         response = requests.get(cover_url, headers=headers, verify=False, timeout=20)
