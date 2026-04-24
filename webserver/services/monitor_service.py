@@ -12,7 +12,7 @@ import threading
 import time
 
 from webserver import loader, constants
-from webserver.services.scan import ScanService, SCAN_EXT
+from webserver.services.scan_service import ScanService, SCAN_EXT
 
 CONF = loader.get_settings()
 
