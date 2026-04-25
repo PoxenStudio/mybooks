@@ -4,8 +4,6 @@
 import logging
 import traceback
 from webserver.i18n import _
-
-import sqlalchemy
 import tornado
 
 from webserver import loader
