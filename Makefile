@@ -5,6 +5,8 @@ IMAGE := poxenstudio/talebook:$(VER)
 REPO1 := poxenstudio/talebook:latest
 TAG1 := poxenstudio/talebook:server-side-render
 TAG2 := poxenstudio/talebook:server-side-render-$(VER)
+BASE_IMAGE := poxenstudio/talebook_base:$(VER)
+BASE_REPO1 := poxenstudio/talebook_base:latest
 BUILDER := shukubuilder
 ARCH := $(shell uname -m)
 PLATFORM ?= linux/$(shell if [ "$(ARCH)" = "x86_64" ]; then echo "amd64"; elif [ "$(ARCH)" = "aarch64" ] || [ "$(ARCH)" = "arm64" ]; then echo "arm64"; else echo "amd64"; fi)
@@ -33,6 +35,15 @@ setup-multiarch:
 	docker buildx create --use --name $(BUILDER) || docker buildx use $(BUILDER)
 	docker buildx inspect $(BUILDER) --bootstrap
 
+
+# 构建并推送基础镜像多架构版本（ubuntu + 系统包 + python依赖 + calibre补丁）
+# 仅在 requirements.txt / calibre补丁 / 系统包变更时需重新构建
+build-base-multiarch:
+	docker buildx build --platform=linux/amd64,linux/arm64 \
+		--builder $(BUILDER) \
+		--build-arg BUILD_COUNTRY=CN \
+		-f Dockerfile.base -t $(BASE_IMAGE) -t $(BASE_REPO1) \
+		--push .
 
 # 构建并推送多架构镜像（同时支持 amd64 和 arm64）
 build-multiarch: test
