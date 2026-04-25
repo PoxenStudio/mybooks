@@ -52,11 +52,6 @@ build-multiarch: test
 		--build-arg BUILD_COUNTRY=CN --build-arg GIT_VERSION=$(VER) \
 		-f Dockerfile -t $(IMAGE) -t $(REPO1) \
 		--target production --push .
-	docker buildx build --platform=linux/amd64,linux/arm64 \
-		--builder $(BUILDER) \
-		--build-arg BUILD_COUNTRY=CN --build-arg GIT_VERSION=$(VER) \
-		-f Dockerfile -t $(TAG1) -t $(TAG2) \
-		--target production-ssr --push .
 
 # 仅构建多架构镜像到本地缓存（不推送）
 build-multiarch-local: test
@@ -65,11 +60,6 @@ build-multiarch-local: test
 		--build-arg BUILD_COUNTRY=CN --build-arg GIT_VERSION=$(VER) \
 		-f Dockerfile -t $(IMAGE) -t $(REPO1) \
 		--target production --load .
-	docker buildx build --platform=linux/amd64,linux/arm64 \
-		--builder $(BUILDER) \
-		--build-arg BUILD_COUNTRY=CN --build-arg GIT_VERSION=$(VER) \
-		-f Dockerfile -t $(TAG1) -t $(TAG2) \
-		--target production-ssr --load .
 
 test: lint
 	rm -f unittest.log
