@@ -359,7 +359,7 @@ export default {
                         this.count_done = rsp.summary.done;
                         this.count_todo = rsp.summary.todo;
 
-                        this.count_total = rsp.status.ready + rsp.status.imported;
+                        this.count_total = rsp.status.total || rsp.status.ready + rsp.status.imported;
                         this.count_processed = rsp.status.imported;
 
                         this.importing = rsp.importing;
@@ -407,7 +407,7 @@ export default {
                             this.count_processed = rsp.status.total - rsp.status.new;
                             this.count_done = rsp.summary.done;
                             this.count_todo = rsp.summary.todo;
-                            this.count_total = rsp.status.total;
+                            this.count_total = rsp.status.total || rsp.status.ready + rsp.status.imported;
                             this.importing = rsp.importing;
                             if (!rsp.importing) {
                                 this.loading = false;
@@ -495,7 +495,7 @@ export default {
                             this.import = rsp.status;
                             this.count_done = rsp.summary.done;
                             this.count_todo = rsp.summary.todo;
-                            this.count_total = rsp.status.ready + rsp.status.imported;
+                            this.count_total = rsp.status.total;
                             this.count_processed = rsp.status.imported;
                             this.importing = rsp.importing;
                             if (!rsp.importing || this.import.ready === 0) {

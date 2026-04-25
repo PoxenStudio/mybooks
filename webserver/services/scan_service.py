@@ -53,11 +53,16 @@ SCAN_EXT = ["azw", "azw3", "epub", "mobi", "pdf", "txt"]
 class ScanService(AsyncService):
     static_is_importing = False
     static_import_id = 0
+    static_import_files_cnt = 0
     invalid_folder: set[str] = set()
 
     @staticmethod
     def is_importing():
         return ScanService.static_is_importing
+
+    @staticmethod
+    def total_files_in_task():
+        return ScanService.static_import_files_cnt
 
     @staticmethod
     def importing_id():
@@ -163,6 +168,7 @@ class ScanService(AsyncService):
         except Exception as e:
             logging.error(f"Failed to create background task: {e}")
 
+        ScanService.static_import_files_cnt = len(filelist)
         try:
             self.do_import_internal(filelist, user_id, task_id)
             if task_id:

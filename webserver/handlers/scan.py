@@ -76,7 +76,9 @@ class Scanner:
     def import_status(self):
         import_id = ScanService.importing_id()
         query = self.session.query(ScanFile.status).filter(ScanFile.import_id == import_id)
-        return (import_id, self.count(query), ScanService.get_invalid_folders())
+        status = self.count(query)
+        status["total"] = ScanService.total_files_in_task()
+        return (import_id, status, ScanService.get_invalid_folders())
 
     def count(self, query):
         rows = query.all() if query else []
