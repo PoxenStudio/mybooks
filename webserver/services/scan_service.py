@@ -271,7 +271,7 @@ class ScanService(AsyncService):
                         continue
                     existed_ebook = True
                     row.book_id = bid
-                    if fmt.upper() in b.formats:
+                    if b.formats and fmt.upper() in b.formats:
                         row.status = ScanFile.EXIST
                         break
                 if existed_ebook and row.status != ScanFile.EXIST:
