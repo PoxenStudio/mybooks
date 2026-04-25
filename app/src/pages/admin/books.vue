@@ -107,6 +107,7 @@
                         @keyup.enter="getDataFromApi"
                         v-model="search"
                         append-icon="mdi-magnify"
+                        @click:append="getDataFromApi"
                         :label="$t('admin.books.search')"
                         single-line
                         hide-details

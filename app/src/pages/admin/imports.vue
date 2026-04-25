@@ -70,7 +70,7 @@
                     <template v-if="selected.length > 0">
                         <v-btn
                             :disabled="loading"
-                            outlined
+                            :outlined="$vuetify.breakpoint.xs"
                             color="primary"
                             @click="delete_record"
                             class="flex-shrink-0"
@@ -84,7 +84,7 @@
             </v-row>
         </v-card-actions>
         <v-progress-linear
-            v-if="((scanning || importing || batchAdding || audioImporting) && count_total > 0)"
+            v-if="importing || batchAdding || audioImporting"
             :value="progressPercent"
             height="24"
             color="green"
@@ -208,7 +208,6 @@ export default {
         total: 0,
         loading: false,
         importing: false,
-        scanning: false,
         batchAdding: false,
         audioImporting: false,
         batchAddDialog: false,
@@ -267,7 +266,6 @@ export default {
             };
         },
         progressPrefix() {
-            if (this.scanning) return this.$t('imports.progressScanning');
             if (this.importing) return this.$t('imports.progressImporting');
             if (this.batchAdding) return this.$t('imports.progressBatchAdding');
             if (this.audioImporting) return this.$t('imports.progressAudioImporting');
@@ -307,7 +305,6 @@ export default {
                     this.count_done = rsp.summary.done;
                     this.count_todo = rsp.summary.todo;
                     this.count_total = 0;
-                    this.scanning = rsp.scanning;
                     this.importing = rsp.importing;
                     if (rsp.ignored_errors && rsp.ignored_errors.length > 0) {
                         this.ignored_errors = rsp.ignored_errors;
@@ -366,7 +363,7 @@ export default {
                         this.count_processed = rsp.status.imported;
 
                         this.importing = rsp.importing;
-                        if (!rsp.importing || this.import.ready === 0) {
+                        if (!rsp.importing) {
                             this.loading = false;
                             return false;
                         }
@@ -385,8 +382,7 @@ export default {
                         return v.hash;
                     }),
                 }),
-            })
-                .then((rsp) => {
+            }).then((rsp) => {
                     if (rsp.err !== "ok") {
                         this.$alert("error", rsp.msg);
                     }
@@ -398,16 +394,33 @@ export default {
                 });
         },
         checkCurrentState() {
-            // Check importing status first
+            // Check scan status first
             this.$backend("/admin/import/status")
                 .then((rsp) => {
                     if (rsp.err !== "ok") {
                         return;
                     }
-                    // If importing is in progress
                     if (rsp.status && rsp.importing) {
-                        // check importing status
-                        this.checkImportState();
+                        this.loading = true;
+                        this.loop_check_status("/admin/import/status", (rsp) => {
+                            this.scan = rsp.status;
+                            this.count_processed = rsp.status.total - rsp.status.new;
+                            this.count_done = rsp.summary.done;
+                            this.count_todo = rsp.summary.todo;
+                            this.count_total = rsp.status.total;
+                            this.importing = rsp.importing;
+                            if (!rsp.importing) {
+                                this.loading = false;
+                                if (rsp.ignored_errors && rsp.ignored_errors.length > 0) {
+                                    this.ignored_errors = rsp.ignored_errors;
+                                } else {
+                                    this.ignored_errors = [];
+                                }
+                                return false;
+                            }
+                            this.loading = true;
+                            return true;
+                        });
                     }
                     if (rsp.ignored_errors && rsp.ignored_errors.length > 0) {
                         this.ignored_errors = rsp.ignored_errors;
@@ -484,7 +497,6 @@ export default {
                             this.count_todo = rsp.summary.todo;
                             this.count_total = rsp.status.ready + rsp.status.imported;
                             this.count_processed = rsp.status.imported;
-                            this.scanning = rsp.scanning;
                             this.importing = rsp.importing;
                             if (!rsp.importing || this.import.ready === 0) {
                                 this.loading = false;

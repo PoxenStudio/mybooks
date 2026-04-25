@@ -76,20 +76,9 @@ class Scanner:
         return count
 
     def import_status(self):
-        import_id = self.session.query(sqlalchemy.func.max(ScanFile.import_id)).scalar()
-        if import_id is None:
-            return (0, {})
-        query = self.session.query(ScanFile.status).filter(
-            ScanFile.import_id == import_id
-        )
-        return (import_id, self.count(query))
-
-    def scan_status(self):
-        scan_id = self.session.query(sqlalchemy.func.max(ScanFile.scan_id)).scalar()
-        if scan_id is None:
-            return (0, {}, ScanService.get_invalid_folders())
-        query = self.session.query(ScanFile.status).filter(ScanFile.scan_id == scan_id)
-        return (scan_id, self.count(query), ScanService.get_invalid_folders())
+        import_id = ScanService.importing_id()
+        query = self.session.query(ScanFile.status).filter(ScanFile.import_id == import_id)
+        return (import_id, self.count(query), ScanService.get_invalid_folders())
 
     def count(self, query):
         rows = query.all() if query else []
@@ -186,7 +175,7 @@ class ImportList(BaseHandler):
                 "err": "ok",
                 "items": response,
                 "total": total,
-                "scanning": False,
+                "scanning": ScanService.static_is_importing,
                 "importing": ScanService.static_is_importing,
                 "summary": summary,
                 "scan_dir": CONF["scan_upload_path"],
@@ -248,13 +237,15 @@ class ImportStatus(BaseHandler):
         scanner = None
         try:
             scanner = Scanner(self.calibre_db, self.settings["ScopedSession"], self.user_id())
-            status = scanner.import_status()[1]
+            import_id, status, failed_path = scanner.import_status()
             summary = scanner.summary()
             return {
                 "err": "ok", "msg": _("成功"),
+                "task": import_id,
                 "status": status,
                 "summary": summary,
-                "scanning": False,
+                "scanning": ScanService.static_is_importing,
+                "ignored_errors": failed_path,
                 "importing": ScanService.static_is_importing
             }
         finally:
@@ -352,17 +343,15 @@ class BatchAddStatus(BaseHandler):
         scanner = None
         try:
             scanner = Scanner(self.calibre_db, self.settings["ScopedSession"], self.user_id())
-            summary = scanner.summary()
-
             service = BatchAddService()
-            status = service.get_status()
+            running = service.is_running()
 
             return {
                 "err": "ok",
                 "msg": _("成功"),
-                "status": status,
-                "summary": summary,
-                "batch_adding": service.is_running()
+                "status": service.get_status() if running else {},
+                "summary": scanner.summary() if running else {},
+                "batch_adding": running
             }
         except Exception as e:
             logging.error(f"BatchAddStatus error: {e}")
@@ -397,14 +386,13 @@ class AudioImportStatus(BaseHandler):
         scanner = None
         try:
             scanner = Scanner(self.calibre_db, self.settings["ScopedSession"])
-            summary = scanner.summary()
-            status = AudioBookImporter.get_status()
+            running = AudioBookImporter.is_running()
             return {
                 "err": "ok",
                 "msg": _("成功"),
-                "status": status,
-                "summary": summary,
-                "audio_importing": AudioBookImporter.is_running(),
+                "status": AudioBookImporter.get_status() if running else {},
+                "summary": scanner.summary() if running else {},
+                "audio_importing": running,
             }
         except Exception as e:
             logging.error(f"AudioImportStatus error: {e}")

@@ -446,12 +446,12 @@ class ScanFile(Base, SQLAlchemyMixin):
     MISSED = "missed"
     PERMISSION = "permission"
 
-    def __init__(self, path, hash_value, scan_id):
+    def __init__(self, path, hash_value, import_id):
         super(ScanFile, self).__init__()
         self.name = os.path.basename(path)
         self.path = path
         self.hash = hash_value
-        self.scan_id = scan_id
+        self.import_id = import_id
         self.status = self.NEW
         self.create_time = datetime.datetime.now()
         self.update_time = datetime.datetime.now()

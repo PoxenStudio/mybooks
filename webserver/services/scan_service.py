@@ -52,11 +52,16 @@ SCAN_EXT = ["azw", "azw3", "epub", "mobi", "pdf", "txt"]
 
 class ScanService(AsyncService):
     static_is_importing = False
+    static_import_id = 0
     invalid_folder: set[str] = set()
 
     @staticmethod
     def is_importing():
         return ScanService.static_is_importing
+
+    @staticmethod
+    def importing_id():
+        return ScanService.static_import_id
 
     @staticmethod
     def get_invalid_folders():
@@ -273,11 +278,12 @@ class ScanService(AsyncService):
                     logging.info("[IMPORT] Adding format %s to existing book %d", fmt, row.book_id)
                     self.db.add_format(row.book_id, fmt.upper(), fpath, True)
                     row.status = ScanFile.IMPORTED
+                    logging.info("[IMPORT] Added format to existing book, book_id=%d [%.3fs]", row.book_id, time.time() - start_time)
 
             if not existed_ebook:
                 logging.info("[IMPORT] Importing new book [%s] from %s", repr(mi.title), fpath)
                 mi.title_sort = utils.get_title_sort(mi.title)
-                row.book_id = self.db.import_book(mi, [fpath])
+                row.book_id = self.db.import_book(mi, [fpath], notify=False, import_hooks=False)
                 row.status = ScanFile.IMPORTED
                 logging.info("[IMPORT] Calibre import done, book_id=%d [%.3fs]", row.book_id, time.time() - start_time)
 
@@ -448,6 +454,7 @@ class ScanService(AsyncService):
             Phase Importing: 从队列中取出 ID，读取对应 ScanFile 行，执行元数据读取和导入操作。
         """
         import_id = int(time.time())
+        ScanService.static_import_id = import_id
         scan_upload_path = os.path.realpath(CONF.get("scan_upload_path", ""))
         total_count = len(filelist)
         batch_size = 20
