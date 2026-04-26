@@ -385,7 +385,7 @@ class ScanService(AsyncService):
             except Exception:
                 pass
 
-    def _scan_one_file(self, fpath, session, import_id, processed_paths):
+    def _scan_one_file(self, fpath, session, import_id, processed_paths, processed_hashes):
         """
             Phase scanning: 处理单个文件：计算哈希，去重，创建/更新 READY 状态的 ScanFile 记录。
         """
@@ -408,6 +408,9 @@ class ScanService(AsyncService):
             if r.status == ScanFile.IMPORTED and self.db.get_data_as_dict(ids=[r.book_id]):
                 logging.info("[SCAN] Already imported by path: %s", fpath)
                 return None
+            elif r.status == ScanFile.EXIST:
+                logging.info("[SCAN] Found duplicated record with same path %s", fpath)
+                return None
 
         # Reuse cached hash if available (NEW/READY record from a previous interrupted run).
         # MISSED/PERMISSION: file was previously inaccessible, reprocess from scratch (no reuse).
@@ -418,14 +421,31 @@ class ScanService(AsyncService):
         )
         if reuse_hash:
             logging.info("[SCAN] Reusing cached hash for: %s", fpath)
-        hash_val, bad_reason = (reuse_hash, None) if reuse_hash else self._compute_hash(fpath)
 
+        if same_path_rows:
+            # Delete all same path records to avoid confusion
+            logging.warning("[SCAN] Found multiple records with same path %s, count: %d. Cleaning up...", fpath, len(same_path_rows))
+            session.query(ScanFile).filter(ScanFile.path == fpath).delete(synchronize_session=False)
+            session.flush()
+            same_path_rows = []
+
+        hash_val, bad_reason = (reuse_hash, None) if reuse_hash else self._compute_hash(fpath)
         if bad_reason:
             row = ScanFile(fpath, "", import_id)
             row.status = bad_reason
             self.save_or_rollback(row, session)
             return None
 
+        row = ScanFile(fpath, hash_val, import_id)
+
+        if hash_val in processed_hashes:
+            # Keep back compatibility to set unique hash.
+            row.hash = hashlib.md5(fpath.encode("utf-8")).hexdigest()
+            row.status = ScanFile.DROP
+            self.save_or_rollback(row, session)
+            return None
+
+        processed_hashes.add(hash_val)
         processed_paths.add(real_fpath)
 
         # Check already imported by hash
@@ -433,21 +453,17 @@ class ScanService(AsyncService):
         for hash_row in hash_rows:
             if hash_row.status == ScanFile.IMPORTED and self.db.get_data_as_dict(ids=[hash_row.book_id]):
                 logging.info("[SCAN] Already imported by hash: %s", fpath)
+                row.hash = hashlib.md5(fpath.encode("utf-8")).hexdigest()
+                row.status = ScanFile.DROP
+                self.save_or_rollback(row, session)
                 return None
 
-        # Create or reuse ScanFile record
-        if same_path_rows:
-            row = same_path_rows[0]
-            row.hash = hash_val
-            row.import_id = import_id
-        else:
-            if hash_rows:
-                session.query(ScanFile).filter(
-                    ScanFile.hash == hash_val,
-                    ScanFile.status != ScanFile.IMPORTED,
-                ).delete(synchronize_session=False)
-                session.flush()
-            row = ScanFile(fpath, hash_val, import_id)
+        if hash_rows:
+            logging.info("[SCAN] Clear existing rows with same hash: %s, count: %d", hash_val, len(hash_rows))
+            session.query(ScanFile).filter(
+                ScanFile.hash == hash_val and ScanFile.status != ScanFile.IMPORTED
+            ).delete(synchronize_session=False)
+            session.flush()
         row.status = ScanFile.READY
         if self.save_or_rollback(row, session):
             return row.id
@@ -483,6 +499,7 @@ class ScanService(AsyncService):
         # ─── Phase 1: compute sha256, dedup, create READY ScanFile records ────────
         session = self.session
         processed_paths: set[str] = set()
+        processed_hashes: set[str] = set()
         queued_count = 0
         try:
             for index, fpath in enumerate(filelist):
@@ -496,7 +513,7 @@ class ScanService(AsyncService):
                     except Exception as e:
                         logging.error("[SCAN] Failed to update progress: %s", e)
 
-                row_id = self._scan_one_file(fpath, session, import_id, processed_paths)
+                row_id = self._scan_one_file(fpath, session, import_id, processed_paths, processed_hashes)
                 if row_id is not None:
                     work_queue.put(row_id)
                     queued_count += 1

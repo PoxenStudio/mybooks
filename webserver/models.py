@@ -423,7 +423,7 @@ class ScanFile(Base, SQLAlchemyMixin):
 
     name = Column(String(512))
     path = Column(String(1024))
-    hash = Column(String(512), unique=True)
+    hash = Column(String(512))
     status = Column(String(24))
 
     title = Column(String(100))
