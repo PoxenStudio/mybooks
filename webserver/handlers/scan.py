@@ -75,26 +75,9 @@ class Scanner:
 
     def import_status(self):
         import_id = ScanService.importing_id()
-        query = self.session.query(ScanFile.status).filter(ScanFile.import_id == import_id)
-        status = self.count(query)
+        status = ScanService.status_count()
         status["total"] = ScanService.total_files_in_task()
         return (import_id, status, ScanService.get_invalid_folders())
-
-    def count(self, query):
-        rows = query.all() if query else []
-        count = {
-            "total": len(rows),
-            ScanFile.NEW: 0,
-            ScanFile.DROP: 0,
-            ScanFile.EXIST: 0,
-            ScanFile.READY: 0,
-            ScanFile.IMPORTED: 0,
-        }
-        for row in rows:
-            if row.status not in count:
-                count[row.status] = 0
-            count[row.status] += 1
-        return count
 
     def close(self):
         """主动关闭数据库会话"""

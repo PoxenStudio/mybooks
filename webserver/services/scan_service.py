@@ -54,6 +54,7 @@ class ScanService(AsyncService):
     static_is_importing = False
     static_import_id = 0
     static_import_files_cnt = 0
+    static_status_cnt: dict[str, int] = {}
     invalid_folder: set[str] = set()
 
     @staticmethod
@@ -63,6 +64,10 @@ class ScanService(AsyncService):
     @staticmethod
     def total_files_in_task():
         return ScanService.static_import_files_cnt
+
+    @staticmethod
+    def status_count():
+        return dict(ScanService.static_status_cnt)
 
     @staticmethod
     def importing_id():
@@ -240,14 +245,14 @@ class ScanService(AsyncService):
                 logging.error("[IMPORT] Error reading metadata from %s: %s", fpath, e)
                 row.status = ScanFile.INVALID
                 self.save_or_rollback(row, session)
-                return None
+                return None, ScanFile.INVALID
 
             if mi.title and mi.title == CALIBRE_ERROR_FLAG:
                 logging.error("[IMPORT] Failed to get metadata for %s", fpath)
                 row.status = ScanFile.INVALID
                 row.title = None
                 self.save_or_rollback(row, session)
-                return None
+                return None, ScanFile.INVALID
 
             # Normalize title/author for pdf (PDF_TILE_WITH_FILE_NAME=False)
             if fmt == "pdf":
@@ -323,9 +328,7 @@ class ScanService(AsyncService):
             logging.error("[IMPORT] Failed to process file %s: %s", fpath, err)
             logging.error(traceback.format_exc())
 
-        if not new_book_id:
-            return None
-
+        status = row.status
         try:
             self.save_or_rollback(row, session)
         except Exception as err:
@@ -334,12 +337,13 @@ class ScanService(AsyncService):
         logging.info("[IMPORT] File done, status=%s [total %.3fs]: %s", row.status, time.time() - start_time, fpath)
         if time.time() - start_time > 0.25:
             logging.warning("[IMPORT] Slow import detected (%.3fs) for file: %s", time.time() - start_time, fpath)
-        return new_book_id
+        return new_book_id, status
 
     def _importing_worker(self, work_queue, importing_imported, task_id, total_count, user_id, scan_upload_path, batch_size):
         """Worker thread for Phase 2: consumes row IDs from work_queue and imports each file."""
         importing_session = self.scoped_session()
         importing_index = 0
+        ScanService.static_status_cnt.clear()
         try:
             while True:
                 row_id = work_queue.get()
@@ -365,7 +369,13 @@ class ScanService(AsyncService):
                         except Exception as e:
                             logging.error("[IMPORT] Failed to update progress: %s", e)
 
-                    new_book_id = self._import_one_file(row, user_id, scan_upload_path, importing_session)
+                    new_book_id, status = self._import_one_file(row, user_id, scan_upload_path, importing_session)
+                    if status:
+                        if status in ScanService.static_status_cnt:
+                            ScanService.static_status_cnt[status] += 1
+                        else:
+                            ScanService.static_status_cnt[status] = 1
+
                     if new_book_id is not None:
                         importing_imported.append(new_book_id)
 
