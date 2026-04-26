@@ -268,7 +268,7 @@ class ScanService(AsyncService):
         try:
             ids = self.db.books_with_same_title(mi)
             existed_ebook = False
-            logging.info("[IMPORT] Same title book ids: %s for: %s", ids, fpath)
+            logging.info("[IMPORT] Same title %d book(s) for: %s", len(ids) if ids else 0, fpath)
             if ids:
                 row.book_id = 0
                 for bid in ids:
@@ -318,11 +318,19 @@ class ScanService(AsyncService):
             if CONF.get("REMOVE_IMPORTED_FILE", False) and (not existed_ebook or row.status == ScanFile.EXIST):
                 self._remove_imported_file(fpath)
         except Exception as err:
+            new_book_id = None
             row.status = ScanFile.INVALID
             logging.error("[IMPORT] Failed to process file %s: %s", fpath, err)
             logging.error(traceback.format_exc())
 
-        self.save_or_rollback(row, session)
+        if not new_book_id:
+            return None
+
+        try:
+            self.save_or_rollback(row, session)
+        except Exception as err:
+            logging.error("[IMPORT] Failed to save ScanFile record for %s: %s", fpath, err)
+
         logging.info("[IMPORT] File done, status=%s [total %.3fs]: %s", row.status, time.time() - start_time, fpath)
         if time.time() - start_time > 0.25:
             logging.warning("[IMPORT] Slow import detected (%.3fs) for file: %s", time.time() - start_time, fpath)
