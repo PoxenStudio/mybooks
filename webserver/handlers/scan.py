@@ -76,7 +76,7 @@ class Scanner:
     def import_status(self):
         import_id = ScanService.importing_id()
         status = ScanService.status_count()
-        status["total"] = ScanService.total_files_in_task()
+        status["total"] = sum(status.values())
         return (import_id, status, ScanService.get_invalid_folders())
 
     def close(self):

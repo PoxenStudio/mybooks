@@ -54,7 +54,9 @@ class ScanService(AsyncService):
     static_is_importing = False
     static_import_id = 0
     static_import_files_cnt = 0
-    static_status_cnt: dict[str, int] = {}
+    static_status_cnt: dict[str, int] = {
+        ScanFile.READY: 0,
+    }
     invalid_folder: set[str] = set()
 
     @staticmethod
@@ -192,12 +194,13 @@ class ScanService(AsyncService):
         try:
             file_size = os.path.getsize(fpath)
             with open(fpath, "rb") as f:
-                if file_size < 10 * MEGA_BYTES:
-                    sha256.update(f.read(4 * MEGA_BYTES))
+                if file_size < 6 * MEGA_BYTES:
+                    sha256.update(f.read(2 * MEGA_BYTES))
                 else:
-                    sha256.update(f.read(3 * MEGA_BYTES))
-                    f.seek(-3 * MEGA_BYTES, 2)
-                    sha256.update(f.read(3 * MEGA_BYTES))
+                    sha256.update(f.read(2 * MEGA_BYTES))
+                    f.seek(-2 * MEGA_BYTES, 2)
+                    sha256.update(f.read(2 * MEGA_BYTES))
+            sha256.update(str(file_size).encode("utf-8"))
             logging.info("[HASH] Computed hash for %s, size:%d in %.3f seconds", fpath, file_size, time.time() - start)
             return "sha256:" + sha256.hexdigest(), None
         except FileNotFoundError:
@@ -343,7 +346,7 @@ class ScanService(AsyncService):
         """Worker thread for Phase 2: consumes row IDs from work_queue and imports each file."""
         importing_session = self.scoped_session()
         importing_index = 0
-        ScanService.static_status_cnt.clear()
+
         try:
             while True:
                 row_id = work_queue.get()
@@ -409,26 +412,26 @@ class ScanService(AsyncService):
         """
         if not os.path.isfile(fpath) or not os.access(fpath, os.R_OK):
             logging.warning("[SCAN] Not a valid file, skip: %s", fpath)
-            return None
+            return None, None
 
         fmt = fpath.split(".")[-1].lower()
         if not fmt or fmt not in SCAN_EXT:
             logging.info("[SCAN] Unsupported format [%s], skip: %s", fmt, fpath)
-            return None
+            return None, None
 
         real_fpath = os.path.realpath(fpath)
         if real_fpath in processed_paths:
             logging.info("[SCAN] Already processed in this run, skip: %s", fpath)
-            return None
+            return None, None
 
         same_path_rows = session.query(ScanFile).filter(ScanFile.path == fpath).all()
         for r in same_path_rows:
             if r.status == ScanFile.IMPORTED and self.db.get_data_as_dict(ids=[r.book_id]):
                 logging.info("[SCAN] Already imported by path: %s", fpath)
-                return None
+                return None, None
             elif r.status == ScanFile.EXIST:
                 logging.info("[SCAN] Found duplicated record with same path %s", fpath)
-                return None
+                return None, None
 
         # Reuse cached hash if available (NEW/READY record from a previous interrupted run).
         # MISSED/PERMISSION: file was previously inaccessible, reprocess from scratch (no reuse).
@@ -440,6 +443,7 @@ class ScanService(AsyncService):
         if reuse_hash:
             logging.info("[SCAN] Reusing cached hash for: %s", fpath)
 
+        hash_val, bad_reason = (reuse_hash, None) if reuse_hash else self._compute_hash(fpath)
         if same_path_rows:
             # Delete all same path records to avoid confusion
             logging.warning("[SCAN] Found multiple records with same path %s, count: %d. Cleaning up...", fpath, len(same_path_rows))
@@ -447,21 +451,19 @@ class ScanService(AsyncService):
             session.flush()
             same_path_rows = []
 
-        hash_val, bad_reason = (reuse_hash, None) if reuse_hash else self._compute_hash(fpath)
         if bad_reason:
             row = ScanFile(fpath, "", import_id)
             row.status = bad_reason
             self.save_or_rollback(row, session)
-            return None
+            return None, bad_reason
 
         row = ScanFile(fpath, hash_val, import_id)
-
         if hash_val in processed_hashes:
             # Keep back compatibility to set unique hash.
             row.hash = hashlib.md5(fpath.encode("utf-8")).hexdigest()
             row.status = ScanFile.EXIST
             self.save_or_rollback(row, session)
-            return None
+            return None, ScanFile.EXIST
 
         processed_hashes.add(hash_val)
         processed_paths.add(real_fpath)
@@ -474,7 +476,7 @@ class ScanService(AsyncService):
                 row.hash = hashlib.md5(fpath.encode("utf-8")).hexdigest()
                 row.status = ScanFile.EXIST
                 self.save_or_rollback(row, session)
-                return None
+                return None, ScanFile.EXIST
 
         if hash_rows:
             logging.info("[SCAN] Clear existing rows with same hash: %s, count: %d", hash_val, len(hash_rows))
@@ -484,8 +486,8 @@ class ScanService(AsyncService):
             session.flush()
         row.status = ScanFile.READY
         if self.save_or_rollback(row, session):
-            return row.id
-        return None
+            return row.id, ScanFile.READY
+        return None, None
 
     def do_import_internal(self, filelist, user_id, task_id=None):
         """
@@ -499,12 +501,15 @@ class ScanService(AsyncService):
         total_count = len(filelist)
         batch_size = 20
 
-        # maxsize limits memory if Phase 2 is slower than Phase 1.
-        work_queue = _queue.Queue(maxsize=50)
+        work_queue = _queue.Queue()
         importing_imported = []
 
         start_time = time.time()
         logging.info("[IMPORT] Start (Phase 1 + Phase 2 pipelined) for %d files", total_count)
+
+        ScanService.static_status_cnt = {
+            ScanFile.READY: 0
+        }
 
         importing_thread = threading.Thread(
             target=self._importing_worker,
@@ -531,10 +536,15 @@ class ScanService(AsyncService):
                     except Exception as e:
                         logging.error("[SCAN] Failed to update progress: %s", e)
 
-                row_id = self._scan_one_file(fpath, session, import_id, processed_paths, processed_hashes)
+                row_id, state = self._scan_one_file(fpath, session, import_id, processed_paths, processed_hashes)
                 if row_id is not None:
                     work_queue.put(row_id)
                     queued_count += 1
+                if state:
+                    if state in ScanService.static_status_cnt:
+                        ScanService.static_status_cnt[state] += 1
+                    else:
+                        ScanService.static_status_cnt[state] = 1
         finally:
             work_queue.put(None)  # sentinel: Phase 1 done
 

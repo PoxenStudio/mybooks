@@ -260,6 +260,7 @@ def make_app():
         @event.listens_for(engine, "connect")
         def set_sqlite_pragma(db_connection, connection_record):
             cursor = db_connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
             cursor.execute("PRAGMA busy_timeout=30000")
             cursor.close()
 
@@ -456,20 +457,17 @@ def make_app():
 
     if CONF.get(ENABLE_PROFILE) is True:
         from webserver.services.profile_service import get_profile_service
-
         profile_service = get_profile_service()
         profile_service.start()
 
     if CONF.get("CALIBRE_CACHE_CLEAN_ENABLED", True):
         from webserver.services.calibre_cache_clean import get_cache_clean_service
-
         cache_clean_service = get_cache_clean_service()
         cache_clean_service.setup(cache)
         cache_clean_service.start()
 
     if CONF.get("IMPORT_BY_INOTIFY", False):
         from webserver.services.monitor_service import get_monitor_service
-
         get_monitor_service().start()
 
     return app
