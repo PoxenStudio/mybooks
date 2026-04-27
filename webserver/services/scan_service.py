@@ -342,10 +342,11 @@ class ScanService(AsyncService):
             logging.warning("[IMPORT] Slow import detected (%.3fs) for file: %s", time.time() - start_time, fpath)
         return new_book_id, status
 
-    def _importing_worker(self, work_queue, importing_imported, task_id, total_count, user_id, scan_upload_path, batch_size):
+    def _importing_worker(self, work_queue, importing_imported, task_id, user_id, scan_upload_path, batch_size):
         """Worker thread for Phase 2: consumes row IDs from work_queue and imports each file."""
         importing_session = self.scoped_session()
         importing_index = 0
+        total_count = 0
 
         try:
             while True:
@@ -360,14 +361,17 @@ class ScanService(AsyncService):
                         continue
 
                     importing_index += 1
-                    logging.info("[IMPORT] Processing [%d]: %s", importing_index, row.path)
-
-                    if task_id and total_count > 0:
+                    logging.info("[IMPORT] [TASK:%d] Processing [%d]: %s", task_id, importing_index, row.path)
+                    if task_id and importing_index % 10 == 0:
+                        status = ScanService.status_count()
+                        all_values_sum = sum(status.values())
+                        total_count = all_values_sum - status.get(ScanFile.IMPORTED, 0) - status.get(ScanFile.EXIST, 0)
+                        processed = all_values_sum - status.get(ScanFile.READY, 0)
                         try:
                             BackgroundService().update_progress(
                                 task_id=task_id,
-                                progress=min(99, 30 + int(importing_index * 70 / total_count)),
-                                progress_data={"stage": "importing", "total": total_count, "imported": len(importing_imported)}
+                                progress=min(99, int(processed * 100 / total_count)),
+                                progress_data={"stage": "importing", "total": total_count, "imported": processed}
                             )
                         except Exception as e:
                             logging.error("[IMPORT] Failed to update progress: %s", e)
@@ -461,9 +465,9 @@ class ScanService(AsyncService):
         if hash_val in processed_hashes:
             # Keep back compatibility to set unique hash.
             row.hash = hashlib.md5(fpath.encode("utf-8")).hexdigest()
-            row.status = ScanFile.EXIST
+            row.status = ScanFile.DROP
             self.save_or_rollback(row, session)
-            return None, ScanFile.EXIST
+            return None, ScanFile.DROP
 
         processed_hashes.add(hash_val)
         processed_paths.add(real_fpath)
@@ -474,9 +478,9 @@ class ScanService(AsyncService):
             if hash_row.status == ScanFile.IMPORTED and self.db.get_data_as_dict(ids=[hash_row.book_id]):
                 logging.info("[SCAN] Already imported by hash: %s", fpath)
                 row.hash = hashlib.md5(fpath.encode("utf-8")).hexdigest()
-                row.status = ScanFile.EXIST
+                row.status = ScanFile.DROP
                 self.save_or_rollback(row, session)
-                return None, ScanFile.EXIST
+                return None, ScanFile.DROP
 
         if hash_rows:
             logging.info("[SCAN] Clear existing rows with same hash: %s, count: %d", hash_val, len(hash_rows))
@@ -513,7 +517,7 @@ class ScanService(AsyncService):
 
         importing_thread = threading.Thread(
             target=self._importing_worker,
-            args=(work_queue, importing_imported, task_id, total_count, user_id, scan_upload_path, batch_size),
+            args=(work_queue, importing_imported, task_id, user_id, scan_upload_path, batch_size),
             name="ScanService.importing",
             daemon=True,
         )
@@ -526,16 +530,6 @@ class ScanService(AsyncService):
         queued_count = 0
         try:
             for index, fpath in enumerate(filelist):
-                if task_id and total_count > 0 and index % 50 == 0:
-                    try:
-                        BackgroundService().update_progress(
-                            task_id=task_id,
-                            progress=int(index * 30 / total_count),
-                            progress_data={"stage": "importing", "total": total_count, "imported": 0}
-                        )
-                    except Exception as e:
-                        logging.error("[SCAN] Failed to update progress: %s", e)
-
                 row_id, state = self._scan_one_file(fpath, session, import_id, processed_paths, processed_hashes)
                 if row_id is not None:
                     work_queue.put(row_id)

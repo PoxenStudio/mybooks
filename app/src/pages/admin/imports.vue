@@ -359,8 +359,8 @@ export default {
                         this.count_done = rsp.summary.done;
                         this.count_todo = rsp.summary.todo;
 
-                        this.count_total = rsp.status.total || rsp.status.ready + rsp.status.imported;
-                        this.count_processed = rsp.status.imported;
+                        this.count_total = rsp.status.total;
+                        this.count_processed = rsp.status.processed;
 
                         this.importing = rsp.importing;
                         if (!rsp.importing) {
@@ -404,10 +404,10 @@ export default {
                         this.loading = true;
                         this.loop_check_status("/admin/import/status", (rsp) => {
                             this.scan = rsp.status;
-                            this.count_processed = rsp.status.total - rsp.status.new;
                             this.count_done = rsp.summary.done;
                             this.count_todo = rsp.summary.todo;
-                            this.count_total = rsp.status.total || rsp.status.ready + rsp.status.imported;
+                            this.count_total = rsp.status.total;
+                            this.count_processed = rsp.status.processed;
                             this.importing = rsp.importing;
                             if (!rsp.importing) {
                                 this.loading = false;
@@ -496,7 +496,7 @@ export default {
                             this.count_done = rsp.summary.done;
                             this.count_todo = rsp.summary.todo;
                             this.count_total = rsp.status.total;
-                            this.count_processed = rsp.status.imported;
+                            this.count_processed = rsp.status.processed;
                             this.importing = rsp.importing;
                             if (!rsp.importing || this.import.ready === 0) {
                                 this.loading = false;
@@ -520,7 +520,7 @@ export default {
                     this.audioImporting = true;
                     this.loop_check_status("/admin/audio_import/status", (rsp) => {
                         this.count_total = rsp.status.total || 0;
-                        this.count_processed = (rsp.status.imported || 0) + (rsp.status.exist || 0);
+                        this.count_processed = count_total - (rsp.status.ready || 0);
                         this.count_done = rsp.summary.done;
                         this.count_todo = rsp.summary.todo;
                         this.audioImporting = rsp.audio_importing || false;
