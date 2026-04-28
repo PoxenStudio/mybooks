@@ -1227,6 +1227,16 @@ export default {
     border-radius: 0 8px 8px 0;
 }
 
+.theme--light .app-navigation-drawer .v-list-group__items > .v-list-item--group-child.v-list-item--active {
+    color: rgba(0, 0, 0, 0.87) !important;
+    caret-color: rgba(0, 0, 0, 0.87) !important;
+}
+
+.theme--dark .app-navigation-drawer .v-list-group__items > .v-list-item--group-child.v-list-item--active {
+    color: rgba(255, 255, 255, 0.87) !important;
+    caret-color: rgba(255, 255, 255, 0.87) !important;
+}
+
 .v-list-item--disabled {
     opacity: 0.4 !important;
     pointer-events: none !important;
