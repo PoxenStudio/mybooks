@@ -36,9 +36,9 @@ import traceback
 from webserver.i18n import _
 from sqlalchemy.exc import IntegrityError
 
-from webserver import utils
-from webserver.models import Item, ScanFile
 from webserver.services import AsyncService
+from webserver.models import Item, ScanFile
+from webserver import utils
 from webserver.services.autofill import AutoFillService
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_CATEGORY, CALIBRE_ERROR_FLAG
 from webserver.constants import BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL
