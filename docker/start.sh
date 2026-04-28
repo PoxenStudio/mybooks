@@ -22,7 +22,7 @@ if [ ! -d "/data/books/imports/audiobooks" ]; then
 fi
 
 if [ ! -s "/data/books/calibre-webserver.db" ]; then
-  cp /prebuilt/books/calibre-webserver.db /data/books/
+  cp /prebuilt/books/calibre-webserver.db-* /data/books/
 fi
 
 if [ ! -d "/data/log" ]; then
@@ -43,7 +43,7 @@ for f in *; do
 done
 
 # 检查文件，并拷贝过去
-find . \( -path ./library -o -name '*.pyc' \) -prune -o -type f -print | while read f; do
+find . \( -path ./library -o -name '*.pyc' -o -name '*.db*' \) -prune -o -type f -print | while read f; do
     target="/data/books/$f"
     if [ ! -e "$target" ]; then
         cp "$f" "$target"
