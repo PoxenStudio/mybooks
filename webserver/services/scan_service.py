@@ -234,7 +234,7 @@ class ScanService(AsyncService):
             title = utils.remove_zlibrary_suffix(fname.replace("." + fmt, ""))
             author = None
             if fmt == "txt":
-                title, author = utils._guess_title_author_from_filename(title)
+                title, author = utils.guess_title_author_from_filename(title)
             mi = Metadata(title, [author] if author else [_("佚名")])
             logging.info("[IMPORT] Skipped metadata read for %s: %s", fmt, repr(title))
         else:
@@ -263,7 +263,7 @@ class ScanService(AsyncService):
                 if not title_ or title_.find("下载工具") >= 0 or title_ == "SSReader Print.":
                     mi.title = utils.remove_zlibrary_suffix(fname.replace("." + fmt, ""))
                 else:
-                    mi.title = title_
+                    mi.title = utils.remove_zlibrary_suffix(title_)
                 if mi.authors is None or len(mi.authors) == 0 or mi.authors[0].lower() == "unknown":
                     mi.authors = [_("佚名")]
 

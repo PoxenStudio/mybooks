@@ -21,7 +21,7 @@ def remove_zlibrary_suffix(text):
     return ZLIBRARY_PATTERN.sub('', text).strip()
 
 
-def _guess_title_author_from_filename(name):
+def guess_title_author_from_filename(name):
     if not name:
         return name, None
     title = name.strip()
@@ -414,5 +414,5 @@ if __name__ == "__main__":
         "《无人生还》(作者：阿加莎·克里斯蒂)",
     ]
     for filename in test_cases:
-        title, author = _guess_title_author_from_filename(filename)
+        title, author = guess_title_author_from_filename(filename)
         print(f"Filename: {filename}\n  Title: {title}\n  Author: {author}\n")

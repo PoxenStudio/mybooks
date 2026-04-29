@@ -1982,7 +1982,8 @@ class BookUpload(BaseHandler):
         # 非结构化的格式，calibre无法识别准确的信息，直接从文件名提取
         if fmt == "txt":
             mi.title = utils.remove_zlibrary_suffix(name.replace("." + fmt, ""))
-            mi.authors = [_(u"佚名")]
+            title, author = utils.guess_title_author_from_filename(mi.title)
+            mi.authors = [author] if author else [_("佚名")]
         elif fmt == "pdf":
             if CONF["PDF_TILE_WITH_FILE_NAME"]:
                 mi.title = utils.remove_zlibrary_suffix(name.replace("." + fmt, ""))
@@ -1990,6 +1991,8 @@ class BookUpload(BaseHandler):
                 title = mi.title.strip() if mi.title else ""
                 if not title or title.find(_(u"下载工具")) >= 0 or title == "SSReader Print.":
                     mi.title = utils.remove_zlibrary_suffix(name.replace("." + fmt, ""))
+                else:
+                    mi.title = utils.remove_zlibrary_suffix(title)
             if mi.authors is None or len(mi.authors) == 0 or mi.authors[0].lower() == "unknown":
                 mi.authors = [_(u"佚名")]
 
