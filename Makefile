@@ -22,8 +22,6 @@ all: build up
 build: test
 	docker build --platform=$(PLATFORM) --no-cache=false --build-arg BUILD_COUNTRY=CN --build-arg GIT_VERSION=$(VER) \
 		-f Dockerfile -t $(IMAGE) -t $(REPO1) --target production .
-	docker build --platform=$(PLATFORM) --no-cache=false --build-arg BUILD_COUNTRY=CN --build-arg GIT_VERSION=$(VER) \
-		-f Dockerfile -t $(TAG1) -t $(TAG2) --target production-ssr .
 
 push:
 	docker push $(IMAGE)
