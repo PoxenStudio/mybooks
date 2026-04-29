@@ -115,7 +115,47 @@ class ScanService(AsyncService):
         session.rollback()
         return False
 
-    def _collect_files(self, paths):
+    def _collect_imported_path(self):
+        start_time = time.time()
+        imported_rows = (
+            self.session.query(ScanFile.path)
+            .filter(ScanFile.status.in_([ScanFile.IMPORTED, ScanFile.EXIST]))
+            .filter(ScanFile.path.isnot(None))
+            .order_by(ScanFile.update_time.desc(), ScanFile.id.desc())
+            .all()
+        )
+        if not imported_rows:
+            return [], []
+
+        last_imported_dir = None
+        imported_dirs = set()
+        imported_files_in_last_dir = set()
+
+        for (path,) in imported_rows:
+            if not path:
+                continue
+            fpath = os.path.realpath(path)
+            fdir = os.path.dirname(fpath)
+            if last_imported_dir is None:
+                last_imported_dir = fdir
+            if fdir == last_imported_dir:
+                imported_files_in_last_dir.add(fpath)
+            elif fdir:
+                imported_dirs.add(fdir)
+
+        if last_imported_dir is None:
+            return [], []
+
+        logging.info(
+            "[SCAN] Imported path cache loaded: dirs=%d, files_in_last_dir=%d, last_dir=%s, cost=%.3f seconds",
+            len(imported_dirs),
+            len(imported_files_in_last_dir),
+            last_imported_dir,
+            time.time() - start_time,
+        )
+        return list(imported_dirs), list(imported_files_in_last_dir)
+
+    def _collect_files(self, paths, imported_dirs=None, imported_files=None):
         if paths is None or paths == "all":
             dirs = [CONF.get("scan_upload_path", "")]
             if not dirs[0] or not os.path.isdir(dirs[0]):
@@ -126,20 +166,37 @@ class ScanService(AsyncService):
         else:
             dirs = list(paths)
 
+        imported_dir_set = {os.path.realpath(d) for d in (imported_dirs or []) if d}
+        imported_file_set = {os.path.realpath(p) for p in (imported_files or []) if p}
+
         filelist = []
         for p in dirs:
             if os.path.isfile(p):
                 fmt = p.split(".")[-1].lower()
-                if fmt in SCAN_EXT:
-                    filelist.append(p)
+                if fmt not in SCAN_EXT:
+                    continue
+                real_p = os.path.realpath(p)
+                if real_p in imported_file_set or os.path.dirname(real_p) in imported_dir_set:
+                    continue
+                filelist.append(p)
             elif os.path.isdir(p):
-                for dirpath, __, filenames in os.walk(p, onerror=ScanService.os_walk_error_handler):
+                for dirpath, dirnames, filenames in os.walk(p, onerror=ScanService.os_walk_error_handler):
+                    real_dirpath = os.path.realpath(dirpath)
+                    dirnames[:] = [
+                        d for d in dirnames
+                        if os.path.realpath(os.path.join(dirpath, d)) not in imported_dir_set
+                    ]
+                    # Skip files in this directory if it's already fully imported
+                    if real_dirpath in imported_dir_set:
+                        continue
                     for fname in filenames:
                         fmt = fname.split(".")[-1].lower()
                         if not fmt or fmt not in SCAN_EXT or fname.startswith('.'):
                             continue
                         fpath = os.path.join(dirpath, fname)
-                        if os.path.isfile(fpath):
+                        if not os.path.isfile(fpath):
+                            continue
+                        if os.path.realpath(fpath) not in imported_file_set:
                             filelist.append(fpath)
             else:
                 logging.warning("[SCAN] Path not found: %s", p)
@@ -155,7 +212,12 @@ class ScanService(AsyncService):
         ScanService.static_is_importing = True
         start_time = time.time()
 
-        filelist = self._collect_files(paths)
+        imported_dirs = []
+        imported_files = []
+        if CONF.get("SKIP_IMPORTED_PATH", False):
+            imported_dirs, imported_files = self._collect_imported_path()
+
+        filelist = self._collect_files(paths, imported_dirs=imported_dirs, imported_files=imported_files)
         logging.info("[IMPORT] Collected %d files in %.3f seconds", len(filelist), time.time() - start_time)
         if not filelist:
             logging.warning("[IMPORT] No valid files found in: %s", paths)
