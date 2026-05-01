@@ -318,7 +318,7 @@ class ScanService(AsyncService):
         start_time = time.time()
 
         # Skip metadata reading when title/author are derived from filename
-        skip_metadata = (fmt == "txt") or (fmt == "pdf" and CONF.get("PDF_TILE_WITH_FILE_NAME", False))
+        skip_metadata = (fmt == "txt")
         if skip_metadata:
             title = utils.remove_zlibrary_suffix(fname.replace("." + fmt, ""))
             author = None
@@ -339,7 +339,7 @@ class ScanService(AsyncService):
                 self.save_or_rollback(row, session)
                 return None, ScanFile.INVALID
 
-            if mi.title and mi.title == CALIBRE_ERROR_FLAG:
+            if mi and mi.title and mi.title == CALIBRE_ERROR_FLAG:
                 logging.error("[IMPORT] Failed to get metadata for %s", fpath)
                 row.status = ScanFile.INVALID
                 row.title = None
@@ -347,14 +347,18 @@ class ScanService(AsyncService):
                 return None, ScanFile.INVALID
 
             # Normalize title/author for pdf (PDF_TILE_WITH_FILE_NAME=False)
-            if fmt == "pdf":
-                title_ = mi.title.strip() if mi.title else ""
-                if not title_ or title_.find("下载工具") >= 0 or title_ == "SSReader Print.":
+            if mi and fmt == "pdf":
+                if CONF.get("PDF_TILE_WITH_FILE_NAME", False):
                     mi.title = utils.remove_zlibrary_suffix(fname.replace("." + fmt, ""))
-                else:
-                    mi.title = utils.remove_zlibrary_suffix(title_)
-                if mi.authors is None or len(mi.authors) == 0 or mi.authors[0].lower() == "unknown":
                     mi.authors = [_("佚名")]
+                else:
+                    title_ = mi.title.strip() if mi.title else ""
+                    if not title_ or title_.find("下载工具") >= 0 or title_ == "SSReader Print.":
+                        mi.title = utils.remove_zlibrary_suffix(fname.replace("." + fmt, ""))
+                    else:
+                        mi.title = utils.remove_zlibrary_suffix(title_)
+                    if mi.authors is None or len(mi.authors) == 0 or mi.authors[0].lower() == "unknown":
+                        mi.authors = [_("佚名")]
 
         row.title = mi.title
         row.author = mi.authors[0] if mi.authors else mi.author_sort
