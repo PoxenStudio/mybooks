@@ -4,14 +4,17 @@
 import datetime
 import logging
 import re
+import mimetypes
 import os
 import traceback
+from urllib.parse import urlparse
 from webserver.i18n import _
 
 import tornado.escape
 from tornado import web
 from webserver import loader
 from webserver.services.mail import MailService
+from webserver.services.resource_service import ResourceService
 from webserver.handlers.base import BaseHandler, auth, js
 from webserver.handlers.audio import AudioUtils
 from webserver.models import Device, ExpectedItem, Message, Reader, StickyItem
@@ -462,7 +465,7 @@ class UserInfo(BaseHandler):
             ),
             "icon": CONF["site_icon"] if "site_icon" in CONF else "favicon_1",
             "socials": CONF["SOCIALS"],
-            "friends": CONF["FRIENDS"],
+            "friends": self._build_friends_with_favicon(),
             "footer": CONF["FOOTER"] if "FOOTER" in CONF else "",
             "header": CONF["HEADER"] if "HEADER" in CONF else "",
             "allow": {
@@ -552,6 +555,33 @@ class UserInfo(BaseHandler):
                     d["extra"][k] = v
 
         return d
+
+    def _build_friends_with_favicon(self):
+        """构建带有 favicon 图标信息的友情链接列表"""
+        friends = CONF.get("FRIENDS", [])
+        result = []
+        need_loading_urls = []
+
+        for friend in friends:
+            href = friend.get("href", "")
+            parsed = urlparse(href)
+            domain = parsed.netloc
+            item = {"text": friend.get("text", ""), "href": href, "icon": ""}
+
+            if domain:
+                icon = ResourceService.check_favicon(domain)
+                if icon is None:
+                    # 文件不存在，需要加载
+                    need_loading_urls.append(href)
+                elif icon:
+                    item["icon"] = icon
+
+            result.append(item)
+
+        if need_loading_urls:
+            ResourceService().load_friends_favicon(need_loading_urls)
+
+        return result
 
     @js
     def get(self):
@@ -951,6 +981,31 @@ class UserExpectedItems(BaseHandler):
             return {"err": "db.error", "msg": _("删除失败")}
 
 
+class FriendsFaviconHandler(BaseHandler):
+    """提供友情链接 favicon 文件的 HTTP 访问"""
+
+    def prepare(self):
+        # 跳过 BaseHandler 的登录检查等，favicon 无需认证
+        self.set_hosts()
+
+    def get(self, filename):
+        from webserver.services.resource_service import FRIENDS_FAVICON_DIR
+
+        # 安全检查：只允许简单文件名
+        if "/" in filename or "\\" in filename or ".." in filename:
+            raise web.HTTPError(400, "Invalid filename")
+
+        filepath = os.path.join(FRIENDS_FAVICON_DIR, filename)
+        if not os.path.exists(filepath) or os.path.getsize(filepath) == 0:
+            raise web.HTTPError(404)
+
+        content_type = mimetypes.guess_type(filename)[0] or "image/x-icon"
+        self.set_header("Content-Type", content_type)
+        self.set_header("Cache-Control", "public, max-age=86400")
+        with open(filepath, "rb") as f:
+            self.write(f.read())
+
+
 def routes():
     return [
         (r"/api/welcome", Welcome),
@@ -973,4 +1028,5 @@ def routes():
         (r"/api/user/devices", UserDevices),
         (r"/api/user/expected", UserExpectedItems),
         (r"/api/user/history/clear", UserHistoryClear),
+        (r"/api/friends/favicon/(.*)", FriendsFaviconHandler),
     ]

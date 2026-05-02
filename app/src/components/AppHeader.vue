@@ -62,7 +62,8 @@
                                 @click="link.action ? handleLinkAction(link.action) : undefined"
                             >
                                 <v-list-item-action class="mt-1 mb-1 mr-2" dense>
-                                    <v-icon class="pa-0 ma-0" :color="link.color || ''">{{ link.icon }}</v-icon>
+                                    <img v-if="link.favicon" :src="link.favicon" class="friend-favicon" @error="$event.target.style.display='none'" />
+                                    <v-icon v-else class="pa-0 ma-0" :color="link.color || ''">{{ link.icon }}</v-icon>
                                 </v-list-item-action>
                                 <v-list-item-content>
                                     <v-list-item-title>
@@ -618,6 +619,7 @@ export default {
                         href: friend.href,
                         text: friend.text,
                         color: "primary",
+                        favicon: friend.icon || "",
                     })),
                 }
             ];
@@ -1316,6 +1318,16 @@ export default {
     .app-navigation-drawer {
         box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15) !important;
     }
+}
+
+.friend-favicon {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    border-radius: 50%;
+    background-color: #ffffff;
+    padding: 2px;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
 }
 </style>
 
