@@ -1028,6 +1028,11 @@
         "stageDone": "已完成",
         "actionComplete": "完成",
         "actionDelete": "刪除",
-        "deleteConfirm": "確定要刪除這條留言嗎？"
+        "deleteConfirm": "確定要刪除這條留言嗎？",
+        "replyDialogTitle": "回覆留言",
+        "replyPlaceholder": "請輸入回覆內容",
+        "replyDefault": "完成",
+        "replyCancel": "取消",
+        "replySubmit": "提交"
     }
 }

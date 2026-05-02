@@ -1025,6 +1025,11 @@
         "stageDone": "Done",
         "actionComplete": "Complete",
         "actionDelete": "Delete",
-        "deleteConfirm": "Are you sure you want to delete this memo?"
+        "deleteConfirm": "Are you sure you want to delete this memo?",
+        "replyDialogTitle": "Reply Memo",
+        "replyPlaceholder": "Enter your reply",
+        "replyDefault": "Done",
+        "replyCancel": "Cancel",
+        "replySubmit": "Submit"
     }
 }

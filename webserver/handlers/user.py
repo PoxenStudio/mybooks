@@ -1040,6 +1040,13 @@ class UserMemo(BaseHandler):
             existing.memo_type = memo_type
             has_update = True
 
+        if "reply" in data or action in (Memo.STAGE_DONE, Memo.STAGE_SUSPEND):
+            reply_content = data.get("reply", "").strip()
+            if not reply_content:
+                reply_content = _("完成")
+            existing.reply = reply_content
+            has_update = True
+
         if has_update:
             existing.update_date = datetime.datetime.now()
             try:
@@ -1066,20 +1073,16 @@ class UserMemo(BaseHandler):
         user_list = {}
 
         if user and user.is_admin():
+            query = query.order_by(Memo.stage.desc()).order_by(Memo.create_date.desc())
             user_list = self.get_all_readers()
         elif user:
-            query = query.filter(Memo.reader_id == user.id)
+            query = query.filter(Memo.reader_id == user.id).order_by(Memo.stage.desc()).order_by(Memo.create_date.desc())
             user_list = {user.id: user.username}
         else:
             return {"err": "ok", "data": {"items": [], "total": 0}}
 
         total = query.count()
-        items = (
-            query.order_by(Memo.create_date.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
-            .all()
-        )
+        items = query.offset((page - 1) * page_size).limit(page_size).all()
 
         result = []
         for item in items:
@@ -1090,6 +1093,7 @@ class UserMemo(BaseHandler):
                     "reader_name": user_list.get(item.reader_id, _("访客")) if item.reader_id == 0 else user_list.get(item.reader_id, str(item.reader_id)),
                     "memo": item.memo,
                     "memo_type": item.memo_type,
+                    "reply": item.reply,
                     "stage": item.stage,
                     "create_date": (
                         item.create_date.strftime("%Y-%m-%d %H:%M:%S")

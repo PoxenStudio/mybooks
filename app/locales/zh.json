@@ -1030,6 +1030,11 @@
         "stageDone": "已完成",
         "actionComplete": "完成",
         "actionDelete": "删除",
-        "deleteConfirm": "确定要删除这条留言吗？"
+        "deleteConfirm": "确定要删除这条留言吗？",
+        "replyDialogTitle": "回复留言",
+        "replyPlaceholder": "请输入回复内容",
+        "replyDefault": "完成",
+        "replyCancel": "取消",
+        "replySubmit": "提交"
     }
 }

@@ -654,6 +654,7 @@ class Memo(Base, SQLAlchemyMixin):
     id = Column(Integer, primary_key=True, autoincrement=True)
     reader_id = Column(Integer, ForeignKey("readers.id"), nullable=False, default=0)
     memo = Column(String(2048), nullable=False, default="")
+    reply = Column(String(2048), nullable=False, default="")
     memo_type = Column(Integer, nullable=False, default=0)
     stage = Column(String(10), nullable=False, default="new")
     create_date = Column(DateTime, default=datetime.datetime.now)
@@ -668,6 +669,7 @@ class Memo(Base, SQLAlchemyMixin):
         self.memo = memo
         self.memo_type = memo_type
         self.stage = stage
+        self.reply = None
         self.create_date = datetime.datetime.now()
         self.update_date = datetime.datetime.now()
 
