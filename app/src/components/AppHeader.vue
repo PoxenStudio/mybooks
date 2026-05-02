@@ -671,7 +671,12 @@ export default {
             ];
 
             const memo_link = [
-                { icon: "mdi-message-text-outline", action: "openMemo", text: "appHeader.memo", color: "green" },
+                {
+                    icon: "mdi-message-text-outline",
+                    text: "appHeader.memo",
+                    color: "green",
+                    ...(this.user.is_login ? { href: "/memos" } : { action: "openMemo" })
+                },
             ];
 
             return [].concat(this.user.is_login ? [] : [login_link])

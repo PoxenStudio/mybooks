@@ -442,5 +442,6 @@
   "今日留言次数已达上限": "Daily memo limit reached",
   "留言提交成功": "Memo submitted successfully",
   "留言更新成功": "Memo updated successfully",
-  "留言不存在": "Memo not found"
+  "留言不存在": "Memo not found",
+  "您的留言已处理，回复内容为：{reply}": "Recieved one memo to you, reply as: {reply}"
 }

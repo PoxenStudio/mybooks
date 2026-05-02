@@ -1015,7 +1015,7 @@
         "colReaderName": "Username",
         "colType": "Type",
         "colContent": "Content",
-        "colStage": "Stage",
+        "colStage": "Processing",
         "colDate": "Date",
         "colActions": "Actions",
         "typeSuggestion": "Suggestion",
@@ -1030,6 +1030,8 @@
         "replyPlaceholder": "Enter your reply",
         "replyDefault": "Done",
         "replyCancel": "Cancel",
-        "replySubmit": "Submit"
+        "replySubmit": "Submit",
+        "actionNew": "New Memo",
+        "colReply": "Reply"
     }
 }

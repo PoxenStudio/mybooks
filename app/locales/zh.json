@@ -1020,7 +1020,7 @@
         "colReaderName": "用户名",
         "colType": "类型",
         "colContent": "内容",
-        "colStage": "阶段",
+        "colStage": "处理",
         "colDate": "日期",
         "colActions": "操作",
         "typeSuggestion": "建议",
@@ -1035,6 +1035,8 @@
         "replyPlaceholder": "请输入回复内容",
         "replyDefault": "完成",
         "replyCancel": "取消",
-        "replySubmit": "提交"
+        "replySubmit": "提交",
+        "actionNew": "新建留言",
+        "colReply": "回复"
     }
 }

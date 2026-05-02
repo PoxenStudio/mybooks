@@ -1051,6 +1051,15 @@ class UserMemo(BaseHandler):
             existing.update_date = datetime.datetime.now()
             try:
                 self.sqlite_session.commit()
+
+                # Send message to the user if exists
+                if existing.reader_id > 0:
+                    msg = ""
+                    if action in (Memo.STAGE_DONE):
+                        msg = _("您的留言已处理，回复内容为：{reply}").format(reply=existing.reply)
+                    m = Message(existing.reader_id, "info", msg)
+                    m.save()
+
                 return {"err": "ok", "msg": _("处理成功") if action in (Memo.STAGE_DONE, Memo.STAGE_SUSPEND) else _("留言更新成功")}
             except Exception as e:
                 logging.error("Update memo failed: %s", e)
@@ -1060,8 +1069,17 @@ class UserMemo(BaseHandler):
             return {"err": "ok", "msg": _("未修改任何内容")}
 
     @js
+    @auth
     def get(self):
-        user = self.current_user
+        user_param = self.get_argument("user", "").strip()
+        if not self.is_admin() or not user_param:
+            user_id = self.user_id()
+        else:
+            if user_param != "0":
+                user_id = int(user_param)
+            else:
+                user_id = 0
+
         page = int(self.get_argument("page", 1))
         page_size = int(self.get_argument("page_size", 20))
         if page < 1:
@@ -1072,14 +1090,11 @@ class UserMemo(BaseHandler):
         query = self.sqlite_session.query(Memo)
         user_list = {}
 
-        if user and user.is_admin():
+        if user_id == 0:
             query = query.order_by(Memo.stage.desc()).order_by(Memo.create_date.desc())
             user_list = self.get_all_readers()
-        elif user:
-            query = query.filter(Memo.reader_id == user.id).order_by(Memo.stage.desc()).order_by(Memo.create_date.desc())
-            user_list = {user.id: user.username}
         else:
-            return {"err": "ok", "data": {"items": [], "total": 0}}
+            query = query.filter(Memo.reader_id == user_id).order_by(Memo.stage.desc()).order_by(Memo.create_date.desc())
 
         total = query.count()
         items = query.offset((page - 1) * page_size).limit(page_size).all()
@@ -1107,7 +1122,7 @@ class UserMemo(BaseHandler):
                     ),
                 }
             )
-        return {"err": "ok", "data": {"items": result, "total": total}}
+        return {"err": "ok", "data": {"items": result, "total": total, "users": user_list}}
 
     @js
     def post(self):

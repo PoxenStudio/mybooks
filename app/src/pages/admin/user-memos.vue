@@ -10,7 +10,7 @@
       :loading="loading"
       :sort-by.sync="sortBy"
       :sort-desc.sync="sortDesc"
-      :footer-props="{ 'items-per-page-options': [20, 50, 100] }"
+      :footer-props="{ 'items-per-page-options': [100, 500, 1000] }"
       class="elevation-1"
     >
       <template v-slot:item.memo_type="{ item }">
@@ -18,7 +18,7 @@
           {{ getTypeName(item.memo_type) }}
         </v-chip>
       </template>
-      
+
       <template v-slot:item.stage="{ item }">
         <v-chip small :color="item.stage === 'done' ? 'success' : 'warning'" text-color="white">
           {{ item.stage === 'done' ? $t('memos.stageDone') : $t('memos.stageNew') }}
@@ -96,7 +96,7 @@ export default {
   methods: {
     fetchItems() {
       this.loading = true;
-      this.$backend('/user/memo?page=1&page_size=1000')
+      this.$backend('/user/memo?user=0&page=1&page_size=1000')
         .then(rsp => {
           if (rsp.err !== 'ok' || !rsp.data || !rsp.data.items) {
             this.$alert('error', rsp.msg);
