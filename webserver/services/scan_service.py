@@ -37,7 +37,7 @@ from webserver.i18n import _
 from sqlalchemy.exc import IntegrityError
 
 from webserver.services import AsyncService
-from webserver.models import Item, ScanFile
+from webserver.models import Item, ScanFile, Reader
 from webserver import utils
 from webserver.services.autofill import AutoFillService
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_CATEGORY, CALIBRE_ERROR_FLAG
@@ -656,6 +656,34 @@ class ScanService(AsyncService):
         if importing_imported:
             logging.info("[IMPORT] Starting auto-fill for %d imported books", len(importing_imported))
             AutoFillService().auto_fill_all(importing_imported)
+
+            if CONF.get("SEND_MAIL_FOR_NEW_BOOKS", False):
+                try:
+                    book_names = []
+                    index = 100
+                    for bid in importing_imported:
+                        b = self.db.get_metadata(bid, index_is_id=True)
+                        if b and b.title:
+                            book_names.append(b.title)
+                        index -= 1
+                        if index <= 0:
+                            break
+
+                    if book_names:
+                        emails = []
+                        readers = self.session.query(Reader).filter(Reader.active.is_(1)).all()
+                        for r in readers:
+                            if not r.email or not r.active:
+                                continue
+                            if r.extra and r.extra.get("allow_sending_mail", True) is True:
+                                emails.append(r.email)
+
+                        if emails:
+                            from webserver.services.mail import MailService
+                            site_url = CONF.get("site_url", "")
+                            MailService().send_new_book_notification(emails, book_names, site_url=site_url)
+                except Exception as e:
+                    logging.error("[IMPORT] Failed to trigger new book notification: %s", e)
 
     @AsyncService.register_service
     def do_rename_category(self, old_dir_path, new_dir_path, scan_upload_path):

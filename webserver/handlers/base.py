@@ -296,6 +296,7 @@ class BaseHandler(web.RequestHandler):
         if CONF["static_host"]:
             self.api_url = self.request.protocol + "://" + host
             self.cdn_url = self.request.protocol + "://" + CONF["static_host"]
+        CONF["site_url"] = self.site_url
 
     def prepare(self):
         # 性能分析：记录请求开始时间

@@ -26,14 +26,14 @@ settings = {
     "cookie_expire" : 7*86400,
     "login_url"     : "/login",
     "user_database" : 'sqlite:////data/books/calibre-webserver.db',
-    "site_title"    : u"书屋",
+    "site_title"    : "书屋",
     "site_language" : "auto",
     "site_theme"    : "dark",
     "ssl_crt_file"  : "/data/books/ssl/ssl.crt",
-    "ssl_key_file": "/data/books/ssl/ssl.key",
+    "ssl_key_file"  : "/data/books/ssl/ssl.key",
 
-    "push_title": u"%(site_title)s：推送给您一本书《%(title)s》",
-    "push_content": u"为您奉上一本《%(title)s》, 欢迎常来访问%(site_title)s！%(site_url)s",
+    "push_title": "%(site_title)s：推送给您一本书《%(title)s》",
+    "push_content": "为您奉上一本《%(title)s》, 欢迎常来访问%(site_title)s！%(site_url)s",
 
     "convert_timeout" : 300,
 
@@ -98,6 +98,7 @@ settings = {
     "IMPORT_BY_INOTIFY": False,
     "IMPORT_CATEGORY_WITH_FOLDER": False,
     "UPDATE_CATEGORY_WITH_FOLDER_RENAME": False,
+    "SEND_MAIL_FOR_NEW_BOOKS" : False,
     "REMOVE_IMPORTED_FILE": False,
 
     "PDF_TILE_WITH_FILE_NAME": False,
@@ -151,7 +152,7 @@ settings = {
 
     'INVITE_MODE'   : False,
     'INVITE_CODE'   : 'talebook',
-    'INVITE_MESSAGE': u'''本站为私人图书馆，需输入密码才可进行访问''',
+    'INVITE_MESSAGE': '''本站为私人图书馆，需输入密码才可进行访问''',
 
     'ALLOW_GUEST_READ' : True,
     'ALLOW_GUEST_PUSH' : True,
@@ -161,26 +162,25 @@ settings = {
     'FOOTER': '',
 
     'FRIENDS': [
-        { "text": u"书格", "href": "https://www.shuge.org/" },
-        { "text": u"读书派", "href": "https://dushupai.com" }
+        { "text": "书格", "href": "https://www.shuge.org/" },
+        { "text": "读书派", "href": "https://dushupai.com" }
     ],
-    'SOCIALS': [
-    ],
-    'DEVICES': [
-    ],
-    'SIGNUP_MAIL_TITLE': u'欢迎注册个人书屋',
-    'SIGNUP_MAIL_CONTENT': u'''
+    'SOCIALS': [],
+    'DEVICES': [],
+    'SIGNUP_MAIL_TITLE': '欢迎注册个人书屋',
+    'SIGNUP_MAIL_CONTENT': '''
 Hi, %(username)s！
 欢迎注册%(site_title)s，这里虽然是个小小的图书馆，但是希望你找到所爱。
 
 点击链接激活你的账号: %(active_link)s
 ''',
 
-    'RESET_MAIL_TITLE': u'密码重置',
-    'RESET_MAIL_CONTENT': u'''
+    'RESET_MAIL_TITLE': '密码重置',
+    'RESET_MAIL_CONTENT': '''
 Hi, %(username)s！
 
 你刚刚在网站上提交了密码重置，请妥善保存你的新密码: %(password)s
 ''',
-
+    'NEW_BOOK_MAIL_TITLE': '',
+    'NWE_BOOK_MAIL_HEADER': ''
 }

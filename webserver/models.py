@@ -111,16 +111,11 @@ class Reader(Base, SQLAlchemyMixin):
     extra = Column(MutableDict.as_mutable(JSONType), default={})
     vipquota = Column(Integer, default=0)  # VIP用户的下载配额
     vipexpire = Column(DateTime)  # VIP用户的到期时间
-    read_limit = Column(
-        Integer, default=0
-    )  # 阅读限制，0:不限制, 1:只允许设置的范围(白名单), 2:排除设置的范围(黑名单)
-    limit_categories = Column(
-        String(512), default=""
-    )  # 阅读限制的范围，逗号分隔的分类列表
-    limit_tags = Column(String(512), default="")  # 阅读限制的范围，逗号分隔的标签列表
-    podcast_token = Column(
-        String(128), default=""
-    )  # Podcast订阅认证token，用于podcast播放器鉴权
+    read_limit = Column(Integer, default=0)
+    limit_categories = Column(String(512), default="")
+    limit_tags = Column(String(512), default="")
+    podcast_token = Column(String(128), default="")
+
 
     def __str__(self):
         return "<id=%d, username=%s, email=%s, admin:%d>" % (
@@ -150,7 +145,7 @@ class Reader(Base, SQLAlchemyMixin):
     def init_default_user(self):
         class DefaultUserInfo:
             extra_data = {"username": _("默认用户")}
-            provider = "qq"
+            provider = ""
             uid = 123456789
 
         self.init(DefaultUserInfo())
@@ -160,7 +155,7 @@ class Reader(Base, SQLAlchemyMixin):
         self.create_time = datetime.datetime.now()
         self.update_time = datetime.datetime.now()
         self.access_time = datetime.datetime.now()
-        self.extra = {"kindle_email": ""}
+        self.extra = {"kindle_email": "", "allow_sending_mail": True}
         self.init_avatar(social_user)
 
     def reset_password(self):

@@ -977,6 +977,12 @@ export default {
             type: "checkbox",
           },
           {
+            icon: "mdi-email-send",
+            key: "SEND_MAIL_FOR_NEW_BOOKS",
+            label: "settings.send_mail_for_new_books",
+            type: "checkbox",
+          },
+          {
             icon: "mdi-shape-plus",
             key: "IMPORT_CATEGORY_WITH_FOLDER",
             label: "settings.category_with_folder",

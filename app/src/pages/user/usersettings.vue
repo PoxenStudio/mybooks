@@ -115,6 +115,12 @@
                   {{ $t("user.resendActivationEmail") }}
                 </a>
               </p>
+              <v-checkbox
+                v-model="user.extra.allow_sending_mail"
+                :label="$t('user.allow_sending_mail')"
+                hide-details
+                class="mt-0"
+              ></v-checkbox>
             </v-col>
 
             <!-- Password -->
@@ -383,6 +389,9 @@ export default {
         vipquota: undefined,
         vip_expire: "",
         podcast_token: "",
+        extra: {
+          allow_sending_mail: true
+        },
       },
       show_pass: false,
       rules: {
@@ -448,6 +457,12 @@ export default {
           rsp.user.password0 = "";
           rsp.user.password1 = "";
           rsp.user.password2 = "";
+          if (!rsp.user.extra) {
+            rsp.user.extra = {};
+          }
+          if (rsp.user.extra.allow_sending_mail === undefined) {
+            rsp.user.extra.allow_sending_mail = true;
+          }
           this.user = rsp.user;
         }
       });
@@ -591,6 +606,7 @@ export default {
         nickname: this.user.nickname,
         kindle_email: this.user.kindle_email,
         podcast_token: this.user.podcast_token,
+        allow_sending_mail: this.user.extra.allow_sending_mail,
       };
 
       this.$backend("/user/update", {

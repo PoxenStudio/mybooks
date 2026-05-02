@@ -613,6 +613,7 @@
         "auto_importing":"监控导入目录，自动进行导入 (只处理新增入库，删除文件没有影响。如果放入的文件不完整，会被忽略。尽量保留导入记录，避免重复处理)",
         "update_category_with_folder_rename":"监控导入目录后，重命名第一级目录或文件移动到新的目录时使用最新的一级目录名更新已导入书籍的类别",
         "remove_imported_file": "导入完成后删除源文件 (开启监控导入目录后将失效)",
+        "send_mail_for_new_books": "在上传及导入后发送邮箱提醒(15分钟合并发送)",
         "advanced_settings": "高级配置项",
         "enable_physical_books": "启用添加实体书功能",
         "cdn_domain": "CDN域名",
@@ -712,6 +713,7 @@
         "username": "用户名",
         "email": "邮箱",
         "resendActivationEmail": "重新发送激活邮件",
+        "allow_sending_mail": "接收新书提醒邮件",
         "password": "密码",
         "modifyPassword": "点击修改",
         "currentPassword": "当前密码",
@@ -1037,6 +1039,6 @@
         "replyCancel": "取消",
         "replySubmit": "提交",
         "actionNew": "新建留言",
-        "colReply": "回复"
+        "colReply": "管理员回复"
     }
 }

@@ -609,8 +609,9 @@
         "import_and_upload": "匯入與上傳",
         "category_with_folder": "使用第一層目錄為自訂類別名稱 (如匯入目錄下 a/b/c.epub 匯入後，類別為 a。目錄名不要有特殊字元，超過 10 個字元會被忽略)",
         "auto_importing": "監控匯入目錄，自動進行匯入 (只處理新增入庫，刪除檔案沒有影響。如果放入的檔案不完整，會被忽略。盡量保留匯入記錄，避免重複處理)",
-        "update_category_with_folder_rename": "監控匯入目錄後，重新命名第一層目錄或檔案移動到新的目錄時使用最新的一層目錄名更新已匯入書籍的類別",
+        "update_category_with_folder_rename": "監控匯入目錄後，重新命名第一層目錄或檔案移動到新的目錄時使用最新的第一層目錄名更新已匯入書籍的類別",
         "remove_imported_file": "匯入完成後刪除原始檔案 (啟用監控匯入目錄後將失效)",
+        "send_mail_for_new_books": "在上傳及匯入後發送信箱提醒(15分鐘合併發送)",
         "advanced_settings": "進階設定項目",
         "enable_physical_books": "啟用添加實體書功能",
         "cdn_domain": "CDN 網域",
@@ -710,6 +711,7 @@
         "username": "使用者名稱",
         "email": "信箱",
         "resendActivationEmail": "重新發送啟用郵件",
+        "allow_sending_mail": "接收新書提醒郵件",
         "password": "密碼",
         "modifyPassword": "點擊修改",
         "currentPassword": "目前密碼",
@@ -1035,6 +1037,6 @@
         "replyCancel": "取消",
         "replySubmit": "提交",
         "actionNew": "新增留言",
-        "colReply": "回覆"
+        "colReply": "管理員回覆"
     }
 }

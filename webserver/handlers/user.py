@@ -98,6 +98,9 @@ class UserUpdate(BaseHandler):
         if "podcast_token" in data:
             user.podcast_token = data.get("podcast_token", "").strip()
 
+        if "allow_sending_mail" in data:
+            user.extra["allow_sending_mail"] = bool(data.get("allow_sending_mail"))
+
         try:
             user.save()
             self.add_msg("success", _("Settings saved."))

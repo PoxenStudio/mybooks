@@ -36,7 +36,7 @@ from webserver.services.convert import ConvertService
 from webserver.services.extract import ExtractService
 from webserver.services.mail import MailService
 from webserver.handlers.base import BaseHandler, ListHandler, auth, js
-from webserver.models import Item, ReadingState
+from webserver.models import Item, ReadingState, Reader
 from webserver.plugins.meta import baike, douban, youshu, xhsd
 from webserver.plugins.meta.calibre import CalibreMetadataApi
 from webserver.plugins.meta.bookbarn_tags import BookBarnTags
@@ -1849,6 +1849,29 @@ class BookUpload(BaseHandler):
         self.sqlite_session.commit()
         if CONF.get(AUTO_FILL_META, False):
             AutoFillService().auto_fill(book_id)
+
+        if CONF.get("SEND_MAIL_FOR_NEW_BOOKS", False) and mi.title:
+            try:
+                emails = []
+                readers = self.sqlite_session.query(Reader).filter(Reader.active.is_(1)).all()
+                for r in readers:
+                    if not r.email or not r.active:
+                        continue
+                    if r.extra and r.extra.get("allow_sending_mail", True) is True:
+                        emails.append(r.email)
+                if emails:
+                    site_url = self.site_url
+                    if not site_url:
+                        referer = self.request.headers.get("Referer", "")
+                        parsed = urllib.parse.urlsplit(referer)
+                        if parsed.scheme and parsed.netloc:
+                            site_url = f"{parsed.scheme}://{parsed.netloc}"
+                    MailService().send_new_book_notification(emails, [mi.title], site_url=site_url)
+                else:
+                    logging.info("No active readers with email found for new book notification.")
+            except Exception as e:
+                logging.error("Failed to trigger new book notification: %s", e)
+
         return book_id
 
     def get_upload_file(self):
@@ -2044,6 +2067,29 @@ class BookUploadChunk(BaseHandler):
         self.sqlite_session.commit()
         if CONF.get(AUTO_FILL_META, False):
             AutoFillService().auto_fill(book_id)
+
+        if CONF.get("SEND_MAIL_FOR_NEW_BOOKS", False) and mi.title:
+            try:
+                emails = []
+                readers = self.sqlite_session.query(Reader).filter(Reader.active.is_(1)).all()
+                for r in readers:
+                    if not r.email:
+                        continue
+                    if r.extra and r.extra.get("allow_sending_mail", True) is True:
+                        emails.append(r.email)
+                if emails:
+                    site_url = self.site_url
+                    if not site_url:
+                        referer = self.request.headers.get("Referer", "")
+                        parsed = urllib.parse.urlsplit(referer)
+                        if parsed.scheme and parsed.netloc:
+                            site_url = f"{parsed.scheme}://{parsed.netloc}"
+                    MailService().send_new_book_notification(emails, [mi.title], site_url=site_url)
+                else:
+                    logging.info("No active readers with email found for new book notification.")
+            except Exception as e:
+                logging.error("Failed to trigger new book notification: %s", e)
+
         return book_id
 
     @staticmethod
