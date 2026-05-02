@@ -116,7 +116,6 @@ class Reader(Base, SQLAlchemyMixin):
     limit_tags = Column(String(512), default="")
     podcast_token = Column(String(128), default="")
 
-
     def __str__(self):
         return "<id=%d, username=%s, email=%s, admin:%d>" % (
             self.id,
