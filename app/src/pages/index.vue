@@ -42,7 +42,7 @@
         </v-col>
         <v-col cols=4 xs=4 sm=3 md=2 lg=1 v-for="(book,idx) in get_random_books" :key="'rec'+idx+book.id" class="book-card">
             <v-card :to="book.href" class="ma-1">
-                <div class="book-img-container">
+                <div class="book-img-container" :title="book.title">
                     <v-img
                         :src="book.thumb"
                         :aspect-ratio="11/15"
@@ -54,6 +54,7 @@
                     <div v-if="book.book_type === 1" class="physical-book-badge">
                         <v-icon small color="white">mdi-bookshelf</v-icon>
                     </div>
+                    <div class="book-title">{{book.title}}</div>
                 </div>
             </v-card>
         </v-col>
@@ -412,6 +413,18 @@ export default {
 /* 确保书籍卡片在路由切换时正确渲染 */
 .book-card {
     min-height: 0;
+}
+
+.book-title {
+    text-align: center;
+    display: block;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    -webkit-box-orient: vertical;
+    text-overflow: clip;
+    font-size: small;
 }
 
 .book-card .v-card {

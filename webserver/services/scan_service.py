@@ -245,7 +245,7 @@ class ScanService(AsyncService):
             imported_dirs, imported_files, imported_id = self._collect_imported_path(skip_last)
 
         filelist = self._collect_files(paths, imported_dirs=imported_dirs, imported_files=imported_files)
-        logging.info("[IMPORT] Collected %d files in %.3f seconds", len(filelist), time.time() - start_time)
+        logging.info("[IMPORT] Collected %d files in %.3f seconds (skip_last_dirs=%d)", len(filelist), time.time() - start_time, skip_last_dirs)
         if not filelist:
             logging.warning("[IMPORT] No valid files found in: %s", paths)
             ScanService.static_is_importing = False
