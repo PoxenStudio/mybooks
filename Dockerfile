@@ -20,26 +20,24 @@ RUN mkdir -p /app-ssr/ /app-static/ && \
     ls -al && \
     cp -r .nuxt node_modules package* /app-ssr/ && \
     npm run build-spa && \
-    cp -r dist nuxt.config.js package* /app-static/ \
+    cp -r dist nuxt.config.js package* /app-static/
 
 # ----------------------------------------
 # 第二阶段，构建环境（基于预构建的基础镜像，含系统包、python依赖及calibre补丁）
 # 基础镜像构建：make build-base-multiarch
-ARG BUILD_COUNTRY="CN"
 
 # ----------------------------------------
 # 测试阶段 (--break-system-packages)
-RUN echo "Testing..."
 FROM docker.1ms.run/poxenstudio/talebook_base:latest AS test
 RUN pip install flake8 pytest --break-system-packages
 COPY webserver/ /var/www/talebook/webserver/
 COPY tests/ /var/www/talebook/tests/
 CMD ["pytest", "/var/www/talebook/tests"]
-RUN echo "Testing... [DONE]"
 
 # ----------------------------------------
 # 生产环境
 FROM docker.1ms.run/poxenstudio/talebook_base:latest AS production
+ARG BUILD_COUNTRY="CN"
 ARG GIT_VERSION=""
 
 LABEL Author="horky <horky.chen@gmail.com>"
