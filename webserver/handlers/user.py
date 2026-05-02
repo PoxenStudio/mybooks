@@ -1000,6 +1000,58 @@ class UserMemo(BaseHandler):
             .count()
         )
 
+    def _update_memo(self, data, memo_id, user):
+        existing = (
+            self.sqlite_session.query(Memo)
+            .filter(Memo.id == memo_id)
+            .first()
+        )
+        if not existing:
+            return {"err": "not_found", "msg": _("留言不存在")}
+
+        action = data.get("action", "")
+        if "action" in data and action not in (Memo.STAGE_DONE, Memo.STAGE_SUSPEND):
+            return {"err": "param.invalid", "msg": _("参数无效")}
+
+        if not user or (existing.reader_id != user.id and not user.is_admin()):
+            return {"err": "permission.denied", "msg": _("无权操作")}
+
+        has_update = False
+
+        if "action" in data and action in (Memo.STAGE_DONE, Memo.STAGE_SUSPEND):
+            if not user.is_admin():
+                return {"err": "permission.denied", "msg": _("无权操作")}
+            existing.stage = action
+            has_update = True
+
+        if "memo" in data:
+            memo_content = data.get("memo", "").strip()
+            if not memo_content:
+                return {"err": "params.memo.required", "msg": _("留言内容不能为空")}
+            if len(memo_content) > 2048:
+                return {"err": "params.memo.too_long", "msg": _("留言内容过长")}
+            existing.memo = memo_content
+            has_update = True
+
+        if "memo_type" in data:
+            memo_type = data.get("memo_type", 0)
+            if memo_type not in [0, 1, 2]:
+                return {"err": "params.memo_type.invalid", "msg": _("留言类型无效")}
+            existing.memo_type = memo_type
+            has_update = True
+
+        if has_update:
+            existing.update_date = datetime.datetime.now()
+            try:
+                self.sqlite_session.commit()
+                return {"err": "ok", "msg": _("处理成功") if action in (Memo.STAGE_DONE, Memo.STAGE_SUSPEND) else _("留言更新成功")}
+            except Exception as e:
+                logging.error("Update memo failed: %s", e)
+                self.sqlite_session.rollback()
+                return {"err": "db.error", "msg": _("数据库操作异常，请重试")}
+        else:
+            return {"err": "ok", "msg": _("未修改任何内容")}
+
     @js
     def get(self):
         user = self.current_user
@@ -1013,14 +1065,12 @@ class UserMemo(BaseHandler):
         query = self.sqlite_session.query(Memo)
         user_list = {}
 
-        # 管理员可查全部，普通用户只查自己的
         if user and user.is_admin():
             user_list = self.get_all_readers()
         elif user:
             query = query.filter(Memo.reader_id == user.id)
             user_list = {user.id: user.username}
         else:
-            # 访客无法查看留言
             return {"err": "ok", "data": {"items": [], "total": 0}}
 
         total = query.count()
@@ -1062,6 +1112,15 @@ class UserMemo(BaseHandler):
         except Exception:
             return {"err": "params.invalid", "msg": _("参数无效")}
 
+        memo_id = data.get("id", None)
+        user = self.current_user
+        reader_id = user.id if user else 0
+
+        if memo_id:
+            # 更新或者处理留言
+            return self._update_memo(data, memo_id, user)
+
+        # 新增留言
         memo_content = data.get("memo", "").strip()
         if not memo_content:
             return {"err": "params.memo.required", "msg": _("留言内容不能为空")}
@@ -1072,49 +1131,6 @@ class UserMemo(BaseHandler):
         if memo_type not in [0, 1, 2]:
             return {"err": "params.memo_type.invalid", "msg": _("留言类型无效")}
 
-        memo_id = data.get("id", None)
-        user = self.current_user
-        reader_id = user.id if user else 0
-
-        # 更新已有留言
-        if memo_id:
-            existing = (
-                self.sqlite_session.query(Memo)
-                .filter(Memo.id == memo_id)
-                .first()
-            )
-            if not existing:
-                return {"err": "not_found", "msg": _("留言不存在")}
-            
-            # 管理员更新 stage
-            action = data.get("action", "")
-            if action == "done" and user and user.is_admin():
-                existing.stage = Memo.STAGE_DONE
-                existing.update_date = datetime.datetime.now()
-                try:
-                    existing.save()
-                    return {"err": "ok", "msg": _("处理成功")}
-                except Exception as e:
-                    logging.error("Complete memo failed: %s", e)
-                    self.sqlite_session.rollback()
-                    return {"err": "db.error", "msg": _("数据库操作异常，请重试")}
-
-            # 只有留言所有者或管理员可以更新
-            if user and (existing.reader_id == user.id or user.is_admin()):
-                existing.memo = memo_content
-                existing.memo_type = memo_type
-                existing.update_date = datetime.datetime.now()
-                try:
-                    existing.save()
-                    return {"err": "ok", "msg": _("留言更新成功")}
-                except Exception as e:
-                    logging.error("Update memo failed: %s", e)
-                    self.sqlite_session.rollback()
-                    return {"err": "db.error", "msg": _("数据库操作异常，请重试")}
-            else:
-                return {"err": "permission.denied", "msg": _("无权操作")}
-
-        # 频率限制
         daily_limit = self.USER_DAILY_LIMIT if user else self.GUEST_DAILY_LIMIT
         today_count = self._get_today_count(reader_id)
         if today_count >= daily_limit:
@@ -1123,7 +1139,6 @@ class UserMemo(BaseHandler):
                 "msg": _("今日留言次数已达上限"),
             }
 
-        # 新增留言
         memo = Memo(
             reader_id=reader_id,
             memo=memo_content,
@@ -1158,7 +1173,7 @@ class UserMemo(BaseHandler):
     def delete(self):
         if not self.is_admin():
             return {"err": "permission.denied", "msg": _("无权操作")}
-            
+
         try:
             data = tornado.escape.json_decode(self.request.body)
         except Exception:
