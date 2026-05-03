@@ -496,13 +496,13 @@ export default {
       }
     },
 
-    nextTrack() {
+    nextTrack(forcePlay = false) {
       if (this.currentTrackIndex < this.audioFiles.length - 1) {
         // 保存当前播放位置
         this.savePlaybackPosition();
 
         this.loadTrack(this.currentTrackIndex + 1);
-        if (this.isPlaying) {
+        if (forcePlay || this.isPlaying) {
           this.$nextTick(() => {
             this.$refs.audioPlayer.play();
           });
@@ -585,7 +585,7 @@ export default {
 
       // 自动播放下一首
       if (this.currentTrackIndex < this.audioFiles.length - 1) {
-        this.nextTrack();
+        this.nextTrack(true);
       } else {
         this.isPlaying = false;
         // 整本书播放完成，可以选择清除播放位置记录
