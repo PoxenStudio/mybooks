@@ -1013,7 +1013,11 @@
         "colActions": "Actions",
         "deleteConfirm": "Are you sure you want to delete the record for \u300a{title}\u300b?",
         "allUsers": "All",
-        "filterByUser": "Filter by User"
+        "filterByUser": "Filter by User",
+        "upload": "Upload",
+        "uploadDialogTitle": "Upload Book",
+        "selectFile": "Select book file",
+        "uploadSuccess": "Book uploaded successfully, expected record has been removed"
     },
     "memos": {
         "pageTitle": "Memo Management",

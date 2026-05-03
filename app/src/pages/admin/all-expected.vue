@@ -27,12 +27,35 @@
       class="elevation-1"
     >
       <template v-slot:item.actions="{ item }">
+        <v-btn small color="primary" class="white--text mr-1" @click="openUploadDialog(item)">
+          <v-icon small left>mdi-upload</v-icon>
+          {{ $t('expected.upload') }}
+        </v-btn>
         <v-btn small color="error" class="white--text" @click="deleteItem(item)">
           <v-icon small left>mdi-delete</v-icon>
           {{ $t('expected.delete') }}
         </v-btn>
       </template>
     </v-data-table>
+
+    <!-- Upload Dialog -->
+    <v-dialog v-model="showUploadDialog" persistent transition="dialog-bottom-transition" width="400">
+      <v-card>
+        <v-toolbar flat dense dark color="#003153">
+          {{ $t('expected.uploadDialogTitle') }}
+          <v-spacer></v-spacer>
+          <v-btn text @click="closeUploadDialog">{{ $t('expected.cancel') }}</v-btn>
+        </v-toolbar>
+        <v-card-text class="pt-4">
+          <v-file-input v-model="uploadFile" :label="$t('expected.selectFile')" prepend-icon="mdi-book-open-variant"></v-file-input>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn :loading="uploading" color="primary" @click="submitUpload">{{ $t('expected.upload') }}</v-btn>
+          <v-spacer></v-spacer>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <!-- Add Dialog -->
     <v-dialog v-model="showAddDialog" max-width="480px" persistent>
@@ -94,6 +117,10 @@ export default {
         author: '',
         publisher: '',
       },
+      showUploadDialog: false,
+      uploading: false,
+      uploadItem: null,
+      uploadFile: null,
     };
   },
   head() {
@@ -194,6 +221,77 @@ export default {
           this.items = this.items.filter(i => i.id !== item.id);
         }
       });
+    },
+    openUploadDialog(item) {
+      this.uploadItem = item;
+      this.uploadFile = null;
+      this.showUploadDialog = true;
+    },
+    closeUploadDialog() {
+      this.showUploadDialog = false;
+      this.uploadItem = null;
+      this.uploadFile = null;
+    },
+    parseSizeString(sizeStr) {
+      if (!sizeStr || sizeStr === '0' || sizeStr === '0MB' || sizeStr === '0KB') return 0;
+      const size = sizeStr.toLowerCase().trim();
+      if (size.endsWith('mb')) return parseInt(size.slice(0, -2)) * 1024 * 1024;
+      if (size.endsWith('kb')) return parseInt(size.slice(0, -2)) * 1024;
+      return parseInt(size);
+    },
+    async submitUpload() {
+      if (!this.uploadFile) {
+        this.$alert('error', this.$t('upload.selectFile'));
+        return;
+      }
+      this.uploading = true;
+      try {
+        const chunkThreshold = this.parseSizeString(
+          (process.client && localStorage.getItem('chunk_upload_size')) || '0'
+        );
+        let rsp;
+        if (chunkThreshold > 0 && this.uploadFile.size > chunkThreshold) {
+          const file = this.uploadFile;
+          const totalChunks = Math.ceil(file.size / chunkThreshold);
+          let hashVal = 0;
+          const str = file.name + file.size;
+          for (let i = 0; i < str.length; i++) {
+            hashVal = ((hashVal << 5) - hashVal + str.charCodeAt(i)) | 0;
+          }
+          const fileHash = Math.abs(hashVal).toString(16);
+          for (let i = 0; i < totalChunks; i++) {
+            const start = i * chunkThreshold;
+            const formData = new FormData();
+            formData.append('chunk', file.slice(start, Math.min(start + chunkThreshold, file.size)));
+            formData.append('filename', file.name);
+            formData.append('chunk_index', String(i));
+            formData.append('total_chunks', String(totalChunks));
+            formData.append('file_hash', fileHash);
+            rsp = await this.$backend('/book/upload/chunk', { method: 'POST', body: formData });
+            if (rsp.err !== 'ok') throw new Error(rsp.msg);
+          }
+        } else {
+          const data = new FormData();
+          data.append('ebook', this.uploadFile);
+          rsp = await this.$backend('/book/upload', { method: 'POST', body: data });
+        }
+        if (rsp && rsp.err === 'ok') {
+          const item = this.uploadItem;
+          this.closeUploadDialog();
+          await this.$backend('/user/expected', {
+            method: 'DELETE',
+            body: JSON.stringify({ id: item.id }),
+          });
+          this.items = this.items.filter(i => i.id !== item.id);
+          this.$alert('success', this.$t('expected.uploadSuccess'));
+        } else {
+          this.$alert('error', (rsp && rsp.msg) || this.$t('upload.uploadFailed'));
+        }
+      } catch (e) {
+        this.$alert('error', e.message || this.$t('upload.uploadFailed'));
+      } finally {
+        this.uploading = false;
+      }
     },
   },
 };

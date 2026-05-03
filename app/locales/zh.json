@@ -1018,7 +1018,11 @@
         "colActions": "操作",
         "deleteConfirm": "确定要删除《{title}》的缺书登记吗？",
         "allUsers": "所有用户",
-        "filterByUser": "按用户筛选"
+        "filterByUser": "按用户筛选",
+        "upload": "入库",
+        "uploadDialogTitle": "入库书籍",
+        "selectFile": "选择书籍文件",
+        "uploadSuccess": "书籍入库成功，缺书登记已自动删除"
     },
     "memos": {
         "pageTitle": "留言管理",

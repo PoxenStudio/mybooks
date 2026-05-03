@@ -1016,7 +1016,11 @@
         "colActions": "操作",
         "deleteConfirm": "確定要刪除《{title}》的缺書登記嗎？",
         "allUsers": "所有用戶",
-        "filterByUser": "按用戶篩選"
+        "filterByUser": "按用戶篩選",
+        "upload": "入庫書籍",
+        "uploadDialogTitle": "入庫書籍",
+        "selectFile": "選擇書籍檔案",
+        "uploadSuccess": "書籍入庫成功，缺書登記已自動刪除"
     },
     "memos": {
         "pageTitle": "留言管理",
