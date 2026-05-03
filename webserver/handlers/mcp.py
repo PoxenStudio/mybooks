@@ -2,7 +2,7 @@
 # -*- coding: UTF-8 -*-
 
 """
-Talebook MCP Multi-Transport Server
+(PoxenStudio)Talebook MCP Multi-Transport Server
 """
 import datetime
 import logging

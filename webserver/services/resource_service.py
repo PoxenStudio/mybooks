@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 
+"""
+(PoxenStudio)资源服务，负责下载和管理好友链接的 favicon 图标
+"""
+
+
 import logging
 import os
 from urllib.parse import urlparse

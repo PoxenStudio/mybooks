@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import sys
+from webserver.handlers import static_files
 from webserver.i18n import _
 from logging.handlers import RotatingFileHandler
 import traceback
@@ -399,7 +400,7 @@ def make_app():
     # Assemble routes carefully:
     # WebDAV must come before files.routes() because files has a catch-all (r"/(.*)")
     # We need to get routes from handlers module without files, add webdav, then add files
-    from webserver.handlers import assistant, mcp, admin, barcode, scan, opds, book, user, meta, audio, files
+    from webserver.handlers import assistant, mcp, admin, barcode, scan, opds, book, user, meta, audio
 
     app_routes = []
     app_routes += social_routes.SOCIAL_AUTH_ROUTES
@@ -430,7 +431,7 @@ def make_app():
     # Insert WebDAV routes BEFORE files.routes()
     app_routes += webdav_routes
     # files.routes() contains catch-all r"/(.*)" so must be last
-    app_routes += files.routes()
+    app_routes += static_files.routes()
 
     app = web.Application(app_routes, **app_settings)
     app._engine = engine

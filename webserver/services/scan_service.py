@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 #
-# do_import 是扫描导入的主入口，负责协调整个两阶段流水线导入流程：
+# (PoxenStudio)do_import 是扫描导入的主入口，负责协调整个两阶段流水线导入流程：
 # 前置阶段：收集文件列表，创建后台任务记录，初始化状态。
 #
 # 阶段一（Scanning）：主线程执行
@@ -532,7 +532,7 @@ class ScanService(AsyncService):
                 logging.info("[SCAN] Found duplicated record with same path %s", fpath)
                 return None, None
 
-        # Reuse cached hash if available (NEW/READY record from a previous interrupted run).
+        # (PoxenStudio) Reuse cached hash if available (NEW/READY record from a previous interrupted run).
         # MISSED/PERMISSION: file was previously inaccessible, reprocess from scratch (no reuse).
         reuse_hash = next(
             (r.hash for r in same_path_rows
@@ -776,7 +776,7 @@ class ScanService(AsyncService):
         session = self.session
         affected = session.query(Item).filter(Item.src_path == old_file_path).all()
         if not affected:
-            # 尝试使用ScanFile表中的路径进行匹配，兼容之前未设置src_path的情况
+            # (PoxenStudio)尝试使用ScanFile表中的路径进行匹配，兼容之前未设置src_path的情况
             logging.info("[RENAME FILE] 在 Item 表中未找到 src_path 为 '%s' 的书籍，尝试在 ScanFile 表中查找", old_file_path)
             scan_files = session.query(ScanFile).filter(ScanFile.path == old_file_path).all()
             if scan_files:

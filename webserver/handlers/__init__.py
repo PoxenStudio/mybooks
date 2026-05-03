@@ -6,7 +6,7 @@ def routes():
     from . import book
     from . import user
     from . import meta
-    from . import files
+    from . import static_files
     from . import opds
     from . import admin
     from . import scan
@@ -26,5 +26,5 @@ def routes():
     routes += user.routes()
     routes += meta.routes()
     routes += audio.routes()
-    routes += files.routes()
+    routes += static_files.routes()
     return routes
