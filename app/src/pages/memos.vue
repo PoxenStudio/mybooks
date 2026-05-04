@@ -19,13 +19,13 @@
       class="elevation-1"
     >
       <template v-slot:item.memo_type="{ item }">
-        <v-chip small :color="getTypeColor(item.memo_type)" text-color="white">
+        <v-chip small :color="getTypeColor(item.memo_type)" :text-color="getTypeFontColor(item.memo_type)">
           {{ getTypeName(item.memo_type) }}
         </v-chip>
       </template>
-      
+
       <template v-slot:item.stage="{ item }">
-        <v-chip small :color="item.stage === 'done' ? 'success' : 'warning'" text-color="white">
+        <v-chip small :color="item.stage === 'done' ? 'success' : 'warning'" text-color="black">
           {{ item.stage === 'done' ? $t('memos.stageDone') : $t('memos.stageNew') }}
         </v-chip>
       </template>
@@ -71,7 +71,7 @@ export default {
       loading: false,
       sortBy: 'create_date',
       sortDesc: true,
-      
+
       memoDialog: false,
       memoType: 0,
       memoContent: '',
@@ -129,6 +129,11 @@ export default {
       if (type === 1) return 'purple';
       if (type === 2) return 'orange';
       return 'grey';
+    },
+    getTypeFontColor(type) {
+      if (type === 0) return 'white';
+      if (type === 1) return 'white';
+      return 'black';
     },
     openMemoDialog() {
         this.memoType = 0;
