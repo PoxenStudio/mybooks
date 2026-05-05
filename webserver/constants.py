@@ -59,6 +59,7 @@ META_SOURCE_AMAZON = "amazon"
 META_SOURCE_XHSD = "xinhua"
 META_SOURCE_DOUBAN = "douban"
 META_SOURCE_BAIDU = "baidu"
+META_SOURCE_YOUSHU = "youshu"
 
 # User reading range setting
 ALLOW_READ_RANGE_SETTING = "ALLOW_READ_RANGE_SETTING"

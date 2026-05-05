@@ -6,9 +6,9 @@ import re
 from webserver.i18n import _
 
 from webserver import loader
-from webserver.plugins.meta import baike, douban
+from webserver.plugins.meta import baike, douban, youshu
 from webserver.constants import META_SELECTED_SOURCES, META_SOURCE_DOUBAN, META_SOURCE_BAIDU
-from webserver.constants import META_SOURCE_GOOGLE, META_SOURCE_AMAZON
+from webserver.constants import META_SOURCE_GOOGLE, META_SOURCE_AMAZON, META_SOURCE_YOUSHU
 
 CONF = loader.get_settings()
 
@@ -123,5 +123,16 @@ class BookSearch:
                 logging.error(_(u"Calibre Metadata API查询失败: %s" % str(e)))
         else:
             logging.info(_("未启用 Calibre Metadata API 搜索，跳过 Google 和 Amazon 搜索"))
+
+        # 优书网搜索
+        if META_SOURCE_YOUSHU in sources:
+            youshu_api = youshu.YoushuApi(copy_image=True)
+            try:
+                book = youshu_api.get_book(clean_title)
+                if book:
+                    books.append(book)
+            except Exception as e:
+                logging.error(_(u"优书网查询失败: %s" % str(e)))
+
         logging.info(_("搜索完成，找到 %d 本书") % len(books))
         return books

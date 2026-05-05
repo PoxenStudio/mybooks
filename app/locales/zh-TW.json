@@ -605,6 +605,7 @@
         "meta_source_google": "Google",
         "meta_source_amazon": "Amazon",
         "meta_source_xinhua": "新華書店",
+        "meta_source_youshu": "優書网",
         "douban_baseurl": "豆瓣外掛 API 位址 (例如 http://10.0.0.1:8080)",
         "douban_api_key": "豆瓣外掛 API 金鑰，可用的 key 有限，可以自行查找替換",
         "douban_max_count": "豆瓣外掛 API 查詢結果數量",
