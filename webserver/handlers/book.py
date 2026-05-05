@@ -716,7 +716,11 @@ class BookRefer(BaseHandler):
         org_mi.timestamp = nowf()
         self.calibre_db.set_metadata(book_id, org_mi, force_changes=True)
         self.calibre_db_cache.set_field(CALIBRE_COLUMN_CATEGORY, {book_id: ""})
-        logging.info("[RESET]reset meta data for %d" % book_id)
+
+        if org_mi.cover_data is not None:
+            (data, mime) = org_mi.cover_data
+            if data is None and mime is None:
+                self.calibre_db.remove_cover(book_id)
         return {"err": "ok", "book_id": book_id}
 
     @js
