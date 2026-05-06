@@ -29,6 +29,7 @@ import tornado.escape
 from tornado import web
 
 from webserver import loader, utils
+from webserver.base.cover_generator import CoverGenerator
 from webserver.services.autofill import AutoFillService
 from webserver.services.ai_fillinfo import AIFillInfoService
 from webserver.services.book_search import BookSearch
@@ -49,6 +50,7 @@ from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COU
 from webserver.constants import BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL, AUTO_FILL_META
 from webserver.constants import META_SOURCE_GOOGLE, META_SOURCE_AMAZON
 from webserver.constants import COLUMN_EXT_LINK, CALIBRE_COLUMN_EXT_LINK
+from webserver.constants import CALIBRE_COLUMN_DYNAMIC_COVER, COLUMN_DYNAMIC_COVER
 
 
 CONF = loader.get_settings()
@@ -713,14 +715,20 @@ class BookRefer(BaseHandler):
         org_mi.set("comments", _(""))
         if org_mi.get("comments", "") == "":
             org_mi.set("comments", _("无详细介绍"))
-        org_mi.timestamp = nowf()
-        self.calibre_db.set_metadata(book_id, org_mi, force_changes=True)
-        self.calibre_db_cache.set_field(CALIBRE_COLUMN_CATEGORY, {book_id: ""})
-
+        dynamic_cover = False
         if org_mi.cover_data is not None:
             (data, mime) = org_mi.cover_data
             if data is None and mime is None:
-                self.calibre_db.remove_cover(book_id)
+                author = org_mi.authors[0] if org_mi.authors else _("佚名")
+                data = CoverGenerator.generate_cover(org_mi.title, author)
+                if data:
+                    org_mi.cover_data = ("jpeg", data)
+                    dynamic_cover = True
+        org_mi.timestamp = nowf()
+        self.calibre_db.set_metadata(book_id, org_mi, force_changes=True)
+        self.calibre_db_cache.set_field(CALIBRE_COLUMN_CATEGORY, {book_id: ""})
+        self.calibre_db_cache.set_field(CALIBRE_COLUMN_DYNAMIC_COVER, {book_id: 1 if dynamic_cover else 0})
+
         return {"err": "ok", "book_id": book_id}
 
     @js
@@ -892,6 +900,7 @@ class BookCover(BaseHandler):
         mi.timestamp = nowf()
 
         self.calibre_db.set_metadata(book_id, mi)
+        self.calibre_db_cache.set_field(CALIBRE_COLUMN_DYNAMIC_COVER, {book_id: 0})
         return {"err": "ok"}
 
 
@@ -1340,7 +1349,7 @@ class BookEdit(BaseHandler):
             "isbn",
             "series",
             "rating",
-            "languages"
+            "languages",
         ]
         for key, val in data.items():
             if key not in KEYS:
@@ -1398,6 +1407,13 @@ class BookEdit(BaseHandler):
 
         mi.timestamp = nowf()
         mi.title_sort = utils.get_title_sort(mi.title)
+        # If the existing cover is dynamic generated, and the new title or author may cause the cover to be no longer suitable, we need to regenerate it
+        dynamic_cover_flag = data.items().get(COLUMN_DYNAMIC_COVER, 0)
+        if dynamic_cover_flag == 1:
+            author = mi.authors[0] if mi.authors else _("佚名")
+            cover_data = CoverGenerator.generate_cover(mi.title, author)
+            if cover_data:
+                mi.cover_data = ("jpeg", cover_data)
         self.calibre_db.set_metadata(bid, mi, force_changes=True)
         return True
 
@@ -1843,8 +1859,21 @@ class BookUpload(BaseHandler):
             return s.group(0)
 
     def _add_new_book(self, mi, fpaths):
+        dynamic_cover = False
         mi.title_sort = utils.get_title_sort(mi.title)
+        fmt, cover_data = mi.cover_data
+        if fmt is None and cover_data is not None:
+            author = mi.authors[0] if mi.authors else _("佚名")
+            data = CoverGenerator.generate_cover(mi.title, author)
+            if data:
+                mi.cover_data = ("jpeg", data)
+                dynamic_cover = True
         book_id = self.calibre_db.import_book(mi, fpaths)
+        if book_id is not None and dynamic_cover:
+            try:
+                self.calibre_db_cache.set_field(CALIBRE_COLUMN_DYNAMIC_COVER, {book_id: 1})
+            except Exception as e:
+                logging.error(f"Failed to set dynamic cover field for book ID {book_id}: {e}")
         self.increase_history_count("upload_history")
         item = Item()
         item.book_id = book_id
@@ -2064,8 +2093,21 @@ class BookUploadChunk(BaseHandler):
     """Handler for chunked file upload"""
 
     def _add_new_book(self, mi, fpaths):
+        dynamic_cover = False
         mi.title_sort = utils.get_title_sort(mi.title)
+        fmt, cover_data = mi.cover_data
+        if fmt is None and cover_data is not None:
+            author = mi.authors[0] if mi.authors else _("佚名")
+            data = CoverGenerator.generate_cover(mi.title, author)
+            if data:
+                mi.cover_data = ("jpeg", data)
+                dynamic_cover = True
         book_id = self.calibre_db.import_book(mi, fpaths)
+        if book_id is not None and dynamic_cover:
+            try:
+                self.calibre_db_cache.set_field(CALIBRE_COLUMN_DYNAMIC_COVER, {book_id: 1})
+            except Exception as e:
+                logging.error(f"Failed to set dynamic cover field for book ID {book_id}: {e}")
         self.increase_history_count("upload_history")
         item = Item()
         item.book_id = book_id
@@ -2096,7 +2138,6 @@ class BookUploadChunk(BaseHandler):
                     logging.info("No active readers with email found for new book notification.")
             except Exception as e:
                 logging.error("Failed to trigger new book notification: %s", e)
-
         return book_id
 
     @staticmethod

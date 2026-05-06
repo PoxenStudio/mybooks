@@ -7,7 +7,7 @@ import traceback
 from webserver.i18n import _
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT
 from webserver.constants import CALIBRE_COLUMN_EXT_LINK, CALIBRE_COLUMN_CATEGORY
-from webserver.constants import BOOK_TYPE_EBOOK
+from webserver.constants import BOOK_TYPE_EBOOK, CALIBRE_COLUMN_DYNAMIC_COVER
 
 
 # 匹配包含z-library的括号内容，例如 (z-library.sk, 1lib.sk, z-lib.sk)
@@ -104,6 +104,7 @@ class SimpleBookFormatter:
         book_type = self.val(CALIBRE_COLUMN_BOOK_TYPE, self.book.get("book_type", BOOK_TYPE_EBOOK))
         book_count = self.val(CALIBRE_COLUMN_PHY_COUNT, self.book.get("book_count", 1))
         ext_link = self.val(CALIBRE_COLUMN_EXT_LINK, '').strip()
+        dynamic_cover = self.book.get(CALIBRE_COLUMN_DYNAMIC_COVER, 0)
         return {
             "id": b["id"],
             "title": b["title"],
@@ -133,7 +134,8 @@ class SimpleBookFormatter:
             "state": self.book.get("state", {}),
             'category': category,
             'ext_link': ext_link,
-            'files': self.get_files()
+            'files': self.get_files(),
+            'dynamic_cover': dynamic_cover,
         }
 
 

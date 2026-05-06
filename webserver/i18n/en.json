@@ -441,5 +441,7 @@
   "您的留言已处理，回复内容为：{reply}": "Recieved one memo to you, reply as: {reply}",
   "批量更新书籍元信息任务已启动，右上角可以查看进度": "Batch update of book metadata task has started, you can check the progress in the top right corner",
   "图书导入完成: 共%d本，成功%d本，失败%d本": "Book import completed: %d total, %d successful, %d failed",
-  "图书元数据更新完成: 共%d本，成功%d本，失败%d本": "Book metadata update completed: %d total, %d successful, %d failed"
+  "图书元数据更新完成: 共%d本，成功%d本，失败%d本": "Book metadata update completed: %d total, %d successful, %d failed",
+  "图书封面更新完成: 共%d本，成功%d本，失败%d本": "Book cover update completed: %d total, %d successful, %d failed",
+  "批量更新书籍动态封面任务已启动，右上角可以查看进度": "Batch update of book dynamic cover task has started, you can check the progress in the top right corner"
 }

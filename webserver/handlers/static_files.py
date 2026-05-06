@@ -15,6 +15,7 @@ from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 from webserver import constants, loader
 from webserver.services.convert import ConvertService
 from webserver.handlers.base import BaseHandler
+from webserver.base.cover_generator import CoverGenerator
 
 
 CONF = loader.get_settings()
@@ -50,11 +51,9 @@ class ImageHandler(BaseHandler):
                 width, height = map(int, fmt.split("_")[1:])
             except:
                 width, height = 60, 80
-            return await self.get_cover_async(
-                id, thumbnail=True, thumb_width=width, thumb_height=height
-            )
+            return await self.get_cover_async(id, thumbnail=True, thumb_width=width, thumb_height=height)
         if fmt == "cover":
-            return await self.get_cover_async(id)
+            return await self.get_cover_async(id, thumbnail=False, thumb_width=600, thumb_height=800)
         if fmt == "opf":
             return await self.get_metadata_as_opf_async(id)
         raise web.HTTPError(404, "bad url")
@@ -70,15 +69,24 @@ class ImageHandler(BaseHandler):
                 # 快速访问数据库获取封面数据，锁住最小范围
                 with self.db_lock:
                     cover = self.calibre_db.cover(id, index_is_id=True)
-                    if cover is None:
-                        cover_data = self.default_cover
-                        updated = self.build_time
-                    else:
-                        cover_data = cover
-                        updated = self.calibre_db.cover_last_modified(id, index_is_id=True)
+
+                dynamic_cover_flag = False
+                if cover is None:
+                    cover_data = self.default_cover
+                    if CONF.get("USE_DYNAMIC_COVER", False):
+                        mi = self.calibre_db.get_metadata(id, index_is_id=True)
+                        author = mi.authors[0] if mi.authors else _("佚名")
+                        data = CoverGenerator.generate_cover(mi.title, author, thumb_width, thumb_height)
+                        if data:
+                            cover_data = data
+                            dynamic_cover_flag = True
+                    updated = self.build_time
+                else:
+                    cover_data = cover
+                    updated = self.calibre_db.cover_last_modified(id, index_is_id=True)
 
                 # 图片处理在锁外执行（CPU 密集型操作）
-                if thumbnail and cover_data != self.default_cover:
+                if thumbnail and cover_data != self.default_cover and not dynamic_cover_flag:
                     cover_data = generate_thumbnail(
                         cover_data, width=thumb_width, height=thumb_height, compression_quality=83
                     )[-1]

@@ -18,6 +18,7 @@ class BackgroundTask:
     SERVICE_TYPE_AI_FILL = "ai_fill"  # AI 更新
     SERVICE_TYPE_TITLE_SORT_UPDATE = "title_sort_update"  # 更新拼音书名
     SERVICE_TYPE_METADATA_UPDATE = "metadata_update"  # 更新图书元数据
+    SERVICE_TYPE_COVER_UPDATE = "cover_update"  # 更新图书封面
 
     # 任务状态
     STATUS_RUNNING = "running"  # 运行中

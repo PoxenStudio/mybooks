@@ -36,12 +36,13 @@ import traceback
 from webserver.i18n import _
 from sqlalchemy.exc import IntegrityError
 
+from webserver.base.cover_generator import CoverGenerator
 from webserver.services import AsyncService
 from webserver.models import Item, ScanFile, Reader
 from webserver import utils
 from webserver.services.autofill import AutoFillService
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_CATEGORY, CALIBRE_ERROR_FLAG
-from webserver.constants import BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL
+from webserver.constants import BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL, CALIBRE_COLUMN_DYNAMIC_COVER
 from webserver.services.background_service import BackgroundService, BackgroundTask
 from webserver import loader
 
@@ -404,8 +405,18 @@ class ScanService(AsyncService):
 
             if not existed_ebook:
                 logging.info("[IMPORT] Importing new book [%s] from %s", repr(mi.title), fpath)
+                dynamic_cover = False
                 mi.title_sort = utils.get_title_sort(mi.title)
+                fmt, data = mi.cover_data
+                if fmt is None and data is not None:
+                    author = mi.authors[0] if mi.authors else _("佚名")
+                    data = CoverGenerator.generate_cover(mi.title, author)
+                    if data:
+                        mi.cover_data = ("jpeg", data)
+                        dynamic_cover = True
                 row.book_id = self.db.import_book(mi, [fpath], notify=False, import_hooks=False)
+                if row.book_id is not None and dynamic_cover:
+                    self.db.set_field(CALIBRE_COLUMN_DYNAMIC_COVER, {row.book_id: 1})
                 row.status = ScanFile.IMPORTED
                 logging.info("[IMPORT] Calibre import done, book_id=%d [%.3fs]", row.book_id, time.time() - start_time)
 
