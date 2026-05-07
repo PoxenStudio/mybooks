@@ -866,7 +866,18 @@ class AdminUpdateDynamicCover(BaseHandler):
         if update_status["is_running"]:
             return {"err": "task.running", "msg": _("有更新任务正在运行中，请稍后再试")}
 
-        idlist = list(self.calibre_db_cache.all_book_ids())
+        req = tornado.escape.json_decode(self.request.body)
+        idlist = req["idlist"]
+        if not idlist:
+            return {"err": "params.error", "msg": _("参数错误")}
+
+        if idlist == "all":
+            idlist = list(self.calibre_db_cache.all_book_ids())
+        elif isinstance(idlist, list):
+            for bid in idlist:
+                if not isinstance(bid, int):
+                    return {"err": "params.error.idlist", "msg": _("idlist参数错误")}
+
         DynamicCoverUpdateService().update_cover(self.current_user.id, idlist)
         return {"err": "ok", "msg": _("批量更新书籍动态封面任务已启动，右上角可以查看进度")}
 

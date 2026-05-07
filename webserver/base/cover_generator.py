@@ -9,7 +9,7 @@ import math
 from PIL import Image, ImageDraw, ImageFont
 
 
-DEFAULT_FONT_PATH = "/var/www/talebook/app/dist/static/epubreader/assets/font/HuiwenFangSong.ttf"
+DEFAULT_FONT_PATH = "/var/www/talebook/app/dist/static/epubreader/assets/font/HuiwenZhengKai.ttf"
 
 
 class CoverGenerator:

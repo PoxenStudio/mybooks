@@ -52,7 +52,7 @@
                                 </v-list-item-icon>
                                 <v-list-item-title>{{ $t('admin.books.updateTitleSort') }}</v-list-item-title>
                             </v-list-item>
-                            <v-list-item @click="ai_fill" :disabled="books_selected.length === 0">
+                            <v-list-item @click="aiFill" :disabled="books_selected.length === 0">
                                 <v-list-item-icon>
                                     <v-icon>mdi-robot</v-icon>
                                 </v-list-item-icon>
@@ -78,7 +78,7 @@
                             </v-list-item>
                             <v-list-item @click="updateWithDynamicCover">
                                 <v-list-item-icon>
-                                    <v-icon>mdi-book-refresh-outline</v-icon>
+                                    <v-icon>mdi-image-refresh-outline</v-icon>
                                 </v-list-item-icon>
                                 <v-list-item-title>{{ $t('admin.books.updateAllDynamicCover') }}</v-list-item-title>
                             </v-list-item>
@@ -371,7 +371,7 @@
                         </v-btn>
                     </template>
                     <v-list dense>
-                        <v-list-item @click="delete_book(item)">
+                        <v-list-item @click="deleteBook(item)">
                             <v-list-item-title>{{ $t('admin.books.deleteBook') }}</v-list-item-title>
                         </v-list-item>
                     </v-list>
@@ -408,7 +408,7 @@
                 <v-card-actions>
                     <v-btn @click="meta_dialog = !meta_dialog">{{ $t('admin.books.cancel') }}</v-btn>
                     <v-spacer></v-spacer>
-                    <v-btn color="primary" @click="auto_fill">{{ $t('admin.books.execute') }}</v-btn>
+                    <v-btn color="primary" @click="autoFill">{{ $t('admin.books.execute') }}</v-btn>
                 </v-card-actions>
             </v-card>
         </v-dialog>
@@ -792,9 +792,11 @@ export default {
 
         updateWithDynamicCover() {
             this.loading = true;
+            const body = {};
+            body.idlist = this.getSelectedBookIds() || "all";
             this.$backend("/admin/book/update_all_dynamic_cover", {
                 method: "POST",
-                body: JSON.stringify({}),
+                body: JSON.stringify(body),
             })
                 .then((rsp) => {
                     this.handleApiResponse(rsp);
@@ -867,11 +869,11 @@ export default {
                     this.loading = false;
                 });
         },
-        auto_fill() {
+        autoFill() {
             const idlist = this.getSelectedBookIds();
             this.$backend("/admin/book/fill", {
                 method: "POST",
-                body: JSON.stringify({"idlist": idlist}),
+                body: JSON.stringify({"idlist": idlist || "all"}),
             })
             .then((rsp) => {
                 this.meta_dialog = false;
@@ -885,7 +887,7 @@ export default {
             })
         },
 
-        ai_fill() {
+        aiFill() {
             const idlist = this.getSelectedBookIds();
             if (!idlist) return;
             this.$backend("/admin/book/aifill", {
@@ -900,7 +902,7 @@ export default {
             });
         },
 
-        delete_book(book) {
+        deleteBook(book) {
             this.loading = true;
             this.$backend("/book/" + book.id + "/delete", {
                 method: "POST",
@@ -939,7 +941,7 @@ export default {
                 }
             });
         },
-        loop_check_status(url, callback) {
+        checkStatusInLoop(url, callback) {
             setTimeout(() => {
                 this.$backend(url)
                     .then((rsp) => {
@@ -949,7 +951,7 @@ export default {
                         }
                         if (callback(rsp)) {
                             setTimeout(() => {
-                                this.loop_check_status(url, callback);
+                                this.checkStatusInLoop(url, callback);
                             }, 1000);
                         } else {
                             this.getDataFromApi();
@@ -968,7 +970,7 @@ export default {
                 // Check if scraping is in progress
                 if (rsp.status.running) {
                     this.scraping = true;
-                    this.loop_check_status("/admin/book/fill", (rsp) => {
+                    this.checkStatusInLoop("/admin/book/fill", (rsp) => {
                         this.progress.count_total = rsp.status.total || 0;
                         this.progress.count_failed = rsp.status.fail || 0;
                         this.progress.count_skipped = rsp.status.skip || 0;

@@ -1408,7 +1408,7 @@ class BookEdit(BaseHandler):
         mi.timestamp = nowf()
         mi.title_sort = utils.get_title_sort(mi.title)
         # If the existing cover is dynamic generated, and the new title or author may cause the cover to be no longer suitable, we need to regenerate it
-        dynamic_cover_flag = data.items().get(COLUMN_DYNAMIC_COVER, 0)
+        dynamic_cover_flag = data.get(COLUMN_DYNAMIC_COVER, 0)
         if dynamic_cover_flag == 1:
             author = mi.authors[0] if mi.authors else _("佚名")
             cover_data = CoverGenerator.generate_cover(mi.title, author)

@@ -100,7 +100,12 @@ class DynamicCoverUpdateService(AsyncService):
                     continue
                 if mi.cover_data:
                     fmt, data = mi.cover_data
-                    if data is not None:
+                    dynamic_cover_flag = False
+                    if data:
+                        custom_data = self.db.get_custom_book_data(CALIBRE_COLUMN_DYNAMIC_COVER, book_id, 0)
+                        dynamic_cover_flag = int(custom_data) == 1
+                        logging.info(f"[DynamicCover] Book id={book_id} already has cover data, dynamic_cover_flag={dynamic_cover_flag}")
+                    if not dynamic_cover_flag or data is not None:
                         continue
                     author = mi.author_sort[0] if mi.author_sort else _("佚名")
                     data = CoverGenerator.generate_cover(mi.title, author)
@@ -108,6 +113,7 @@ class DynamicCoverUpdateService(AsyncService):
                         mi.cover_data = ("jpeg", data)
                         logging.debug(f"[DynamicCover] Generated cover for book id={book_id}")
                         self.db.set_metadata(book_id, mi, commit=True)
+                        self.db.set_field(CALIBRE_COLUMN_DYNAMIC_COVER, {book_id: 1})
                 logging.debug("[DynamicCover] Updated book id=%d (%d/%d)", book_id, index + 1, self.count_total)
             except Exception as e:
                 self.count_fail += 1
@@ -121,6 +127,10 @@ class DynamicCoverUpdateService(AsyncService):
         if self.task_id:
             try:
                 BackgroundService().complete_task(task_id=self.task_id)
+                self.add_msg(
+                    user_id=uid,
+                    status="success",
+                    msg=_("图书封面更新完成: 共%d本，成功%d本)") % (self.count_total, self.count_done))
             except Exception as e:
                 logging.error("[DynamicCover] Failed to complete task: %s", e)
 
