@@ -1806,16 +1806,21 @@ class BookAddByISBN(BaseHandler):
 
         logging.info("Adding new book by ISBN: %s" % isbn)
         # 通过Douban API查询ISBN的图书信息
-        douban_api = douban.DoubanBookApi(
-            CONF["douban_apikey"],
-            CONF["douban_baseurl"],
-            copy_image=True,
-            maxCount=1
-        )
+        if META_SOURCE_DOUBAN in CONF["META_SOURCE"]:
+            douban_api = douban.DoubanBookApi(
+                CONF["douban_apikey"],
+                CONF["douban_baseurl"],
+                copy_image=True,
+                maxCount=1
+            )
         try:
             try:
                 md = douban.SimpleMetaData(isbn=isbn)
-                book_data = douban_api.get_book(md)
+                if META_SOURCE_DOUBAN in CONF["META_SOURCE"]:
+                    book_data = douban_api.get_book(md)
+                if not book_data:
+                    xhsd_api = xhsd.XhsdBookApi()
+                    book_data = xhsd_api.get_book_by_isbn(isbn)
             except Exception as e:
                 logging.error(f"Douban API error for ISBN {isbn}: {e}")
                 book_data = None

@@ -10,7 +10,7 @@ import requests
 import traceback
 
 from webserver import loader
-from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT
+from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT, META_SOURCE_DOUBAN
 from webserver.constants import BOOK_TYPE_PHYSICAL, AUTO_FILL_META
 from webserver.models import Item, ScanFile
 from webserver.services import AsyncService
@@ -221,19 +221,21 @@ class BatchAddService(AsyncService):
                 self._record_scan_file(csv_filename, isbn, title, author, ScanFile.DROP, book_id)
                 return None
 
-            try:
-                api = douban.DoubanBookApi(
-                    CONF["douban_apikey"],
-                    CONF["douban_baseurl"],
-                    copy_image=True,
-                    maxCount=1
-                )
+            book_data = None
+            if META_SOURCE_DOUBAN in CONF["META_SOURCE"]:
+                try:
+                    api = douban.DoubanBookApi(
+                        CONF["douban_apikey"],
+                        CONF["douban_baseurl"],
+                        copy_image=True,
+                        maxCount=1
+                    )
 
-                md = douban.SimpleMetaData(isbn=isbn)
-                book_data = api.get_book(md)
-            except Exception as e:
-                logging.error(f"Douban API error for ISBN {isbn}: {e}")
-                book_data = None
+                    md = douban.SimpleMetaData(isbn=isbn)
+                    book_data = api.get_book(md)
+                except Exception as e:
+                    logging.error(f"Douban API error for ISBN {isbn}: {e}")
+                    book_data = None
 
             if not book_data:
                 # 尝试使用XhsdBookApi

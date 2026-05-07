@@ -228,7 +228,7 @@
             <v-card v-if="!dialog_refer">
                 <v-toolbar flat dense>
                     <!-- download -->
-                    <v-btn icon small fab @click="dialog_download = true">
+                    <v-btn icon small fab @click="dialog_download = true" :disabled="!hasCompatibleFormats">
                         <v-icon>get_app</v-icon>
                     </v-btn>
                     <v-spacer></v-spacer>
@@ -575,12 +575,12 @@
         <v-col cols="12" sm="6" class="book-action-col" :class="{ 'book-action-col--txt': is_txt }">
             <v-card outlined>
                 <v-list>
-                    <v-list-item :href="'/read/' + book.id" target="_blank">
-                        <v-list-item-avatar large color="primary">
+                    <v-list-item :href="'/read/' + book.id" target="_blank" :disabled="book.book_type == this.BOOK_TYPE.PHYSICAL">
+                        <v-list-item-avatar large :color="book.book_type == this.BOOK_TYPE.PHYSICAL ? 'grey' : 'primary'">
                             <v-icon dark>import_contacts</v-icon>
                         </v-list-item-avatar>
                         <v-list-item-content>
-                            <v-list-item-title>{{ $t('book.onlineReading') }}</v-list-item-title>
+                            <v-list-item-title :class="{ 'grey--text': book.book_type == this.BOOK_TYPE.PHYSICAL }">{{ $t('book.onlineReading') }}</v-list-item-title>
                         </v-list-item-content>
                         <v-list-item-action>
                             <v-icon>mdi-arrow-right</v-icon>
@@ -592,12 +592,12 @@
         <v-col cols="12" sm="6" class="book-action-col book-action-col--txt" v-show="is_txt">
           <v-card outlined>
             <v-list>
-              <v-list-item :href="'/book/' + book.id+'/readtxt'" target="_blank">
-                <v-list-item-avatar large color="primary">
+              <v-list-item :href="'/book/' + book.id+'/readtxt'" target="_blank" :disabled="book.book_type == this.BOOK_TYPE.PHYSICAL">
+                <v-list-item-avatar large :color="book.book_type == this.BOOK_TYPE.PHYSICAL ? 'grey' : 'primary'">
                   <v-icon dark>import_contacts</v-icon>
                 </v-list-item-avatar>
                 <v-list-item-content>
-                  <v-list-item-title>{{ $t('book.txtOnlineReading', { status: txt_parse_inited ? $t('book.parsed') : $t('book.notParsed') }) }}</v-list-item-title>
+                  <v-list-item-title :class="{ 'grey--text': book.book_type == this.BOOK_TYPE.PHYSICAL }">{{ $t('book.txtOnlineReading', { status: txt_parse_inited ? $t('book.parsed') : $t('book.notParsed') }) }}</v-list-item-title>
                 </v-list-item-content>
                 <v-list-item-action>
                   <v-icon>mdi-arrow-right</v-icon>
@@ -609,12 +609,12 @@
         <v-col cols="12" sm="6" class="book-action-col" :class="{ 'book-action-col--txt': is_txt }">
             <v-card outlined>
                 <v-list>
-                    <v-list-item @click="dialog_download = !dialog_download">
-                        <v-list-item-avatar large color="primary">
+                    <v-list-item @click="dialog_download = !dialog_download" :disabled="book.book_type == this.BOOK_TYPE.PHYSICAL">
+                        <v-list-item-avatar large :color="book.book_type == this.BOOK_TYPE.PHYSICAL ? 'grey' : 'primary'">
                             <v-icon dark>get_app</v-icon>
                         </v-list-item-avatar>
                         <v-list-item-content>
-                            <v-list-item-title>{{ $t('book.download') }}</v-list-item-title>
+                            <v-list-item-title :class="{ 'grey--text': book.book_type == this.BOOK_TYPE.PHYSICAL }">{{ $t('book.download') }}</v-list-item-title>
                         </v-list-item-content>
                         <v-list-item-action>
                             <v-icon>mdi-arrow-right</v-icon>
