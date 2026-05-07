@@ -54,7 +54,6 @@
                     <div v-if="book.book_type === 1" class="physical-book-badge">
                         <v-icon small color="white">mdi-bookshelf</v-icon>
                     </div>
-                    <div class="book-title">{{book.title}}</div>
                 </div>
             </v-card>
         </v-col>

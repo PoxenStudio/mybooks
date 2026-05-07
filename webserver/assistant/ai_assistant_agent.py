@@ -34,7 +34,6 @@ class AIAssistantMCPAgent:
             timeout=30.0
         )
         self.model = AI_MODEL
-        logging.debug(f"Initialized AI client with model: {self.model}, base_url: {AI_BASE_URL}")
 
         self.mcp_client = MCPStreamClient(MCP_SERVER_URL, MCP_TOKEN, cookies)
         self.session_active = True
