@@ -383,12 +383,33 @@
                 :disabled="!settings['AI_ENABLED']"
                 :prepend-icon="'mdi-key'"
                 v-model="settings['AI_DEEPSEEK_API_KEY']"
-                :label="$t('settings.ai_deepseek_api_key')"
-                :placeholder="$t('settings.ai_deepseek_api_key_description')"
+                :label="$t('settings.ai_api_key')"
+                :placeholder="$t('settings.ai_api_key_description')"
                 type="text"
                 :rules="apiKeyRules"
                 :maxlength="128"
               ></v-text-field>
+              <v-text-field
+                :disabled="!settings['AI_ENABLED']"
+                :prepend-icon="'mdi-link'"
+                v-model="settings['AI_API_URL']"
+                :label="$t('settings.ai_api_url')"
+                :placeholder="$t('settings.ai_api_url_description')"
+                type="text"
+                :rules="urlRule"
+                :maxlength="512"
+              ></v-text-field>
+              <v-text-field
+                :disabled="!settings['AI_ENABLED']"
+                :prepend-icon="'mdi-function'"
+                v-model="settings['AI_MODEL']"
+                :label="$t('settings.ai_model')"
+                :placeholder="$t('settings.ai_model_description')"
+                type="text"
+                :rules="urlRule"
+                :maxlength="128"
+              ></v-text-field>
+              <v-divider class="my-2"></v-divider>
               <v-text-field
                 :prepend-icon="'mdi-key'"
                 v-model="settings['AI_MCP_TOKEN']"
@@ -1229,6 +1250,12 @@ export default {
       if (!v) return true;
       const pattern = /^https?:\/\/.+/;
       return pattern.test(v) || "Must be a valid HTTP/HTTPS URL";
+    },
+    modelNameRule: (v) => {
+      if (!v) return true;
+      // 只能包含字母、数字、下划线、连字符、点，且不能以连字符或点开头或结尾，不能连续出现特殊字符
+      const pattern = /^(?![.-])[a-zA-Z0-9]+([_.-]?[a-zA-Z0-9]+)*$/;
+      return pattern.test(v) || "Model name can only contain letters, numbers, underscores, hyphens, or dots, and cannot start/end with hyphen/dot or have consecutive special characters";
     },
     apiKeyRules: [
       (v) =>

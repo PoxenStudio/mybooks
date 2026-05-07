@@ -9,7 +9,7 @@ import asyncio
 import signal
 from datetime import datetime
 
-from webserver.assistant.deepseek_agent import DeepSeekMCPAgent
+from webserver.assistant.ai_assistant_agent import AIAssistantMCPAgent
 
 
 def print_banner():
@@ -39,7 +39,7 @@ async def main():
     print_banner()
 
     # 初始化代理
-    agent = DeepSeekMCPAgent()
+    agent = AIAssistantMCPAgent()
     await agent.initialize()
 
     # 获取可用工具

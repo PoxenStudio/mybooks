@@ -444,10 +444,10 @@ def make_app():
     if CONF.get("AI_DEEPSEEK_API_KEY"):
         logging.info("DeepSeek API Key found. Initializing AI Assistant...")
         from webserver.handlers.assistant import AssistantWebSocketHandler
-        from webserver.assistant.deepseek_agent import DeepSeekMCPAgent
+        from webserver.assistant.ai_assistant_agent import AIAssistantMCPAgent
 
         def init_ai_agent():
-            agent = DeepSeekMCPAgent()
+            agent = AIAssistantMCPAgent()
             AssistantWebSocketHandler._agent = agent
             # Note: initialization will happen on first connection or we can trigger it here
             # But deepseek_agent.initialize() is async, so we need to run it in the ioloop

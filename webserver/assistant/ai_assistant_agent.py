@@ -1,5 +1,5 @@
 """
-DeepSeek + MCP Conversation Agent
+OpenAI compatible API + MCP Conversation Agent
 Supports continuous conversation and tool calling
 """
 
@@ -14,33 +14,37 @@ from webserver.assistant.mcp_client import MCPStreamClient
 from webserver.constants import DEEPSEEK_API_BASE
 
 CONF = loader.get_settings()
-DEEPSEEK_API_KEY = CONF.get("AI_DEEPSEEK_API_KEY", "")
+AI_API_KEY = CONF.get("AI_DEEPSEEK_API_KEY", "")
+AI_BASE_URL = CONF.get("AI_API_URL", DEEPSEEK_API_BASE)
+AI_MODEL = CONF.get("AI_MODEL", "deepseek-chat")
 MCP_TOKEN = CONF.get("AI_MCP_TOKEN", "")
 MCP_SERVER_URL = "http://127.0.0.1:80/api/mcp/stream"
 
 
-class DeepSeekMCPAgent:
+class AIAssistantMCPAgent:
     """
-    DeepSeek + MCP会话代理
+    AI + MCP会话代理
     支持持续对话和工具调用
     """
 
     def __init__(self, cookies: Optional[Dict] = None):
-        self.deepseek_client = OpenAI(
-            api_key=DEEPSEEK_API_KEY,
-            base_url=DEEPSEEK_API_BASE,
+        self.ai_client = OpenAI(
+            api_key=AI_API_KEY,
+            base_url=AI_BASE_URL,
             timeout=30.0
         )
+        self.model = AI_MODEL
+        logging.debug(f"Initialized AI client with model: {self.model}, base_url: {AI_BASE_URL}")
 
         self.mcp_client = MCPStreamClient(MCP_SERVER_URL, MCP_TOKEN, cookies)
         self.session_active = True
         self.conversation_history = []
 
     async def initialize(self):
-        print("初始化DeepSeek-MCP代理...")
+        logging.info("Init AI-MCP agent...")
         await self.mcp_client.connect()
-        print("代理初始化完成")
-        print("-" * 60)
+        logging.info("AI-MCP agent initialized successfully.")
+        logging.info("-" * 60)
 
     def format_tool_schema(self, tool: Dict) -> str:
         """格式化单个工具的schema为可读描述"""
@@ -66,8 +70,8 @@ class DeepSeekMCPAgent:
 
         return result
 
-    async def format_conversation_for_deepseek(self, user_input: str) -> List[Dict]:
-        """格式化对话历史给DeepSeek"""
+    async def format_conversation(self, user_input: str) -> List[Dict]:
+        """格式化对话历史给AI模型"""
         # 构建系统提示
         tools = await self.mcp_client.list_tools()
         tool_descriptions = "\n\n".join([
@@ -111,7 +115,7 @@ class DeepSeekMCPAgent:
         return messages
 
     def extract_tool_call(self, response_text: str) -> Optional[Dict]:
-        """从DeepSeek响应中提取工具调用"""
+        """从AI模型响应中提取工具调用"""
         # 匹配工具调用格式
         pattern = r'<tool_call>\s*({.*?})\s*</tool_call>'
         match = re.search(pattern, response_text, re.DOTALL)
@@ -141,12 +145,12 @@ class DeepSeekMCPAgent:
         """处理用户输入，可能涉及工具调用，由WebSocketHandler调用"""
 
         # 格式化对话
-        messages = await self.format_conversation_for_deepseek(user_input)
+        messages = await self.format_conversation(user_input)
 
         try:
             # 第一次调用：获取思考过程或工具调用
-            response = self.deepseek_client.chat.completions.create(
-                model="deepseek-chat",
+            response = self.ai_client.chat.completions.create(
+                model=AI_MODEL,
                 messages=messages,
                 temperature=0.7,
                 max_tokens=2000,
@@ -186,9 +190,9 @@ class DeepSeekMCPAgent:
                         "content": f"工具调用结果：\n{tool_result_str}\n\n请根据这个结果回答我的问题。"
                     })
 
-                    # 第二次调用DeepSeek（获得针对工具结果的最终回答）
-                    final_response = self.deepseek_client.chat.completions.create(
-                        model="deepseek-chat",
+                    # 第二次调用AI模型（获得针对工具结果的最终回答）
+                    final_response = self.ai_client.chat.completions.create(
+                        model=AI_MODEL,
                         messages=new_messages,
                         temperature=0.7,
                         max_tokens=2000,

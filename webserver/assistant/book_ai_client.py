@@ -60,10 +60,10 @@ class BookAIClient:
 
         self.client = OpenAI(
             api_key=api_key,
-            base_url=DEEPSEEK_API_BASE,
+            base_url=CONF.get("AI_API_URL", DEEPSEEK_API_BASE),
             timeout=30.0,
         )
-        self.model = "deepseek-chat"
+        self.model = CONF.get("AI_MODEL", "deepseek-chat")
 
     @staticmethod
     def _is_valid_isbn(isbn: str) -> bool:

@@ -70,6 +70,7 @@ settings = {
     "AI_MODEL": "deepseek-chat",
     "AI_MCP_TOKEN": "",
     "AI_DEEPSEEK_API_KEY": "",
+    "AI_API_URL": "https://api.deepseek.com",
     "MAIN_PAGE_RANDOM_COUNT": 12,
     "MAIN_PAGE_RECENT_COUNT": 12,
     "DEFAULT_PAGE_SIZE": 60,
