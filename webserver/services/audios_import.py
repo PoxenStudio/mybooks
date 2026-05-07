@@ -133,6 +133,7 @@ class AudioBookImporter(AsyncService):
         return False
 
     def _synch_audio_files(self, src_dir, dest_dir):
+        logging.debug(f"[AUDIO_IMPORT] Synchronizing audio files from {src_dir} to {dest_dir}")
         if not os.path.exists(dest_dir):
             shutil.copytree(src_dir, dest_dir)
         else:
@@ -203,20 +204,21 @@ class AudioBookImporter(AsyncService):
         for idx, dir_name in enumerate(subdirs):
             dir_path = os.path.join(import_dir, dir_name)
             dir_hash = "audiodir:" + hashlib.md5(dir_path.encode("utf-8")).hexdigest()
+            logging.info("[AUDIO_IMPORT] Processing directory %d/%d: %s", idx + 1, total, dir_path)
 
             existing = self.session.query(ScanFile).filter(ScanFile.hash == dir_hash).first()
             if existing and existing.status in (ScanFile.IMPORTED, ScanFile.EXIST):
                 # 存在已导入有声书时，检查当前音频目录中相对对应的有声书目录(/data/books/audios/<book_id>)是否有新增的音频文件
-                if existing.status == ScanFile.EXIST:
+                if existing.status == ScanFile.IMPORTED:
                     book_id = existing.book_id
                     if book_id and self._check_audio_exists(book_id):
-                        logging.info("[AUDIO_IMPORT] book_id %s already exists for %s, but audio files are present, mark as imported", book_id, dir_path)
                         self._synch_audio_files(dir_path, os.path.join(output_dir, str(book_id)))
 
                 AudioBookImporter.static_status["skipped"] += 1
                 self._update_progress(task_id, idx + 1, total)
                 continue
 
+            logging.info("[AUDIO_IMPORT] new record for %s, will attempt to import", dir_path)
             mp3_files = sorted([
                 f for f in os.listdir(dir_path) if f.lower().endswith(".mp3")
             ])
