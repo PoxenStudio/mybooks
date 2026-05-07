@@ -68,28 +68,6 @@
             <book-cards :books="get_recent_books"></book-cards>
         </v-col>
     </v-row>
-    <v-row>
-        <v-col cols=12>
-            <v-divider class="new-legend"></v-divider>
-        </v-col>
-        <v-col cols=12 sm=6 md=4 v-for="nav in navs" :key="nav.text">
-            <v-card outlined style="border-radius: 12px;">
-                <v-list>
-                    <v-list-item :to="nav.href" >
-                        <v-list-item-avatar large color='#003153' >
-                            <v-icon dark >{{nav.icon}}</v-icon>
-                        </v-list-item-avatar>
-                        <v-list-item-content>
-                            <v-list-item-title>{{nav.text}} </v-list-item-title>
-                        </v-list-item-content>
-                        <v-list-item-action>
-                            <v-icon >mdi-arrow-right</v-icon>
-                        </v-list-item-action>
-                    </v-list-item>
-                </v-list>
-            </v-card>
-        </v-col>
-    </v-row>
 
     <!-- Release Notes Dialog -->
     <v-dialog v-model="releaseNotesDialog" max-width="480" persistent transition="dialog-bottom-transition">
@@ -129,12 +107,6 @@ export default {
         },
         get_recent_books: function() {
             return this.new_books.map( b => {
-                b['href'] = "/book/" + b.id;
-                return b;
-            });
-        },
-        get_audio_books: function() {
-            return this.audio_books.map( b => {
                 b['href'] = "/book/" + b.id;
                 return b;
             });
@@ -229,16 +201,7 @@ export default {
     },
     created() {
         this.$store.commit('navbar', true);
-        // 获取sys数据，确保存在性
         const sys = this.$store.state.sys || {};
-        this.navs = [
-            { icon: 'widgets',            href:'/nav',       text: this.$t('index.categoryNavigation'),  count: sys.books || 0},
-            { icon: 'mdi-account-group',  href:'/author',    text: this.$t('index.authors'),     count: sys.authors || 0},
-            { icon: 'mdi-home-group',     href:'/publisher', text: this.$t('index.publishers'),   count: sys.publishers || 0},
-            { icon: 'mdi-tag-heart',      href:'/tag',       text: this.$t('index.tags'),     count: sys.tags || 0},
-            { icon: 'mdi-translate',      href:'/language',       text: this.$t('index.languages'),     count: sys.languages || 0},
-            { icon: 'mdi-history',        href:'/all',    text: this.$t('index.allBooks'), },
-            ]
     },
     async asyncData({ app, res }) {
         if ( res !== undefined ) {
@@ -249,8 +212,6 @@ export default {
     data: () => ({
         random_books: [],
         new_books: [],
-        audio_books: [],
-        navs: [],
         libraryStats: null,
         releaseNotesDialog: false,
         releaseNotesContent: '',

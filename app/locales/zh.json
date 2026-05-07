@@ -779,7 +779,7 @@
         "booksUnit": "本书"
     },
     "footer": {
-        "base_message": "系统基于Calibre构建，感谢开源的力量。任何问题或建议请前往下方Talebook主页扫码公众号私信联系。"
+        "base_message": "基于Calibre构建, 任何问题或建议请前往下方Talebook主页扫码公众号私信联系。"
     },
     "appHeader": {
         "home": "首页",

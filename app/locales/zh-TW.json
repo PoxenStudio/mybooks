@@ -777,7 +777,7 @@
         "booksUnit": "本書"
     },
     "footer": {
-        "base_message": "系統基於 Calibre 建構，感謝開源的力量。任何問題或建議請前往下方 Talebook 主頁掃描 QR Code 關注公眾號私訊聯絡。"
+        "base_message": "系統基於 Calibre 建構，任何問題或建議請前往下方 Talebook 主頁掃描 QR Code 關注公眾號私訊聯絡。"
     },
     "appHeader": {
         "home": "首頁",

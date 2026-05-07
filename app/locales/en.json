@@ -774,7 +774,7 @@
         "booksUnit": " books"
     },
     "footer": {
-        "base_message": "This site is built on Calibre, thanks to the power of open source. If you have any questions or suggestions, please visit the <a target=\"_blank\" href=\"https://mybooks.top\">project homepage</a>."
+        "base_message": "This site is built on Calibre, if you have any questions or suggestions, please visit the <a target=\"_blank\" href=\"https://mybooks.top\">project homepage</a>."
     },
     "appHeader": {
         "home": "Home",
