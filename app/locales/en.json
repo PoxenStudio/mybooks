@@ -328,6 +328,7 @@
         "batch_add_books": "Batch Add Hardcopy Books",
         "import_audiobooks": "Import Audiobooks",
         "import_selected": "Import Selected Books",
+        "cancel_import": "Cancel Import",
         "scan_scope": "Scan Scope",
         "scan_scope_all": "Full scan",
         "scan_scope_exclude_last": "Exclude directories imported in last task",
@@ -903,6 +904,7 @@
         "markedAsRead": "Marked as read",
         "settingSuccess": "Setting successful!",
         "success": "Success",
+        "deleteSuccess": "Delete successful!",
         "audioLoadFailed": "Audio file loading failed",
         "audioPlayFailed": "Audio playback failed"
     },

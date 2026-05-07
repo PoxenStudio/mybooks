@@ -24,7 +24,7 @@
                             :disabled="loading"
                             :outlined="$vuetify.breakpoint.xs"
                             color="#2d6d4b"
-                            @click="import_books"
+                            @click="importBooks"
                             class="flex-shrink-0"
                             :icon="$vuetify.breakpoint.xs"
                         >
@@ -37,7 +37,7 @@
                             :disabled="loading"
                             :outlined="$vuetify.breakpoint.xs"
                             color="#2d6d4b"
-                            @click="import_books"
+                            @click="importBooks"
                             class="flex-shrink-0"
                             :icon="$vuetify.breakpoint.xs"
                         >
@@ -49,7 +49,7 @@
                         :disabled="loading"
                         :outlined="$vuetify.breakpoint.xs"
                         color="purple darken-1"
-                        @click="import_audiobooks"
+                        @click="importAudiobooks"
                         class="flex-shrink-0"
                         :icon="$vuetify.breakpoint.xs"
                     >
@@ -60,19 +60,30 @@
                         :disabled="loading"
                         :outlined="$vuetify.breakpoint.xs"
                         color="secondary"
-                        @click="show_batch_add_dialog"
+                        @click="showBatchAddDialog"
                         class="flex-shrink-0"
                         :icon="$vuetify.breakpoint.xs"
                     >
                         <v-icon>mdi-book-plus-multiple</v-icon>
                         <span v-if="!$vuetify.breakpoint.xs">{{ $t('imports.batch_add_books') }}</span>
                     </v-btn>
+                    <v-btn
+                        v-if="importing"
+                        :outlined="$vuetify.breakpoint.xs"
+                        color="error"
+                        @click="cancelImport"
+                        class="flex-shrink-0"
+                        :icon="$vuetify.breakpoint.xs"
+                    >
+                        <v-icon>mdi-cancel</v-icon>
+                        <span v-if="!$vuetify.breakpoint.xs">{{ $t('imports.cancel_import') }}</span>
+                    </v-btn>
                     <template v-if="selected.length > 0">
                         <v-btn
                             :disabled="loading"
                             :outlined="$vuetify.breakpoint.xs"
                             color="primary"
-                            @click="delete_record"
+                            @click="deleteRecord"
                             class="flex-shrink-0"
                             :icon="$vuetify.breakpoint.xs"
                         >
@@ -200,7 +211,7 @@
                 <v-card-actions>
                     <v-spacer></v-spacer>
                     <v-btn text @click="batchAddDialog = false" :disabled="batchAdding">{{ $t('common.cancel') }}</v-btn>
-                    <v-btn color="primary" @click="start_batch_add" :disabled="!csvFile || batchAdding">
+                    <v-btn color="primary" @click="startBatchAdd" :disabled="!csvFile || batchAdding">
                         <v-icon left v-if="!batchAdding">mdi-upload</v-icon>
                         <v-progress-circular v-if="batchAdding" indeterminate size="20" class="mr-2"></v-progress-circular>
                         {{ batchAdding ? $t('imports.batch_add_processing') : $t('imports.batch_add_start') }}
@@ -256,10 +267,8 @@ export default {
         },
     },
     mounted() {
-        this.getDataFromApi();
-
-        this.loading = true;
         this.checkCurrentState();
+        this.getDataFromApi();
     },
     computed: {
         pageCount: function () {
@@ -301,7 +310,6 @@ export default {
     },
     methods: {
         getDataFromApi() {
-            this.loading = true;
             const { sortBy, sortDesc, page, itemsPerPage } = this.options;
 
             var data = new URLSearchParams();
@@ -336,12 +344,13 @@ export default {
                     if (rsp.ignored_errors && rsp.ignored_errors.length > 0) {
                         this.ignored_errors = rsp.ignored_errors;
                     }
-                })
-                .finally(() => {
-                    this.loading = false;
+                }).finally(() => {
+                    if (!this.importing && !this.audioImporting && !this.batchAdding) {
+                        this.loading = false;
+                    }
                 });
         },
-        loop_check_status(url, callback) {
+        loopCheckStatus(url, callback) {
             setTimeout(() => {
                 this.$backend(url)
                     .then((rsp) => {
@@ -351,16 +360,15 @@ export default {
                         }
                         if (callback(rsp)) {
                             setTimeout(() => {
-                                this.loop_check_status(url, callback);
+                                this.loopCheckStatus(url, callback);
                             }, 1000);
                         } else {
                             this.getDataFromApi();
-                            this.$alert("info", "处理完毕！");
                         }
                     })
             }, 2000);
         },
-        import_books() {
+        importBooks() {
             this.loading = true;
             var filelist = "all";
             if (this.selected.length > 0) {
@@ -383,7 +391,7 @@ export default {
                         return;
                     }
 
-                    this.loop_check_status("/admin/import/status", (rsp) => {
+                    this.loopCheckStatus("/admin/import/status", (rsp) => {
                         this.import = rsp.status;
                         this.count_done = rsp.summary.done;
                         this.count_todo = rsp.summary.todo;
@@ -391,8 +399,8 @@ export default {
                         this.count_total = rsp.status.total;
                         this.count_processed = rsp.status.processed;
 
-                        this.importing = rsp.importing;
-                        if (!rsp.importing) {
+                        this.importing = rsp.importing || false;
+                        if (!this.importing) {
                             this.loading = false;
                             return false;
                         }
@@ -402,7 +410,18 @@ export default {
                     this.selected = [];
                 })
         },
-        delete_record() {
+        cancelImport() {
+            this.$backend("/admin/import/cancel", {
+                method: "POST",
+            }).then((rsp) => {
+                    this.$alert("success", rsp.msg);
+                    this.getDataFromApi();
+                })
+                .catch((err) => {
+                    this.$alert("error", err.message);
+                })
+        },
+        deleteRecord() {
             this.loading = true;
             this.$backend("/admin/import/delete", {
                 method: "POST",
@@ -431,7 +450,7 @@ export default {
                     }
                     if (rsp.status && rsp.importing) {
                         this.loading = true;
-                        this.loop_check_status("/admin/import/status", (rsp) => {
+                        this.loopCheckStatus("/admin/import/status", (rsp) => {
                             this.scan = rsp.status;
                             this.count_done = rsp.summary.done;
                             this.count_todo = rsp.summary.todo;
@@ -450,6 +469,8 @@ export default {
                             this.loading = true;
                             return true;
                         });
+                    } else {
+                        this.importing = false;
                     }
                     if (rsp.ignored_errors && rsp.ignored_errors.length > 0) {
                         this.ignored_errors = rsp.ignored_errors;
@@ -467,7 +488,7 @@ export default {
                     if (rsp.audio_importing) {
                         this.audioImporting = true;
                         this.loading = true;
-                        this.loop_check_status("/admin/audio_import/status", (rsp) => {
+                        this.loopCheckStatus("/admin/audio_import/status", (rsp) => {
                             this.count_total = rsp.status.total || 0;
                             this.count_processed = (rsp.status.imported || 0) + (rsp.status.exist || 0);
                             this.count_done = rsp.summary.done;
@@ -480,6 +501,8 @@ export default {
                             this.loading = true;
                             return true;
                         });
+                    } else {
+                        this.audioImporting = false;
                     }
                 });
 
@@ -493,7 +516,7 @@ export default {
                     if (rsp.batch_adding) {
                         this.batchAdding = true;
                         this.loading = true;
-                        this.loop_check_status("/admin/batch_add/status", (rsp) => {
+                        this.loopCheckStatus("/admin/batch_add/status", (rsp) => {
                             this.count_total = rsp.status.total || 0;
                             this.count_processed = rsp.status.processed || 0;
                             this.count_done = rsp.summary.done;
@@ -507,6 +530,8 @@ export default {
                             this.loading = true;
                             return true;
                         });
+                    } else {
+                        this.batchAdding = false;
                     }
                 });
         },
@@ -520,7 +545,7 @@ export default {
                     // If importing is in progress
                     if (rsp.status && rsp.importing > 0) {
                         this.loading = true;
-                        this.loop_check_status("/admin/import/status", (rsp) => {
+                        this.loopCheckStatus("/admin/import/status", (rsp) => {
                             this.import = rsp.status;
                             this.count_done = rsp.summary.done;
                             this.count_todo = rsp.summary.todo;
@@ -537,7 +562,7 @@ export default {
                     }
                 });
         },
-        import_audiobooks() {
+        importAudiobooks() {
             this.loading = true;
             this.$backend("/admin/audio_import/run", { method: "POST" })
                 .then((rsp) => {
@@ -547,9 +572,9 @@ export default {
                         return;
                     }
                     this.audioImporting = true;
-                    this.loop_check_status("/admin/audio_import/status", (rsp) => {
+                    this.loopCheckStatus("/admin/audio_import/status", (rsp) => {
                         this.count_total = rsp.status.total || 0;
-                        this.count_processed = count_total - (rsp.status.ready || 0);
+                        this.count_processed = this.count_total - (rsp.status.ready || 0);
                         this.count_done = rsp.summary.done;
                         this.count_todo = rsp.summary.todo;
                         this.audioImporting = rsp.audio_importing || false;
@@ -562,11 +587,11 @@ export default {
                     });
                 });
         },
-        show_batch_add_dialog() {
+        showBatchAddDialog() {
             this.batchAddDialog = true;
             this.csvFile = null;
         },
-        start_batch_add() {
+        startBatchAdd() {
             if (!this.csvFile) {
                 this.$alert("error", this.$t('imports.batch_add_no_file'));
                 return;
@@ -596,7 +621,7 @@ export default {
                     this.csvFile = null;
 
                     // 开始轮询状态
-                    this.loop_check_status("/admin/batch_add/status", (rsp) => {
+                    this.loopCheckStatus("/admin/batch_add/status", (rsp) => {
                         this.count_total = rsp.status.total || 0;
                         this.count_processed = rsp.status.processed || 0;
                         this.count_done = rsp.summary.done;

@@ -331,6 +331,7 @@
         "batch_add_books": "批次匯入實體書",
         "import_audiobooks": "匯入有聲書",
         "import_selected": "匯入選中書籍",
+        "cancel_import": "取消匯入",
         "scan_scope": "掃描範圍",
         "scan_scope_all": "全量掃描",
         "scan_scope_exclude_last": "排除上一次已匯入目錄",
@@ -905,7 +906,8 @@
         "setToReading": "已設定為閱讀中狀態",
         "markedAsRead": "已標記為讀完",
         "settingSuccess": "設定成功！",
-        "success": "設定成功",
+        "success": "成功",
+        "deleteSuccess": "刪除成功",
         "audioLoadFailed": "音訊檔案載入失敗",
         "audioPlayFailed": "音訊播放失敗"
     },

@@ -331,6 +331,7 @@
         "batch_add_books": "批量导入实体书",
         "import_audiobooks": "导入有声书",
         "import_selected": "导入选中书籍",
+        "cancel_import": "取消导入",
         "scan_scope": "扫描范围",
         "scan_scope_all": "全量扫描",
         "scan_scope_exclude_last": "排除上一次已导入目录(不包括最后一个目录)",
@@ -907,7 +908,8 @@
         "setToReading": "已设置为在读状态",
         "markedAsRead": "已标记为读完",
         "settingSuccess": "设置成功！",
-        "success": "设置成功",
+        "success": "成功",
+        "deleteSuccess": "删除成功",
         "audioLoadFailed": "音频文件加载失败",
         "audioPlayFailed": "音频播放失败"
     },

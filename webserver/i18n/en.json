@@ -446,5 +446,7 @@
   "批量更新书籍动态封面任务已启动，右上角可以查看进度": "Batch update of book dynamic cover task has started, you can check the progress in the top right corner",
   "图书封面更新完成: 共%d本，成功%d本": "Book cover update completed: %d total, %d successful",
   "本书已有TXTZ版本, 不需要转换": "This book already has a TXTZ version, no conversion needed",
-  "本书不支持转换，仅支持TXT格式转换为TXTZ": "This book does not support conversion, only TXT format can be converted to TXTZ"
+  "本书不支持转换，仅支持TXT格式转换为TXTZ": "This book does not support conversion, only TXT format can be converted to TXTZ",
+  "当前没有正在运行的任务": "No tasks are currently running",
+  "正在取消任务, 请稍后查看状态": "Cancelling task, please check the status later"
 }

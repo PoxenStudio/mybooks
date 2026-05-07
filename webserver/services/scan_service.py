@@ -52,6 +52,7 @@ SCAN_EXT = ["azw", "azw3", "epub", "mobi", "pdf", "txt"]
 
 
 class ScanService(AsyncService):
+    static_abort_flag = False
     static_is_importing = False
     static_import_id = 0
     static_import_files_cnt = 0
@@ -77,9 +78,16 @@ class ScanService(AsyncService):
         return ScanService.static_import_id
 
     @staticmethod
+    def cancel():
+        if not ScanService.static_is_importing:
+            return
+        ScanService.static_abort_flag = True
+        logging.info("[IMPORT]Cancel the importing")
+
+    @staticmethod
     def get_invalid_folders():
         if ScanService.invalid_folder:
-            logging.info(f"Invalid folders#0: {ScanService.invalid_folder}")
+            logging.info(f"[IMPORT]Invalid folders#0: {ScanService.invalid_folder}")
         return list(ScanService.invalid_folder)
 
     @staticmethod
@@ -235,6 +243,7 @@ class ScanService(AsyncService):
             return
 
         ScanService.invalid_folder.clear()
+        ScanService.static_abort_flag = False
         ScanService.static_is_importing = True
         start_time = time.time()
 
@@ -474,6 +483,9 @@ class ScanService(AsyncService):
                 try:
                     if row_id is None:  # sentinel: Phase 1 finished
                         break
+                    if ScanService.static_abort_flag:
+                        # Skip all to clear the queue
+                        continue
 
                     row = importing_session.query(ScanFile).get(row_id)
                     if row is None:
@@ -650,6 +662,9 @@ class ScanService(AsyncService):
         queued_count = 0
         try:
             for index, fpath in enumerate(filelist):
+                if ScanService.static_abort_flag:
+                    logging.info("[IMPORT] Aborting import during scanning phase at index %d/%d", index, total_count)
+                    break
                 row_id, state = self._scan_one_file(fpath, session, import_id, processed_paths, processed_hashes)
                 if row_id is not None:
                     work_queue.put(row_id)
@@ -666,7 +681,6 @@ class ScanService(AsyncService):
 
         # Wait for Phase 2 to finish gracefully
         importing_thread.join()
-
         logging.info("[IMPORT] Both phases done in %.3fs. Queued: %d, Imported: %d",
                      time.time() - start_time, queued_count, len(importing_imported))
 

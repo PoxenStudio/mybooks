@@ -10,6 +10,7 @@ from webserver import loader
 from webserver.handlers.base import BaseHandler, auth, js, is_admin
 from webserver.models import ScanFile
 from webserver.services.scan_service import ScanService
+from webserver.services.audios_import import AudioBookImporter
 
 CONF = loader.get_settings()
 SCAN_EXT = ["azw", "azw3", "epub", "mobi", "pdf", "txt"]
@@ -354,8 +355,6 @@ class AudioImportRun(BaseHandler):
     @js
     @is_admin
     def post(self):
-        from webserver.services.audios_import import AudioBookImporter
-
         if AudioBookImporter.is_running():
             return {"err": "running", "msg": _("有声书导入任务正在运行中，请稍候")}
 
@@ -367,8 +366,6 @@ class AudioImportStatus(BaseHandler):
     @js
     @is_admin
     def get(self):
-        from webserver.services.audios_import import AudioBookImporter
-
         scanner = None
         try:
             scanner = Scanner(self.calibre_db, self.settings["ScopedSession"])
@@ -391,6 +388,20 @@ class AudioImportStatus(BaseHandler):
                     logging.error(f"Error closing scanner: {e}")
 
 
+class ImportCancel(BaseHandler):
+    @js
+    @is_admin
+    def post(self):
+        try:
+            if not ScanService.is_importing():
+                return {"err": "not_importing", "msg": _("当前没有正在运行的任务")}
+            ScanService.cancel()
+            return {"err": "ok", "msg": _("正在取消任务, 请稍后查看状态")}
+        except Exception as e:
+            logging.error(f"ImportCancel error: {e}")
+            return {"err": "server.error", "msg": str(e)}
+
+
 def routes():
     return [
         (r"/api/admin/import/list", ImportList),
@@ -401,4 +412,5 @@ def routes():
         (r"/api/admin/batch_add/status", BatchAddStatus),
         (r"/api/admin/audio_import/run", AudioImportRun),
         (r"/api/admin/audio_import/status", AudioImportStatus),
+        (r"/api/admin/import/cancel", ImportCancel),
     ]

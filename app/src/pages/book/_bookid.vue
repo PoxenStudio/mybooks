@@ -2236,7 +2236,7 @@ export default {
                 method: "POST",
             }).then((rsp) => {
                 if (rsp.err === "ok") {
-                    this.$alert("success", this.$t('message.success'));
+                    this.$alert("success", this.$t('message.deleteSuccess'));
                     this.$router.push("/");
                 } else {
                     this.$alert("error", rsp.msg);
