@@ -179,6 +179,23 @@
                             {{ $t('admin.books.selectedCount', { count: books_selected.length }) }}
                         </span>
                     </template>
+                    <template v-slot:page-text>
+                        <div class="d-flex align-center" style="gap: 4px;">
+                            <v-text-field
+                                v-model.number="jumpPage"
+                                type="number"
+                                :min="1"
+                                :max="totalPages"
+                                dense
+                                hide-details
+                                outlined
+                                class="page-jump-input"
+                                @keyup.enter="goToPage"
+                                @blur="goToPage"
+                            ></v-text-field>
+                            <span class="text-body-2">/ {{ totalPages }}</span>
+                        </div>
+                    </template>
                 </v-data-footer>
             </template>
             <template v-slot:item.status="{ item }">
@@ -383,6 +400,23 @@
                     </v-list>
                 </v-menu>
             </template>
+            <template v-slot:footer.page-text>
+                <div class="d-flex align-center" style="gap: 4px;">
+                    <v-text-field
+                        v-model.number="jumpPage"
+                        type="number"
+                        :min="1"
+                        :max="totalPages"
+                        dense
+                        hide-details
+                        outlined
+                        class="page-jump-input"
+                        @keyup.enter="goToPage"
+                        @blur="goToPage"
+                    ></v-text-field>
+                    <span class="text-body-2">/ {{ totalPages }}</span>
+                </div>
+            </template>
         </v-data-table>
 
         <!-- 小浮窗提醒 -->
@@ -525,6 +559,7 @@ export default {
         update_title_sort_dialog: false,
         clear_invalid_items_dialog: false,
         adding_book: false,
+        jumpPage: 1,
         books_selected: [],
         tag_input: null,
         search: "",
@@ -559,8 +594,16 @@ export default {
         book_type_filter() {
             this.getDataFromApi();
         },
+        'options.page'(val) {
+            this.jumpPage = val || 1;
+        },
     },
     computed: {
+        totalPages() {
+            const { itemsPerPage = 100 } = this.options;
+            if (itemsPerPage <= 0) return 1;
+            return Math.ceil(this.total / itemsPerPage) || 1;
+        },
         auto_fill_mins: function() {
             const selected_count = this.books_selected.length > 0 ? this.books_selected.length : this.total;
             if (selected_count > 0) {
@@ -635,6 +678,14 @@ export default {
         }
     },
     methods: {
+        goToPage() {
+            const page = parseInt(this.jumpPage);
+            if (!isNaN(page) && page >= 1 && page <= this.totalPages) {
+                this.options = { ...this.options, page };
+            } else {
+                this.jumpPage = this.options.page || 1;
+            }
+        },
         getDataFromApi() {
             this.loading = true;
             const { sortBy, sortDesc, page, itemsPerPage } = this.options;
@@ -1227,6 +1278,24 @@ export default {
         height: 24px !important;
         padding: 0 8px !important;
     }
+}
+
+/* 页码跳转输入框 */
+.page-jump-input {
+    width: 60px !important;
+}
+.page-jump-input input {
+    text-align: center;
+    font-size: 0.75rem !important;
+    -moz-appearance: textfield;
+}
+.page-jump-input .v-input__slot {
+    min-height: 28px !important;
+}
+.page-jump-input input::-webkit-outer-spin-button,
+.page-jump-input input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
 }
 
 /* 确保间距工具类正常工作 */
