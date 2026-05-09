@@ -1390,12 +1390,11 @@ class BookEdit(BaseHandler):
 
     def edit_book(self, bid, data):
         from calibre.utils.date import now as nowf
-        mi = self.calibre_db.get_metadata(bid, index_is_id=True)
-        logging.info(f"Editing book {bid}, current title: {mi.title}, new title: {data.get('title', None)}")
+        mi = self.calibre_db.get_metadata(bid, index_is_id=True, get_cover=True)
         need_update_cover = False
         if CONF.get("USE_DYNAMIC_COVER", False) and data.get("title", None) and data["title"] != mi.title:
             fmt, cover_data = mi.cover_data if mi.cover_data else (None, None)
-            if cover_data is not None:
+            if cover_data is not None or mi.cover:
                 dynamic_cover_flag = self.calibre_db_cache.get_custom_book_data(bid, COLUMN_DYNAMIC_COVER, default=0)
                 need_update_cover = dynamic_cover_flag == 1
             else:
@@ -1449,7 +1448,7 @@ class BookEdit(BaseHandler):
                 logging.error("Too many characters in the category, ignore it!")
         if COLUMN_EXT_LINK in data:
             ext_link = data[COLUMN_EXT_LINK].strip()
-            if len(ext_link) < 500 and (ext_link.startswith('http://') or ext_link.startswith('https://')):
+            if len(ext_link) < 500 and (ext_link.startswith('http://') or ext_link.startswith('https://') or ext_link == ''):
                 mi.set(CALIBRE_COLUMN_EXT_LINK, ext_link)
                 self.calibre_db_cache.set_field(CALIBRE_COLUMN_EXT_LINK, {bid: ext_link})
             else:
