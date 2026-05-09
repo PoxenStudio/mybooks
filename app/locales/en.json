@@ -505,7 +505,7 @@
         "ai_mcp_token": "MCP Access Token",
         "ai_mcp_token_generated": "MCP token has been generated",
         "ai_mcp_token_generate_failed": "Failed to generate MCP token",
-        "ai_api_key": "DeepSeek API Key",
+        "ai_api_key": "API Key",
         "ai_api_key_description": "Register an account and obtain an API key at https://platform.deepseek.com",
         "ai_api_url": "AI API URL",
         "ai_api_url_description": "Enter the OpenAPI compatible interface URL of the model provider",

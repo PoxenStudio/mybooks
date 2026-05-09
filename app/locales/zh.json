@@ -695,7 +695,7 @@
         "ai_mcp_token": "MCP访问令牌",
         "ai_mcp_token_generated": "MCP访问令牌已生成",
         "ai_mcp_token_generate_failed": "生成MCP访问令牌失败",
-        "ai_api_key": "DeepSeek API密钥",
+        "ai_api_key": "API密钥",
         "ai_api_key_description": "前往模型服务商注册账号并获取API密钥",
         "ai_usage_info": "AI使用信息",
         "ai_api_url": "AI接口地址",

@@ -693,7 +693,7 @@
         "ai_mcp_token": "MCP 存取權杖",
         "ai_mcp_token_generated": "MCP 存取權杖已生成",
         "ai_mcp_token_generate_failed": "生成 MCP 存取權杖失敗",
-        "ai_api_key": "DeepSeek API 金鑰",
+        "ai_api_key": "API 金鑰",
         "ai_api_key_description": "前往 https://platform.deepseek.com 註冊帳號並取得 API 金鑰",
         "ai_usage_info": "AI 使用資訊",
         "ai_api_url": "AI接口鏈接",
