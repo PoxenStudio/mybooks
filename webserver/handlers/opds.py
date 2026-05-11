@@ -250,33 +250,7 @@ def ACQUISITION_ENTRY(item, db, updated, CFM, CKEYS, prefix):
             _("SERIES: %(series)s [%(sidx)s]<br />")
             % dict(series=xml(series), sidx=fmt_sidx(float(item[FM["series_index"]])))
         )
-    for key in CKEYS:
-        mi = db.get_metadata(item[CFM["id"]["rec_index"]], index_is_id=True)
-        name, val = mi.format_field(key)
-        if val:
-            datatype = CFM[key]["datatype"]
-            if datatype == "text" and CFM[key]["is_multiple"]:
-                extra.append(
-                    "%s: %s<br />"
-                    % (
-                        xml(name),
-                        xml(
-                            format_tag_string(
-                                val,
-                                CFM[key]["is_multiple"]["ui_to_list"],
-                                ignore_max=True,
-                                no_tag_count=True,
-                                joinval=CFM[key]["is_multiple"]["list_to_ui"],
-                            )
-                        ),
-                    )
-                )
-            elif datatype == "comments" or (
-                CFM[key]["datatype"] == "composite" and CFM[key]["display"].get("contains_html", False)
-            ):
-                extra.append("%s: %s<br />" % (xml(name), comments_to_html(val)))
-            else:
-                extra.append("%s: %s<br />" % (xml(name), xml(val)))
+
     comments = item[FM["comments"]]
     if comments:
         comments = comments_to_html(comments)
@@ -439,6 +413,10 @@ class OpdsHandler(BaseHandler):
         raise web.Finish()
 
     def check_opds_enabled(self):
+        if CONF.get("ENABLE_OPDS_AUTH", False) and self.current_user is None:
+            self.set_header("WWW-Authenticate", "Basic")
+            self.set_status(401)
+            raise web.Finish()
         if not CONF.get("ENABLE_OPDS_SERVICE", True):
             raise web.HTTPError(503, reason="OPDS service is not enabled")
 

@@ -41,6 +41,7 @@ settings = {
     "google_analytics_id" : "G-LLF01B5ZZ8",
 
     "ENABLE_OPDS_SERVICE"      : True,
+    "ENABLE_OPDS_AUTH"         : False,
     "opds_will_display"        : ["*"],
     "opds_wont_display"        : [],
     "opds_max_tags_shown"      : 10240,

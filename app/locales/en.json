@@ -245,6 +245,7 @@
             "deleteBook": "Delete Book",
             "updateAllMeta": "Update Books according to file name format",
             "updateAllDynamicCover": "Batch update dynamic cover if no cover",
+            "resetAllDynamicCover": "Restore original book cover from file",
             "header": {
                 "cover": "Cover",
                 "id": "ID",
@@ -528,6 +529,7 @@
         "enable_audio_conversion_log": "Enable audio conversion logging (default off, enable to record detailed conversion logs)",
         "use_dynamic_cover": "Enable dynamic cover (automatically generate cover image based on book information)",
         "enable_opds_service": "Enable OPDS catalog service (allows readers to access the library via the OPDS protocol)",
+        "enable_opds_auth": "Enable OPDS catalog service authentication (requires username and password to access OPDS)",
         "enable_webdav_service": "Enable WebDAV service (allows readers to access the library via the WebDAV protocol)",
         "enable_podcast_service": "Enable Podcast catalog service (allows readers to access the library via the Podcast protocol)",
         "extended_features": "Extended Features",

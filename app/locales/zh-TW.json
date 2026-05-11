@@ -248,6 +248,7 @@
             "deleteBook": "刪除此書",
             "updateAllMeta": "更新庫中目錄及文件格式",
             "updateAllDynamicCover": "為無封面書籍生成封面",
+            "resetAllDynamicCover": "恢復圖書文件內置的封面",
             "header": {
                 "cover": "封面",
                 "id": "ID",
@@ -711,6 +712,7 @@
         "enable_audio_conversion_log": "啟用有聲書轉換日誌記錄（預設關閉，開啟後記錄轉換的詳細日誌)",
         "use_dynamic_cover": "啟用動態封面（根據書籍資訊自動生成封面圖片）",
         "enable_opds_service": "啟用 OPDS 目錄服務（用於閱讀器透過 OPDS 協定存取書庫）",
+        "enable_opds_auth": "啟用 OPDS 目錄服務認證（開啟後訪問OPDS需要輸入用戶名和密碼）",
         "enable_webdav_service": "啟用 WebDAV 服務（用於閱讀器透過 WebDAV 協定存取書庫）",
         "enable_podcast_service": "啟用 Podcast 訂閱服務（用於播放器透過 Podcast 協定存取有聲書）",
         "extended_features": "擴充功能",

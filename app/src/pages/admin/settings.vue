@@ -1115,6 +1115,12 @@ export default {
             type: "checkbox",
           },
           {
+            icon: "mdi-lock",
+            key: "ENABLE_OPDS_AUTH",
+            label: "settings.enable_opds_auth",
+            type: "checkbox",
+          },
+          {
             icon: "mdi-podcast",
             key: "ENABLE_PODCAST_SERVICE",
             label: "settings.enable_podcast_service",

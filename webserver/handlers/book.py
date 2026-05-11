@@ -1395,7 +1395,7 @@ class BookEdit(BaseHandler):
         if CONF.get("USE_DYNAMIC_COVER", False) and data.get("title", None) and data["title"] != mi.title:
             fmt, cover_data = mi.cover_data if mi.cover_data else (None, None)
             if cover_data is not None or mi.cover:
-                dynamic_cover_flag = self.calibre_db_cache.get_custom_book_data(bid, COLUMN_DYNAMIC_COVER, default=0)
+                dynamic_cover_flag = self.calibre_db.get_custom(bid, label=COLUMN_DYNAMIC_COVER, index_is_id=True)
                 need_update_cover = dynamic_cover_flag == 1
             else:
                 need_update_cover = True
