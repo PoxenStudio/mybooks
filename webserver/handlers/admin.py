@@ -1314,7 +1314,6 @@ class LibraryStats(BaseHandler):
             month_ebook_count = (
                 self.sqlite_session.query(Item)
                 .filter(
-                    Item.book_id.in_(all_book_ids),
                     Item.book_type == 0,
                     extract("year", Item.create_time) == current_year,
                     extract("month", Item.create_time) == current_month,
@@ -1326,7 +1325,6 @@ class LibraryStats(BaseHandler):
             month_physical_books = (
                 self.sqlite_session.query(func.sum(Item.book_count))
                 .filter(
-                    Item.book_id.in_(all_book_ids),
                     Item.book_type == 1,
                     extract("year", Item.create_time) == current_year,
                     extract("month", Item.create_time) == current_month,
