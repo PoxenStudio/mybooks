@@ -88,6 +88,12 @@
                                 </v-list-item-icon>
                                 <v-list-item-title>{{ $t('admin.books.updateAllDynamicCover') }}</v-list-item-title>
                             </v-list-item>
+                            <v-list-item :disabled="!use_dynamic_cover" @click="resetDynamicCover">
+                                <v-list-item-icon>
+                                    <v-icon>mdi-image-refresh-outline</v-icon>
+                                </v-list-item-icon>
+                                <v-list-item-title>{{ $t('admin.books.resetAllDynamicCover') }}</v-list-item-title>
+                            </v-list-item>
                         </v-list>
                     </v-menu>
                     <v-btn
@@ -871,6 +877,23 @@ export default {
             const body = {};
             body.idlist = this.getSelectedBookIds() || "all";
             this.$backend("/admin/book/update_all_dynamic_cover", {
+                method: "POST",
+                body: JSON.stringify(body),
+            })
+                .then((rsp) => {
+                    this.handleApiResponse(rsp);
+                    this.$alert("success", rsp.msg);
+                })
+                .finally(() => {
+                    this.loading = false;
+                });
+        },
+
+        resetDynamicCover() {
+            this.loading = true;
+            const body = {};
+            body.idlist = this.getSelectedBookIds() || "all";
+            this.$backend("/admin/book/reset_cover", {
                 method: "POST",
                 body: JSON.stringify(body),
             })

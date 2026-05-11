@@ -248,6 +248,7 @@
             "deleteBook": "删除此书",
             "updateAllMeta": "更新库中目录及文件格式",
             "updateAllDynamicCover": "为无封面书籍生成封面",
+            "resetAllDynamicCover": "恢复图书文件内置的封面",
             "header": {
                 "cover": "封面",
                 "id": "ID",

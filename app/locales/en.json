@@ -245,6 +245,7 @@
             "deleteBook": "Delete Book",
             "updateAllMeta": "Update Books according to file name format",
             "updateAllDynamicCover": "Batch update dynamic cover if no cover",
+            "resetAllDynamicCover": "Restore original book cover from file",
             "header": {
                 "cover": "Cover",
                 "id": "ID",

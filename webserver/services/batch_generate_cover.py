@@ -6,6 +6,7 @@
 """
 
 import logging
+import os
 import time
 from webserver.i18n import _
 
@@ -13,7 +14,7 @@ from webserver import loader
 from webserver.base.cover_generator import CoverGenerator
 from webserver.services import AsyncService
 from webserver.services.background_service import BackgroundService, BackgroundTask
-from webserver.constants import CALIBRE_COLUMN_DYNAMIC_COVER, COLUMN_DYNAMIC_COVER
+from webserver.constants import COLUMN_DYNAMIC_COVER
 
 CONF = loader.get_settings()
 
@@ -60,8 +61,62 @@ class DynamicCoverUpdateService(AsyncService):
         except Exception as e:
             logging.error("[DynamicCover] Failed to update task progress: %s", e)
 
+    def _generate_dynamic_cover(self, book_id, mi):
+        """使用 CoverGenerator 为书籍生成动态封面"""
+        author = mi.author_sort[0] if mi.author_sort else _("佚名")
+        data = CoverGenerator.generate_cover(mi.title, author)
+        if data:
+            mi.cover_data = ("jpeg", data)
+            self.db.set_metadata(book_id, mi, commit=True)
+            self.db.set_custom(book_id, 1, COLUMN_DYNAMIC_COVER)
+            logging.debug(f"[DynamicCover] Generated dynamic cover for book id={book_id}")
+            return True
+        return False
+
+    def _extract_file_cover(self, book_id, mi):
+        """从书籍文件中提取内置封面"""
+        from calibre.ebooks.metadata.meta import get_metadata
+
+        books = self.db.get_data_as_dict(ids=[book_id])
+        if not books:
+            logging.warning(f"[DynamicCover] Book id={book_id} not found in db")
+            return False
+        book = books[0]
+
+        book_path = None
+        for fmt in ["epub", "mobi", "azw", "azw3", "pdf"]:
+            book_path = book.get(f"fmt_{fmt}", None)
+            if book_path:
+                break
+
+        if not book_path:
+            logging.warning(f"[DynamicCover] No supported book file found for book id={book_id}")
+            return False
+
+        book_name = os.path.basename(book_path)
+        ext = os.path.splitext(book_name)[1]
+        file_fmt = ext[1:].lower() if ext else None
+        if not file_fmt:
+            return False
+
+        try:
+            with open(book_path, "rb") as stream:
+                file_mi = get_metadata(stream, stream_type=file_fmt, use_libprs_metadata=True)
+            if file_mi.cover_data:
+                cover_fmt, cover_data = file_mi.cover_data
+                if cover_data:
+                    mi.cover_data = (cover_fmt or "jpeg", cover_data)
+                    self.db.set_metadata(book_id, mi, commit=True)
+                    self.db.set_custom(book_id, 0, COLUMN_DYNAMIC_COVER)
+                    logging.debug(f"[DynamicCover] Extracted file cover for book id={book_id}")
+                    return True
+        except Exception as e:
+            logging.error(f"[DynamicCover] Failed to extract file cover for book id={book_id}: {e}")
+
+        return False
+
     @AsyncService.register_service
-    def update_cover(self, uid, idlist: list = None):
+    def update_cover(self, uid, idlist: list = None, dynamic_cover=True):
         self.is_running = True
         self.start_time = time.time()
         self.count_done = 0
@@ -73,7 +128,7 @@ class DynamicCoverUpdateService(AsyncService):
             return
 
         self.count_total = len(books_to_update)
-        logging.info("[DynamicCover] Starting cover update for %d books", self.count_total)
+        logging.info("[DynamicCover] Starting cover update for %d books，dynamic_cover=%s", self.count_total, dynamic_cover)
 
         try:
             task = BackgroundService().update_task(
@@ -98,22 +153,17 @@ class DynamicCoverUpdateService(AsyncService):
                 self.count_done += 1
                 if mi is None:
                     continue
-                if mi.cover_data:
-                    fmt, data = mi.cover_data
+                if mi.cover:
                     dynamic_cover_flag = False
-                    if data:
-                        custom_data = self.db.get_custom_book_data(CALIBRE_COLUMN_DYNAMIC_COVER, book_id, 0)
-                        dynamic_cover_flag = int(custom_data) == 1
-                        logging.info(f"[DynamicCover] Book id={book_id} already has cover data, dynamic_cover_flag={dynamic_cover_flag}")
-                    if not dynamic_cover_flag and data is not None:
+                    custom_data = self.db.get_custom(book_id, label=COLUMN_DYNAMIC_COVER, index_is_id=True)
+                    dynamic_cover_flag = custom_data == 1
+                    logging.info(f"[DynamicCover] Book id={book_id} already has cover data, dynamic_cover_flag={dynamic_cover_flag}")
+                    if dynamic_cover and not dynamic_cover_flag:
                         continue
-                    author = mi.author_sort[0] if mi.author_sort else _("佚名")
-                    data = CoverGenerator.generate_cover(mi.title, author)
-                    if data:
-                        mi.cover_data = ("jpeg", data)
-                        logging.debug(f"[DynamicCover] Generated cover for book id={book_id}")
-                        self.db.set_metadata(book_id, mi, commit=True)
-                        self.db.set_custom(book_id, 1, COLUMN_DYNAMIC_COVER)
+                if dynamic_cover:
+                    self._generate_dynamic_cover(book_id, mi)
+                else:
+                    self._extract_file_cover(book_id, mi)
                 logging.debug("[DynamicCover] Updated book id=%d (%d/%d)", book_id, index + 1, self.count_total)
             except Exception as e:
                 self.count_fail += 1
