@@ -94,7 +94,7 @@ class DynamicCoverUpdateService(AsyncService):
         for index, book_id in enumerate(books_to_update):
             self.current_book_id = book_id
             try:
-                mi = self.db.get_metadata(book_id, index_is_id=True)
+                mi = self.db.get_metadata(book_id, index_is_id=True, get_cover=True)
                 self.count_done += 1
                 if mi is None:
                     continue
