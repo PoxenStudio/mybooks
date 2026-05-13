@@ -740,6 +740,10 @@ class BookRefer(BaseHandler):
                 org_mi.set("tags", [utils.super_strip(t) for t in org_mi.tags])
             else:
                 org_mi.set("tags", [])
+            if org_mi.series:
+                org_mi.set("series", utils.super_strip(org_mi.series))
+            else:
+                org_mi.set("series", "")
         if org_mi.title and org_mi.title == CALIBRE_ERROR_FLAG:
             return {"err": "book.invalid", "msg": _("此书籍文件无法识别, 或者受DRM保护无法处理")}
 
@@ -2105,7 +2109,7 @@ class BookUpload(BaseHandler):
             else:
                 title = mi.title.strip() if mi.title else ""
                 if not title or title.find(_("下载工具")) >= 0 or title == "SSReader Print.":
-                    mi.title = utils.remove_zlibrary_suffix(name.replace("." + fmt, ""))
+                    mi.title = utils.remove_zlibrary_suffix(name[:-len(fmt) - 1])
                 else:
                     mi.title = utils.remove_zlibrary_suffix(title)
             if mi.authors is None or len(mi.authors) == 0 or mi.authors[0].lower() == "unknown":
