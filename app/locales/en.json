@@ -671,6 +671,7 @@
         "deviceTypeRequired": "Please select device type",
         "deviceIPRequired": "Please enter device IP address",
         "devicePortRequired": "Please enter device port",
+        "kindleNotSupportTemporary": "Kindle temporary devices are not supported, please configure a Kindle device in system settings or User Center",
         "clearCategory": "Clear",
         "shareToEmail": "Send via Email",
         "shareToEmailDesc": "Enter an email address to send the book file",

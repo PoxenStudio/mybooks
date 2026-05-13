@@ -506,6 +506,7 @@
         "deviceTypeRequired": "請選擇裝置類型",
         "deviceIPRequired": "請輸入裝置 IP 位址",
         "devicePortRequired": "請輸入裝置連接埠",
+        "kindleNotSupportTemporary": "不支援 Kindle 類型的臨時裝置，請在系統設定或我的帳戶中配置 Kindle 裝置",
         "clearCategory": "清除",
         "shareToEmail": "分享到信箱",
         "shareToEmailDesc": "輸入信箱位址，系統將自動發送書籍檔案到該信箱",

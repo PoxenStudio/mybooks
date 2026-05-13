@@ -508,6 +508,7 @@
         "deviceTypeRequired": "请选择设备类型",
         "deviceIPRequired": "请输入设备IP地址",
         "devicePortRequired": "请输入设备端口",
+        "kindleNotSupportTemporary": "不支持Kindle类型的临时设备，请在系统设置或我的账户中配置Kindle设备",
         "clearCategory": "清除",
         "shareToEmail": "分享到邮箱",
         "shareToEmailDesc": "输入邮箱地址，系统将自动发送书籍文件到该邮箱",

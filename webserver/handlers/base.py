@@ -305,6 +305,9 @@ class BaseHandler(web.RequestHandler):
         if CONF.get(ENABLE_PROFILE) is True:
             self._request_start_time = time.time()
 
+        # output header for debug
+        logging.debug("Request: %s %s, Headers: %s", self.request.method, self.request.uri, dict(self.request.headers))
+
         self.set_hosts()
         self.set_i18n()
         self.process_auth_header()
