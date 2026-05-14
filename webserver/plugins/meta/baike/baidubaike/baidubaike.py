@@ -47,6 +47,10 @@ class Page(object):
             return
 
         self.html = self.http.text
+        logging.info(f"Fetched content length: {len(self.html)} characters")
+        # write content to /data/baike.html for debugging
+        with open("/data/baike.html", "w", encoding="utf-8") as f:
+            f.write(self.html)
         self.soup = BeautifulSoup(self.html, "lxml")
 
         # Exceptions
@@ -97,6 +101,7 @@ class Page(object):
     def get_image(self):
         if not self.valid:
             return ""
+        normal_type = True
         url = ""
         divs = self.soup.find_all(class_=CLASS_SUMMARY_PIC)
         for div in divs:
@@ -104,7 +109,16 @@ class Page(object):
             if not url:
                 continue
             break
-        return url
+        if not url:
+            normal_type = False
+            # 查找页面的meta如下信息，获取图片url
+            # <meta property="og:image" content="https://xxx" />
+            og_images = self.soup.find_all("meta", property="og:image")
+            for og_image in og_images:
+                if og_image and og_image.has_attr("content") and og_image["content"].lower().startswith("https://bkimg.cdn.bcebos.com/"):
+                    url = og_image["content"]
+                    break
+        return normal_type, url
 
     def get_summary(self):
         """Get summary infomation of a page"""
