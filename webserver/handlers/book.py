@@ -48,7 +48,7 @@ from webserver.constants import COLUMN_CATEGORY, CALIBRE_COLUMN_CATEGORY
 from webserver.constants import CALIBRE_ERROR_FLAG, SUPPORTED_EBOOK_FORMATS
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT
 from webserver.constants import BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL, AUTO_FILL_META
-from webserver.constants import META_SOURCE_GOOGLE, META_SOURCE_AMAZON, META_SOURCE_DOUBAN
+from webserver.constants import META_SOURCE_GOOGLE, META_SOURCE_AMAZON, META_SOURCE_DOUBAN, META_SELECTED_SOURCES
 from webserver.constants import COLUMN_EXT_LINK, CALIBRE_COLUMN_EXT_LINK
 from webserver.constants import CALIBRE_COLUMN_DYNAMIC_COVER, COLUMN_DYNAMIC_COVER
 
@@ -1820,6 +1820,7 @@ class BookAddByISBN(BaseHandler):
 
         # 使用基类方法查找已存在的ISBN实体书
         existing_books = self.find_phy_books_by_isbn(isbn)
+        sources = CONF.get(META_SELECTED_SOURCES, [])
 
         # 如果已存在该ISBN的图书，更新相关计数
         if existing_books:
@@ -1851,7 +1852,7 @@ class BookAddByISBN(BaseHandler):
 
         logging.info("Adding new book by ISBN: %s" % isbn)
         # 通过Douban API查询ISBN的图书信息
-        if META_SOURCE_DOUBAN in CONF["META_SOURCE"]:
+        if META_SOURCE_DOUBAN in sources:
             douban_api = douban.DoubanBookApi(
                 CONF["douban_apikey"],
                 CONF["douban_baseurl"],
@@ -1861,7 +1862,7 @@ class BookAddByISBN(BaseHandler):
         try:
             try:
                 md = douban.SimpleMetaData(isbn=isbn)
-                if META_SOURCE_DOUBAN in CONF["META_SOURCE"]:
+                if META_SOURCE_DOUBAN in sources:
                     book_data = douban_api.get_book(md)
                 if not book_data:
                     xhsd_api = xhsd.XhsdBookApi()
