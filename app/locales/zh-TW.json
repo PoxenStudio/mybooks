@@ -723,7 +723,11 @@
         "stamp_upload_success": "圖章圖片上傳成功",
         "stamp_image_format_error": "只支援 PNG 格式的圖片",
         "stamp_image_size_error": "圖片檔案大小不能超過 128KB",
-        "stamp_image_dimension_error": "圖片尺寸不能超過 480x480 像素"
+        "stamp_image_dimension_error": "圖片尺寸不能超過 480x480 像素",
+        "url_rule_error": "請輸入有效的 HTTP/HTTPS URL",
+        "model_name_rule_error": "模型名稱只能包含字母、數字、底線、連字符或點，且不能以連字符或點開頭/結尾，也不能有連續的特殊字元",
+        "api_key_rule_error": "API 金鑰只能包含字母、數字、連字符或點",
+        "api_key_length_error": "長度必須在 16 到 128 個字元之間"
     },
     "user": {
         "avatar": "大頭貼",

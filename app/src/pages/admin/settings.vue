@@ -396,7 +396,7 @@
                 :label="$t('settings.ai_api_url')"
                 :placeholder="$t('settings.ai_api_url_description')"
                 type="text"
-                :rules="urlRule"
+                :rules="[urlRule]"
                 :maxlength="512"
               ></v-text-field>
               <v-text-field
@@ -406,7 +406,7 @@
                 :label="$t('settings.ai_model')"
                 :placeholder="$t('settings.ai_model_description')"
                 type="text"
-                :rules="urlRule"
+                :rules="[modelNameRule]"
                 :maxlength="128"
               ></v-text-field>
               <v-divider class="my-2"></v-divider>
@@ -1246,27 +1246,6 @@ export default {
       { text: "HTTP", value: "http" },
       { text: "HTTPS", value: "https" },
     ],
-    urlRule: (v) => {
-      if (!v) return true;
-      const pattern = /^https?:\/\/.+/;
-      return pattern.test(v) || "Must be a valid HTTP/HTTPS URL";
-    },
-    modelNameRule: (v) => {
-      if (!v) return true;
-      // 只能包含字母、数字、下划线、连字符、点，且不能以连字符或点开头或结尾，不能连续出现特殊字符
-      const pattern = /^(?![.-])[a-zA-Z0-9]+([_.-]?[a-zA-Z0-9]+)*$/;
-      return pattern.test(v) || "Model name can only contain letters, numbers, underscores, hyphens, or dots, and cannot start/end with hyphen/dot or have consecutive special characters";
-    },
-    apiKeyRules: [
-      (v) =>
-        !v ||
-        /^[a-zA-Z0-9-]*$/.test(v) ||
-        "Only alphanumeric characters allowed",
-      (v) =>
-        !v ||
-        (v.length >= 16 && v.length <= 128) ||
-        "Length must be between 16 and 128 characters",
-    ],
     trashSizes: { trash: 0, upload: 0 },
     trashSizeTexts: { trash: "", upload: "" },
     trashLoading: false,
@@ -1286,6 +1265,26 @@ export default {
     ],
   }),
   computed: {
+    urlRule() {
+      return (v) => {
+        if (!v) return true;
+        const pattern = /^https?:\/\/.+/;
+        return pattern.test(v) || this.$t('settings.url_rule_error');
+      };
+    },
+    modelNameRule() {
+      return (v) => {
+        if (!v) return true;
+        const pattern = /^(?![.-])[a-zA-Z0-9]+([_.-]?[a-zA-Z0-9]+)*$/;
+        return pattern.test(v) || this.$t('settings.model_name_rule_error');
+      };
+    },
+    apiKeyRules() {
+      return [
+        (v) => !v || /^[a-zA-Z0-9-.]*$/.test(v) || this.$t('settings.api_key_rule_error'),
+        (v) => !v || (v.length >= 16 && v.length <= 128) || this.$t('settings.api_key_length_error'),
+      ];
+    },
     metaSourceItems() {
       const allSources = this.settings["META_ALL_SOURCES"] || [
         "douban",
