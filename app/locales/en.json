@@ -540,7 +540,11 @@
         "stamp_upload_success": "Stamp image uploaded successfully",
         "stamp_image_format_error": "Only PNG format is supported",
         "stamp_image_size_error": "Image file size must not exceed 128KB",
-        "stamp_image_dimension_error": "Image dimensions must not exceed 480x480 pixels"
+        "stamp_image_dimension_error": "Image dimensions must not exceed 480x480 pixels",
+        "url_rule_error": "Must be a valid HTTP/HTTPS URL",
+        "model_name_rule_error": "Model name can only contain letters, numbers, underscores, hyphens, or dots, and cannot start/end with hyphen/dot or have consecutive special characters",
+        "api_key_rule_error": "API key can only contain letters, numbers, hyphens, or dots",
+        "api_key_length_error": "Length must be between 16 and 128 characters"
     },
     "book": {
         "edit": {

@@ -726,7 +726,11 @@
         "stamp_upload_success": "图章图片上传成功",
         "stamp_image_format_error": "只支持PNG格式的图片",
         "stamp_image_size_error": "图片文件大小不能超过128KB",
-        "stamp_image_dimension_error": "图片尺寸不能超过480x480像素"
+        "stamp_image_dimension_error": "图片尺寸不能超过480x480像素",
+        "url_rule_error": "请输入有效的 HTTP/HTTPS URL",
+        "model_name_rule_error": "模型名称只能包含字母、数字、下划线、连字符或点，且不能以连字符或点开头/结尾，也不能有连续的特殊字符",
+        "api_key_rule_error": "API密钥只能包含字母、数字、连字符或点",
+        "api_key_length_error": "长度必须在16到128个字符之间"
     },
     "user": {
         "avatar": "头像",
