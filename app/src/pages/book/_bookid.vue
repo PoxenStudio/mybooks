@@ -33,7 +33,7 @@
                                     <v-btn
                                         icon
                                         small
-                                        @click.stop="play_sample_voice(item)"
+                                        @click.stop="playSampleVoice(item)"
                                         :loading="playing_sample === item.voice_name"
                                     >
                                         <v-icon>play_arrow</v-icon>
@@ -45,7 +45,7 @@
                     <v-card-actions>
                         <v-btn color="" text @click="dialog_epub2audio = false">{{ $t('common.cancel') }}</v-btn>
                         <v-spacer></v-spacer>
-                        <v-btn color="primary" text @click="generate_audio">{{ $t('common.start') }}</v-btn>
+                        <v-btn color="primary" text @click="generateAudio">{{ $t('common.start') }}</v-btn>
                     </v-card-actions>
                 </v-card>
             </v-dialog>
@@ -83,7 +83,7 @@
                                     <v-btn
                                         icon
                                         small
-                                        @click="play_audio_file(audio_item, idx)"
+                                        @click="playAudioFile(audio_item, idx)"
                                         :loading="playing_audio_index === idx && audio_loading"
                                         :color="playing_audio_index === idx ? 'primary' : 'default'"
                                     >
@@ -99,7 +99,7 @@
                             v-if="audios.status === AUDIO_STATUS.PROCESSING"
                             color="warning"
                             text
-                            @click="clear_conversion"
+                            @click="clearConversion"
                         >
                             {{ $t('book.cancelConversion') }}
                         </v-btn>
@@ -107,7 +107,7 @@
                             v-else-if="audios.status === AUDIO_STATUS.CONVERTED"
                             color="error"
                             text
-                            @click="clear_conversion"
+                            @click="clearConversion"
                         >
                             {{ $t('common.clear') }}
                         </v-btn>
@@ -115,7 +115,7 @@
                             v-if="audios.status === AUDIO_STATUS.CONVERTED"
                             color="primary"
                             text
-                            @click="generate_audio"
+                            @click="generateAudio"
                         >
                             {{ $t('common.restore') }}
                         </v-btn>
@@ -205,15 +205,15 @@
                                             </v-btn>
                                         </template>
                                         <v-list dense>
-                                            <v-list-item @click="set_refer(book)">
+                                            <v-list-item @click="setRefer(book)">
                                                 <v-list-item-title>{{ $t('book.setBookInfoAndImage') }}</v-list-item-title>
                                             </v-list-item>
                                             <v-list-item
-                                                @click="set_refer(book, { only_meta: 'yes' })">
+                                                @click="setRefer(book, { only_meta: 'yes' })">
                                                 <v-list-item-title>{{ $t('book.setBookInfoOnly') }}</v-list-item-title>
                                             </v-list-item>
                                             <v-list-item
-                                                @click="set_refer(book, { only_cover: 'yes' })">
+                                                @click="setRefer(book, { only_cover: 'yes' })">
                                                 <v-list-item-title>{{ $t('book.setBookImageOnly') }}</v-list-item-title>
                                             </v-list-item>
                                         </v-list>
@@ -249,7 +249,7 @@
                         color="primary"
                         class="mx-2 d-flex d-sm-flex"
                         :style="tiny ? { padding: '0px 2px', margin: '0px 3px !important' } : {}"
-                        @click="switch_to_audio_player"
+                        @click="switchToAudioPlayer"
                         v-if="book.book_type != this.BOOK_TYPE.PHYSICAL"
                     >
                         <v-icon dark v-if="!tiny">{{ audios.status === AUDIO_STATUS.FAILED ? 'error' : 'audiotrack' }}</v-icon>
@@ -278,35 +278,35 @@
                                 </v-btn>
                             </template>
                             <v-list min-width="200">
-                                <v-list-item @click="save_meta_to_file" :disabled="!hasEpubAzw3OrPDF">
+                                <v-list-item @click="saveMetaToFile" :disabled="!hasEpubAzw3OrPDF">
                                     <v-icon>mdi-file-sync</v-icon>
                                     {{ $t('book.saveMetaToFile') }}
                                 </v-list-item>
-                                <v-list-item @click="add_stamp_to_cover" :disabled="!hasEpubAzw3 || !stamp_enabled">
+                                <v-list-item @click="addStampToCover" :disabled="!hasEpubAzw3 || !stamp_enabled">
                                     <v-icon>mdi-picture-in-picture-bottom-right-outline</v-icon>
                                     {{ $t('book.addStampToCover') }}
                                 </v-list-item>
-                                <v-list-item @click="convert_book" :disabled="!hasEBooks">
+                                <v-list-item @click="convertBook" :disabled="!hasEBooks">
                                     <v-icon>mdi-swap-horizontal</v-icon>
                                     {{ $t('book.convert') }}
                                 </v-list-item>
-                                <v-list-item @click="convert_to_pdf" :disabled="!hasEBooks || hasPDF">
+                                <v-list-item @click="convertToPdf" :disabled="!hasEBooks || hasPDF">
                                     <v-icon>mdi-swap-horizontal</v-icon>
                                     {{ $t('book.convertToPdf') }}
                                 </v-list-item>
-                                <v-list-item @click="convert_to_txtz" :disabled="!hasEBooks || !hasTxt || hasTxtZ">
+                                <v-list-item @click="convertToTxtz" :disabled="!hasEBooks || !hasTxt || hasTxtZ">
                                     <v-icon>mdi-swap-horizontal</v-icon>
                                     {{ $t('book.convertToTxtZ') }}
                                 </v-list-item>
-                                <v-list-item @click="seperate_book" :disabled="book.files.length <= 1">
+                                <v-list-item @click="separateBook" :disabled="book.files.length <= 1">
                                     <v-icon>mdi-content-copy</v-icon>
                                     {{ $t('book.seperate') }}
                                 </v-list-item>
-                                <v-list-item @click="show_delete_format_dialog" :disabled="book.files.length <= 1">
+                                <v-list-item @click="showDeleteFormatDialog" :disabled="book.files.length <= 1">
                                     <v-icon>mdi-file-document-remove-outline</v-icon>
                                     {{ $t('book.deleteFormat') }}
                                 </v-list-item>
-                                <v-list-item @click="show_upload_format_dialog" :disabled="book.book_type==this.BOOK_TYPE.PHYSICAL">
+                                <v-list-item @click="showUploadFormatDialog" :disabled="book.book_type==this.BOOK_TYPE.PHYSICAL">
                                     <v-icon>mdi-file-upload-outline</v-icon>
                                     {{ $t('book.uploadNewFormat') }}
                                 </v-list-item>
@@ -326,15 +326,15 @@
                                     <v-icon>settings_applications</v-icon>
                                     {{ $t('book.editBookInfo') }}
                                 </v-list-item>
-                                <v-list-item @click="get_refer">
+                                <v-list-item @click="getRefer">
                                     <v-icon>apps</v-icon>
                                     {{ $t('book.updateInfoFromInternet') }}
                                 </v-list-item>
-                                <v-list-item @click="update_tags">
+                                <v-list-item @click="updateTags">
                                     <v-icon>mdi-bookmark-plus</v-icon>
                                     {{ $t('book.updateTags') }}
                                 </v-list-item>
-                                <v-list-item @click="reset_refer">
+                                <v-list-item @click="resetRefer">
                                     <v-icon>apps</v-icon>
                                     {{ $t('book.resetInfo') }}
                                 </v-list-item>
@@ -342,11 +342,11 @@
                                     <v-icon>photo</v-icon>
                                     {{ $t('book.setCover') }}
                                 </v-list-item>
-                                <v-list-item @click="set_sole">
+                                <v-list-item @click="setSole">
                                     <v-icon>{{ book.sole ? 'public_off' : 'public' }}</v-icon>
                                     {{ book.sole ? $t('book.setPublic') : $t('book.setSole') }}
                                 </v-list-item>
-                                <v-list-item @click="ai_fill_book">
+                                <v-list-item @click="aiFillBook">
                                     <v-icon>mdi-robot</v-icon>
                                     {{ $t('book.aiUpdate') }}
                                 </v-list-item>
@@ -354,11 +354,11 @@
                                     <v-icon>mdi-email-send</v-icon>
                                     {{ $t('book.shareToEmail') }}
                                 </v-list-item>
-                                <v-list-item @click="generate_share_card" :disabled="book.book_type==this.BOOK_TYPE.PHYSICAL">
+                                <v-list-item @click="generateShareCard" :disabled="book.book_type==this.BOOK_TYPE.PHYSICAL">
                                     <v-icon>mdi-card-bulleted-outline</v-icon>
                                     {{ $t('book.generateShareCard') }}
                                 </v-list-item>
-                                <v-list-item @click="delete_book">
+                                <v-list-item @click="deleteBook">
                                     <v-icon>delete_forever</v-icon>
                                     {{ $t('book.deleteBook') }}
                                 </v-list-item>
@@ -493,7 +493,7 @@
                             </div>
                             <div class="tag-chips" style="margin-top: 5px;">
                                 <v-chip rounded smallF color="indigo" class="white--text"
-                                        @click="ai_fill_book" :loading="ai_filling">
+                                        @click="aiFillBook" :loading="ai_filling">
                                     <v-icon left>mdi-robot</v-icon>
                                     {{ $t('book.aiUpdate') }}
                                 </v-chip>
@@ -630,7 +630,7 @@
         <v-col cols="12" sm="6" class="book-action-col" :class="{ 'book-action-col--txt': is_txt }">
             <v-card outlined>
                 <v-list>
-                    <v-list-item @click="switch_audio_dialog" :disabled="book.book_type == this.BOOK_TYPE.PHYSICAL">
+                    <v-list-item @click="switchAudioDialog" :disabled="book.book_type == this.BOOK_TYPE.PHYSICAL">
                         <v-list-item-avatar large :color="book.book_type == this.BOOK_TYPE.PHYSICAL ? 'grey' : (audios.status === AUDIO_STATUS.FAILED ? 'red' : 'primary')">
                             <v-icon dark>{{ audios.status === AUDIO_STATUS.FAILED ? 'error' : 'audiotrack' }}</v-icon>
                         </v-list-item-avatar>
@@ -1074,7 +1074,7 @@
                 <v-spacer></v-spacer>
                 <v-btn text @click="dialog_share_card = false">{{ $t('common.close') }}</v-btn>
                 <v-btn v-if="share_card_image_url && !share_card_generating"
-                       color="primary" @click="download_share_card">
+                       color="primary" @click="downloadShareCard">
                     <v-icon left>mdi-download</v-icon>
                     {{ $t('book.downloadShareCard') }}
                 </v-btn>
@@ -1605,7 +1605,7 @@ export default {
         }
     },
     async mounted() {
-        this.get_txt_parse_status();
+        this.getTxtParseStatus();
         // 异步加载推荐图书
         this.loadSuggestionBooks();
         this.loadSameNameBooks();
@@ -1624,7 +1624,7 @@ export default {
                 this.loaded = true;
                 if (newValue && newValue.status === this.AUDIO_STATUS.PROCESSING) {
                     // 如果音频状态是正在处理中，启动进度轮询
-                    this.start_audio_progress_polling();
+                    this.startAudioProgressPolling();
                 }
             },
             immediate: true, // 立即执行一次，用于初始数据检查
@@ -1693,9 +1693,9 @@ export default {
     },
     beforeDestroy() {
         // 清理音频资源
-        this.stop_current_audio();
-        this.stop_audio_file_playback();
-        this.stop_audio_progress_polling();
+        this.stopCurrentAudio();
+        this.stopAudioFilePlayback();
+        this.stopAudioProgressPolling();
     },
     methods: {
         async toggleFavorite() {
@@ -1816,15 +1816,15 @@ export default {
             }
             if (next) next();
         },
-        switch_to_audio_player() {
+        switchToAudioPlayer() {
             if (this.audios.status === this.AUDIO_STATUS.CONVERTED && this.audios.count > 0) {
                 // 切换到音频播放页面, /audio/<bid>
                 this.$router.push("/audio/" + this.book.id);
             } else {
-                this.switch_audio_dialog();
+                this.switchAudioDialog();
             }
         },
-        switch_audio_dialog() {
+        switchAudioDialog() {
             // 如果是实体书，则不允许转换音频
             if (this.book.book_type == this.BOOK_TYPE.PHYSICAL) {
                 return;
@@ -1836,9 +1836,9 @@ export default {
                 this.dialog_audiolist = !this.dialog_audiolist
                 // Start progress polling when opening audio list dialog
                 if (this.dialog_audiolist && this.audios.status === this.AUDIO_STATUS.PROCESSING) {
-                    this.start_audio_progress_polling();
+                    this.startAudioProgressPolling();
                 } else {
-                    this.stop_audio_progress_polling();
+                    this.stopAudioProgressPolling();
                 }
             }
         },
@@ -1848,7 +1848,7 @@ export default {
             if (text.length <= maxLength) return text;
             return text.slice(0, maxLength) + '...';
         },
-        sendto_kindle() {
+        sendToKindle() {
             if (process.client) {
                 this.$cookies.set("last_mailto", this.mail_to);
             }
@@ -1867,7 +1867,7 @@ export default {
                 }
             });
         },
-        generate_audio() {
+        generateAudio() {
             // 保存选择的语音名称到localStorage
             if (process.client) {
                 localStorage.setItem("last_used_voice_name", this.voice_name);
@@ -1881,15 +1881,15 @@ export default {
                     this.epub2audio_processing = true;
                     this.dialog_epub2audio = false;
                     this.dialog_audiolist = false;
-                    this.start_audio_progress_polling();
+                    this.startAudioProgressPolling();
                     this.$alert("success", this.$t('book.audioGenerated'));
                 } else {
-                    this.stop_audio_progress_polling();
+                    this.stopAudioProgressPolling();
                     this.$alert("error", rsp.msg);
                 }
             });
         },
-        get_txt_parse_status(){
+        getTxtParseStatus(){
           if (!this.hasTxt && !this.hasTxtZ) {
             return;
           }
@@ -1901,7 +1901,7 @@ export default {
               }
             })
         },
-        get_refer() {
+        getRefer() {
             this.dialog_refer = true;
             this.refer_books_loading = true;
             // 构造查询参数，传递书籍信息避免后端重复查询数据库
@@ -1924,7 +1924,7 @@ export default {
                     this.refer_books_loading = false;
                 });
         },
-        set_refer(book, opt) {
+        setRefer(book, opt) {
             // 防止多次重复点击
             if(this.refer_books_setting_btn_loading) return;
             const provider_key = book.provider_key
@@ -1953,7 +1953,7 @@ export default {
                this.refer_books_setting_btn_loading = false;
             });
         },
-        reset_refer() {
+        resetRefer() {
             // 使用本地书籍信息覆盖
             this.$backend("/book/" + this.book.id + "/refer", {
                 method: "POST",
@@ -1968,7 +1968,7 @@ export default {
                 }
             });
         },
-        update_tags() {
+        updateTags() {
             // this.$router.push("/book/" + this.book.id + "/tags");
             this.$backend("/book/" + this.book.id + "/tags", {
                 method: "POST"
@@ -1982,7 +1982,7 @@ export default {
                 }
             });
         },
-        ai_fill_book() {
+        aiFillBook() {
             if (this.ai_filling) return;
             this.ai_filling = true;
             this.$backend("/book/" + this.book.id + "/aifill", {
@@ -1998,7 +1998,7 @@ export default {
                 this.ai_filling = false;
             });
         },
-        convert_book() {
+        convertBook() {
             // 转换书籍格式
             this.$backend("/book/" + this.book.id + "/convert", {
                 method: "POST",
@@ -2012,7 +2012,7 @@ export default {
                 }
             });
         },
-        convert_to_pdf() {
+        convertToPdf() {
             // 转换为PDF
             this.$backend("/book/" + this.book.id + "/topdf", {
                 method: "POST",
@@ -2025,7 +2025,7 @@ export default {
                 }
             });
         },
-        convert_to_txtz() {
+        convertToTxtz() {
             // 转换为TXTZ
             this.$backend("/book/" + this.book.id + "/totxtz", {
                 method: "POST",
@@ -2038,7 +2038,7 @@ export default {
                 }
             });
         },
-        set_sole() {
+        setSole() {
             // 设置为私藏
             this.$backend("/book/" + this.book.id + "/setsole", {
                 method: "POST",
@@ -2052,7 +2052,7 @@ export default {
                 }
             });
         },
-        seperate_book() {
+        separateBook() {
             // 检查是否有多个格式
             if (!this.book.files || this.book.files.length <= 1) {
                 this.$alert("error", this.$t('book.needMultipleFormats'));
@@ -2063,7 +2063,7 @@ export default {
             this.selectedSeparateFormat = this.book.files[0].format.toLowerCase();
             this.dialog_separate = true;
         },
-        save_meta_to_file() {
+        saveMetaToFile() {
             // 保存元数据到书籍文件
             if (!this.hasEpubAzw3OrPDF) {
                 this.$alert("error", this.$t('book.needEpubOrAzw3'));
@@ -2082,7 +2082,7 @@ export default {
                 this.$alert("error", this.$t('book.saveMetaFailed'));
             });
         },
-        add_stamp_to_cover() {
+        addStampToCover() {
             // 为封面加盖图章
             if (!this.hasEpubAzw3OrPDF) {
                 this.$alert("error", this.$t('book.needEpubOrAzw3'));
@@ -2115,7 +2115,7 @@ export default {
                 this.$alert("error", this.$t('book.addStampFailed'));
             });
         },
-        show_delete_format_dialog() {
+        showDeleteFormatDialog() {
             // 检查是否有多个格式
             if (!this.book.files || this.book.files.length <= 1) {
                 this.$alert("error", this.$t('book.needMultipleFormats'));
@@ -2186,7 +2186,7 @@ export default {
                 this.$alert("error", this.$t('book.deleteFormatFailed'));
             });
         },
-        show_upload_format_dialog() {
+        showUploadFormatDialog() {
             this.upload_format_file = null;
             this.dialog_upload_format = true;
         },
@@ -2234,7 +2234,7 @@ export default {
                 return parseInt(size / 1024) + 'KB';
             }
         },
-        delete_book() {
+        deleteBook() {
             this.$backend("/book/" + this.book.id + "/delete", {
                 method: "POST",
             }).then((rsp) => {
@@ -2246,15 +2246,15 @@ export default {
                 }
             });
         },
-        play_sample_voice(voice_option) {
+        playSampleVoice(voice_option) {
             if (this.playing_sample === voice_option.voice_name) {
                 // 如果正在播放相同的样本，则停止播放
-                this.stop_current_audio();
+                this.stopCurrentAudio();
                 return;
             }
 
             // 停止当前播放的音频
-            this.stop_current_audio();
+            this.stopCurrentAudio();
 
             // 设置正在播放状态
             this.playing_sample = voice_option.voice_name;
@@ -2280,14 +2280,14 @@ export default {
                 this.$alert("error", this.$t('message.audioPlayFailed'));
             });
         },
-        stop_current_audio() {
+        stopCurrentAudio() {
             if (this.currentAudio) {
                 this.currentAudio.pause();
                 this.currentAudio = null;
             }
             this.playing_sample = null;
         },
-        play_audio_file(audio_item, index) {
+        playAudioFile(audio_item, index) {
             // If clicking on the same audio that's currently playing
             if (this.playing_audio_index === index && this.currentAudioFile) {
                 if (this.audio_paused) {
@@ -2303,10 +2303,10 @@ export default {
             }
 
             // Stop any currently playing audio
-            this.stop_audio_file_playback();
+            this.stopAudioFilePlayback();
 
             // Stop sample voice if playing
-            this.stop_current_audio();
+            this.stopCurrentAudio();
 
             // Set loading state
             this.audio_loading = true;
@@ -2324,11 +2324,11 @@ export default {
             });
 
             this.currentAudioFile.addEventListener('ended', () => {
-                this.stop_audio_file_playback();
+                this.stopAudioFilePlayback();
             });
 
             this.currentAudioFile.addEventListener('error', () => {
-                this.stop_audio_file_playback();
+                this.stopAudioFilePlayback();
                 this.$alert("error", this.$t('message.audioLoadFailed'));
             });
 
@@ -2337,11 +2337,11 @@ export default {
                 this.audio_loading = false;
                 this.audio_paused = false;
             }).catch(() => {
-                this.stop_audio_file_playback();
+                this.stopAudioFilePlayback();
                 this.$alert("error", this.$t('message.audioPlayFailed'));
             });
         },
-        stop_audio_file_playback() {
+        stopAudioFilePlayback() {
             if (this.currentAudioFile) {
                 this.currentAudioFile.pause();
                 this.currentAudioFile = null;
@@ -2350,19 +2350,19 @@ export default {
             this.audio_loading = false;
             this.audio_paused = false;
         },
-        start_audio_progress_polling() {
-            this.stop_audio_progress_polling(); // Clear any existing timer
+        startAudioProgressPolling() {
+            this.stopAudioProgressPolling(); // Clear any existing timer
             this.progressTimer = setInterval(() => {
-                this.update_audio_progress();
+                this.updateAudioProgress();
             }, 10000); // Poll every 10 seconds
         },
-        stop_audio_progress_polling() {
+        stopAudioProgressPolling() {
             if (this.progressTimer) {
                 clearInterval(this.progressTimer);
                 this.progressTimer = null;
             }
         },
-        async update_audio_progress() {
+        async updateAudioProgress() {
             try {
                 const response = await this.$backend(`/book/${this.book.id}`);
                 if (response.audios) {
@@ -2370,7 +2370,7 @@ export default {
 
                     // Stop polling if conversion is complete or failed
                     if (this.audios.status !== this.AUDIO_STATUS.PROCESSING) {
-                        this.stop_audio_progress_polling();
+                        this.stopAudioProgressPolling();
                     }
                 }
             } catch (error) {
@@ -2378,7 +2378,7 @@ export default {
                 // Continue polling even if one request fails
             }
         },
-        async clear_conversion() {
+        async clearConversion() {
             try {
                 let endpoint;
                 let successMessage;
@@ -2404,7 +2404,7 @@ export default {
                 if (response.err === 'ok') {
                     this.$alert('success', successMessage);
                     // Stop any ongoing polling
-                    this.stop_audio_progress_polling();
+                    this.stopAudioProgressPolling();
                     // Close the dialog
                     this.dialog_audiolist = false;
                     if (is_delete) {
@@ -2813,7 +2813,7 @@ export default {
         },
 
         // 生成读书分享卡片
-        async generate_share_card() {
+        async generateShareCard() {
             this.share_card_image_url = null;
             this.share_card_generating = true;
             this.dialog_share_card = true;
@@ -3120,7 +3120,7 @@ export default {
         },
 
         // 下载读书分享卡片
-        download_share_card() {
+        downloadShareCard() {
             if (!this.share_card_image_url) return;
             const a = document.createElement('a');
             const safeName = (this.book.title || 'book').replace(/[/\\:*?"<>|]/g, '_');
