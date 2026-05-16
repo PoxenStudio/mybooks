@@ -548,7 +548,7 @@ class Device(Base, SQLAlchemyMixin):
     ip = Column(String(128), default="")
     port = Column(Integer, default=12121)
     schema = Column(String(8), default="http")
-    mailbox = Column(String(256), default="")
+    mailbox = Column(String(2048), default="")
     create_time = Column(DateTime, default=datetime.datetime.now)
     update_time = Column(DateTime, default=datetime.datetime.now)
 
@@ -576,7 +576,7 @@ class Device(Base, SQLAlchemyMixin):
         self.update_time = datetime.datetime.now()
 
     def to_dict(self):
-        return {
+        result = {
             "name": self.name,
             "type": self.device_type,
             "ip": self.ip,
@@ -584,6 +584,16 @@ class Device(Base, SQLAlchemyMixin):
             "schema": self.schema,
             "mailbox": self.mailbox,
         }
+        if self.device_type == "ftp":
+            try:
+                extra = json.loads(self.mailbox or "{}")
+            except Exception:
+                extra = {}
+            result["ftp_username"] = extra.get("username", "")
+            result["ftp_password"] = extra.get("password", "")
+            result["ftp_path"] = extra.get("path", "")
+            result["mailbox"] = ""
+        return result
 
 
 class StickyItem(Base, SQLAlchemyMixin):

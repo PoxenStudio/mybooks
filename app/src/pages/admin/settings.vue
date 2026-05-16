@@ -217,90 +217,146 @@
             </template>
 
             <template v-if="card.show_devices">
-              <v-row
-                v-for="(device, idx) in settings.DEVICES"
-                :key="'device-' + idx"
-              >
-                <v-col class="py-0" cols="2">
-                  <v-text-field
-                    flat
-                    small
-                    hide-details
-                    single-line
-                    v-model="device.name"
-                    :label="$t('settings.device_name')"
-                    type="text"
-                    maxlength="64"
-                  ></v-text-field>
-                </v-col>
-                <v-col class="py-0" cols="2">
-                  <v-select
-                    flat
-                    small
-                    hide-details
-                    single-line
-                    v-model="device.type"
-                    :items="deviceTypes"
-                    :label="$t('settings.device_type')"
-                  >
-                  </v-select>
-                </v-col>
-                <template v-if="device.type === 'kindle'">
-                  <v-col class="py-0" cols="6">
-                    <v-text-field
-                      flat
-                      small
-                      hide-details
-                      single-line
-                      v-model="device.mailbox"
-                      :label="$t('settings.device_mailbox')"
-                      type="email"
-                      placeholder="user@kindle.com"
-                    ></v-text-field>
-                  </v-col>
-                </template>
-                <template v-else>
-                  <v-col class="py-0" cols="2">
-                    <v-text-field
-                      flat
-                      small
-                      hide-details
-                      single-line
-                      v-model="device.ip"
-                      :label="$t('settings.device_ip')"
-                      type="text"
-                    ></v-text-field>
-                  </v-col>
-                  <v-col class="py-0" cols="2">
-                    <v-text-field
-                      flat
-                      small
-                      hide-details
-                      single-line
-                      v-model.number="device.port"
-                      :label="$t('settings.device_port')"
-                      type="number"
-                    ></v-text-field>
-                  </v-col>
-                  <v-col class="py-0" cols="2">
-                    <v-select
-                      flat
-                      small
-                      hide-details
-                      single-line
-                      v-model="device.schema"
-                      :items="deviceSchemas"
-                      :label="$t('settings.device_schema')"
-                    >
-                    </v-select>
-                  </v-col>
-                </template>
-                <v-col class="py-0" cols="1" align-self="end">
-                  <v-btn icon small @click="settings.DEVICES.splice(idx, 1)">
-                    <v-icon>delete</v-icon>
-                  </v-btn>
-                </v-col>
-              </v-row>
+              <template v-for="(device, idx) in settings.DEVICES">
+                <div :key="'device-' + idx" class="device-item mb-3">
+                  <v-row>
+                    <v-col class="py-1" cols="3">
+                      <v-text-field
+                        outlined
+                        dense
+                        hide-details="auto"
+                        v-model="device.name"
+                        :label="$t('settings.device_name')"
+                        type="text"
+                        maxlength="64"
+                      ></v-text-field>
+                    </v-col>
+                    <v-col class="py-1" cols="2">
+                      <v-select
+                        outlined
+                        dense
+                        hide-details="auto"
+                        v-model="device.type"
+                        :items="deviceTypes"
+                        :label="$t('settings.device_type')"
+                      ></v-select>
+                    </v-col>
+                    <template v-if="device.type === 'kindle'">
+                      <v-col class="py-1" cols="6">
+                        <v-text-field
+                          outlined
+                          dense
+                          hide-details="auto"
+                          v-model="device.mailbox"
+                          :label="$t('settings.device_mailbox')"
+                          type="email"
+                          placeholder="user@kindle.com"
+                        ></v-text-field>
+                      </v-col>
+                    </template>
+                    <template v-else-if="device.type === 'ftp'">
+                      <v-col class="py-1" cols="3">
+                        <v-text-field
+                          outlined
+                          dense
+                          hide-details="auto"
+                          v-model="device.ip"
+                          :label="$t('settings.device_ip')"
+                          type="text"
+                          placeholder="192.168.1.100"
+                        ></v-text-field>
+                      </v-col>
+                      <v-col class="py-1" cols="2">
+                        <v-text-field
+                          outlined
+                          dense
+                          hide-details="auto"
+                          v-model.number="device.port"
+                          :label="$t('settings.device_port')"
+                          type="number"
+                          placeholder="21"
+                        ></v-text-field>
+                      </v-col>
+                    </template>
+                    <template v-else>
+                      <v-col class="py-1" cols="2">
+                        <v-text-field
+                          outlined
+                          dense
+                          hide-details="auto"
+                          v-model="device.ip"
+                          :label="$t('settings.device_ip')"
+                          type="text"
+                          placeholder="192.168.1.100"
+                        ></v-text-field>
+                      </v-col>
+                      <v-col class="py-1" cols="2">
+                        <v-text-field
+                          outlined
+                          dense
+                          hide-details="auto"
+                          v-model.number="device.port"
+                          :label="$t('settings.device_port')"
+                          type="number"
+                          placeholder="8080"
+                        ></v-text-field>
+                      </v-col>
+                      <v-col class="py-1" cols="2">
+                        <v-select
+                          outlined
+                          dense
+                          hide-details="auto"
+                          v-model="device.schema"
+                          :items="deviceSchemas"
+                          :label="$t('settings.device_schema')"
+                        ></v-select>
+                      </v-col>
+                    </template>
+                    <v-col class="py-1" cols="auto" align-self="center">
+                      <v-btn icon small @click="settings.DEVICES.splice(idx, 1)">
+                        <v-icon>delete</v-icon>
+                      </v-btn>
+                    </v-col>
+                  </v-row>
+                  <v-row v-if="device.type === 'ftp'">
+                    <v-col class="py-1" cols="3"></v-col>
+                    <v-col class="py-1" cols="2">
+                      <v-text-field
+                        outlined
+                        dense
+                        hide-details="auto"
+                        v-model="device.ftp_username"
+                        :label="$t('settings.device_ftp_username')"
+                        type="text"
+                        autocomplete="off"
+                        :placeholder="$t('book.ftpAnonymousHint')"
+                      ></v-text-field>
+                    </v-col>
+                    <v-col class="py-1" cols="2">
+                      <v-text-field
+                        outlined
+                        dense
+                        hide-details="auto"
+                        v-model="device.ftp_password"
+                        :label="$t('settings.device_ftp_password')"
+                        type="password"
+                        autocomplete="new-password"
+                      ></v-text-field>
+                    </v-col>
+                    <v-col class="py-1" cols="3">
+                      <v-text-field
+                        outlined
+                        dense
+                        hide-details="auto"
+                        v-model="device.ftp_path"
+                        :label="$t('settings.device_ftp_path')"
+                        type="text"
+                        placeholder="/books"
+                      ></v-text-field>
+                    </v-col>
+                  </v-row>
+                </div>
+              </template>
               <v-row>
                 <v-col align="center">
                   <v-btn
@@ -665,6 +721,7 @@ export default {
       { text: this.$t("settings.device_type_dangdang"), value: "dangdang" },
       { text: "Kindle", value: "kindle" },
       { text: "PureLibro", value: "purelibro" },
+      { text: this.$t("settings.device_type_ftp"), value: "ftp" },
     ];
 
     this.cards = [
@@ -1583,5 +1640,14 @@ export default {
 .theme--dark .save-btn {
   background: linear-gradient(135deg, #42a5f5 0%, #1e88e5 50%, #1565c0 100%) !important;
   box-shadow: 0 4px 12px rgba(66, 165, 245, 0.35), 0 2px 4px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+.device-item {
+  border: 1.5px dashed rgba(0, 0, 0, 0.8);
+  border-radius: 6px;
+  padding: 15px 4px 15px;
+}
+.theme--dark .device-item {
+  border-color: rgba(255, 255, 255, 0.8);
 }
 </style>

@@ -2,6 +2,7 @@
 # -*- coding: UTF-8 -*-
 
 import datetime
+import json
 import logging
 import re
 import mimetypes
@@ -766,14 +767,27 @@ class UserDevices(BaseHandler):
         self.sqlite_session.query(Device).filter(Device.reader_id == user_id).delete()
         result = []
         for d in devices_data:
+            device_type = d.get("type", "duokan")
+            # FTP设备将扩展字段序列化为JSON存入mailbox
+            if device_type == "ftp":
+                ftp_extra = json.dumps({
+                    "username": d.get("ftp_username", ""),
+                    "password": d.get("ftp_password", ""),
+                    "path": d.get("ftp_path", ""),
+                })
+                if len(ftp_extra) > 2048:
+                    return {"err": "params.invalid", "msg": _("FTP配置信息过长")}
+                mailbox = ftp_extra
+            else:
+                mailbox = d.get("mailbox", "")
             device = Device(
                 reader_id=user_id,
                 name=d.get("name", ""),
-                device_type=d.get("type", "duokan"),
+                device_type=device_type,
                 ip=d.get("ip", ""),
                 port=int(d.get("port", 12121)),
                 schema=d.get("schema", "http"),
-                mailbox=d.get("mailbox", ""),
+                mailbox=mailbox,
             )
             self.sqlite_session.add(device)
             result.append(device.to_dict())

@@ -2579,25 +2579,34 @@ class BookSendToDevice(BaseHandler):
             device_type = data.get("device_type", "").lower()
             device_url = data.get("device_url", "")
             mailbox = data.get("mailbox", "")
+            ftp_username = data.get("ftp_username", "")
+            ftp_password = data.get("ftp_password", "")
+            ftp_path = data.get("ftp_path", "")
         except:
             return {"err": "params.invalid", "msg": _("请求参数格式错误")}
 
-        # Kindle设备使用邮箱地址，其他设备使用device_url
+        # 支持的设备类型
+        supported_types = ["duokan", "ireader", "hanwang", "boox", "dangdang", "kindle", "purelibro", "ftp"]
+        if device_type not in supported_types:
+            return {"err": "device.unsupported", "msg": _("不支持的设备类型: %s") % device_type}
+
+        # 各设备类型参数校验
         if device_type == "kindle":
             if not mailbox:
                 return {"err": "params.missing", "msg": _("Kindle设备需要提供邮箱地址")}
+        elif device_type == "ftp":
+            if not device_url:
+                return {"err": "params.missing", "msg": _("设备类型和设备地址不能为空")}
+            if not ftp_path:
+                return {"err": "params.missing", "msg": _("FTP路径不能为空")}
         else:
             if not device_type or not device_url:
                 return {"err": "params.missing", "msg": _("设备类型和设备地址不能为空")}
 
-        # 支持的设备类型
-        supported_types = ["duokan", "ireader", "hanwang", "boox", "dangdang", "kindle", "purelibro"]
-        if device_type not in supported_types:
-            return {"err": "device.unsupported", "msg": _("不支持的设备类型: %s") % device_type}
-
-        # Kindle设备通过邮件发送
         if device_type == "kindle":
             return self._send_to_kindle(book, book_id, mailbox)
+        elif device_type == "ftp":
+            return self._send_to_ftp(book, book_id, device_url, ftp_username, ftp_password, ftp_path)
         else:
             return self._send_to_other_device(book, book_id, device_type, device_url)
 
@@ -2719,6 +2728,81 @@ class BookSendToDevice(BaseHandler):
         except Exception as e:
             logging.error(f"[SEND_TO_DEVICE] 发送失败: {e}")
             return {"err": "upload.error", "msg": _("发送过程出错，请查看日志获取详细信息")}
+
+
+    def _send_to_ftp(self, book, book_id, device_url, ftp_username, ftp_password, ftp_path):
+        """通过FTP上传发送书籍。每次调用创建独立FTP连接，多个并发请求互不影响。"""
+        # 查找合适的文件格式（优先级：epub > azw3 > pdf > txt）
+        file_path = None
+        file_format = None
+        for fmt in ["epub", "azw3", "pdf", "txt"]:
+            fmt_key = "fmt_%s" % fmt
+            if fmt_key in book:
+                file_path = book[fmt_key]
+                file_format = fmt
+                break
+
+        if not file_path:
+            return {"err": "file.not_found", "msg": _("书籍没有支持的文件格式（epub/azw3/pdf/txt）")}
+
+        if not os.path.exists(file_path):
+            return {"err": "file.missing", "msg": _("书籍文件不存在: %s") % file_path}
+
+        try:
+            from webserver.plugins.sending.uploader import FtpUploader
+
+            # 优先使用 title_sort（已转为拼音，无中文兼容问题）
+            book_name = book.get("sort", "") or book.get("title", "")
+            if book_name:
+                book_name = book_name.replace(" ", "_")
+            if len(book_name) > 120:
+                book_name = f"{book_id}"
+            else:
+                book_name = f"{book_id}_{book_name}"
+            if book_name:
+                book_name += os.path.splitext(file_path)[-1]
+            else:
+                book_name = None
+
+            # 每次实例化都创建独立连接对象，并发请求之间无共享状态
+            uploader = FtpUploader(
+                file_path,
+                file_name=book_name,
+                username=ftp_username,
+                password=ftp_password,
+                path=ftp_path,
+            )
+
+            logging.info(
+                "[SEND_TO_FTP] 开始发送书籍 %s (%s) 到 %s%s",
+                book_id, file_format, device_url, ftp_path,
+            )
+            result = uploader.upload(device_url)
+
+            if result.get("success"):
+                logging.info("[SEND_TO_FTP] 发送成功: %s -> %s", book_id, device_url)
+                return {"err": "ok", "msg": _("书籍发送成功")}
+
+            error_type = result.get("error_type", "other")
+            error_msg = result.get("message", "发送失败")
+            logging.warning("[SEND_TO_FTP] 发送失败 book=%s error_type=%s msg=%s", book_id, error_type, error_msg)
+
+            if error_type == "auth":
+                return {"err": "ftp.auth_failed", "msg": _("FTP认证失败")}
+            if error_type == "ftp_perm":
+                return {"err": "ftp.path_not_found", "msg": _("FTP路径不存在: %s") % ftp_path}
+            if error_type == "connection":
+                return {"err": "connection.failed", "msg": _("FTP连接失败: %s") % device_url}
+            if error_type == "timeout":
+                return {"err": "upload.timeout", "msg": _("上传超时。请检查网络连接和设备状态")}
+            return {"err": "ftp.upload_failed", "msg": _("FTP上传失败: %s") % error_msg}
+
+        except ImportError as e:
+            logging.error("[SEND_TO_FTP] 导入FTP上传器失败: %s", e)
+            return {"err": "uploader.import_error", "msg": _("设备上传功能不可用")}
+        except Exception as e:
+            logging.error("[SEND_TO_FTP] 发送失败: %s", e)
+            return {"err": "ftp.upload_failed", "msg": _("FTP上传失败: %s") % str(e)}
 
 
 class BookSendToMail(BaseHandler):

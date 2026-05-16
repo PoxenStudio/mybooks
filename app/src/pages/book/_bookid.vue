@@ -987,6 +987,9 @@
                             <span v-if="device.type === 'kindle'">
                                 {{ device.name }} ({{ getDeviceTypeText(device.type) }}) - {{ device.mailbox }}
                             </span>
+                            <span v-else-if="device.type === 'ftp'">
+                                {{ device.name }} ({{ getDeviceTypeText(device.type) }}) - {{ device.ip }}:{{ device.port }} {{ device.ftp_path }}
+                            </span>
                             <span v-else>
                                 {{ device.name }} ({{ getDeviceTypeText(device.type) }}) - {{ device.ip }}:{{ device.port }}
                             </span>
@@ -1008,26 +1011,66 @@
                         dense
                         :rules="[v => !!v || $t('book.deviceTypeRequired')]"
                     ></v-select>
-                    <v-text-field
-                        v-model="tempDevice.ip"
-                        :label="$t('book.deviceIP') + ' *'"
-                        outlined
-                        dense
-                        :rules="[v => !!v || $t('book.deviceIPRequired')]"
-                        placeholder="192.168.1.100"
-                    ></v-text-field>
-                    <v-text-field
-                        v-model="tempDevice.port"
-                        :label="$t('book.devicePort') + ' *'"
-                        outlined
-                        dense
-                        type="number"
-                        :rules="[v => !!v || $t('book.devicePortRequired')]"
-                        placeholder="8080"
-                    ></v-text-field>
-                    <v-alert v-if="tempDevice.type === 'kindle'" type="info" dense outlined class="mt-2">
-                        {{ $t('book.kindleNotSupportTemporary') }}
-                    </v-alert>
+
+                    <!-- Kindle：只显示邮箱 -->
+                    <template v-if="tempDevice.type === 'kindle'">
+                        <v-text-field
+                            v-model="tempDevice.mailbox"
+                            :label="$t('book.kindleMailbox') + ' *'"
+                            outlined
+                            dense
+                            type="email"
+                            :rules="[v => !!v || $t('book.kindleMailboxRequired')]"
+                            placeholder="user@kindle.com"
+                        ></v-text-field>
+                    </template>
+
+                    <!-- 普通设备或 FTP：显示 IP + 端口 -->
+                    <template v-if="tempDevice.type !== 'kindle'">
+                        <v-text-field
+                            v-model="tempDevice.ip"
+                            :label="$t('book.deviceIP') + ' *'"
+                            outlined
+                            dense
+                            :rules="[v => !!v || $t('book.deviceIPRequired')]"
+                            placeholder="192.168.1.100"
+                        ></v-text-field>
+                        <v-text-field
+                            v-model="tempDevice.port"
+                            :label="$t('book.devicePort') + ' *'"
+                            outlined
+                            dense
+                            type="number"
+                            :rules="[v => !!v || $t('book.devicePortRequired')]"
+                            placeholder="21"
+                        ></v-text-field>
+                    </template>
+
+                    <!-- FTP 扩展字段 -->
+                    <template v-if="tempDevice.type === 'ftp'">
+                        <v-text-field
+                            v-model="tempDevice.ftp_username"
+                            :label="$t('book.ftpUsername')"
+                            outlined
+                            dense
+                            :placeholder="$t('book.ftpAnonymousHint')"
+                        ></v-text-field>
+                        <v-text-field
+                            v-model="tempDevice.ftp_password"
+                            :label="$t('book.ftpPassword')"
+                            outlined
+                            dense
+                            type="password"
+                        ></v-text-field>
+                        <v-text-field
+                            v-model="tempDevice.ftp_path"
+                            :label="$t('book.ftpPath') + ' *'"
+                            outlined
+                            dense
+                            :rules="[v => !!v || $t('book.ftpPathRequired')]"
+                            placeholder="/books"
+                        ></v-text-field>
+                    </template>
                 </div>
 
                 <div v-if="devices.length === 0 && selectedDeviceOption !== 'temporary'" class="text-center py-4">
@@ -1302,14 +1345,14 @@ export default {
             if (!this.selectedDeviceOption) return false;
 
             if (this.selectedDeviceOption === 'temporary') {
-                // Kindle不支持临时设备
-                if (this.tempDevice.type === 'kindle') return false;
-                // 临时设备需要验证所有字段
-                return this.tempDevice.type && this.tempDevice.ip && this.tempDevice.port;
-            } else {
-                // 选择了已保存的设备
-                return true;
+                const type = this.tempDevice.type;
+                if (!type) return false;
+                if (type === 'kindle') return !!this.tempDevice.mailbox;
+                if (type === 'ftp') return !!(this.tempDevice.ip && this.tempDevice.port && this.tempDevice.ftp_path);
+                return !!(this.tempDevice.ip && this.tempDevice.port);
             }
+            // 已保存设备
+            return true;
         },
 
         hasEpubAzw3() {
@@ -1396,6 +1439,7 @@ export default {
                 { text: this.$t('device.dangdang'), value: 'dangdang' },
                 { text: 'Kindle', value: 'kindle' },
                 { text: 'PureLibro', value: 'purelibro' },
+                { text: this.$t('device.ftp'), value: 'ftp' },
             ];
         },
         voice_options() {
@@ -1517,7 +1561,11 @@ export default {
         tempDevice: {
             type: '',
             ip: '',
-            port: ''
+            port: '',
+            mailbox: '',
+            ftp_username: '',
+            ftp_password: '',
+            ftp_path: '',
         },
 
         // 读书分享卡片
@@ -1674,7 +1722,8 @@ export default {
                 boox: '8085',
                 hanwang: '9310',
                 ireader: '10123',
-                dangdang: '11111'
+                dangdang: '11111',
+                ftp: '21',
             };
             if (portMap[newType]) {
                 this.tempDevice.port = portMap[newType];
@@ -2725,7 +2774,11 @@ export default {
                     this.tempDevice = {
                         type: tempDeviceData.type || '',
                         ip: tempDeviceData.ip || '',
-                        port: tempDeviceData.port || ''
+                        port: tempDeviceData.port || '',
+                        mailbox: tempDeviceData.mailbox || '',
+                        ftp_username: tempDeviceData.ftp_username || '',
+                        ftp_password: tempDeviceData.ftp_password || '',
+                        ftp_path: tempDeviceData.ftp_path || '',
                     };
                 }
             } catch (error) {
@@ -2749,13 +2802,14 @@ export default {
         // 获取设备类型文本
         getDeviceTypeText(type) {
             const typeMap = {
-                'duokan':  '多看阅读器',
-                'ireader': '掌阅',
-                'hanwang': '汉王',
-                'boox':    '文石Boox',
+                'duokan':   '多看阅读器',
+                'ireader':  '掌阅',
+                'hanwang':  '汉王',
+                'boox':     '文石Boox',
                 'dangdang': '当当阅读器',
-                'kindle':  'Kindle',
-                "purelibro": "PureLibro",
+                'kindle':   'Kindle',
+                'purelibro': 'PureLibro',
+                'ftp':      'FTP',
             };
             return typeMap[type] || type;
         },
@@ -2763,7 +2817,7 @@ export default {
         // 发送到设备
         async sendToDevice() {
             if (!this.canSendToDevice) {
-                this.$alert('error', '请完整填写设备信息');
+                this.$alert('error', this.$t('message.fillDeviceInfo'));
                 return;
             }
 
@@ -2773,33 +2827,45 @@ export default {
                 let deviceName;
 
                 if (this.selectedDeviceOption === 'temporary') {
-                    // 使用临时设备
+                    // 临时设备：直接使用 tempDevice 字段
                     deviceInfo = {
                         type: this.tempDevice.type,
                         ip: this.tempDevice.ip,
                         port: this.tempDevice.port,
-                        schema: 'http'
+                        schema: 'http',
+                        mailbox: this.tempDevice.mailbox,
+                        ftp_username: this.tempDevice.ftp_username,
+                        ftp_password: this.tempDevice.ftp_password,
+                        ftp_path: this.tempDevice.ftp_path,
                     };
                     deviceName = this.$t('book.temporaryDevice');
                 } else {
-                    // 使用已保存的设备
+                    // 已保存的设备
                     const deviceIndex = parseInt(this.selectedDeviceOption.replace('saved-', ''));
                     deviceInfo = this.devices[deviceIndex];
                     deviceName = deviceInfo.name;
                 }
 
-                // 为Kindle设备构造请求参数
                 let requestBody;
                 if (deviceInfo.type === 'kindle') {
                     requestBody = {
-                        device_type: deviceInfo.type,
-                        mailbox: deviceInfo.mailbox
+                        device_type: 'kindle',
+                        mailbox: deviceInfo.mailbox,
+                    };
+                } else if (deviceInfo.type === 'ftp') {
+                    const url = `${deviceInfo.ip}:${deviceInfo.port}`;
+                    requestBody = {
+                        device_type: 'ftp',
+                        device_url: url,
+                        ftp_username: deviceInfo.ftp_username || '',
+                        ftp_password: deviceInfo.ftp_password || '',
+                        ftp_path: deviceInfo.ftp_path || '',
                     };
                 } else {
                     const url = `${deviceInfo.schema || 'http'}://${deviceInfo.ip}:${deviceInfo.port}`;
                     requestBody = {
                         device_type: deviceInfo.type,
-                        device_url: url
+                        device_url: url,
                     };
                 }
 
@@ -2809,15 +2875,14 @@ export default {
                 });
 
                 if (response.err === 'ok') {
-                    this.$alert('success', `书籍已成功发送到 ${deviceName}`);
+                    this.$alert('success', this.$t('message.sendDeviceSuccess', { name: deviceName }));
                     this.dialog_send_to_device = false;
-                    // 保存设备偏好设置
                     this.saveDevicePreferences();
                 } else {
-                    this.$alert('error', response.msg || '发送失败');
+                    this.$alert('error', response.msg || this.$t('message.sendDeviceFailed'));
                 }
             } catch (error) {
-                this.$alert('error', '发送失败，请稍后重试');
+                this.$alert('error', this.$t('message.sendDeviceFailed'));
             } finally {
                 this.sending_to_device = false;
             }

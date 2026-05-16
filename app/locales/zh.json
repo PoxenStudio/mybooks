@@ -510,6 +510,13 @@
         "deviceIPRequired": "请输入设备IP地址",
         "devicePortRequired": "请输入设备端口",
         "kindleNotSupportTemporary": "不支持Kindle类型的临时设备，请在系统设置或我的账户中配置Kindle设备",
+        "kindleMailbox": "Kindle邮箱",
+        "kindleMailboxRequired": "请输入Kindle邮箱地址",
+        "ftpPath": "FTP路径",
+        "ftpUsername": "FTP用户名",
+        "ftpPassword": "FTP密码",
+        "ftpPathRequired": "FTP路径不能为空",
+        "ftpAnonymousHint": "空为匿名登录",
         "clearCategory": "清除",
         "shareToEmail": "分享到邮箱",
         "shareToEmailDesc": "输入邮箱地址，系统将自动发送书籍文件到该邮箱",
@@ -691,6 +698,10 @@
         "device_type_hanwang": "汉王",
         "device_type_boox": "文石Boox",
         "device_type_dangdang": "当当",
+        "device_type_ftp": "FTP服务器",
+        "device_ftp_username": "用户名(空为匿名)",
+        "device_ftp_password": "密码",
+        "device_ftp_path": "目标路径",
         "ai_enabled": "启用AI助手(Beta)",
         "ai_capabilities_description": "配置AI助手相关功能",
         "ai_capability": "AI助手",
@@ -898,7 +909,8 @@
         "ireader": "掌阅",
         "hanwang": "汉王",
         "boox": "文石Boox",
-        "dangdang": "当当阅读器"
+        "dangdang": "当当阅读器",
+        "ftp": "FTP服务器"
     },
     "voice": {
         "xiaobei": "女声 | 晓北（辽宁）",
@@ -925,7 +937,10 @@
         "success": "成功",
         "deleteSuccess": "删除成功",
         "audioLoadFailed": "音频文件加载失败",
-        "audioPlayFailed": "音频播放失败"
+        "audioPlayFailed": "音频播放失败",
+        "sendDeviceSuccess": "书籍已成功发送到 {name}",
+        "sendDeviceFailed": "发送失败，请稍后重试",
+        "fillDeviceInfo": "请完整填写设备信息"
     },
     "bookCards": {
         "browseDetails": "点击浏览详情"

@@ -508,6 +508,13 @@
         "deviceIPRequired": "請輸入裝置 IP 位址",
         "devicePortRequired": "請輸入裝置連接埠",
         "kindleNotSupportTemporary": "不支援 Kindle 類型的臨時裝置，請在系統設定或我的帳戶中配置 Kindle 裝置",
+        "kindleMailbox": "Kindle 電子郵件",
+        "kindleMailboxRequired": "請輸入 Kindle 電子郵件地址",
+        "ftpPath": "FTP路徑",
+        "ftpUsername": "FTP使用者名稱",
+        "ftpPassword": "FTP密碼",
+        "ftpPathRequired": "FTP路徑不能為空",
+        "ftpAnonymousHint": "空為匿名登入",
         "clearCategory": "清除",
         "shareToEmail": "分享到信箱",
         "shareToEmailDesc": "輸入信箱位址，系統將自動發送書籍檔案到該信箱",
@@ -689,6 +696,10 @@
         "device_type_hanwang": "漢王",
         "device_type_boox": "文石 Boox",
         "device_type_dangdang": "當當",
+        "device_type_ftp": "FTP伺服器",
+        "device_ftp_username": "使用者名稱（空為匿名）",
+        "device_ftp_password": "密碼",
+        "device_ftp_path": "目標路徑",
         "ai_enabled": "啟用 AI 助手 (Beta)",
         "ai_capabilities_description": "設定 AI 助手相關功能",
         "ai_capability": "AI 助手",
@@ -895,7 +906,8 @@
         "ireader": "掌閱",
         "hanwang": "漢王",
         "boox": "文石 Boox",
-        "dangdang": "當當閱讀器"
+        "dangdang": "當當閱讀器",
+        "ftp": "FTP伺服器"
     },
     "voice": {
         "xiaobei": "女聲 | 曉北（遼寧）",
@@ -922,7 +934,10 @@
         "success": "成功",
         "deleteSuccess": "刪除成功",
         "audioLoadFailed": "音訊檔案載入失敗",
-        "audioPlayFailed": "音訊播放失敗"
+        "audioPlayFailed": "音訊播放失敗",
+        "sendDeviceSuccess": "書籍已成功發送到 {name}",
+        "sendDeviceFailed": "發送失敗，請稍後重試",
+        "fillDeviceInfo": "請完整填寫設備資訊"
     },
     "bookCards": {
         "browseDetails": "點擊瀏覽詳情"
