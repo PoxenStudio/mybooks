@@ -831,7 +831,7 @@
         "userCount": "User Count",
         "syslog": "System Log",
         "toolbox": "Toolbox",
-        "resources": "Download Resources",
+        "resources": "eBook Resources",
         "opdsIntroduction": "About OPDS",
         "webdavIntroduction": "About WebDAV",
         "search": "Search",
@@ -1045,8 +1045,8 @@
         "publishDate": "Publish Date"
     },
     "resources": {
-        "pageTitle": "Download Resources",
-        "pageSubtitle": "Ebook download resource directory",
+        "pageTitle": "eBook Resources",
+        "pageSubtitle": "eBook resource directory",
         "noResources": "No resources available",
         "loadError": "Failed to load resource list"
     },

@@ -8,7 +8,13 @@
         <v-card-text class="d-flex align-center pa-4">
             <!-- Left: Icon -->
             <div class="resource-card__icon-wrap mr-4" @click.stop="openLink">
-                <v-icon size="40" :color="$vuetify.theme.dark ? '#4a9eca' : '#003153'">
+                <img
+                    v-if="isImageIcon"
+                    :src="icon"
+                    :alt="title"
+                    class="resource-card__image"
+                >
+                <v-icon v-else size="40" :color="$vuetify.theme.dark ? '#4a9eca' : '#003153'">
                     {{ icon || 'mdi-open-in-new' }}
                 </v-icon>
             </div>
@@ -57,6 +63,11 @@ export default {
         link: {
             type: String,
             required: true
+        }
+    },
+    computed: {
+        isImageIcon() {
+            return typeof this.icon === 'string' && /^(https?:)?\/\//.test(this.icon);
         }
     },
     methods: {
@@ -122,6 +133,13 @@ export default {
     background: linear-gradient(145deg, rgba(74, 158, 202, 0.18), rgba(74, 158, 202, 0.07));
 }
 
+.resource-card__image {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    display: block;
+}
+
 .resource-card__content {
     min-width: 0;
 }
@@ -132,6 +150,7 @@ export default {
 
 .resource-card__description {
     display: -webkit-box;
+    line-clamp: 2;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;

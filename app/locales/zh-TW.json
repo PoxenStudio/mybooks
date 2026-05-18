@@ -834,7 +834,7 @@
         "userCount": "使用者數",
         "syslog": "系統日誌",
         "toolbox": "工具集",
-        "resources": "下載資源",
+        "resources": "圖書資源",
         "opdsIntroduction": "OPDS 介紹",
         "webdavIntroduction": "WebDAV 存取",
         "search": "搜尋",
@@ -1048,8 +1048,8 @@
         "publishDate": "發布日期"
     },
     "resources": {
-        "pageTitle": "下載資源",
-        "pageSubtitle": "電子書下載資源彙總",
+        "pageTitle": "圖書資源",
+        "pageSubtitle": "圖書資源彙總，不定期更新",
         "noResources": "暫無資源",
         "loadError": "載入資源列表失敗"
     },

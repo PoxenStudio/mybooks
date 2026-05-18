@@ -1,6 +1,7 @@
 import datetime
 import requests
 import logging
+import json
 import os
 import shutil
 import time
@@ -55,6 +56,7 @@ class BookBarnClient:
     APPLY_TOKEN_API = "bookbarn/token"
     CHECK_LATEST_RELEASE_API = "bookbarn/release/check"
     UPDATE_ACTION_API = "bookbarn/token/action"
+    GET_CONFIG_API = "bookbarn/config"
     GET_BOOKS_API = "bookbarn/pubbooks"
     DOWNLOAD_API = "getfile"
     FILE_SAVE_PATH = "/tmp/bookbarn/"
@@ -184,6 +186,36 @@ class BookBarnClient:
                 return []
         else:
             logging.error(f"Failed to get book list: {response.status_code} - {response.text}")
+            return None
+
+    def getResourceList(self, token):
+        params = {
+            "version": VERSION,
+            "token": token,
+            "configKey": "resources"
+        }
+        try:
+            response = requests.get(self.HOST_BASE + self.GET_CONFIG_API, params=params, verify=False)
+        except Exception as e:
+            logging.error(f"Exception occurred while getting resource list: {str(e)}")
+            return None
+
+        if response.status_code == 200:
+            data = response.json().get("data")
+            if data:
+                try:
+                    array_data = json.loads(data)
+                    if isinstance(array_data, list):
+                        data = array_data
+                except Exception as e:
+                    logging.error(f"Failed to parse resource list: {str(e)}")
+            if data is not None:
+                return data
+            else:
+                logging.warning("No data found in the response.")
+                return None
+        else:
+            logging.error(f"Failed to get resource list: {response.status_code} - {response.text}")
             return None
 
     def downloadFile(self, token, download_url, book_id, filename, filesize):

@@ -836,7 +836,7 @@
         "userCount": "用户数",
         "syslog": "系统日志",
         "toolbox": "工具集",
-        "resources": "下载资源",
+        "resources": "图书资源",
         "opdsIntroduction": "OPDS介绍",
         "webdavIntroduction": "WebDAV访问",
         "search": "搜索",
@@ -1051,8 +1051,8 @@
         "publishDate": "发布日期"
     },
     "resources": {
-        "pageTitle": "下载资源",
-        "pageSubtitle": "电子书下载资源汇总",
+        "pageTitle": "图书资源",
+        "pageSubtitle": "图书资源汇总，不定期更新",
         "noResources": "暂无资源",
         "loadError": "加载资源列表失败"
     },

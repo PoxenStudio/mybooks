@@ -1431,19 +1431,24 @@ class AdminToolList(BaseHandler):
 
 
 class AdminResources(BaseHandler):
+    CONF_DEFAULT_RESOURCES = [
+        {
+            "icon": "https://dushupai.com/favicon.ico",
+            "title": "读书派",
+            "link": "https://dushupai.com/",
+        },
+        {
+            "icon": "https://www.huaijiushuku.com/favicon.ico",
+            "title": "怀旧书库",
+            "link": "https://www.huaijiushuku.com/",
+        }
+    ]
+
     @js
     @is_admin
     def get(self):
-        friends = CONF.get("FRIENDS", [])
-        resources = [
-            {
-                "icon": f.get("icon", ""),
-                "title": f.get("text", ""),
-                "description": "下载资源测试和显示的形式因=枯pq 302ld,asdpf -基本上是链接的favicon和title, 以及一个简单的描述文本",
-                "link": f.get("href", ""),
-            }
-            for f in friends
-        ]
+        resources = BookBarnClient().getResourceList(CONF.get("BOOKBARN_TOKEN", ""))
+        resources = resources if resources else AdminResources.CONF_DEFAULT_RESOURCES
         return {"err": "ok", "resources": resources}
 
 
