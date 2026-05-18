@@ -28,7 +28,7 @@
           class="tool-card pa-2"
           rounded="xl"
           outlined
-          @click="goToTool(tool.id)"
+          @click="goToTool(tool)"
           style="cursor: pointer; border: 2px solid #90CAF9;"
         >
           <v-card-text>
@@ -90,8 +90,9 @@ export default {
     this.$store.commit("navbar", true);
   },
   methods: {
-    goToTool(id) {
-      this.$router.push(`/toolbox/${id}`);
+    goToTool(tool) {
+      let toolPage = tool.page || tool.id;
+      this.$router.push(`/toolbox/${toolPage}`);
     },
   },
 };

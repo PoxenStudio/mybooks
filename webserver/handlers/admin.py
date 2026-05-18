@@ -1430,6 +1430,26 @@ class AdminToolList(BaseHandler):
         return {"err": "ok", "tools": tools}
 
 
+class AdminRareBookDownloader(BaseHandler):
+    @js
+    @is_admin
+    def post(self):
+        from urllib.parse import urlparse
+        from webserver.toolbox.rare_book_downloader import RareBookDownloader
+
+        data = tornado.escape.json_decode(self.request.body)
+        url = (data.get("url") or "").strip()
+        if not url:
+            return {"err": "params.url.missing", "msg": _("请提供URL参数")}
+
+        host = urlparse(url).hostname or ""
+        if host != "hkust.edu.hk" and not host.endswith(".hkust.edu.hk"):
+            return {"err": "params.url.unsupported", "msg": _("不支持的URL，仅支持 hkust.edu.hk 及其子域名")}
+
+        RareBookDownloader().download(url)
+        return {"err": "ok", "msg": _("古书下载任务已启动，右上角可以查看进度")}
+
+
 class AdminResources(BaseHandler):
     CONF_DEFAULT_RESOURCES = [
         {
@@ -1482,5 +1502,6 @@ def routes():
         (r"/api/admin/book/reset_cover", AdminResetCover),
         (r"/api/admin/syslog/download", AdminSyslogDownload),
         (r"/api/admin/toolbox/list", AdminToolList),
+        (r"/api/admin/toolbox/rare_book_downloader", AdminRareBookDownloader),
         (r"/api/admin/resources", AdminResources),
     ]

@@ -3,13 +3,14 @@
 """
 
 class Tool:
-    def __init__(self, id: str, name: str, description: str, revision: str, author: str, publish_date: str = ""):
+    def __init__(self, id: str, name: str, description: str, revision: str, author: str, publish_date: str = "", page: str = ""):
         self._id = id
         self._name = name
         self._description = description
         self._revision = revision
         self._author = author
         self._publish_date = publish_date
+        self._page = page
 
     @property
     def id(self) -> str:
@@ -59,6 +60,14 @@ class Tool:
     def publish_date(self, value: str):
         self._publish_date = value
 
+    @property
+    def page(self) -> str:
+        return self._page
+
+    @page.setter
+    def page(self, value: str):
+        self._page = value
+
     def to_dict(self) -> dict:
         return {
             "id": self._id,
@@ -67,6 +76,7 @@ class Tool:
             "revision": self._revision,
             "author": self._author,
             "publish_date": self._publish_date,
+            "page": self._page,
         }
 
 
@@ -90,6 +100,7 @@ class ToolSet:
             revision=info["revision"],
             author=info["author"],
             publish_date=info.get("publish_date", ""),
+            page=info.get("page", "")
         )
         ToolSet._tool_set[info["tool_id"]] = tool
 

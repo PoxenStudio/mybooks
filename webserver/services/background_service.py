@@ -20,6 +20,7 @@ class BackgroundTask:
     SERVICE_TYPE_METADATA_UPDATE = "metadata_update"  # 更新图书元数据
     SERVICE_TYPE_COVER_UPDATE = "cover_update"  # 更新图书封面
     SERVICE_TYPE_SAVE_META = "save_meta"  # 将图书元数据保存到文件中
+    SERVICE_TYPE_OTHER = "other"  # 其他任务类型
 
     # 任务状态
     STATUS_RUNNING = "running"  # 运行中
