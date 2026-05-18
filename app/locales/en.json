@@ -1038,6 +1038,7 @@
     },
     "rareBookDownloader": {
         "title": "Rare Book Downloader",
+        "subtitle": "Download rare books from HKUST Library and import into your library",
         "placeholder": "Enter HKUST Library page URL",
         "downloadBtn": "Download",
         "close": "Close",

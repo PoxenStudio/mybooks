@@ -1044,6 +1044,7 @@
     },
     "rareBookDownloader": {
         "title": "古书下载",
+        "subtitle": "从香港科技大学图书馆下载古书并导入书库",
         "placeholder": "输入香港科技大学图书馆页面链接",
         "downloadBtn": "下载",
         "close": "关闭",

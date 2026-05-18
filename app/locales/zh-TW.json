@@ -1041,6 +1041,7 @@
     },
     "rareBookDownloader": {
         "title": "古書下載",
+        "subtitle": "從香港科技大學圖書館下載古書並匯入書庫",
         "placeholder": "輸入香港科技大學圖書館頁面連結",
         "downloadBtn": "下載",
         "close": "關閉",

@@ -1,57 +1,73 @@
 <template>
-  <div class="rbd-page" :class="darkMode ? 'rbd-dark' : 'rbd-light'">
-    <!-- Close button -->
-    <button class="rbd-close" @click="$router.go(-1)" :title="$t('rareBookDownloader.close')">
-      <span>✕</span>
-    </button>
+  <v-container fluid class="pa-4">
+    <!-- Page header -->
+    <v-row class="mb-3" align="center">
+      <v-col>
+        <span class="text-h5 font-weight-bold">{{ $t('rareBookDownloader.title') }}</span>
+      </v-col>
+      <v-col cols="auto">
+        <v-btn small color="error" @click="$router.go(-1)">
+          <v-icon small left>mdi-close</v-icon>{{ $t('rareBookDownloader.close') }}
+        </v-btn>
+      </v-col>
+    </v-row>
 
-    <div class="rbd-center">
-      <!-- Title -->
-      <div class="rbd-title-wrap">
-        <span class="rbd-icon">📖</span>
-        <h1 class="rbd-title">{{ $t('rareBookDownloader.title') }}</h1>
-      </div>
+    <!-- Search card -->
+    <v-row justify="center">
+      <v-col cols="12" md="8" lg="6">
+        <v-card rounded="xl" outlined class="rbd-card pa-6">
+          <!-- Icon + title inside card -->
+          <div class="d-flex align-center justify-center mb-6">
+            <span class="rbd-icon mr-3">📖</span>
+            <span class="text-h5 font-weight-bold rbd-card-title">{{ $t('rareBookDownloader.title') }}</span>
+          </div>
 
-      <!-- Search bar -->
-      <div class="rbd-search-bar">
-        <input
-          v-model="url"
-          class="rbd-input"
-          type="url"
-          :placeholder="$t('rareBookDownloader.placeholder')"
-          @keyup.enter="download"
-          :disabled="loading"
-        />
-        <button
-          class="rbd-btn-download"
-          :class="{ 'rbd-btn-loading': loading }"
-          @click="download"
-          :disabled="loading"
-        >
-          <span v-if="loading" class="rbd-spinner" />
-          <span v-else>{{ $t('rareBookDownloader.downloadBtn') }}</span>
-        </button>
-      </div>
+          <!-- URL input row -->
+          <div class="rbd-search-bar mb-4">
+            <input
+              v-model="url"
+              class="rbd-input"
+              type="url"
+              :placeholder="$t('rareBookDownloader.placeholder')"
+              @keyup.enter="download"
+              :disabled="loading"
+            />
+            <button
+              class="rbd-btn-download"
+              :class="{ 'rbd-btn-loading': loading }"
+              @click="download"
+              :disabled="loading"
+            >
+              <span v-if="loading" class="rbd-spinner" />
+              <span v-else>{{ $t('rareBookDownloader.downloadBtn') }}</span>
+            </button>
+          </div>
 
-      <!-- Result message -->
-      <transition name="rbd-fade">
-        <div v-if="resultMsg" class="rbd-result" :class="resultClass">
-          {{ resultMsg }}
-        </div>
-      </transition>
+          <!-- Result message -->
+          <transition name="rbd-fade">
+            <v-alert
+              v-if="resultMsg"
+              :type="resultType"
+              dense
+              text
+              rounded="lg"
+              class="mb-4"
+            >{{ resultMsg }}</v-alert>
+          </transition>
 
-      <!-- Description -->
-      <p class="rbd-desc">
-        {{ $t('rareBookDownloader.descPre') }}
-        <a
-          href="https://lbezone.hkust.edu.hk/rse/?s=*&sort=pubyear&order=asc&scopename=thread-bound-books"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="rbd-link"
-        >{{ $t('rareBookDownloader.descLibrary') }}</a>{{ $t('rareBookDownloader.descPost') }}
-      </p>
-    </div>
-  </div>
+          <!-- Description -->
+          <p class="rbd-desc text-caption mb-0">
+            {{ $t('rareBookDownloader.descPre') }}<a
+              href="https://lbezone.hkust.edu.hk/rse/?s=*&sort=pubyear&order=asc&scopename=thread-bound-books"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="rbd-link"
+            >{{ $t('rareBookDownloader.descLibrary') }}</a>{{ $t('rareBookDownloader.descPost') }}
+          </p>
+        </v-card>
+      </v-col>
+    </v-row>
+  </v-container>
 </template>
 
 <script>
@@ -60,17 +76,9 @@ export default {
     url: '',
     loading: false,
     resultMsg: '',
-    resultClass: '',
+    resultType: 'success',
   }),
-  computed: {
-    darkMode() {
-      return this.$store.state.dark;
-    },
-  },
   created() {
-    this.$store.commit('navbar', false);
-  },
-  beforeDestroy() {
     this.$store.commit('navbar', true);
   },
   methods: {
@@ -79,7 +87,7 @@ export default {
       const trimmed = this.url.trim();
       if (!trimmed) {
         this.resultMsg = this.$t('rareBookDownloader.errorEmptyUrl');
-        this.resultClass = 'rbd-result-error';
+        this.resultType = 'error';
         return;
       }
       this.loading = true;
@@ -90,10 +98,10 @@ export default {
           body: JSON.stringify({ url: trimmed }),
         });
         this.resultMsg = rsp.msg || (rsp.err === 'ok' ? this.$t('rareBookDownloader.success') : rsp.err);
-        this.resultClass = rsp.err === 'ok' ? 'rbd-result-ok' : 'rbd-result-error';
+        this.resultType = rsp.err === 'ok' ? 'success' : 'error';
       } catch (e) {
         this.resultMsg = String(e);
-        this.resultClass = 'rbd-result-error';
+        this.resultType = 'error';
       } finally {
         this.loading = false;
       }
@@ -103,84 +111,22 @@ export default {
 </script>
 
 <style scoped>
-/* ── Base layout ── */
-.rbd-page {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  transition: background 0.3s;
-}
-
-.rbd-light {
-  background: #f5f7fa;
-  color: #1a1a2e;
-}
-
-.rbd-dark {
-  background: #12141a;
-  color: #e8eaf0;
-}
-
-/* ── Close button ── */
-.rbd-close {
-  position: absolute;
-  top: 20px;
-  right: 24px;
-  background: #d32f2f;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 6px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  letter-spacing: 0.02em;
-  box-shadow: 0 2px 8px rgba(211, 47, 47, 0.35);
-  transition: opacity 0.2s, transform 0.15s;
-}
-.rbd-close:hover {
-  opacity: 0.85;
-  transform: scale(1.04);
-}
-
-/* ── Center block ── */
-.rbd-center {
-  width: 100%;
-  max-width: 640px;
-  padding: 0 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-}
-
-/* ── Title ── */
-.rbd-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+/* ── Card ── */
+.rbd-card {
+  border: 2px solid #90CAF9;
+  transition: box-shadow 0.2s;
 }
 
 .rbd-icon {
-  font-size: 36px;
+  font-size: 32px;
   line-height: 1;
 }
 
-.rbd-title {
-  margin: 0;
-  font-size: clamp(1.5rem, 4vw, 2.2rem);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.rbd-light .rbd-title {
+.rbd-card-title {
   color: #003153;
 }
 
-.rbd-dark .rbd-title {
+.theme--dark .rbd-card-title {
   color: #90caf9;
 }
 
@@ -188,31 +134,24 @@ export default {
 .rbd-search-bar {
   display: flex;
   width: 100%;
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 49, 83, 0.15);
-}
-
-.rbd-dark .rbd-search-bar {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 3px 14px rgba(0, 49, 83, 0.13);
 }
 
 .rbd-input {
   flex: 1;
   min-width: 0;
-  padding: 14px 18px;
-  font-size: 15px;
+  padding: 13px 16px;
+  font-size: 14px;
   border: none;
   outline: none;
+  background: #f5f7fa;
+  color: inherit;
   transition: background 0.2s;
 }
 
-.rbd-light .rbd-input {
-  background: #fff;
-  color: #1a1a2e;
-}
-
-.rbd-dark .rbd-input {
+.theme--dark .rbd-input {
   background: #1e2130;
   color: #e8eaf0;
 }
@@ -229,17 +168,17 @@ export default {
   background: #003153;
   color: #fff;
   border: none;
-  padding: 0 28px;
-  font-size: 15px;
+  padding: 0 24px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   letter-spacing: 0.03em;
   transition: background 0.2s, opacity 0.2s;
-  min-width: 96px;
+  min-width: 88px;
   justify-content: center;
 }
 
@@ -247,17 +186,16 @@ export default {
   background: #004a7c;
 }
 
-.rbd-btn-download:disabled,
-.rbd-btn-loading {
-  opacity: 0.7;
+.rbd-btn-download:disabled {
+  opacity: 0.65;
   cursor: not-allowed;
 }
 
 /* ── Spinner ── */
 .rbd-spinner {
   display: inline-block;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border: 2px solid rgba(255, 255, 255, 0.4);
   border-top-color: #fff;
   border-radius: 50%;
@@ -268,71 +206,28 @@ export default {
   to { transform: rotate(360deg); }
 }
 
-/* ── Result message ── */
-.rbd-result {
-  width: 100%;
-  padding: 12px 18px;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 500;
-  text-align: center;
-}
-
-.rbd-result-ok {
-  background: rgba(46, 125, 50, 0.12);
-  color: #2e7d32;
-  border: 1px solid rgba(46, 125, 50, 0.3);
-}
-
-.rbd-dark .rbd-result-ok {
-  background: rgba(102, 187, 106, 0.15);
-  color: #a5d6a7;
-  border-color: rgba(102, 187, 106, 0.3);
-}
-
-.rbd-result-error {
-  background: rgba(211, 47, 47, 0.1);
-  color: #c62828;
-  border: 1px solid rgba(211, 47, 47, 0.25);
-}
-
-.rbd-dark .rbd-result-error {
-  background: rgba(239, 83, 80, 0.15);
-  color: #ef9a9a;
-  border-color: rgba(239, 83, 80, 0.3);
-}
-
 /* ── Description ── */
 .rbd-desc {
-  margin: 0;
-  width: 100%;
-  font-size: 13px;
-  line-height: 1.65;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  text-align: left;
-}
-
-.rbd-light .rbd-desc {
+  font-size: 14px !important;
+  line-height: 1.65;
   color: #606880;
 }
 
-.rbd-dark .rbd-desc {
+.theme--dark .rbd-desc {
   color: #8892a4;
 }
 
 .rbd-link {
   text-decoration: underline;
   text-underline-offset: 2px;
-}
-
-.rbd-light .rbd-link {
   color: #003153;
 }
 
-.rbd-dark .rbd-link {
+.theme--dark .rbd-link {
   color: #90caf9;
 }
 
@@ -343,11 +238,11 @@ export default {
 /* ── Transition ── */
 .rbd-fade-enter-active,
 .rbd-fade-leave-active {
-  transition: opacity 0.3s, transform 0.3s;
+  transition: opacity 0.3s, transform 0.25s;
 }
 .rbd-fade-enter,
 .rbd-fade-leave-to {
   opacity: 0;
-  transform: translateY(-6px);
+  transform: translateY(-4px);
 }
 </style>
