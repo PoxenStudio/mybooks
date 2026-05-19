@@ -18,7 +18,9 @@ RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     echo "Asia/Shanghai" > /etc/timezone && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-        gettext gosu procps nginx calibre calibre-bin supervisor fonts-lato fonts-wqy-microhei ffmpeg libzbar0 python3-pip && \
+        curl gettext gosu procps nginx calibre calibre-bin supervisor fonts-lato fonts-wqy-microhei ffmpeg libzbar0 python3-pip && \
+    curl -fsSL https://deb.nodesource.com/setup_16.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
     apt clean && \
     rm -rf /var/lib/apt/lists/* && \
     pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
@@ -39,6 +41,7 @@ RUN ARCH=$(uname -m) && \
 # Apply calibre patches
 COPY calibre/7.6/calibre/db/cache.py /usr/lib/calibre/calibre/db/
 COPY calibre/7.6/calibre/customize/ui.py /usr/lib/calibre/calibre/customize/
+COPY calibre/7.6/calibre/ebooks/metadata/epub.py /usr/lib/calibre/calibre/ebooks/metadata/
 COPY calibre/7.6/calibre/ebooks/metadata/sources/amazon.py /usr/lib/calibre/calibre/ebooks/metadata/sources/
 
 # Install python packages
