@@ -72,6 +72,12 @@ class RareBookDownloader(AsyncService):
 
             book_id = self._import_pdf(user_id, pdf_path, meta.get("title", ""), meta.get("authors", []))
             BackgroundService().complete_task(task_id)
+
+            try:
+                os.removedirs(output_dir)
+            except Exception:
+                logging.error("[RareBookDownloader]Failed to remove output dir.")
+
             return {
                 "title": meta.get("title", ""),
                 "authors": meta.get("authors", []),
