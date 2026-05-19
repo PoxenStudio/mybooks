@@ -659,7 +659,7 @@
         "ssl_certificate_management": "SSL证书管理",
         "social_network_login": "社交网络登录",
         "save": "保存设置",
-        "save_hints": "注意：保存将会重启服务，当前正进行的后台处理，如导入及联网更新信息等任务将会中断！",
+        "save_hints": "注意：修改红色图标的项目时将会重启服务，当前正进行的后台处理，如导入及联网更新信息等任务将会中断！其它选项保存后刷新页面即可。",
         "save_confirm_title": "确认保存设置",
         "save_confirm_message_autoreload": "当前系统配置了保存设置将重启容器，会导致所有后台任务中断，请确认现在保存并重启？",
         "save_confirm_message_no_autoreload": "当前系统未配置保存配置自动重启，设置保存后需要重启容器才能生效。",

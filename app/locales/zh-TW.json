@@ -657,7 +657,7 @@
         "ssl_certificate_management": "SSL 憑證管理",
         "social_network_login": "社群網路登入",
         "save": "儲存設置",
-        "save_hints": "注意：儲存將會重新啟動服務，當前正進行的後台處理，如匯入及聯網更新資訊等任務將會中斷！",
+        "save_hints": "注意：修改紅色圖標的項目時將會重新啟動服務，當前正進行的後台處理，如匯入及聯網更新資訊等任務將會中斷！其它選擇保存後刷新頁面即可。",
         "save_confirm_title": "確認儲存設定",
         "save_confirm_message_autoreload": "目前系統設定為儲存設定後將重新啟動容器，會導致所有背景任務中斷，請確認現在儲存並重新啟動？",
         "save_confirm_message_no_autoreload": "目前系統未設定儲存配置自動重啟，設定儲存後需要重新啟動容器才能生效。",

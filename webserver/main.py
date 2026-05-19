@@ -372,7 +372,7 @@ def make_app():
         "ScopedSession": ScopedSession,
         "build_time": fromtimestamp(os.stat(path).st_mtime),
         "default_cover": default_cover,
-        "autoreload": VERSION == "v0.0.1",
+        "autoreload": VERSION == "v0.0.3",
     })
 
     logging.info("Now, Running...")

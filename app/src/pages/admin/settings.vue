@@ -28,38 +28,48 @@
                 small
                 hide-details
                 v-if="f.type === 'checkbox'"
-                :prepend-icon="f.icon"
                 v-model="settings[f.key]"
                 :key="f.key + '-checkbox'"
                 :label="$t(f.label)"
-              ></v-checkbox>
+              >
+                <template v-if="f.icon" v-slot:prepend>
+                  <v-icon :color="f.color">{{ f.icon }}</v-icon>
+                </template>
+              </v-checkbox>
               <v-textarea
                 outlined
                 v-else-if="f.type === 'textarea'"
-                :prepend-icon="f.icon"
                 v-model="settings[f.key]"
                 :key="f.key + '-textarea'"
                 :label="$t(f.label)"
-              ></v-textarea>
+              >
+                <template v-if="f.icon" v-slot:prepend>
+                  <v-icon :color="f.color">{{ f.icon }}</v-icon>
+                </template>
+              </v-textarea>
               <v-select
                 small
                 v-else-if="f.type === 'select'"
-                :prepend-icon="f.icon"
                 v-model="settings[f.key]"
                 :items="f.items"
                 :key="f.key + '-select'"
                 :label="$t(f.label)"
               >
+                <template v-if="f.icon" v-slot:prepend>
+                  <v-icon :color="f.color">{{ f.icon }}</v-icon>
+                </template>
               </v-select>
               <v-select
                 small
                 v-else-if="f.type === 'select_image'"
-                :prepend-icon="f.icon"
                 v-model="settings[f.key]"
                 :items="f.items"
                 :key="f.key + '-select_image'"
                 :label="$t(f.label)"
               >
+                <template v-if="f.icon" v-slot:prepend>
+                  <v-icon :color="f.color">{{ f.icon }}</v-icon>
+                </template>
                 <template #item="{ item }">
                   <v-img
                     :src="`${site_url}/logo/${item.image_file}.ico`"
@@ -85,7 +95,6 @@
                   v-model="settings['META_SELECTED_SOURCES']"
                   :items="metaSourceItems"
                   :label="$t(f.label)"
-                  :prepend-icon="f.icon"
                   multiple
                   chips
                   small-chips
@@ -115,16 +124,22 @@
                       </v-list-item-content>
                     </v-list-item>
                   </template>
+                  <template v-if="f.icon" v-slot:prepend>
+                    <v-icon :color="f.color">{{ f.icon }}</v-icon>
+                  </template>
                 </v-select>
               </template>
               <v-text-field
                 v-else
-                :prepend-icon="f.icon"
                 v-model="settings[f.key]"
                 :key="f.key + '-text'"
                 :label="$t(f.label)"
                 type="text"
-              ></v-text-field>
+              >
+                <template v-if="f.icon" v-slot:prepend>
+                  <v-icon :color="f.color">{{ f.icon }}</v-icon>
+                </template>
+              </v-text-field>
             </template>
 
             <template v-for="b in card.buttons">
@@ -398,7 +413,7 @@
                 color="primary"
                 :disabled="!settings['ENABLE_BOOKBARN'] || appliedToken"
                 style="margin-bottom: 24px"
-                @click="apply_bookbarn_token"
+                @click="applyBookbarnToken"
               >
                 <v-icon>key</v-icon>{{ $t("settings.bookbarn_apply_token") }}
               </v-btn>
@@ -508,7 +523,7 @@
                     class="px-0 pt-4"
                     :class="$vuetify.breakpoint.smAndUp ? 'float-right' : ''"
                   >
-                    {{ s.text }} (<a @click="show_sns_config(s)">{{
+                    {{ s.text }} (<a @click="showSNSConfig(s)">{{
                       $t("settings.description")
                     }}</a
                     >)
@@ -658,38 +673,12 @@
       </v-card>
     </v-dialog>
 
-    <v-dialog
-      v-model="saveConfirmDialog"
-      persistent
-      transition="dialog-bottom-transition"
-      width="520"
-    >
-      <v-card>
-        <v-toolbar flat dense dark color="#003153">
-          {{ $t("settings.save_confirm_title") }}
-        </v-toolbar>
-        <v-card-text class="pt-4">
-          {{ saveConfirmMessage }}
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn text @click="saveConfirmDialog = false">
-            {{ $t("common.cancel") }}
-          </v-btn>
-          <v-btn color="primary" @click="confirmSaveSettings">
-            {{ $t("settings.confirm_save") }}
-          </v-btn>
-          <v-spacer></v-spacer>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-
     <br />
     <div class="text-center">
       <p>{{ $t("settings.save_hints") }}</p>
       <v-btn
         color="primary"
-        @click="openSaveConfirmDialog"
+        @click="saveSettings"
         class="save-btn"
         large
         elevation="4"
@@ -972,7 +961,7 @@ export default {
           },
         ],
         buttons: [
-          { icon: "email", label: "settings.test_email", action: "test_email" },
+          { icon: "email", label: "settings.test_email", action: "testEmail" },
         ],
       },
       {
@@ -1054,6 +1043,7 @@ export default {
           },
           {
             icon: "info",
+            color: "red",
             key: "MAX_UPLOAD_SIZE",
             label: "settings.max_upload_size",
           },
@@ -1070,6 +1060,7 @@ export default {
           },
           {
             icon: "mdi-format-text",
+            color: "red",
             key: "ENABLE_TXT_TO_TXTZ_PLUGIN",
             label: "settings.enable_txt_to_txtz_plugin",
             type: "checkbox",
@@ -1114,9 +1105,10 @@ export default {
         show: false,
         title: "settings.advanced_settings",
         fields: [
-          { icon: "home", key: "static_host", label: "settings.cdn_domain" },
+          { icon: "home", color: "red", key: "static_host", label: "settings.cdn_domain" },
           {
             icon: "info",
+            color: "red",
             key: "BOOK_NAMES_FORMAT",
             label: "settings.book_names_format",
             type: "select",
@@ -1137,6 +1129,7 @@ export default {
           },
           {
             icon: "lock",
+            color: "red",
             key: "cookie_secret",
             label: "settings.cookie_secret",
           },
@@ -1191,6 +1184,7 @@ export default {
           },
           {
             icon: "mdi-archive-cog-outline",
+            color: "red",
             key: "LOG_LEVEL_DEBUG",
             label: "settings.enable_debug_logging",
             type: "checkbox",
@@ -1379,14 +1373,7 @@ export default {
     }
   },
   methods: {
-    openSaveConfirmDialog() {
-      this.saveConfirmDialog = true;
-    },
-    confirmSaveSettings() {
-      this.saveConfirmDialog = false;
-      this.save_settings();
-    },
-    save_settings: function () {
+    saveSettings: function () {
       if (this.settings["site_language"] === "") {
         this.settings["site_language"] = "zh";
       }
@@ -1438,7 +1425,7 @@ export default {
         }
       });
     },
-    show_sns_config: function (s) {
+    showSNSConfig: function (s) {
       var msg = `${this.$t("settings.sns_config_message", {
         text: s.text,
         link: s.link,
@@ -1447,7 +1434,7 @@ export default {
       })}`;
       this.$alert("warning", msg);
     },
-    apply_bookbarn_token() {
+    applyBookbarnToken() {
       this.appliedToken = true;
       this.$backend("/admin/bookbarn/token/apply", {
         method: "POST",
@@ -1462,7 +1449,7 @@ export default {
         }
       });
     },
-    test_email: function () {
+    testEmail: function () {
       var data = new URLSearchParams();
       data.append("smtp_server", this.settings["smtp_server"]);
       data.append("smtp_username", this.settings["smtp_username"]);
