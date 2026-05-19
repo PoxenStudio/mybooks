@@ -87,7 +87,9 @@ class ToolSet:
     @staticmethod
     def collect_tools():
         from .rare_book_downloader import RareBookDownloader
+        from .merge_formats_tool import MergeFormatsTool
         ToolSet.register(RareBookDownloader.info())
+        ToolSet.register(MergeFormatsTool.info())
 
     @staticmethod
     def register(info: dict):

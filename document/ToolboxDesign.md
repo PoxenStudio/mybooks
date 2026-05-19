@@ -215,3 +215,58 @@ Handler 在调用 `RareBookDownloader().download()` 前会校验：
 2. 在 `toolset.py` 的 `ToolSet.collect_tools()` 中注册新工具
 3. 如需独立的路由，在 `webserver/handlers/toolbox.py` 的 `routes()` 中追加
 4. 在 `app/src/pages/toolbox/` 下新建对应的 `.vue` 页面
+5. 工具图标文件命名为 `<tool_id>` 同名，放置于对应静态资源目录下
+
+---
+
+## 五、MergeFormatsTool — 格式合并工具
+
+### 5.1 设计背景
+
+同一本书可能在不同时间以不同格式（如 EPUB 与 MOBI）导入，形成两条独立书籍记录。
+`MergeFormatsTool` 用于将格式较少的"来源书籍"的格式文件合并到"目标书籍"，然后删除来源书籍，从而去除重复。
+
+### 5.2 新增的 BaseTool 方法
+
+| 方法 | 说明 |
+|---|---|
+| `search_books(query, max_results)` | 用 Calibre 的 `title:"~<query>"` 语法搜索书籍，返回包含 id/title/authors/formats/img 的列表 |
+| `merge_book_formats(source_id, target_id)` | 将 source 书籍中 target 没有的格式文件复制过去，返回新增格式列表 |
+| `delete_book_by_id(book_id)` | 删除 Item 记录及 Calibre 书籍数据 |
+
+### 5.3 后台逻辑（`merge_formats_tool.py`）
+
+`MergeFormatsTool` 继承 `BaseTool`，不使用后台任务（执行较快，同步返回结果）。
+
+核心方法 `merge(source_book_id, target_book_id)`：
+
+1. 校验 source ≠ target
+2. 调用 `merge_book_formats()` 复制差异格式
+3. 调用 `delete_book_by_id()` 删除来源书籍
+4. 返回 `{"added_formats": [...], "deleted_book_id": int}`
+
+### 5.4 路由
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/toolbox/merge_formats/search?q=<keyword>` | 按书名搜索，返回书籍列表 |
+| POST | `/api/toolbox/merge_formats/merge` | 执行合并，body: `{"source_id": int, "target_id": int}` |
+
+### 5.5 前端页面（`toolbox/merge_formats_tool.vue`）
+
+页面分三个区域：
+
+- **页头**：居中显示工具名称，右侧红底白字关闭按钮
+- **书籍选择区**：左右两列对称布局
+  - 每列包含按书名搜索框 + 书籍列表（`BookCards` 风格，带封面缩略图、格式 chips）
+  - 点击卡片切换选中状态（再次点击取消）；选中书籍以高亮边框 + 勾选图标标识
+- **合并操作区**：
+  - 显示当前左右选中书名的摘要提示
+  - 仅当左右均已选中且 ID 不同时，"合并"按钮才变为可用
+  - 合并成功后清除选中状态，并从列表中移除已删除的来源书籍；以 `v-alert` 展示结果
+
+### 5.6 i18n 覆盖
+
+**后台**（`webserver/i18n/`）：新增 `格式合并`、错误消息等字符串的 `en.json` 和 `zh-TW.json` 翻译。
+
+**前端**（`app/locales/`）：在 zh / en / zh-TW 三个文件中新增 `mergeFormats` 命名空间，覆盖页面所有文字。

@@ -1039,6 +1039,19 @@
         "fetchFailed": "取得日誌失敗",
         "pageTitle": "系統日誌"
     },
+    "mergeFormats": {
+        "title": "格式合併",
+        "close": "關閉",
+        "sourcePanel": "來源書籍（將被刪除）",
+        "targetPanel": "目標書籍（保留）",
+        "searchPlaceholder": "依書名搜尋",
+        "noResults": "未找到相關書籍",
+        "noSourceSelected": "未選擇來源書籍",
+        "noTargetSelected": "未選擇目標書籍",
+        "mergeBtn": "將左側格式合併至右側書籍",
+        "mergeSuccess": "合併成功",
+        "hint": "來源書籍的格式檔案將複製到目標書籍，合併後來源書籍將被刪除。"
+    },
     "rareBookDownloader": {
         "title": "古書下載",
         "subtitle": "從香港科技大學圖書館下載古書並匯入書庫",

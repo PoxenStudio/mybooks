@@ -219,5 +219,81 @@ class BaseTool(AsyncService):
                     "[%s] Failed to delete source file %s: %s",
                     self.__class__.__name__, file_path, err,
                 )
-
         return book_id
+
+    def merge_book_formats(self, source_book_id: int, target_book_id: int) -> list:
+        """将 source 书籍的所有格式文件复制到 target 书籍，返回新增的格式列表。
+
+        仅复制 target 书籍中尚不存在的格式，不覆盖已有格式。
+
+        :param source_book_id: 格式来源书籍 ID（合并后将被删除）。
+        :param target_book_id: 格式目标书籍 ID（保留）。
+        :return:               成功添加的格式名称列表（大写），例如 ``["MOBI", "AZW3"]``。
+        :raises RuntimeError:  书籍不存在或没有可合并的新格式时抛出。
+        """
+        src_books = self.db.get_data_as_dict(ids=[source_book_id])
+        tgt_books = self.db.get_data_as_dict(ids=[target_book_id])
+        if not src_books:
+            raise RuntimeError(_("来源书籍不存在: ID=%d") % source_book_id)
+        if not tgt_books:
+            raise RuntimeError(_("目标书籍不存在: ID=%d") % target_book_id)
+
+        src_book = src_books[0]
+        tgt_book = tgt_books[0]
+
+        src_fmts = set(f.upper() for f in (src_book.get("available_formats") or []))
+        tgt_fmts = set(f.upper() for f in (tgt_book.get("available_formats") or []))
+        new_fmts = src_fmts - tgt_fmts
+
+        if not new_fmts:
+            raise RuntimeError(_("来源书籍没有目标书籍中缺少的格式，无需合并"))
+
+        added = []
+        for fmt in new_fmts:
+            fpath = self.db.format_abspath(source_book_id, fmt, index_is_id=True)
+            if not fpath or not os.path.exists(fpath):
+                logging.warning(
+                    "[%s] format file not found: book_id=%d fmt=%s",
+                    self.__class__.__name__, source_book_id, fmt,
+                )
+                continue
+            try:
+                self.db.add_format(target_book_id, fmt, fpath, index_is_id=True)
+                added.append(fmt)
+                logging.info(
+                    "[%s] Copied format %s from book %d to %d",
+                    self.__class__.__name__, fmt, source_book_id, target_book_id,
+                )
+            except Exception as err:
+                logging.error(
+                    "[%s] Failed to add format %s to book %d: %s",
+                    self.__class__.__name__, fmt, target_book_id, err,
+                )
+
+        return added
+
+    def delete_book_by_id(self, book_id: int) -> None:
+        """从 Calibre 书库及 Item 表中删除指定书籍。
+
+        :param book_id: 要删除的书籍 ID。
+        :raises RuntimeError: 删除失败时抛出。
+        """
+        try:
+            item = self.session.query(Item).filter(Item.book_id == book_id).first()
+            if item:
+                self.session.delete(item)
+                self.session.commit()
+        except Exception as err:
+            logging.warning(
+                "[%s] Failed to delete Item for book_id=%d: %s",
+                self.__class__.__name__, book_id, err,
+            )
+        try:
+            self.db.delete_book(book_id)
+            logging.info("[%s] Deleted book_id=%d", self.__class__.__name__, book_id)
+        except Exception as err:
+            logging.error(
+                "[%s] Failed to delete book_id=%d from Calibre: %s",
+                self.__class__.__name__, book_id, err,
+            )
+            raise RuntimeError(_("删除书籍失败: %s") % str(err)) from err

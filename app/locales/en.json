@@ -1036,6 +1036,19 @@
         "fetchFailed": "Failed to fetch logs",
         "pageTitle": "System Log"
     },
+    "mergeFormats": {
+        "title": "Merge Formats",
+        "close": "Close",
+        "sourcePanel": "Source Book (will be deleted)",
+        "targetPanel": "Target Book (kept)",
+        "searchPlaceholder": "Search by title",
+        "noResults": "No books found",
+        "noSourceSelected": "No source book selected",
+        "noTargetSelected": "No target book selected",
+        "mergeBtn": "Merge Left Formats into Right Book",
+        "mergeSuccess": "Merge successful",
+        "hint": "The source book's format files will be copied to the target book, then the source book will be deleted."
+    },
     "rareBookDownloader": {
         "title": "Rare Book Downloader",
         "subtitle": "Download rare books from HKUST Library and import into your library",

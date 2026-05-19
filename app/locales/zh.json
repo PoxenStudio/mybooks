@@ -1042,6 +1042,19 @@
         "fetchFailed": "获取日志失败",
         "pageTitle": "系统日志"
     },
+    "mergeFormats": {
+        "title": "格式合并",
+        "close": "关闭",
+        "sourcePanel": "来源书籍（将被删除）",
+        "targetPanel": "目标书籍（保留）",
+        "searchPlaceholder": "按书名搜索",
+        "noResults": "未找到相关书籍",
+        "noSourceSelected": "未选择来源书籍",
+        "noTargetSelected": "未选择目标书籍",
+        "mergeBtn": "合并左侧格式到右侧书籍",
+        "mergeSuccess": "合并成功",
+        "hint": "来源书籍的格式文件将被复制到目标书籍，合并后来源书籍将被删除。"
+    },
     "rareBookDownloader": {
         "title": "古书下载",
         "subtitle": "从香港科技大学图书馆下载古书并导入书库",
