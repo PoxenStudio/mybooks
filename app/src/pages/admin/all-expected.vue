@@ -56,44 +56,6 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
-
-    <!-- Add Dialog -->
-    <v-dialog v-model="showAddDialog" max-width="480px" persistent>
-      <v-card>
-        <v-card-title>
-          {{ $t('expected.addDialogTitle') }}
-          <v-spacer></v-spacer>
-          <v-btn icon @click="closeAddDialog">
-            <v-icon>mdi-close</v-icon>
-          </v-btn>
-        </v-card-title>
-        <v-card-text>
-          <v-form ref="addForm">
-            <v-text-field
-              v-model="newItem.title"
-              :label="$t('expected.fieldTitle')"
-              :rules="[v => !!v.trim() || $t('expected.titleRequired')]"
-              required
-              autofocus
-            ></v-text-field>
-            <v-text-field
-              v-model="newItem.author"
-              :label="$t('expected.fieldAuthor')"
-            ></v-text-field>
-            <v-text-field
-              v-model="newItem.publisher"
-              :label="$t('expected.fieldPublisher')"
-            ></v-text-field>
-          </v-form>
-          <v-alert v-if="addError" type="error" class="mt-2">{{ addError }}</v-alert>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn text @click="closeAddDialog">{{ $t('expected.cancel') }}</v-btn>
-          <v-btn color="primary" @click="submitAdd" :loading="adding">{{ $t('expected.add') }}</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
   </v-card>
 </template>
 
@@ -109,9 +71,6 @@ export default {
       loading: false,
       sortBy: 'create_time',
       sortDesc: true,
-      showAddDialog: false,
-      adding: false,
-      addError: '',
       newItem: {
         title: '',
         author: '',
@@ -175,38 +134,6 @@ export default {
         })
         .finally(() => {
           this.loading = false;
-        });
-    },
-    closeAddDialog() {
-      this.showAddDialog = false;
-      this.addError = '';
-      this.newItem = { title: '', author: '', publisher: '' };
-      if (this.$refs.addForm) {
-        this.$refs.addForm.resetValidation();
-      }
-    },
-    submitAdd() {
-      if (!this.$refs.addForm.validate()) return;
-      this.adding = true;
-      this.addError = '';
-      this.$backend('/user/expected', {
-        method: 'POST',
-        body: JSON.stringify({
-          title: this.newItem.title.trim(),
-          author: this.newItem.author.trim(),
-          publisher: this.newItem.publisher.trim(),
-        }),
-      })
-        .then(rsp => {
-          if (rsp.err !== 'ok') {
-            this.addError = rsp.msg;
-          } else {
-            this.items.unshift(rsp.item);
-            this.closeAddDialog();
-          }
-        })
-        .finally(() => {
-          this.adding = false;
         });
     },
     deleteItem(item) {
