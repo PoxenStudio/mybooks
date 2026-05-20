@@ -2,7 +2,7 @@
   <v-container fluid class="pa-4">
     <!-- Page header -->
     <v-row class="mb-3" align="center">
-      <v-col>
+      <v-col class="text-center">
         <span class="text-h5 font-weight-bold">{{ $t('rareBookDownloader.title') }}</span>
       </v-col>
       <v-col cols="auto">
@@ -16,12 +16,6 @@
     <v-row justify="center">
       <v-col cols="12" md="8" lg="6">
         <v-card rounded="xl" outlined class="rbd-card pa-6">
-          <!-- Icon + title inside card -->
-          <div class="d-flex align-center justify-center mb-6">
-            <span class="rbd-icon mr-3">📖</span>
-            <span class="text-h5 font-weight-bold rbd-card-title">{{ $t('rareBookDownloader.title') }}</span>
-          </div>
-
           <!-- URL input row -->
           <div class="rbd-search-bar mb-4">
             <input
