@@ -39,7 +39,14 @@ export default {
       this.$router.push('/wap/login');
     },
     handleLogout() {
-      this.$router.push('/wap/');
+      this.$backend('/user/sign_out').then( rsp => {
+        if (rsp.err === 'ok') {
+          this.$store.commit('logout');
+          this.$store.state.user.is_login = false;
+          this.$store.state.user = null;
+        }
+        this.$router.push('/wap');
+      });
     }
   }
 };
@@ -77,7 +84,7 @@ export default {
 }
 .site-name {
   font-weight: bold;
-  font-size: 18px;
+  font-size: 24px;
   text-decoration: none;
   color: #333;
 }
@@ -86,5 +93,6 @@ export default {
   height: 32px;
   border-radius: 50%;
   cursor: pointer;
+  background-color: #003153;
 }
 </style>

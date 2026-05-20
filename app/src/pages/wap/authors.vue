@@ -42,6 +42,7 @@ export default {
   data() {
     return {
       items: [],
+      pins: [],
       total: 0,
       selectedAuthor: '',
       books: [],
@@ -54,7 +55,7 @@ export default {
   },
   computed: {
     meta_items() {
-      return this.items;
+      return [...this.pins, ...this.items.slice(0, 50)];
     }
   },
   async created() {
@@ -75,8 +76,9 @@ export default {
     async fetchAuthors() {
       try {
         const rsp = await this.$backend('/author?show=all');
-        if (rsp.err === 'ok') {
-          this.items = rsp.items;
+        if (rsp.items !== undefined) {
+          this.items = rsp.items || [];
+          this.pins = rsp.pins || [];
           this.total = rsp.total;
         }
       } catch (e) {

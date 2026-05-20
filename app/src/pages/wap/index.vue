@@ -2,7 +2,7 @@
   <div class="wap-page">
     <wap-header />
     <main class="wap-main">
-      <h2 class="wap-site-title">{{ sys.title }}</h2>
+
       <div class="wap-search">
         <select v-model="searchCategory" class="search-category">
           <option v-for="cat in searchCategories" :value="cat.value" :key="cat.value">{{ $t(cat.label) }}</option>

@@ -171,7 +171,7 @@ class MetaList(ListHandler):
                     for item in items:
                         item["name"] = LanguageNameUtil.get_language_name(item["name"])
                 items.sort(key=lambda x: x["count"], reverse=True)
-        return {"meta": meta, "title": title, "items": items, "total": count, "pins": pins}
+        return {"err": "ok", "meta": meta, "title": title, "items": items, "total": count, "pins": pins}
 
 
 class MetaBooks(ListHandler):
