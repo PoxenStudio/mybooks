@@ -153,7 +153,9 @@ export default {
           this.alert.type = 'error';
           this.alert.msg = rsp.msg;
         } else {
-          // 登录成功，跳转到 WAP 首页
+          // 登录成功，更新 store 中的用户信息
+          this.$store.commit('login', rsp);
+          // 跳转到 WAP 首页
           this.$router.push('/wap');
         }
       } catch (e) {

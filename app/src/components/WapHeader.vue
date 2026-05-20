@@ -3,7 +3,6 @@
     <div class="wap-header-left">
       <template v-if="isLoggedIn">
         <img :src="user.avatar" class="user-avatar" alt="avatar" />
-        <button class="logout-btn" @click="handleLogout">退出</button>
       </template>
       <template v-else>
         <button class="login-btn" @click="handleLogin">登录</button>
@@ -11,6 +10,11 @@
     </div>
     <div class="wap-header-center">
       <a href="/wap" class="site-name">Talebook</a>
+    </div>
+    <div class="wap-header-right">
+      <template v-if="isLoggedIn">
+        <button class="logout-btn" @click="handleLogout">退出</button>
+      </template>
     </div>
   </header>
 </template>
@@ -35,7 +39,7 @@ export default {
       this.$router.push('/wap/login');
     },
     handleLogout() {
-      this.$router.push('/logout');
+      this.$router.push('/wap/');
     }
   }
 };
@@ -49,8 +53,27 @@ export default {
   align-items: center;
   justify-content: space-between;
 }
-.wap-header-left button {
-  padding: 4px 8px;
+.wap-header-left {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+.wap-header-center {
+  flex: 1;
+  text-align: center;
+}
+.wap-header-right {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  justify-content: flex-end;
+}
+.login-btn, .logout-btn {
+  padding: 4px 12px;
+  border: 1px solid #ccc;
+  background: #f5f5f5;
+  cursor: pointer;
+  border-radius: 4px;
 }
 .site-name {
   font-weight: bold;
@@ -62,6 +85,6 @@ export default {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  margin-right: 8px;
+  cursor: pointer;
 }
 </style>

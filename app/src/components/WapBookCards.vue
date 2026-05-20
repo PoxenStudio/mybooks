@@ -14,9 +14,8 @@
         <div class="wap-book-download">
           <div v-if="book.files.length > 0" class="download-list">
             <template v-for="(file, idx2) in book.files" :key="'file-' + idx2">
-              <a :href="file.href" target="_blank" class="download-link">
+              <a :href="'/api/book/' + book.id + '.' + file.format" target="_blank" class="download-link">
                 {{ file.format }}
-                ({{ file.size >= 1048576 ? Math.floor(file.size / 1048576) + 'MB' : Math.floor(file.size / 1024) + 'KB' }})
               </a>
             </template>
           </div>
