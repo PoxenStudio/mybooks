@@ -179,7 +179,10 @@ class WapRenderer:
     @classmethod
     def _book_card(cls, book, cdn_url=""):
         book_id = book.get("id", 0)
-        title = cls.esc(book.get("title") or "未知书名")
+        raw_title = book.get("title") or "未知书名"
+        if len(raw_title) > 20:
+            raw_title = raw_title[:20] + "…"
+        title = cls.esc(raw_title)
         authors = book.get("authors") or []
         author = cls.esc(", ".join(authors) if authors else "佚名")
 
