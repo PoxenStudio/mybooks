@@ -601,6 +601,7 @@
         "downloadBook": "Download Book",
         "generateCover": "Generate Simple Cover",
         "noDownloadableFiles": "No downloadable file formats available for this book",
+        "languages": "Language",
         "push": "Push",
         "read": "Read",
         "manage": "Manage",

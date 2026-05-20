@@ -142,51 +142,7 @@
 </template>
 
 <script>
-const languageCodes = {
-    "zho": "中文",
-    "zha": "繁體中文",
-    "eng": "English",
-    "fra": "French",
-    "deu": "German",
-    "spa": "Spanish",
-    "rus": "Russian",
-    "jpn": "Japanese",
-    "ita": "Italian",
-    "por": "Portuguese",
-    "kor": "Korean",
-    "nld": "Dutch",
-    "ara": "Arabic",
-    "hin": "Hindi",
-    "tur": "Turkish",
-    "vie": "Vietnamese",
-    "tha": "Thai",
-    "ell": "Greek",
-    "pol": "Polish",
-    "ces": "Czech",
-    "ron": "Romanian",
-    "swe": "Swedish",
-    "fin": "Finnish",
-    "dan": "Danish",
-    "hun": "Hungarian",
-    "ukr": "Ukrainian",
-    "heb": "Hebrew",
-    "slk": "Slovak",
-    "srp": "Serbian",
-    "hrv": "Croatian",
-    "bul": "Bulgarian",
-    "cat": "Catalan",
-    "ind": "Indonesian",
-    "msi": "Malay",
-    "fil": "Filipino",
-    "nor": "Norwegian",
-    "tam": "Tamil",
-    "ben": "Bengali",
-    "lit": "Lithuanian",
-    "est": "Estonian",
-    "slv": "Slovenian",
-    "glg": "Galician",
-    "eus": "Basque"
-};
+import { languageOptions } from "~/utils/languageCodes";
 
 export default {
     components: {},
@@ -206,7 +162,7 @@ export default {
         dialog_msg: false,
         alert_msg: "please login",
         alert_type: "error",
-        languageOptions: Object.entries(languageCodes).map(([code, name]) => ({ code, name })),
+        languageOptions: languageOptions,
     }),
     computed: {
         pub_year: function () {

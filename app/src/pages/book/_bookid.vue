@@ -516,14 +516,15 @@
                                     </v-list>
                                 </v-menu><v-menu offset-y>
                                     <template v-slot:activator="{ on, attrs }">
-                                        <v-chip rounded smallF color="green" class="white--text" v-bind="attrs" v-on="on" :disabled="categories.length === 0">
+                                        <v-chip rounded smallF color="#003153" class="white--text" v-bind="attrs" v-on="on" :disabled="categories.length === 0">
                                             <v-icon>language</v-icon>
-                                            {{ $t('book.languages') }} : {{ book.languages || '') }}
+                                            {{ $t('book.languages') }} : {{ languageName(book.languages)}}
                                             <v-icon color="white" class="ml-1">edit</v-icon>
                                         </v-chip>
                                     </template>
                                     <v-list dense>
-                                        <v-list-item v-for="(lang, index) in languageOptions" :key="index" @click="setLanguage(lang)">
+                                        <v-list-item v-for="(lang, index) in languageOptions" :key="index" @click="setLanguage(lang.code)">
+                                            <v-list-item-title>{{ lang.name }}</v-list-item-title>
                                         </v-list-item>
                                     </v-list>
                                 </v-menu>
@@ -1239,51 +1240,7 @@
 <script>
 import BookCards from "~/components/BookCards.vue";
 import QRCode from "qrcode";
-const languageCodes = {
-    "zho": "中文",
-    "zha": "繁體中文",
-    "eng": "English",
-    "fra": "French",
-    "deu": "German",
-    "spa": "Spanish",
-    "rus": "Russian",
-    "jpn": "Japanese",
-    "ita": "Italian",
-    "por": "Portuguese",
-    "kor": "Korean",
-    "nld": "Dutch",
-    "ara": "Arabic",
-    "hin": "Hindi",
-    "tur": "Turkish",
-    "vie": "Vietnamese",
-    "tha": "Thai",
-    "ell": "Greek",
-    "pol": "Polish",
-    "ces": "Czech",
-    "ron": "Romanian",
-    "swe": "Swedish",
-    "fin": "Finnish",
-    "dan": "Danish",
-    "hun": "Hungarian",
-    "ukr": "Ukrainian",
-    "heb": "Hebrew",
-    "slk": "Slovak",
-    "srp": "Serbian",
-    "hrv": "Croatian",
-    "bul": "Bulgarian",
-    "cat": "Catalan",
-    "ind": "Indonesian",
-    "msi": "Malay",
-    "fil": "Filipino",
-    "nor": "Norwegian",
-    "tam": "Tamil",
-    "ben": "Bengali",
-    "lit": "Lithuanian",
-    "est": "Estonian",
-    "slv": "Slovenian",
-    "glg": "Galician",
-    "eus": "Basque"
-};
+import { languageOptions } from "~/utils/languageCodes";
 
 export default {
     components: {
@@ -1674,7 +1631,7 @@ export default {
         currentAudioFile: null,
         // Progress polling timer
         progressTimer: null,
-        languageOptions: Object.entries(languageCodes).map(([code, name]) => ({ code, name })),
+        languageOptions,
         email_rules: function (email) {
             var re = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
             return (email !== this.kindle_sender && re.test(email)) || "Invalid email format";
@@ -2801,6 +2758,7 @@ export default {
                 method: "POST",
                 body: JSON.stringify({ languages: lang }),
             })
+
             .then(rsp => {
                 if (rsp.err === 'ok') {
                     this.$alert("success", this.$t('book.edit.saveSuccess'));
@@ -2809,6 +2767,11 @@ export default {
                     this.$alert("error", rsp.msg);
                 }
             });
+        },
+
+        languageName(code) {
+            const found = this.languageOptions.find(opt => opt.code === code);
+            return found ? found.name : code;
         },
 
         // 从localStorage加载设备偏好设置

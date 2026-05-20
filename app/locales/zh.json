@@ -429,6 +429,7 @@
         "downloadBook": "下载书籍",
         "generateCover": "生成简单封面",
         "noDownloadableFiles": "本书暂无可供下载的文件格式",
+        "languages": "语言",
         "push": "推送",
         "read": "阅读",
         "manage": "管理",
