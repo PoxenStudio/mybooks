@@ -2,7 +2,7 @@
   <div class="wap-book-cards">
     <div v-for="(book, idx) in books" :key="'book-' + book.id" class="wap-book-card">
       <div class="wap-book-cover">
-        <img :src="book.thumb || book.img" alt="cover" />
+        <img :src="book.thumb || book.img" alt="cover" width="80" />
       </div>
       <div class="wap-book-info">
         <h4 class="wap-book-title">{{ book.title }}</h4>
@@ -10,17 +10,17 @@
         <div v-if="book.category" class="wap-book-category">
           <span class="category-badge">{{ book.category }}</span>
         </div>
-        <div v-if="book.comments" class="wap-book-comments" v-html="book.comments"></div>
-        <div class="wap-book-download">
-          <div v-if="book.files.length > 0" class="download-list">
-            <template v-for="(file, idx2) in book.files" :key="'file-' + idx2">
-              <a :href="'/api/book/' + book.id + '.' + file.format" target="_blank" class="download-link">
-                {{ file.format }}
-              </a>
-            </template>
-          </div>
+        <div v-if="book.files && book.files.length > 0" class="wap-book-download">
+          <a
+            v-for="(file, idx2) in book.files"
+            :key="'file-' + idx2"
+            :href="'/api/book/' + book.id + '.' + file.format"
+            target="_blank"
+            class="download-link"
+          >{{ file.format }}</a>
         </div>
       </div>
+      <div style="clear:both;"></div>
     </div>
   </div>
 </template>
@@ -39,62 +39,55 @@ export default {
 
 <style scoped>
 .wap-book-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
+  width: 100%;
 }
 .wap-book-card {
   border: 1px solid #ddd;
   border-radius: 4px;
   padding: 8px;
-  display: flex;
-  gap: 12px;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+.wap-book-cover {
+  float: left;
+  margin-right: 10px;
 }
 .wap-book-cover img {
-  width: 100px;
-  height: auto;
-  aspect-ratio: 3/4;
+  display: block;
+  width: 80px;
+  height: 107px;
+  object-fit: cover;
 }
 .wap-book-info {
-  flex: 1;
+  overflow: hidden;
 }
 .wap-book-title {
-  margin: 0;
-  font-size: 16px;
+  margin: 0 0 4px 0;
+  font-size: 15px;
 }
 .wap-book-author {
-  font-size: 14px;
+  font-size: 13px;
   color: #666;
-  margin: 4px 0;
+  margin: 0 0 4px 0;
 }
 .category-badge {
   background-color: #2196F3;
   color: white;
-  padding: 2px 6px;
+  padding: 1px 6px;
   border-radius: 4px;
   font-size: 12px;
 }
-.wap-book-comments {
-  font-size: 14px;
-  margin: 8px 0;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
+.wap-book-download {
+  margin-top: 6px;
 }
 .download-link {
   display: inline-block;
-  margin: 4px 8px 4px 0;
+  margin: 2px 6px 2px 0;
   padding: 2px 8px;
   background-color: #eee;
   text-decoration: none;
   color: #333;
   border-radius: 4px;
   font-size: 13px;
-}
-@media (max-width: 600px) {
-  .wap-book-cards {
-    grid-template-columns: 1fr;
-  }
 }
 </style>
