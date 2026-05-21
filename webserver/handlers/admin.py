@@ -350,6 +350,7 @@ TITLE_TEMPLATE="%%s | %(site_title)s"
             }
 
         args["installed"] = True
+        args["installed_version"] = VERSION
         try:
             args.dumpfile()
         except:
@@ -1468,6 +1469,9 @@ class AdminSyslogDownload(BaseHandler):
 
 
 class AdminResources(BaseHandler):
+    _cache_data = None
+    _cache_time = 0
+
     CONF_DEFAULT_RESOURCES = [
         {
             "icon": "https://dushupai.com/favicon.ico",
@@ -1484,8 +1488,14 @@ class AdminResources(BaseHandler):
     @js
     @is_admin
     def get(self):
-        resources = BookBarnClient().getResourceList(CONF.get("BOOKBARN_TOKEN", ""))
-        resources = resources if resources else AdminResources.CONF_DEFAULT_RESOURCES
+        if time.time() - AdminResources._cache_time < 7200 and AdminResources._cache_data:
+            logging.info("Use cached data")
+            resources = AdminResources._cache_data
+        else:
+            resources = BookBarnClient().getResourceList(CONF.get("BOOKBARN_TOKEN", ""))
+            resources = resources if resources else AdminResources.CONF_DEFAULT_RESOURCES
+            AdminResources._cache_data = resources
+            AdminResources._cache_time = time.time()
         return {"err": "ok", "resources": resources}
 
 

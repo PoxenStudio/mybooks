@@ -27,14 +27,15 @@ class AsyncService(metaclass=SingletonType):
     def __init__(self):
         self.scoped_session = lambda: "no-session"
 
-    def setup(self, calibre_db=None, scoped_session=None):
+    def setup(self, calibre_db=None, scoped_session=None, need_check_db=False):
         self.db = calibre_db
         self.scoped_session = scoped_session
         self.session = scoped_session()
         need_sync_item_time = False
 
         # alter table as needed
-        if self.session is not None:
+        if need_check_db and self.session is not None:
+            logging.info("[AsyncService] Need to check db table.")
             # Alter the item table to add a new bool column sole if it doesn't exist
             try:
                 need_sync_item_time, changed = self.adjust_item_table()

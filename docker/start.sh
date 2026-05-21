@@ -9,7 +9,7 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH
 groupmod -o -g "${PGID}" talebook
 usermod -o -u "${PUID}" talebook
 
-echo "starting...."
+echo "[PoxenStudio/Talebook]Starting...."
 
 # 使用预设的书库和配置
 if [ ! -d "/data/books" ]; then
@@ -34,6 +34,8 @@ if [ ! -d "/data/log/nginx" ]; then
   chown -R talebook:talebook /data/log/nginx
 fi
 
+echo "[PoxenStudio/Talebook] Checked and parepared the default folders."
+
 # 检查目录，拷贝并创建目录
 cd /prebuilt/books/;
 for f in *; do
@@ -49,7 +51,7 @@ find . \( -path ./library -o -name '*.pyc' -o -name '*.db*' \) -prune -o -type f
         cp "$f" "$target"
     fi
 done
-
+echo "[PoxenStudio/Talebook] Checked the library"
 
 mkdir -p /root/.npm
 
@@ -77,6 +79,8 @@ chown -R talebook:talebook \
   /usr/lib/calibre \
   /usr/share/calibre
 
+echo "[PoxenStudio/Talebook] Checked the permission"
+
 # 检测权限
 TEST_WRITE_FILE=/data/books/library/test_writeable.txt
 date > $TEST_WRITE_FILE
@@ -88,6 +92,8 @@ else
 fi
 
 # 启动
+echo "[PoxenStudio/Talebook] Prepared the running environments."
+
 export PYTHONDONTWRITEBYTECODE=1
 
 PYTHON_BIN="$(command -v python3 2>/dev/null || true)"
@@ -125,18 +131,18 @@ run_as_talebook() {
 }
 
 echo
-echo "====== Check config ===="
+echo "[PoxenStudio/Talebook] Checking the nginx config..."
 nginx -t || exit 1
 
 echo
-echo "====== Sync DB Scheme ===="
+echo "[PoxenStudio/Talebook] Syncing db as needed..."
 run_as_talebook "$PYTHON_BIN" /var/www/talebook/server.py --syncdb
 
 echo
-echo "====== Update Server Config ===="
+echo "[PoxenStudio/Talebook] Updating talebook config..."
 run_as_talebook "$PYTHON_BIN" /var/www/talebook/server.py --update-config
 
 echo
-echo "====== Start Server ===="
+echo "[PoxenStudio/Talebook] All done, launch the service..."
 exec /usr/bin/supervisord --nodaemon -u root -c /etc/supervisor/supervisord.conf
 

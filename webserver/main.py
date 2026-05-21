@@ -375,9 +375,12 @@ def make_app():
         "autoreload": VERSION == "v0.0.1",
     })
 
-    logging.info("Now, Running...")
-    need_sync_item_time = AsyncService().setup(book_db, ScopedSession)
+    is_upgrade = CONF.get("installed_version", "") != VERSION
+    logging.info(f"The installed version is {CONF.get("installed_version", "")}, {"" if is_upgrade else "No"} need to check or upgrade table structure.")
+    need_sync_item_time = AsyncService().setup(book_db, ScopedSession, need_check_db=is_upgrade)
+    CONF["installed_version"] = VERSION
 
+    logging.info("Now, Running...")
     # WebDAV route is always registered; the handler checks ENABLE_WEBDAV_SERVICE at
     # request time and lazily initialises the WSGI app on first use.
     from webserver.webdav.handler import WebDAVHandler
@@ -428,7 +431,6 @@ def make_app():
 
     # Automatically start AI Assistant if configured
     if CONF.get("AI_DEEPSEEK_API_KEY"):
-        logging.info("DeepSeek API Key found. Initializing AI Assistant...")
         from webserver.handlers.assistant import AssistantWebSocketHandler
         from webserver.assistant.ai_assistant_agent import AIAssistantMCPAgent
 
