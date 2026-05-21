@@ -26,7 +26,7 @@ RUN set -ex; \
     pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/; \
     useradd -u 990 -U -d /var/www/talebook -s /bin/false talebook; \
     groupmod -g 990 talebook && usermod -aG users talebook; \
-    sed -i "s/user www-data;/user talebook;/g" /etc/nginx/nginx.conf; \
+    sed -i "s/user  nginx;/user talebook;/g" /etc/nginx/nginx.conf; \
     apt-get purge -y --auto-remove gnupg2; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache

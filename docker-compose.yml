@@ -5,7 +5,7 @@ services:
     restart: always
     image: poxenstudio/talebook
     volumes:
-      - /tmp/demo:/data
+      - /tmp/talebook:/data
     ports:
       - "3000:80"
       - "3443:443"

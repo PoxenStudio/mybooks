@@ -111,8 +111,6 @@ CMD ["/var/www/talebook/docker/start.sh"]
 # ----------------------------------------
 # 生产环境（server side render版)
 FROM production AS production-ssr
-
-# copy ssr config
 COPY conf/nginx/server-side-render.conf /etc/nginx/conf.d/talebook.conf
 COPY conf/supervisor/server-side-render.conf /etc/supervisor/conf.d/talebook.conf
 COPY --from=builder /app-ssr/ /var/www/talebook/app/
