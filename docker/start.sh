@@ -55,6 +55,7 @@ echo "[PoxenStudio/Talebook] Checked the library"
 
 mkdir -p /root/.npm
 
+echo "[PoxenStudio/Talebook] Checking the permission..."
 # 设置PUID/GUID权限
 permission_file=/data/.permission
 touch $permission_file
@@ -63,7 +64,7 @@ if [ "x$permission" != "x$PUID:$PGID" ]; then
     echo "updating '/data/' permission to $PUID:$PGID"
     chown -R talebook:talebook /data
     echo "$PUID:$PGID" > $permission_file
-    echo "permission updated!"
+    echo "[PoxenStudio/Talebook] permission updated!"
 fi
 
 # 设置系统文件的权限（数量较少）
@@ -74,9 +75,7 @@ chown -R talebook:talebook \
   /var/www/talebook/app/.env \
   /var/www/talebook/app/dist \
   /var/www/talebook/webserver \
-  /var/www/talebook/server.py \
-  /usr/lib/calibre \
-  /usr/share/calibre
+  /var/www/talebook/server.py
 
 echo "[PoxenStudio/Talebook] Checked the permission"
 

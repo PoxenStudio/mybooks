@@ -44,6 +44,7 @@ RUN ARCH=$(uname -m) && \
 
 # Apply calibre patches
 COPY calibre/7.6/calibre/ /usr/lib/calibre/calibre/
+RUN chown -R talebook:talebook /usr/lib/calibre /usr/share/calibre
 
 # Install python packages
 COPY requirements.txt /tmp/requirements.txt
