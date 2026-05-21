@@ -120,7 +120,7 @@ class ImportList(BaseHandler):
             order = order.asc() if desc == "false" else order.desc()
             query = self.sqlite_session.query(ScanFile).order_by(order)
 
-            done_status = [ScanFile.EXIST, ScanFile.IMPORTED]
+            done_status = [ScanFile.IMPORTED]
             if filter == "todo":
                 query = query.filter(ScanFile.status.not_in(done_status))
             elif filter == "done":
@@ -206,11 +206,12 @@ class ImportRun(BaseHandler):
             req = tornado.escape.json_decode(self.request.body)
             filelist = req.get("filelist", "all")
             skip_last_dirs = req.get("skip_last_dirs", 0)
+            force = req.get("force", False)
             if not filelist:
                 return {"err": "params.error", "msg": _("参数错误")}
             if ScanService.is_importing():
                 return {"err": "empty", "msg": _("没有等待导入书库的书籍！")}
-            ScanService().do_import(filelist, self.user_id(), skip_last_dirs)
+            ScanService().do_import(filelist, self.user_id(), skip_last_dirs, force)
             return {"err": "ok", "msg": _("扫描成功")}
         except Exception as e:
             logging.error(f"ImportRun error: {e}")

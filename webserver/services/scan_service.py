@@ -237,7 +237,10 @@ class ScanService(AsyncService):
         return filelist
 
     @AsyncService.register_service
-    def do_import(self, paths, user_id, skip_last_dirs=0):
+    def do_import(self, paths, user_id, skip_last_dirs=0, force=False):
+        """
+            force: 为TRUE时不检查重复的图书，直接导入
+        """
         if ScanService.static_is_importing:
             logging.error("Importing is running, please wait...")
             return
@@ -276,7 +279,7 @@ class ScanService(AsyncService):
 
         ScanService.static_import_files_cnt = len(filelist)
         try:
-            self.do_import_internal(filelist, user_id, task_id, imported_id)
+            self.do_import_internal(filelist, user_id, task_id, imported_id, force)
             if task_id:
                 BackgroundService().complete_task(task_id=task_id)
 
@@ -335,7 +338,7 @@ class ScanService(AsyncService):
             logging.error("[IMPORT] Error reading file %s: %s", fpath, e)
             return None, ScanFile.INVALID
 
-    def _import_one_file(self, row, user_id, scan_upload_path, session):
+    def _import_one_file(self, row, user_id, scan_upload_path, session, force):
         """
             Read metadata and import one READY ScanFile into calibre.
 
@@ -406,9 +409,12 @@ class ScanService(AsyncService):
 
         new_book_id = None
         try:
-            ids = self.db.books_with_same_title(mi)
+            if force:
+                ids = []
+            else:
+                ids = self.db.books_with_same_title(mi)
+                logging.info("[IMPORT] Same title %d book(s) for: %s", len(ids) if ids else 0, fpath)
             existed_ebook = False
-            logging.info("[IMPORT] Same title %d book(s) for: %s", len(ids) if ids else 0, fpath)
             if ids:
                 row.book_id = 0
                 for bid in ids:
@@ -458,7 +464,7 @@ class ScanService(AsyncService):
 
                 if CONF.get("IMPORT_CATEGORY_WITH_FOLDER", False):
                     rel = os.path.relpath(os.path.realpath(fpath), scan_upload_path)
-                    first_dir = rel.split(os.sep)[0] if os.sep in rel else ""
+                    first_dir = rel.split(os.sep, maxsplit=1)[0] if os.sep in rel else ""
                     if first_dir and len(first_dir) < 10 and not any(c in first_dir for c in ',:;|/\\\'"\t '):
                         try:
                             self.db.new_api.set_field(CALIBRE_COLUMN_CATEGORY, {row.book_id: first_dir})
@@ -487,7 +493,7 @@ class ScanService(AsyncService):
             logging.warning("[IMPORT] Slow import detected (%.3fs) for file: %s", time.time() - start_time, fpath)
         return new_book_id, status
 
-    def _importing_worker(self, work_queue, importing_imported, task_id, user_id, scan_upload_path, batch_size):
+    def _importing_worker(self, work_queue, importing_imported, task_id, user_id, scan_upload_path, batch_size, force):
         """Worker thread for Phase 2: consumes row IDs from work_queue and imports each file."""
         importing_session = self.scoped_session()
         importing_index = 0
@@ -524,7 +530,7 @@ class ScanService(AsyncService):
                         except Exception as e:
                             logging.error("[IMPORT] Failed to update progress: %s", e)
 
-                    new_book_id, status = self._import_one_file(row, user_id, scan_upload_path, importing_session)
+                    new_book_id, status = self._import_one_file(row, user_id, scan_upload_path, importing_session, force)
                     if status:
                         if status in ScanService.static_status_cnt:
                             ScanService.static_status_cnt[status] += 1
@@ -558,7 +564,7 @@ class ScanService(AsyncService):
             except Exception:
                 pass
 
-    def _scan_one_file(self, fpath, session, import_id, processed_paths, processed_hashes):
+    def _scan_one_file(self, fpath, session, import_id, processed_paths, processed_hashes, force):
         """
             Phase scanning: 处理单个文件：计算哈希，去重，创建/更新 READY 状态的 ScanFile 记录。
         """
@@ -578,6 +584,8 @@ class ScanService(AsyncService):
 
         same_path_rows = session.query(ScanFile).filter(ScanFile.path == fpath).all()
         for r in same_path_rows:
+            if force:
+                break
             if r.status == ScanFile.IMPORTED and self.db.get_data_as_dict(ids=[r.book_id]):
                 logging.info("[SCAN] Already imported by path: %s", fpath)
                 return None, None
@@ -587,11 +595,14 @@ class ScanService(AsyncService):
 
         # (PoxenStudio) Reuse cached hash if available (NEW/READY record from a previous interrupted run).
         # MISSED/PERMISSION: file was previously inaccessible, reprocess from scratch (no reuse).
-        reuse_hash = next(
-            (r.hash for r in same_path_rows
-             if r.status in (ScanFile.NEW, ScanFile.READY) and r.hash and r.hash.startswith("sha256:")),
-            None,
-        )
+        if not force:
+            reuse_hash = next(
+                (r.hash for r in same_path_rows
+                    if r.status in (ScanFile.NEW, ScanFile.READY) and r.hash and r.hash.startswith("sha256:")),
+                None,
+            )
+        else:
+            reuse_hash = None
         if reuse_hash:
             logging.info("[SCAN] Reusing cached hash for: %s", fpath)
 
@@ -623,6 +634,8 @@ class ScanService(AsyncService):
         # Check already imported by hash
         hash_rows = session.query(ScanFile).filter(ScanFile.hash == hash_val).all()
         for hash_row in hash_rows:
+            if force:
+                break
             if hash_row.status == ScanFile.IMPORTED and self.db.get_data_as_dict(ids=[hash_row.book_id]):
                 logging.info("[SCAN] Already imported by hash: %s", fpath)
                 row.hash = hashlib.md5(fpath.encode("utf-8")).hexdigest()
@@ -641,7 +654,7 @@ class ScanService(AsyncService):
             return row.id, ScanFile.READY
         return None, None
 
-    def do_import_internal(self, filelist, user_id, task_id=None, imported_id=0):
+    def do_import_internal(self, filelist, user_id, task_id=None, imported_id=0, force=False):
         """
             并行执行:
             Phase Scanning: 负责遍历文件、计算哈希、去重，并将 READY 状态的 ScanFile 行 ID 放入队列；
@@ -665,7 +678,7 @@ class ScanService(AsyncService):
 
         importing_thread = threading.Thread(
             target=self._importing_worker,
-            args=(work_queue, importing_imported, task_id, user_id, scan_upload_path, batch_size),
+            args=(work_queue, importing_imported, task_id, user_id, scan_upload_path, batch_size, force),
             name="ScanService.importing",
             daemon=True,
         )
@@ -681,7 +694,7 @@ class ScanService(AsyncService):
                 if ScanService.static_abort_flag:
                     logging.info("[IMPORT] Aborting import during scanning phase at index %d/%d", index, total_count)
                     break
-                row_id, state = self._scan_one_file(fpath, session, import_id, processed_paths, processed_hashes)
+                row_id, state = self._scan_one_file(fpath, session, import_id, processed_paths, processed_hashes, force)
                 if row_id is not None:
                     work_queue.put(row_id)
                     queued_count += 1

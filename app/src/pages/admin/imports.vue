@@ -379,6 +379,7 @@ export default {
             const payload = {
                 filelist: filelist,
                 skip_last_dirs: this.skip_last_dirs,
+                force: this.selected.length > 0
             };
             this.$backend("/admin/import/run", {
                 method: "POST",

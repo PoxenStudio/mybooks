@@ -342,7 +342,7 @@
         "scan_books": "掃描書籍",
         "batch_add_books": "批次匯入實體書",
         "import_audiobooks": "匯入有聲書",
-        "import_selected": "匯入選中書籍",
+        "import_selected": "強制匯入選中書籍",
         "cancel_import": "取消匯入",
         "scan_scope": "掃描範圍",
         "scan_scope_all": "全量掃描",
@@ -357,11 +357,11 @@
         "done": "已匯入 ( {count} )",
         "status": {
             "ready": "可匯入",
-            "exist": "已存在",
+            "exist": "存在同名",
             "imported": "匯入成功",
             "new": "待掃描",
-            "drop": "重複",
-            "invalid": "無效",
+            "drop": "檔案重複",
+            "invalid": "檔案無效",
             "missed": "檔案遺失",
             "permission": "權限不足"
         },
