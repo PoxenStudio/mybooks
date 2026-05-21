@@ -6,6 +6,7 @@ import threading
 
 
 from webserver import loader
+from webserver.i18n import _
 from webserver.version import VERSION
 
 CONF = loader.get_settings()

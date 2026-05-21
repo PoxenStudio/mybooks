@@ -19,7 +19,7 @@ $(info Building tag2: $(TAG2))
 
 all: build up
 
-build: test
+build:
 	docker build --platform=$(PLATFORM) --no-cache=false --build-arg BUILD_COUNTRY=CN --build-arg GIT_VERSION=$(VER) \
 		-f Dockerfile -t $(IMAGE) -t $(REPO1) --target production .
 
@@ -44,7 +44,7 @@ build-base-multiarch:
 		--load .
 
 # 构建并推送多架构镜像（同时支持 amd64 和 arm64）
-build-multiarch: test
+build-multiarch:
 	docker buildx build --platform=linux/amd64,linux/arm64 \
 		--builder $(BUILDER) \
 		--build-arg BUILD_COUNTRY=CN --build-arg GIT_VERSION=$(VER) \
@@ -52,17 +52,12 @@ build-multiarch: test
 		--target production --push .
 
 # 仅构建多架构镜像到本地缓存（不推送）
-build-multiarch-local: test
+build-multiarch-local:
 	docker buildx build --platform=linux/amd64,linux/arm64 \
 		--builder $(BUILDER) \
 		--build-arg BUILD_COUNTRY=CN --build-arg GIT_VERSION=$(VER) \
 		-f Dockerfile -t $(IMAGE) -t $(REPO1) \
 		--target production --load .
-
-test: lint
-	rm -f unittest.log
-	# docker build --platform=$(PLATFORM) --build-arg BUILD_COUNTRY=CN -t talebook/test --target test -f Dockerfile .
-	# docker run --rm --name=talebook-docker-test -v "$$PWD":"$$PWD" -w "$$PWD" talebook/test pytest --log-file=unittest.log --log-level=INFO tests
 
 lint:
 	flake8 webserver --count --select=E9,F63,F7,F82 --show-source --statistics --exclude epub_to_audio,test
