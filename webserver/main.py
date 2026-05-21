@@ -21,6 +21,7 @@ from tornado import web
 from tornado.options import define, options
 
 from webserver import loader, models, social_routes
+from webserver.base.setting_saver import SettingsSaver
 from webserver.services import AsyncService
 from webserver.services.book_barn import BookBarnService
 from webserver.services.item_sync import ItemSyncService
@@ -241,15 +242,10 @@ def make_app():
         "|" + (" " * 60 + f"{VERSION}").center(banner_width) + "|",
         border_bottom,
     ]
-    logging.info("\n%s", "\n".join(banner_lines))
 
     if options.update_config:
         logging.info("updating configs ...")
-        # 触发一次空白配置更新
-        from webserver.handlers.admin import SettingsSaverLogic
-
-        logic = SettingsSaverLogic()
-        logic.update_nuxtjs_env()
+        SettingsSaver().update_nuxtjs_env()
         logging.info("done")
         sys.exit(0)
 
@@ -288,6 +284,8 @@ def make_app():
         logging.info("Create tables into DB")
         sys.exit(0)
 
+    logging.info("\n%s", "\n".join(banner_lines))
+
     try:
         init_calibre()
         config_calibre()
@@ -296,6 +294,7 @@ def make_app():
         logging.error(traceback.format_exc())
         sys.exit(1)
 
+    from calibre import gui2
     from calibre.db.legacy import LibraryDatabase
     from calibre.utils.date import fromtimestamp
     from calibre.ebooks.metadata.sources.update import patch_plugins
@@ -340,8 +339,6 @@ def make_app():
 
     # hook 2: don't force GUI
     logging.info("Patching calibre GUI requirement...")
-    from calibre import gui2
-
     old_must_use_qt = gui2.must_use_qt
 
     def new_must_use_qt(headless=True):
@@ -378,7 +375,8 @@ def make_app():
     is_upgrade = CONF.get("installed_version", "") != VERSION
     logging.info(f"The installed version is {CONF.get("installed_version", "")}, {"" if is_upgrade else "No"} need to check or upgrade table structure.")
     need_sync_item_time = AsyncService().setup(book_db, ScopedSession, need_check_db=is_upgrade)
-    CONF["installed_version"] = VERSION
+    if is_upgrade:
+        SettingsSaver().save_extra_settings(CONF)
 
     logging.info("Now, Running...")
     # WebDAV route is always registered; the handler checks ENABLE_WEBDAV_SERVICE at

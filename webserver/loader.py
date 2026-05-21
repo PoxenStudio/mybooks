@@ -32,7 +32,7 @@ class SettingsLoader(dict):
             import webserver.settings
 
             self.update(webserver.settings.settings)
-        except:
+        except Exception:
             logging.error(traceback.format_exc())
             pass
 
@@ -41,13 +41,13 @@ class SettingsLoader(dict):
         try:
             import auto
             self.update(auto.settings)
-        except:
+        except Exception:
             pass
 
         try:
             import manual
             self.update(manual.settings)
-        except:
+        except Exception:
             pass
 
     def dumpfile(self, filename="auto.py"):
@@ -69,11 +69,11 @@ settings = {
         py = os.path.join(d, filename)
         pyc = os.path.join(d, filename + "c")
         logging.error("saving settings file: %s" % py)
-        with open(py, "w") as f:
+        with open(py, "w", encoding="utf-8") as f:
             f.write(code)
         try:
             os.remove(pyc)
-        except:
+        except Exception:
             pass
 
     def loads(self, text):
