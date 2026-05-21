@@ -18,6 +18,7 @@ CONF = loader.get_settings()
 
 AUDIO_IMPORT_DIR = os.path.join(CONF.get("scan_upload_path", "/data/books/imports/"), constants.AUDIO_BOOK_IMPORTS)
 AUDIO_OUTPUT_DIR = CONF.get("audio_output_folder", "/data/books/audios/")
+SUPPORTED_AUDIO_FORMATS = ['.mp3', ".m4a", ".m4b", ".wav"]
 
 COVER_NAMES = {"cover.jpg", "cover.jpeg", "cover.png"}
 
@@ -44,10 +45,10 @@ def _read_cover_data(cover_path):
         return None, None
 
 
-def _extract_mp3_metadata(mp3_path, fallback_title):
+def _extract_audio_metadata(audio_path, fallback_title):
     try:
         import mutagen
-        audio = mutagen.File(mp3_path, easy=True)
+        audio = mutagen.File(audio_path, easy=True)
         if audio is None:
             return fallback_title, None
         title = None
@@ -59,10 +60,10 @@ def _extract_mp3_metadata(mp3_path, fallback_title):
                 title = str(title_tag[0]).strip() if isinstance(title_tag, list) else str(title_tag).strip()
             if author_tag:
                 author = str(author_tag[0]).strip() if isinstance(author_tag, list) else str(author_tag).strip()
-            logging.debug("[AUDIO_IMPORT] Extracted metadata from %s: title=%s, author=%s", mp3_path, title, author)
+            logging.debug("[AUDIO_IMPORT] Extracted metadata from %s: title=%s, author=%s", audio_path, title, author)
         return title or fallback_title, author
     except Exception as e:
-        logging.warning("[AUDIO_IMPORT] Failed to read mp3 metadata from %s: %s", mp3_path, e)
+        logging.warning("[AUDIO_IMPORT] Failed to read audio metadata from %s: %s", audio_path, e)
         return fallback_title, None
 
 
@@ -127,7 +128,7 @@ class AudioBookImporter(AsyncService):
         audio_dir = os.path.join(AUDIO_OUTPUT_DIR, str(book_id))
         if not os.path.isdir(audio_dir):
             return False
-        audio_files = [f for f in os.listdir(audio_dir) if f.lower().endswith(".mp3")]
+        audio_files = [f for f in os.listdir(audio_dir) if f.lower().endswith(tuple(SUPPORTED_AUDIO_FORMATS))]
         if audio_files:
             return True
         return False
@@ -219,17 +220,17 @@ class AudioBookImporter(AsyncService):
                 continue
 
             logging.info("[AUDIO_IMPORT] new record for %s, will attempt to import", dir_path)
-            mp3_files = sorted([
-                f for f in os.listdir(dir_path) if f.lower().endswith(".mp3")
+            audio_files = sorted([
+                f for f in os.listdir(dir_path) if f.lower().endswith(tuple(SUPPORTED_AUDIO_FORMATS))
             ])
-            if not mp3_files:
-                logging.info("[AUDIO_IMPORT] no mp3 files in %s, skipping", dir_path)
+            if not audio_files:
+                logging.info("[AUDIO_IMPORT] no audio files in %s, skipping", dir_path)
                 AudioBookImporter.static_status["skipped"] += 1
                 self._update_progress(task_id, idx + 1, total)
                 continue
 
-            first_mp3 = os.path.join(dir_path, mp3_files[0])
-            title, author = _extract_mp3_metadata(first_mp3, dir_name)
+            first_audio = os.path.join(dir_path, audio_files[0])
+            title, author = _extract_audio_metadata(first_audio, dir_name)
             if not author:
                 author = _("佚名")
             title = utils.super_strip(title) if title else dir_name
