@@ -4,6 +4,7 @@
 import logging
 import os
 import re
+import subprocess
 import sys
 from webserver.handlers import static_files
 from webserver.i18n import _
@@ -375,7 +376,7 @@ def make_app():
     is_upgrade = CONF.get("installed_version", "") != VERSION
     logging.info(f"The installed version is {CONF.get("installed_version", "")}, {"" if is_upgrade else "No"} need to check or upgrade table structure.")
     need_sync_item_time = AsyncService().setup(book_db, ScopedSession, need_check_db=is_upgrade)
-    if is_upgrade:
+    if is_upgrade and CONF.get("installed", False):
         SettingsSaver().save_extra_settings(CONF)
 
     logging.info("Now, Running...")

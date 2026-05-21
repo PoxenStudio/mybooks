@@ -6,27 +6,31 @@
 FROM docker.1ms.run/library/ubuntu:24.04
 ARG BUILD_COUNTRY="CN"
 
-# Set mirrors in china
-RUN if [ "x${BUILD_COUNTRY}" = "xCN" ]; then \
-    echo "using repo mirrors for ${BUILD_COUNTRY}"; \
-    sed 's@archive.ubuntu.com/ubuntu@mirrors.huaweicloud.com/repository/ubuntu@g' -i /etc/apt/sources.list.d/ubuntu.sources; \
-    sed 's@security.ubuntu.com/ubuntu@mirrors.huaweicloud.com/repository/ubuntu@g' -i /etc/apt/sources.list.d/ubuntu.sources; \
-    fi
-
-# Install required packages, create talebook user
-RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
-    echo "Asia/Shanghai" > /etc/timezone && \
-    apt-get update && \
+# 合并所有 RUN 指令，减少镜像层数
+RUN set -ex; \
+    if [ "x${BUILD_COUNTRY}" = "xCN" ]; then \
+        sed 's@archive.ubuntu.com/ubuntu@mirrors.huaweicloud.com/repository/ubuntu@g' -i /etc/apt/sources.list.d/ubuntu.sources; \
+        sed 's@security.ubuntu.com/ubuntu@mirrors.huaweicloud.com/repository/ubuntu@g' -i /etc/apt/sources.list.d/ubuntu.sources; \
+    fi; \
+    ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime; \
+    echo "Asia/Shanghai" > /etc/timezone; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends gnupg2 ca-certificates curl; \
+    curl https://nginx.org/keys/nginx_signing.key | gpg --dearmor | tee /usr/share/keyrings/nginx-archive-keyring.gpg >/dev/null; \
+    echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/mainline/ubuntu/ noble nginx" > /etc/apt/sources.list.d/nginx.list; \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
+    apt-get update; \
     apt-get install -y --no-install-recommends \
-        curl gettext gosu procps nginx calibre calibre-bin supervisor fonts-lato fonts-wqy-microhei ffmpeg libzbar0 python3-pip && \
-    curl -fsSL https://deb.nodesource.com/setup_16.x | bash - && \
-    apt-get install -y --no-install-recommends nodejs && \
-    apt clean && \
-    rm -rf /var/lib/apt/lists/* && \
-    pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
-    useradd -u 990 -U -d /var/www/talebook -s /bin/false talebook && \
-    groupmod -g 990 talebook && usermod -aG users talebook && \
-    sed -i "s/user www-data;/user talebook;/g" /etc/nginx/nginx.conf
+        gettext gosu procps nginx calibre calibre-bin supervisor \
+        fonts-lato fonts-wqy-microhei ffmpeg libzbar0 python3-pip nodejs; \
+    pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/; \
+    useradd -u 990 -U -d /var/www/talebook -s /bin/false talebook; \
+    groupmod -g 990 talebook && usermod -aG users talebook; \
+    sed -i "s/user www-data;/user talebook;/g" /etc/nginx/nginx.conf; \
+    apt-get purge -y --auto-remove gnupg2; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache
+
 
 # Install OpenCC based on architecture
 COPY prebuilt/ /tmp/prebuilt/
@@ -39,12 +43,9 @@ RUN ARCH=$(uname -m) && \
     rm -rf /tmp/prebuilt
 
 # Apply calibre patches
-COPY calibre/7.6/calibre/db/cache.py /usr/lib/calibre/calibre/db/
-COPY calibre/7.6/calibre/customize/ui.py /usr/lib/calibre/calibre/customize/
-COPY calibre/7.6/calibre/ebooks/metadata/epub.py /usr/lib/calibre/calibre/ebooks/metadata/
-COPY calibre/7.6/calibre/ebooks/metadata/sources/amazon.py /usr/lib/calibre/calibre/ebooks/metadata/sources/
+COPY calibre/7.6/calibre/ /usr/lib/calibre/calibre/
 
 # Install python packages
 COPY requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt --break-system-packages && \
-    rm -rf /root/.cache /tmp/requirements.txt
+RUN pip install --no-cache-dir --no-compile -r /tmp/requirements.txt --break-system-packages && \
+    rm -rf /root/.cache /root/.config/pip /tmp/requirements.txt /tmp/pip-* /var/tmp/*

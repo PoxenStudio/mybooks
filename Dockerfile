@@ -28,7 +28,7 @@ RUN mkdir -p /app-ssr/ /app-static/ && \
 
 # ----------------------------------------
 # 测试阶段 (--break-system-packages)
-FROM docker.1ms.run/poxenstudio/talebook_base:latest AS test
+FROM poxenstudio/talebook_base:latest AS test
 RUN pip install flake8 pytest --break-system-packages
 COPY webserver/ /var/www/talebook/webserver/
 COPY tests/ /var/www/talebook/tests/
@@ -36,7 +36,7 @@ CMD ["pytest", "/var/www/talebook/tests"]
 
 # ----------------------------------------
 # 生产环境
-FROM docker.1ms.run/poxenstudio/talebook_base:latest AS production
+FROM poxenstudio/talebook_base:latest AS production
 ARG BUILD_COUNTRY="CN"
 ARG GIT_VERSION=""
 
@@ -81,7 +81,7 @@ COPY --from=builder /app-static/dist/avatar/ /data/books/avatar/
 COPY release_notes.txt /var/www/talebook/app/dist/static/
 
 
-RUN rm -f /etc/nginx/sites-enabled/default /var/www/html -rf && \
+RUN rm -f /etc/nginx/conf.d/default.conf /var/www/html -rf && \
     cd /var/www/talebook/ && \
     ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && \
     echo ${TZ} > /etc/timezone && \

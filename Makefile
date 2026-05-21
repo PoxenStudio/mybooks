@@ -20,7 +20,7 @@ $(info Building tag2: $(TAG2))
 all: build up
 
 build:
-	docker build --platform=$(PLATFORM) --no-cache=false --build-arg BUILD_COUNTRY=CN --build-arg GIT_VERSION=$(VER) \
+	docker build --pull --platform=$(PLATFORM) --no-cache=false --build-arg BUILD_COUNTRY=CN --build-arg GIT_VERSION=$(VER) \
 		-f Dockerfile -t $(IMAGE) -t $(REPO1) --target production .
 
 push:
@@ -37,7 +37,7 @@ setup-multiarch:
 # 构建并推送基础镜像多架构版本（ubuntu + 系统包 + python依赖 + calibre补丁）
 # 仅在 requirements.txt / calibre补丁 / 系统包变更时需重新构建
 build-base-multiarch:
-	docker buildx build --platform=linux/amd64,linux/arm64 \
+	docker buildx build --pull --platform=linux/amd64,linux/arm64 \
 		--builder $(BUILDER) \
 		--build-arg BUILD_COUNTRY=CN \
 		-f Dockerfile.base -t $(BASE_IMAGE) -t $(BASE_REPO1) \
@@ -45,7 +45,7 @@ build-base-multiarch:
 
 # 构建并推送多架构镜像（同时支持 amd64 和 arm64）
 build-multiarch:
-	docker buildx build --platform=linux/amd64,linux/arm64 \
+	docker buildx build --pull --platform=linux/amd64,linux/arm64 \
 		--builder $(BUILDER) \
 		--build-arg BUILD_COUNTRY=CN --build-arg GIT_VERSION=$(VER) \
 		-f Dockerfile -t $(IMAGE) -t $(REPO1) \
@@ -53,7 +53,7 @@ build-multiarch:
 
 # 仅构建多架构镜像到本地缓存（不推送）
 build-multiarch-local:
-	docker buildx build --platform=linux/amd64,linux/arm64 \
+	docker buildx build --pull --platform=linux/amd64,linux/arm64 \
 		--builder $(BUILDER) \
 		--build-arg BUILD_COUNTRY=CN --build-arg GIT_VERSION=$(VER) \
 		-f Dockerfile -t $(IMAGE) -t $(REPO1) \

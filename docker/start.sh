@@ -69,7 +69,6 @@ fi
 # 设置系统文件的权限（数量较少）
 chown -R talebook:talebook \
   /data/log/ \
-  /var/lib/nginx \
   /root/.config/calibre \
   /root/.npm \
   /var/www/talebook/app/.env \
