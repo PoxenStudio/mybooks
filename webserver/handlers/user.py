@@ -583,7 +583,7 @@ class UserInfo(BaseHandler):
             result.append(item)
 
         if need_loading_urls:
-            ResourceService().load_friends_favicon(need_loading_urls)
+            ResourceService().load_favicons(need_loading_urls)
 
         return result
 
@@ -1233,8 +1233,8 @@ class UserMemo(BaseHandler):
             return {"err": "db.error", "msg": _("删除失败")}
 
 
-class FriendsFaviconHandler(BaseHandler):
-    """提供友情链接 favicon 文件的 HTTP 访问"""
+class FaviconHandler(BaseHandler):
+    """提供友情链接及资源 favicon 文件的 HTTP 访问"""
 
     def prepare(self):
         # 跳过 BaseHandler 的登录检查等，favicon 无需认证
@@ -1281,5 +1281,5 @@ def routes():
         (r"/api/user/expected", UserExpectedItems),
         (r"/api/user/history/clear", UserHistoryClear),
         (r"/api/user/memo", UserMemo),
-        (r"/api/friends/favicon/(.*)", FriendsFaviconHandler),
+        (r"/api/favicon/(.*)", FaviconHandler),
     ]

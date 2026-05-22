@@ -49,7 +49,7 @@ class ImageHandler(BaseHandler):
         if fmt == "thumb" or fmt.startswith("thumb_"):
             try:
                 width, height = map(int, fmt.split("_")[1:])
-            except:
+            except Exception:
                 width, height = 60, 80
             return await self.get_cover_async(id, thumbnail=True, thumb_width=width, thumb_height=height)
         if fmt == "cover":
@@ -260,10 +260,10 @@ class ToolIconHandler(BaseHandler):
 def routes():
     static_config = {"path": CONF["html_path"], "default_filename": "index.html"}
     return [
-        (r"/get/pcover", ProxyImageHandler),
         (r"/get/tool/([^/]+)/icon", ToolIconHandler),
         (r"/get/progress/([0-9]+)", ProgressHandler),
         (r"/get/extract/([0-9]+)/(.*)", EpubReader),
+        (r"/get/pcover", ProxyImageHandler),
         (r"/get/(.*)/(.*)", ImageHandler),
         (r"/(.*)", web.StaticFileHandler, static_config),
     ]

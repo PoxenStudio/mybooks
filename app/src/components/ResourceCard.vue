@@ -9,13 +9,13 @@
             <!-- Left: Icon -->
             <div class="resource-card__icon-wrap mr-4" @click.stop="openLink">
                 <img
-                    v-if="isImageIcon"
+                    v-if="icon"
                     :src="icon"
                     :alt="title"
                     class="resource-card__image"
                 >
-                <v-icon v-else size="40" :color="$vuetify.theme.dark ? '#4a9eca' : '#003153'">
-                    {{ icon || 'mdi-open-in-new' }}
+                <v-icon v-else size="40" :color="$vuetify.theme.dark ? '#4a9eca' : 'white'">
+                    {{ 'mdi-open-in-new' }}
                 </v-icon>
             </div>
 
@@ -35,8 +35,6 @@
                     {{ description }}
                 </div>
             </div>
-
-            <!-- Trailing arrow -->
             <v-icon class="ml-2 resource-card__arrow" :color="$vuetify.theme.dark ? 'grey lighten-1' : 'grey darken-1'" size="20">
                 mdi-chevron-right
             </v-icon>
@@ -63,11 +61,6 @@ export default {
         link: {
             type: String,
             required: true
-        }
-    },
-    computed: {
-        isImageIcon() {
-            return typeof this.icon === 'string' && /^(https?:)?\/\//.test(this.icon);
         }
     },
     methods: {

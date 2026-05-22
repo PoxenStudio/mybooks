@@ -1940,7 +1940,7 @@ class BookUpload(BaseHandler):
     def convert(cls, s):
         try:
             return s.group(0).encode("latin1").decode("utf8")
-        except:
+        except Exception:
             return s.group(0)
 
     def _add_new_book(self, mi, fpaths):
@@ -2920,7 +2920,7 @@ class BookSperate(BaseHandler):
         try:
             data = tornado.escape.json_decode(self.request.body)
             fmt = data.get("format", "").strip().lower()
-        except:
+        except Exception:
             return {"err": "params.invalid", "msg": _("请求参数格式错误")}
 
         if not fmt:

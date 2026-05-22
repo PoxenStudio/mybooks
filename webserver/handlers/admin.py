@@ -24,6 +24,7 @@ from webserver.services.batch_convert import BatchConvertService
 from webserver.services.batch_title_sort import BatchTitleSortUpdateService
 from webserver.services.metadata_update import MetaDataUpdateService
 from webserver.services.batch_generate_cover import DynamicCoverUpdateService
+from webserver.services.resource_service import ResourceService
 from webserver.services.save_meta_to_files import SaveMetaToFilesService
 from webserver.services.mail import MailService
 from webserver.services.book_barn import BookBarnClient
@@ -1355,6 +1356,8 @@ class AdminResources(BaseHandler):
     _cache_data = None
     _cache_time = 0
 
+    CACHED_TIME = 7200  # 2 hours
+
     CONF_DEFAULT_RESOURCES = [
         {
             "icon": "https://dushupai.com/favicon.ico",
@@ -1371,14 +1374,23 @@ class AdminResources(BaseHandler):
     @js
     @is_admin
     def get(self):
-        if time.time() - AdminResources._cache_time < 7200 and AdminResources._cache_data:
-            logging.info("Use cached data")
-            resources = AdminResources._cache_data
+        if time.time() - self._cache_time < AdminResources.CACHED_TIME and self._cache_data:
+            logging.info("[Resources]Use cached data")
+            resources = self._cache_data
         else:
             resources = BookBarnClient().getResourceList(CONF.get("BOOKBARN_TOKEN", ""))
             resources = resources if resources else AdminResources.CONF_DEFAULT_RESOURCES
-            AdminResources._cache_data = resources
-            AdminResources._cache_time = time.time()
+            self._cache_data = resources
+            self._cache_time = time.time()
+
+            need_loading_urls = []
+            for res in resources:
+                if "icon" in res and res["icon"]:
+                    need_loading_urls.append(res["icon"])
+                    res["icon"] = ResourceService.check_favicon(res["icon"])
+            if need_loading_urls:
+                ResourceService().load_favicons(need_loading_urls, flag=1)
+
         return {"err": "ok", "resources": resources}
 
 
