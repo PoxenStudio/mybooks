@@ -28,7 +28,7 @@ RUN mkdir -p /app-ssr/ /app-static/ && \
 
 # ----------------------------------------
 # 测试阶段 (--break-system-packages)
-FROM poxenstudio/talebook_base:latest AS test
+FROM docker.1ms.run/poxenstudio/talebook_base:latest AS test
 RUN pip install flake8 pytest --break-system-packages
 COPY webserver/ /var/www/talebook/webserver/
 COPY tests/ /var/www/talebook/tests/
@@ -36,7 +36,7 @@ CMD ["pytest", "/var/www/talebook/tests"]
 
 # ----------------------------------------
 # 生产环境
-FROM poxenstudio/talebook_base:latest AS production
+FROM docker.1ms.run/poxenstudio/talebook_base:latest AS production
 ARG BUILD_COUNTRY="CN"
 ARG GIT_VERSION=""
 
