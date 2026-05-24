@@ -2,12 +2,12 @@
     <div>
     <v-row>
         <v-col cols=12 class='text-center position-relative'>
-            <div class="watermark">PoxenStudio/Talebook</div>
+            <div class="watermark">PoxenStudio/MyBooks</div>
 
             <v-divider class='mt-10 mb-3'></v-divider>
             <p class='mb-0 text-center footer-text' v-html="footer_text"></p>
             <p>
-                <v-btn small text target="_blank" href="https://github.com/PoxenStudio/talebook">Project</v-btn>
+                <v-btn small text target="_blank" href="https://github.com/PoxenStudio/mybooks">Project</v-btn>
                 | <v-btn small text target="_blank" href="/podcast">Podcast</v-btn>
                 | <v-btn small text target="_blank" href="https://mybooks.top">Talebook</v-btn>
                 | <v-btn small text target="_blank" href="/opds-readme"> {{ $t('appHeader.opdsIntroduction') }} </v-btn>

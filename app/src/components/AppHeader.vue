@@ -367,7 +367,7 @@
                     <v-btn
                         outlined
                         color="primary"
-                        href="https://github.com/PoxenStudio/talebook/issues"
+                        href="https://github.com/PoxenStudio/mybooks/issues"
                         target="_blank"
                         rel="noopener noreferrer"
                     >

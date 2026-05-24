@@ -1027,7 +1027,7 @@ export default {
         tips: [
           {
             text: "settings.douban_plugin_description",
-            link: "https://github.com/PoxenStudio/talebook/blob/master/document/README.zh_CN.md#%E5%A6%82%E6%9E%9C%E9%85%8D%E7%BD%AE%E8%B1%86%E7%93%A3%E6%8F%92%E4%BB%B6",
+            link: "https://github.com/PoxenStudio/mybooks/blob/master/document/README.zh_CN.md#%E5%A6%82%E6%9E%9C%E9%85%8D%E7%BD%AE%E8%B1%86%E7%93%A3%E6%8F%92%E4%BB%B6",
           },
         ],
       },

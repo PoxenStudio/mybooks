@@ -50,7 +50,7 @@ ENABLE_VIP_QUOTA_KEY = "ENABLE_VIP_QUOTA"
 IMPORT_BY_INOTIFY = "IMPORT_BY_INOTIFY"
 META_ALL_SOURCES = ["douban", "baidu", "google", "amazon", "xinhua", "youshu"]
 DEFAULT_META_SOURCES = ["douban", "baidu", "xinhua"]
-LOG_PATH = "/data/log/talebook.log"
+LOG_PATH = "/data/log/mybooks.log"
 
 
 class AdminUsers(BaseHandler):
