@@ -16,7 +16,7 @@ export const state = () => ({
         },
     },
     site_title: "首页",
-    site_title_template: "%s | Talebook"
+    site_title_template: "%s | MyBooks"
 })
 
 export const mutations = {

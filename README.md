@@ -1,4 +1,4 @@
-[![GitHub License](https://img.shields.io/github/license/mybooks/talebook?style=flat-square)](https://github.com/poxenstudio/talebook/blob/master/LICENSE)
+[![GitHub License](https://img.shields.io/github/license/mybooks?style=flat-square)](https://github.com/poxenstudio/mybooks/blob/master/LICENSE)
 [![Docker Pulls](https://img.shields.io/docker/pulls/poxenstudio/mybooks.svg)](https://hub.docker.com/r/poxenstudio/talebook)
 ![GitHub stars](https://img.shields.io/github/stars/PoxenStudio/mybooks.svg?logo=github)
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/w/PoxenStudio/mybooks?logo=github)

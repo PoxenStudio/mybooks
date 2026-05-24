@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-tests/test_talebook_api.py -- talebook_api.py integration tests
+tests/test_mybooks_api.py -- mybooks_api.py integration tests
 
-Calls talebook_api.py via subprocess for every tool and verifies:
+Calls mybooks_api.py via subprocess for every tool and verifies:
   - The script completes without crashing (returns valid JSON)
   - Required-parameter checks fire correctly
   - Live APIs return err=ok (or an acceptable non-crash error)
 
 Built-in defaults (override with env vars):
-  TALEBOOK_HOST      http://127.0.0.1:8082
-  TALEBOOK_USER      admin
-  TALEBOOK_PASSWORD  123456
-  TALEBOOK_TEST_EMAIL     (optional, enables mailto test)
-  TALEBOOK_TEST_BOOK_ID   (optional, pin a specific book id)
+  MYBOOKS_HOST      http://127.0.0.1:8082
+  MYBOOKS_USER      admin
+  MYBOOKS_PASSWORD  123456
+  MYBOOKS_TEST_EMAIL     (optional, enables mailto test)
+  MYBOOKS_TEST_BOOK_ID   (optional, pin a specific book id)
 """
 
 import json
@@ -24,14 +24,14 @@ import unittest
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-HOST     = os.environ.get("TALEBOOK_HOST",     "http://127.0.0.1:8082")
-USER     = os.environ.get("TALEBOOK_USER",     "admin")
-PASSWORD = os.environ.get("TALEBOOK_PASSWORD", "123456")
-TEST_EMAIL   = os.environ.get("TALEBOOK_TEST_EMAIL", "")
-TEST_BOOK_ID = int(os.environ.get("TALEBOOK_TEST_BOOK_ID", "1004") or "979")
+HOST     = os.environ.get("MYBOOKS_HOST",     "http://127.0.0.1:8082")
+USER     = os.environ.get("MYBOOKS_USER",     "admin")
+PASSWORD = os.environ.get("MYBOOKS_PASSWORD", "123456")
+TEST_EMAIL   = os.environ.get("MYBOOKS_TEST_EMAIL", "")
+TEST_BOOK_ID = int(os.environ.get("MYBOOKS_TEST_BOOK_ID", "1004") or "979")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-API_SCRIPT = os.path.join(SCRIPT_DIR, "..", "skills", "talebook", "scripts", "talebook_api.py")
+API_SCRIPT = os.path.join(SCRIPT_DIR, "..", "skills", "mybooks", "scripts", "mybooks_api.py")
 CASES_DIR  = os.path.join(SCRIPT_DIR, "cases")
 
 # Will be populated in setUpModule
@@ -43,11 +43,11 @@ _book_id = TEST_BOOK_ID
 # ---------------------------------------------------------------------------
 
 def call(tool: str, args: dict = None, timeout: int = 30) -> dict:
-    """Run talebook_api.py <tool> <json-args> and return parsed JSON response."""
+    """Run mybooks_api.py <tool> <json-args> and return parsed JSON response."""
     env = os.environ.copy()
-    env["TALEBOOK_HOST"]     = HOST
-    env["TALEBOOK_USER"]     = USER
-    env["TALEBOOK_PASSWORD"] = PASSWORD
+    env["MYBOOKS_HOST"]     = HOST
+    env["MYBOOKS_USER"]     = USER
+    env["MYBOOKS_PASSWORD"] = PASSWORD
     cmd = ["python3", API_SCRIPT, tool, json.dumps(args or {})]
     print(cmd)
     r = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=timeout)
@@ -104,9 +104,9 @@ class Base(unittest.TestCase):
 class TestEnvValidation(Base):
     def _run_bare(self, host="", user="", password=""):
         env = os.environ.copy()
-        env["TALEBOOK_HOST"]     = host
-        env["TALEBOOK_USER"]     = user
-        env["TALEBOOK_PASSWORD"] = password
+        env["MYBOOKS_HOST"]     = host
+        env["MYBOOKS_USER"]     = user
+        env["MYBOOKS_PASSWORD"] = password
         r = subprocess.run(
             ["python3", API_SCRIPT, "get_user_info", "{}"],
             capture_output=True, text=True, env=env, timeout=10)
@@ -114,11 +114,11 @@ class TestEnvValidation(Base):
 
     def test_missing_host(self):
         out = self._run_bare(host="", user="u", password="p")
-        self.assertIn("TALEBOOK_HOST", out)
+        self.assertIn("MYBOOKS_HOST", out)
 
     def test_missing_credentials(self):
         out = self._run_bare(host="http://localhost", user="", password="")
-        self.assertTrue("TALEBOOK_USER" in out or "TALEBOOK_PASSWORD" in out,
+        self.assertTrue("MYBOOKS_USER" in out or "MYBOOKS_PASSWORD" in out,
             f"Expected credential error, got: {out[:200]}")
 
 
@@ -146,7 +146,7 @@ class TestParamValidation(Base):
         self.assertParamError(call("book_upload", {}), "file_path")
 
     def test_book_upload_missing_file(self):
-        resp = call("book_upload", {"file_path": "/tmp/_talebook_no_such_file_.epub"})
+        resp = call("book_upload", {"file_path": "/tmp/_mybooks_no_such_file_.epub"})
         text = json.dumps(resp).lower()
         self.assertIn("not found", text,
             f"Expected 'not found' error, got: {text[:200]}")
@@ -397,7 +397,7 @@ class TestBookAddByIsbn(Base):
 class TestMailTo(Base):
     def test_mailto(self):
         if not TEST_EMAIL:
-            self.skipTest("TALEBOOK_TEST_EMAIL not set")
+            self.skipTest("MYBOOKS_TEST_EMAIL not set")
         if not _book_id:
             self.skipTest("no usable book_id")
         resp = call("mailto", {"book_id": _book_id, "email": TEST_EMAIL})

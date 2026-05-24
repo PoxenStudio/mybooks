@@ -39,7 +39,7 @@ class WapBaseHandler(BaseHandler):
 
     def write_page(self, title, body):
         """Render a complete HTML page and write it to the response."""
-        site_title = CONF.get("site_title", "Talebook")
+        site_title = CONF.get("site_title", "MyBooks")
         html = WapRenderer.render_page(
             title, body, user=self.current_user, site_title=site_title
         )
@@ -81,7 +81,7 @@ class WapIndex(WapBaseHandler):
     """Homepage: search form + recent books."""
 
     def get(self):
-        site_title = CONF.get("site_title", "Talebook")
+        site_title = CONF.get("site_title", "MyBooks")
         body = WapRenderer.render_search_form()
         body += "<h2>最新书籍</h2>\n"
         books = self.provider.get_recent_books(count=20)

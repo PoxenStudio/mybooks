@@ -39,7 +39,7 @@ class MCPService:
     def __init__(self, base_handler: BaseHandler = None, token: str = None):
         """初始化MCP服务"""
         self.token = token
-        self.server = Server("talebook-mcp")
+        self.server = Server("mybooks-mcp")
         self.base_handler = base_handler
         self.authenticated_tokens = {}  # 存储有效的token和用户信息
         self.need_login = True
@@ -1101,7 +1101,7 @@ class MCPService:
         tools = [
             Tool(
                 name="get_books_count",
-                description="Get the current count of books in the talebook collection." + self.need_login_prompt,
+                description="Get the current count of books in the mybooks collection." + self.need_login_prompt,
                 inputSchema={
                     "type": "object",
                     "properties": {},
@@ -1463,10 +1463,10 @@ class MCPService:
                 "tools": {}
             },
             "serverInfo": {
-                "name": "talebook-mcp",
+                "name": "mybooks-mcp",
                 "version": "0.1.0",
-                "description": ("Local ebooks management system developed by Talebook(PoxenStudio). "
-                                "Use this tool to manage your ebook collection in talebook, and query book info online."),
+                "description": ("Local ebooks management system developed by PoxenStudio. "
+                                "Use this tool to manage your ebook collection in mybooks, and query book info online."),
             },
             "sessionId": session_id
         }

@@ -1,11 +1,11 @@
 使用指南
 ===========
-本文主要介绍talebook程序的使用说明，以及常见问题。如需手动安装或者提交PR，请参阅[开发者指南](./Development.zh_CN.md)。
+本文主要介绍MyBooks的使用说明，以及常见问题。如需手动安装或者提交PR，请参阅[开发者指南](./Development.zh_CN.md)。
 
 
 NAS用户，可以参阅网友们写的指南：
 * [新手向NAS教程 篇十七：春节假期来搭建书库吧！免费开源有手就行！群晖Calibre部署教程！ ](https://post.smzdm.com/p/a3d7ox0k/)
-* [飞牛NAS部署Talebook](https://club.fnnas.com/forum.php?mod=viewthread&tid=27403)
+* [飞牛NAS部署MyBooks(PoxenStudio/Talebook)](https://club.fnnas.com/forum.php?mod=viewthread&tid=27403)
 
 
 常见配置指南
@@ -19,8 +19,8 @@ NAS用户，可以参阅网友们写的指南：
 
 如果有调整过supervisord里面的配置（例如端口、目录），一定要执行```sudo supervisorctl reload all```重新读取配置，不然是不会生效的，可能会导致启动失败。
 
-如果提示```talebook:tornado-8000: ERROR(spawn error)```，那么说明环境没配置正确。
-请打开日志文件```/data/log/talebook.log```查看原因，重点查看最后一次出现Traceback报错，关注其中```Traceback (most recent call last)```提示的错误原因。
+如果提示```mybooks:tornado-8000: ERROR(spawn error)```，那么说明环境没配置正确。
+请打开日志文件```/data/log/mybooks.log```查看原因，重点查看最后一次出现Traceback报错，关注其中```Traceback (most recent call last)```提示的错误原因。
 
 ### 网站能打开，但是提示```500: internal server error```
 
@@ -28,7 +28,7 @@ NAS用户，可以参阅网友们写的指南：
 
 ** 一般都是因为data目录权限设置不正确，导致启动异常 **，可以多排查下用户名、UID、目录权限等。
 
-请打开日志文件```/data/log/talebook.log```查看原因，重点查看最后一次出现Traceback报错，关注其中```Traceback (most recent call last)```提示的错误原因，并提issue联系开发者排查。
+请打开日志文件```/data/log/mybooks.log```查看原因，重点查看最后一次出现Traceback报错，关注其中```Traceback (most recent call last)```提示的错误原因，并提issue联系开发者排查。
 
 ### 「静读天下」APP里访问书库会失败，怎么办？
 

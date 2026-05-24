@@ -2,7 +2,7 @@
 # -*- coding: UTF-8 -*-
 
 """
-Youshu.me metadata plugin for Talebook
+Youshu.me metadata plugin for MyBooks
 """
 
 import logging

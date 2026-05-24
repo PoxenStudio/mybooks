@@ -6,7 +6,7 @@ export default {
   // Global page headers: https://go.nuxtjs.dev/config-head
   head: {
     title: "PoxenStudio",
-    titleTemplate: "%s | Talebook",
+    titleTemplate: "%s | MyBooks",
     htmlAttrs: {
       lang: 'en'
     },
@@ -17,11 +17,11 @@ export default {
       { name: 'apple-mobile-web-app-status-bar-style', content: 'black' },
       //{ name: 'viewport', content: 'width=device-width, initial-scale=1' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui' },
-      { name: 'keywords', content: '在线阅读 电子书 推送 kindle epub mobi pdf azw3 poxenstudio talebook ebook' },
+      { name: 'keywords', content: '在线阅读 电子书 推送 kindle epub mobi pdf azw3 poxenstudio mybooks talebook ebook' },
       {
         hid: 'description',
         name: 'description',
-        content: '这是一个基于poxenstudio/talebook搭建的个人电子书库，管理和阅读Epub/Mobi/Pdf/Azw3等格式的电子书，也支持下载或推送到阅读设备里。',
+        content: '这是一个基于poxenstudio/mybooks搭建的个人电子书库，管理和阅读Epub/Mobi/Pdf/Azw3等格式的电子书，也支持下载或推送到阅读设备里。',
       },
     ],
     link: [
@@ -86,8 +86,8 @@ export default {
 
   publicRuntimeConfig: {
     head: {
-        title: process.env.TITLE || "Talebook",
-        titleTemplate: process.env.TITLE_TEMPLATE || " %s | PoxenStudio/Talebook",
+        title: process.env.TITLE || "MyBooks",
+        titleTemplate: process.env.TITLE_TEMPLATE || " %s | PoxenStudio/MyBooks",
     },
     api_url: process.env.API_URL || "http://127.0.0.1:8000",
     googleAnalytics: {

@@ -9,7 +9,7 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH
 groupmod -o -g "${PGID}" talebook
 usermod -o -u "${PUID}" talebook
 
-echo "[PoxenStudio/Talebook]Starting...."
+echo "[MyBooks]Starting...."
 
 # 使用预设的书库和配置
 if [ ! -d "/data/books" ]; then
@@ -34,7 +34,7 @@ if [ ! -d "/data/log/nginx" ]; then
   chown -R talebook:talebook /data/log/nginx
 fi
 
-echo "[PoxenStudio/Talebook] Checked and parepared the default folders."
+echo "[MyBooks] Checked and parepared the default folders."
 
 # 检查目录，拷贝并创建目录
 cd /prebuilt/books/;
@@ -51,11 +51,11 @@ find . \( -path ./library -o -name '*.pyc' -o -name '*.db*' \) -prune -o -type f
         cp "$f" "$target"
     fi
 done
-echo "[PoxenStudio/Talebook] Checked the library"
+echo "[MyBooks] Checked the library"
 
 mkdir -p /root/.npm
 
-echo "[PoxenStudio/Talebook] Checking the permission..."
+echo "[MyBooks] Checking the permission..."
 # 设置PUID/GUID权限
 permission_file=/data/.permission
 touch $permission_file
@@ -64,7 +64,7 @@ if [ "x$permission" != "x$PUID:$PGID" ]; then
     echo "updating '/data/' permission to $PUID:$PGID"
     chown -R talebook:talebook /data
     echo "$PUID:$PGID" > $permission_file
-    echo "[PoxenStudio/Talebook] permission updated!"
+    echo "[MyBooks] permission updated!"
 fi
 
 # 设置系统文件的权限
@@ -77,7 +77,7 @@ chown -R talebook:talebook \
   /var/www/talebook/webserver \
   /var/www/talebook/server.py
 
-echo "[PoxenStudio/Talebook] Checked the permission"
+echo "[MyBooks] Checked the permission"
 
 # 检测权限
 TEST_WRITE_FILE=/data/books/library/test_writeable.txt
@@ -90,7 +90,7 @@ else
 fi
 
 # 启动
-echo "[PoxenStudio/Talebook] Prepared the running environments."
+echo "[MyBooks] Prepared the running environments."
 
 export PYTHONDONTWRITEBYTECODE=1
 
@@ -129,18 +129,18 @@ run_as_talebook() {
 }
 
 echo
-echo "[PoxenStudio/Talebook] Checking the nginx config..."
+echo "[MyBooks] Checking the nginx config..."
 nginx -t || exit 1
 
 echo
-echo "[PoxenStudio/Talebook] Syncing db as needed..."
+echo "[MyBooks] Syncing db as needed..."
 run_as_talebook "$PYTHON_BIN" /var/www/talebook/server.py --syncdb
 
 echo
-echo "[PoxenStudio/Talebook] Updating talebook config..."
+echo "[MyBooks] Updating talebook config..."
 run_as_talebook "$PYTHON_BIN" /var/www/talebook/server.py --update-config
 
 echo
-echo "[PoxenStudio/Talebook] All done, launch the service..."
+echo "[MyBooks] All done, launch the service..."
 exec /usr/bin/supervisord --nodaemon -u root -c /etc/supervisor/supervisord.conf
 

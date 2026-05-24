@@ -207,7 +207,7 @@ def get_cover(raster_cover, first_spine_item, reader):
         except Exception:
             pass
 
-    # Using default cover in talebook if missing cover image
+    # Using default cover in mybooks if missing cover image
     # return render_cover(first_spine_item, zf, reader=reader)
     pass
 

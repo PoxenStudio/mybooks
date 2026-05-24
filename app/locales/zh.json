@@ -1,6 +1,6 @@
 {
     "install": {
-        "title": "安装 TaleBook",
+        "title": "安装 MyBooks (PoxenStudio/TaleBook)",
         "siteTitle": "网站标题",
         "defaultLanguage": "默认语言",
         "languageChinese": "中文",
@@ -638,7 +638,7 @@
         "douban_baseurl": "豆瓣插件API地址(例如 http://10.0.0.1:8080 )",
         "douban_api_key": "豆瓣插件API密钥, 可用的key有限, 可以自行查找替换",
         "douban_max_count": "豆瓣插件API查询结果数量",
-        "douban_plugin_description": "若需要启用豆瓣插件，请参阅安装文档的说明。若出现失败，可尝试更换镜像，例如 talebook/douban-api-rs",
+        "douban_plugin_description": "若需要启用豆瓣插件，请参阅安装文档的说明。若出现失败，可尝试更换镜像，例如 poxenstudio/douban-api-rs",
         "import_and_upload": "导入与上传",
         "category_with_folder": "使用第一级目录为自定义类别名称 (如导入目录下a/b/c.epub导入后, 类别为a。目录名不要有特殊字符，超过10个字符会被忽略)",
         "auto_importing":"监控导入目录，自动进行导入 (只处理新增入库，删除文件没有影响。如果放入的文件不完整，会被忽略。尽量保留导入记录，避免重复处理)",
@@ -817,7 +817,7 @@
         "booksUnit": "本书"
     },
     "footer": {
-        "base_message": "基于Calibre构建, 任何问题或建议请前往下方Talebook主页扫码公众号私信联系。"
+        "base_message": "基于Calibre构建, 任何问题或建议请前往下方MyBooks主页扫码公众号私信联系。"
     },
     "appHeader": {
         "home": "首页",
@@ -872,7 +872,7 @@
         "message_notification": "消息通知",
         "clear_messages": "全部清空",
         "defaultFooter": "本站基于Calibre构建，感谢开源界的力量。所有资源搜集于互联网，如有侵权请邮件联系。",
-        "defaultHeader": "欢迎访问！如果你喜欢此项目，请前往 Github <a target=\"_blank\" href=\"https://github.com/PoxenStudio/talebook\"> 给 talebook 点击一个Star！</a>",
+        "defaultHeader": "欢迎访问！如果你喜欢此项目，请前往 Github <a target=\"_blank\" href=\"https://github.com/PoxenStudio/mybooks\"> 给 mybooks 点击一个Star！</a>",
         "favorites": "收藏",
         "wants": "待读",
         "reading": "在读",

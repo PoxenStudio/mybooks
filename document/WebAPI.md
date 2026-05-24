@@ -1,5 +1,6 @@
-# Talebook Python 后台 API 接口文档
+# MyBoooks Python 后台 API 接口文档
 **最后更新时间**：2026-05-11
+**已从PoxenStudio/Talebook更名为MyBooks**
 
 ## 基础说明
 
@@ -2444,7 +2445,7 @@ POST响应：
 {
   "err": "ok",
   "status": "healthy",
-  "server": "talebook-mcp"
+  "server": "mybooks-mcp"
 }
 ```
 

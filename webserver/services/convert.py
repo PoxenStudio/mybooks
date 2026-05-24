@@ -57,7 +57,7 @@ class ConvertService(AsyncService):
         new_fmt = self.get_fmt(new_path)
 
         args = [EBOOK_CONVERT_CMD, old_path, new_path]
-        args += ["--book-producer", "PoxenStudio/Talebook(https://mybooks.top)"]
+        args += ["--book-producer", "PoxenStudio/MyBooks(https://mybooks.top)"]
         if new_fmt == "epub":
             args += ["--epub-version", "2"]
             if old_path.lower().endswith(".txt"):

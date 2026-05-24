@@ -9,7 +9,7 @@
             <p>
                 <v-btn small text target="_blank" href="https://github.com/PoxenStudio/mybooks">Project</v-btn>
                 | <v-btn small text target="_blank" href="/podcast">Podcast</v-btn>
-                | <v-btn small text target="_blank" href="https://mybooks.top">Talebook</v-btn>
+                | <v-btn small text target="_blank" href="https://mybooks.top">MyBooks</v-btn>
                 | <v-btn small text target="_blank" href="/opds-readme"> {{ $t('appHeader.opdsIntroduction') }} </v-btn>
                 | <v-btn small text target="_blank" href="/webdav-readme"> {{ $t('appHeader.webdavIntroduction') }} </v-btn>
             </p>

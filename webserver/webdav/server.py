@@ -6,14 +6,14 @@ from .dav_provider import TalebookProvider
 
 def create_webdav_app(calibre_cache, sqlite_session):
     """
-    Create and configure WsgiDAV application for Talebook.
+    Create and configure WsgiDAV application.
 
     Args:
         calibre_cache: Calibre library cache (new_api)
         sqlite_session: SQLAlchemy scoped session for user authentication
 
     Returns:
-        WsgiDAVApp instance configured for Talebook
+        WsgiDAVApp instance configured
     """
 
     # Create a function to get session
@@ -28,7 +28,7 @@ def create_webdav_app(calibre_cache, sqlite_session):
     config = {
         "host": "0.0.0.0",
         "port": 8080,
-        "app_title": "PoxenStudio/Talebook",
+        "app_title": "PoxenStudio/MyBooks",
         "provider_mapping": {
             "/books": provider,
         },

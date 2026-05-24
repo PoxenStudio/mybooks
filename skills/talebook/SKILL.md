@@ -1,22 +1,22 @@
 ---
-name: talebook
+name: mybooks
 homepage: https://www.mybooks.top
 allowed-tools: Bash(python3:*)
-metadata: {"clawdbot":{},"openclaw":{"requires":{"bins":["python3"],"env":["TALEBOOK_HOST","TALEBOOK_USER","TALEBOOK_PASSWORD"]}}}
-description: "Talebook(PoxenStudio)是个人书库管理系统，提供电子书及实体书管理，包括存储、分类、搜索和元数据管理功能。你可以帮助用户：查询书库统计信息和阅读统计,搜索/浏览书籍,获取书籍详情,更新书籍元数据（书名、作者、标签、分类、简介等）,自动联网填充书籍信息,发送书籍到邮箱或阅读器设备,上传电子书或通过ISBN添加实体书,管理阅读状态（想读/在读/已读/收藏）,查看作者信息和分类信息"
+metadata: {"clawdbot":{},"openclaw":{"requires":{"bins":["python3"],"env":["MYBOOKS_HOST","MYBOOKS_USER","MYBOOKS_PASSWORD"]}}}
+description: "MyBooks(PoxenStudio/Talebook)是个人书库管理系统，提供电子书及实体书管理，包括存储、分类、搜索和元数据管理功能。你可以帮助用户：查询书库统计信息和阅读统计,搜索/浏览书籍,获取书籍详情,更新书籍元数据（书名、作者、标签、分类、简介等）,自动联网填充书籍信息,发送书籍到邮箱或阅读器设备,上传电子书或通过ISBN添加实体书,管理阅读状态（想读/在读/已读/收藏）,查看作者信息和分类信息"
 ---
 
-# talebook
+# MyBooks
 
 ## Requirements
 ```bash
 # 需要配置以下三个环境变量后方可使用
-export TALEBOOK_HOST="http://127.0.0.1:8082"
-export TALEBOOK_USER="admin"
-export TALEBOOK_PASSWORD="your_password"
+export MYBOOKS_HOST="http://127.0.0.1:8082"
+export MYBOOKS_USER="admin"
+export MYBOOKS_PASSWORD="your_password"
 
 然后按如下方式执行：
-<skill-installation-path>/scripts/talebook_api.py <tool-name> '<json-args>'
+<skill-installation-path>/scripts/mybooks_api.py <tool-name> '<json-args>'
 ```
 
 > **安全提示**：请勿将凭据写入共享或全局配置文件（如 `~/.openclaw/.env`），以避免凭据被其他 agent 或进程意外读取。建议通过会话级环境变量或专用密钥管理工具传入凭据。
@@ -44,10 +44,10 @@ export TALEBOOK_PASSWORD="your_password"
 | `"task.running"` | 后台任务正在进行中，稍后重试 |
 
 ### 认证方式
-- 脚本通过 `TALEBOOK_USER` / `TALEBOOK_PASSWORD` 环境变量自动调用 `/api/user/sign_in` 完成登录
+- 脚本通过 `MYBOOKS_USER` / `MYBOOKS_PASSWORD` 环境变量自动调用 `/api/user/sign_in` 完成登录
 - 服务端通过 **Secure Cookie**（`user_id` + `lt`）维持会话
 - 若响应中出现 `err=user.need_login`，脚本会自动重新登录后重试一次；仍失败则报错退出
-- **必须**在调用前配置 `TALEBOOK_HOST`、`TALEBOOK_USER`、`TALEBOOK_PASSWORD` 三个环境变量，否则脚本直接报错退出
+- **必须**在调用前配置 `MYBOOKS_HOST`、`MYBOOKS_USER`、`MYBOOKS_PASSWORD` 三个环境变量，否则脚本直接报错退出
 
 ---
 
@@ -61,7 +61,7 @@ export TALEBOOK_PASSWORD="your_password"
 
 **执行脚本**：
 ```bash
-<skill-installation-path>/scripts/talebook_api.py get_user_info '{}'
+<skill-installation-path>/scripts/mybooks_api.py get_user_info '{}'
 ```
 
 **响应示例**：
@@ -83,7 +83,7 @@ export TALEBOOK_PASSWORD="your_password"
 
 **执行脚本**：
 ```bash
-<skill-installation-path>/scripts/talebook_api.py library_stats '{}'
+<skill-installation-path>/scripts/mybooks_api.py library_stats '{}'
 ```
 
 **响应示例**：
@@ -112,7 +112,7 @@ export TALEBOOK_PASSWORD="your_password"
 
 **执行脚本**：
 ```bash
-<skill-installation-path>/scripts/talebook_api.py reading_stats '{}'
+<skill-installation-path>/scripts/mybooks_api.py reading_stats '{}'
 ```
 
 **响应示例**：
@@ -148,7 +148,7 @@ export TALEBOOK_PASSWORD="your_password"
 
 **执行脚本**：
 ```bash
-<skill-installation-path>/scripts/talebook_api.py search_books '{"name":"三体"}'
+<skill-installation-path>/scripts/mybooks_api.py search_books '{"name":"三体"}'
 ```
 
 **响应示例**：
@@ -177,7 +177,7 @@ export TALEBOOK_PASSWORD="your_password"
 
 **执行脚本**：
 ```bash
-<skill-installation-path>/scripts/talebook_api.py search_by_category '{"category":"科幻"}'
+<skill-installation-path>/scripts/mybooks_api.py search_by_category '{"category":"科幻"}'
 ```
 
 ---
@@ -194,7 +194,7 @@ export TALEBOOK_PASSWORD="your_password"
 
 **执行脚本**：
 ```bash
-<skill-installation-path>/scripts/talebook_api.py get_book '{"book_id":42}'
+<skill-installation-path>/scripts/mybooks_api.py get_book '{"book_id":42}'
 ```
 
 **响应示例**：
@@ -254,7 +254,7 @@ export TALEBOOK_PASSWORD="your_password"
 
 **执行脚本**：
 ```bash
-<skill-installation-path>/scripts/talebook_api.py edit_book '{"book_id":42,"tags":["小说","中国文学"],"category":"现代文学"}'
+<skill-installation-path>/scripts/mybooks_api.py edit_book '{"book_id":42,"tags":["小说","中国文学"],"category":"现代文学"}'
 ```
 
 **响应示例**：
@@ -284,10 +284,10 @@ export TALEBOOK_PASSWORD="your_password"
 **执行脚本**：
 ```bash
 # 更新单本书
-<skill-installation-path>/scripts/talebook_api.py book_fill '{"idlist":[42]}'
+<skill-installation-path>/scripts/mybooks_api.py book_fill '{"idlist":[42]}'
 
 # 批量更新
-<skill-installation-path>/scripts/talebook_api.py book_fill '{"idlist":[42,43,44]}'
+<skill-installation-path>/scripts/mybooks_api.py book_fill '{"idlist":[42,43,44]}'
 ```
 
 **响应示例**：
@@ -314,7 +314,7 @@ export TALEBOOK_PASSWORD="your_password"
 
 **执行脚本**：
 ```bash
-<skill-installation-path>/scripts/talebook_api.py mailto '{"book_id":42,"email":"user@kindle.com"}'
+<skill-installation-path>/scripts/mybooks_api.py mailto '{"book_id":42,"email":"user@kindle.com"}'
 ```
 
 **响应示例**：
@@ -353,11 +353,11 @@ export TALEBOOK_PASSWORD="your_password"
 **执行脚本**：
 ```bash
 # 发送到多看设备
-<skill-installation-path>/scripts/talebook_api.py send_to_device \
+<skill-installation-path>/scripts/mybooks_api.py send_to_device \
   '{"book_id":42,"device_type":"duokan","device_url":"192.168.1.100"}'
 
 # 发送到 Kindle（通过邮件）
-<skill-installation-path>/scripts/talebook_api.py send_to_device \
+<skill-installation-path>/scripts/mybooks_api.py send_to_device \
   '{"book_id":42,"device_type":"kindle","mailbox":"mykindle@kindle.cn"}'
 ```
 
@@ -376,7 +376,7 @@ export TALEBOOK_PASSWORD="your_password"
 
 **执行脚本**：
 ```bash
-<skill-installation-path>/scripts/talebook_api.py categories '{}'
+<skill-installation-path>/scripts/mybooks_api.py categories '{}'
 ```
 
 **响应示例**：
@@ -404,7 +404,7 @@ export TALEBOOK_PASSWORD="your_password"
 
 **执行脚本**：
 ```bash
-<skill-installation-path>/scripts/talebook_api.py list_authors '{}'
+<skill-installation-path>/scripts/mybooks_api.py list_authors '{}'
 ```
 
 **响应示例**：
@@ -437,7 +437,7 @@ export TALEBOOK_PASSWORD="your_password"
 
 **执行脚本**：
 ```bash
-<skill-installation-path>/scripts/talebook_api.py get_author_books '{"author_name":"余华"}'
+<skill-installation-path>/scripts/mybooks_api.py get_author_books '{"author_name":"余华"}'
 ```
 
 ---
@@ -456,7 +456,7 @@ export TALEBOOK_PASSWORD="your_password"
 
 **执行脚本**：
 ```bash
-<skill-installation-path>/scripts/talebook_api.py book_upload '{"file_path":"/path/to/book.epub"}'
+<skill-installation-path>/scripts/mybooks_api.py book_upload '{"file_path":"/path/to/book.epub"}'
 ```
 
 **响应示例**：
@@ -480,7 +480,7 @@ export TALEBOOK_PASSWORD="your_password"
 
 **执行脚本**：
 ```bash
-<skill-installation-path>/scripts/talebook_api.py book_add_by_isbn '{"isbn":"9787020024759"}'
+<skill-installation-path>/scripts/mybooks_api.py book_add_by_isbn '{"isbn":"9787020024759"}'
 ```
 
 **响应示例**（新增）：
@@ -508,7 +508,7 @@ export TALEBOOK_PASSWORD="your_password"
 
 **执行脚本**：
 ```bash
-<skill-installation-path>/scripts/talebook_api.py wants '{"book_id":42}'
+<skill-installation-path>/scripts/mybooks_api.py wants '{"book_id":42}'
 ```
 
 ---
@@ -521,7 +521,7 @@ export TALEBOOK_PASSWORD="your_password"
 
 **执行脚本**：
 ```bash
-<skill-installation-path>/scripts/talebook_api.py list_wants '{}'
+<skill-installation-path>/scripts/mybooks_api.py list_wants '{}'
 ```
 
 ---
@@ -539,7 +539,7 @@ export TALEBOOK_PASSWORD="your_password"
 
 **执行脚本**：
 ```bash
-<skill-installation-path>/scripts/talebook_api.py favorite '{"book_id":42}'
+<skill-installation-path>/scripts/mybooks_api.py favorite '{"book_id":42}'
 ```
 
 ---
@@ -552,7 +552,7 @@ export TALEBOOK_PASSWORD="your_password"
 
 **执行脚本**：
 ```bash
-<skill-installation-path>/scripts/talebook_api.py list_favorites '{}'
+<skill-installation-path>/scripts/mybooks_api.py list_favorites '{}'
 ```
 
 ---
@@ -571,7 +571,7 @@ export TALEBOOK_PASSWORD="your_password"
 **执行脚本**：
 ```bash
 # 标记为在读
-<skill-installation-path>/scripts/talebook_api.py reading '{"book_id":42,"read_state":1}'
+<skill-installation-path>/scripts/mybooks_api.py reading '{"book_id":42,"read_state":1}'
 ```
 
 ---
@@ -584,7 +584,7 @@ export TALEBOOK_PASSWORD="your_password"
 
 **执行脚本**：
 ```bash
-<skill-installation-path>/scripts/talebook_api.py list_reading '{}'
+<skill-installation-path>/scripts/mybooks_api.py list_reading '{}'
 ```
 
 ---
@@ -601,7 +601,7 @@ export TALEBOOK_PASSWORD="your_password"
 
 **执行脚本**：
 ```bash
-<skill-installation-path>/scripts/talebook_api.py read_done '{"book_id":42}'
+<skill-installation-path>/scripts/mybooks_api.py read_done '{"book_id":42}'
 ```
 
 ---
@@ -614,7 +614,7 @@ export TALEBOOK_PASSWORD="your_password"
 
 **执行脚本**：
 ```bash
-<skill-installation-path>/scripts/talebook_api.py list_read_done '{}'
+<skill-installation-path>/scripts/mybooks_api.py list_read_done '{}'
 ```
 
 ---

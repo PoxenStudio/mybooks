@@ -337,7 +337,7 @@ def _create_pdf(
     c.setTitle(title)
     if len(authors) > 0:
         c.setAuthor(authors[0])
-    c.setCreator("Talebook(https://mybooks.top)")
+    c.setCreator("MyBooks(https://mybooks.top)")
 
     for idx, img_path in enumerate(images, start=1):
         _log(f"[{idx}/{total}] Adding page: {os.path.basename(img_path)}")

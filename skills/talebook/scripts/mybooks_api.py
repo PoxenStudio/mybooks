@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-talebook_api.py — Talebook REST API Client
+mybooks_api.py — Talebook REST API Client
 
 Usage:
-    python3 talebook_api.py <tool-name> '<json-args>'
+    python3 mybooks_api.py <tool-name> '<json-args>'
 
 Environment Variables:
     TALEBOOK_HOST       Server URL with port (e.g., http://192.168.1.2:8082)
@@ -21,7 +21,7 @@ import json
 import os
 import sys
 import urllib.parse
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 
 # ============================================================================
@@ -43,10 +43,10 @@ ERROR_MESSAGES = {
 
 
 # ============================================================================
-# TalebookAPI Class
+# MyBooksAPI Class
 # ============================================================================
 
-class TalebookAPI:
+class MyBooksAPI:
     """Main API client for Talebook REST API."""
 
     def __init__(self, host: str, username: str, password: str):
@@ -520,7 +520,7 @@ def main():
     if len(sys.argv) < 2:
         print(json.dumps({
             "status": "error",
-            "message": "Usage: talebook_api.py <tool-name> '<json-args>'"
+            "message": "Usage: mybooks_api.py <tool-name> '<json-args>'"
         }), file=sys.stderr)
         sys.exit(1)
 
@@ -551,7 +551,7 @@ def main():
         sys.exit(1)
 
     # Create API client and execute
-    api = TalebookAPI(host, username, password)
+    api = MyBooksAPI(host, username, password)
     api.sign_in()
     result = api.execute_tool(tool_name, args)
 

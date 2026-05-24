@@ -457,7 +457,7 @@ class UserInfo(BaseHandler):
             "users": count_all_users,
             "active": count_hot_users,
             "version": VERSION,
-            "title": CONF["site_title"] if "site_title" in CONF else "TaleBook",
+            "title": CONF["site_title"] if "site_title" in CONF else "MyBooks",
             "language": CONF["site_language"] if "site_language" in CONF else "",
             "theme": CONF["site_theme"] if "site_theme" in CONF else "light",
             "maxUploadSize": (

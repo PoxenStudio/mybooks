@@ -2,7 +2,7 @@
 # -*- coding: UTF-8 -*-
 
 """
-(PoxenStudio)Talebook MCP Multi-Transport Server
+(PoxenStudio)MyBooks MCP Multi-Transport Server
 """
 import datetime
 import logging
@@ -88,7 +88,7 @@ class MCPHandler(ListHandler):
 class MCPHealthHandler(BaseHandler):
     @js
     def get(self):
-        return {"err": "ok", "status": "healthy", "server": "talebook-mcp"}
+        return {"err": "ok", "status": "healthy", "server": "mybooks-mcp"}
 
 
 def routes():

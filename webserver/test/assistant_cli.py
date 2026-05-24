@@ -15,7 +15,7 @@ from webserver.assistant.ai_assistant_agent import AIAssistantMCPAgent
 def print_banner():
     """打印欢迎横幅"""
     print("\n" + "=" * 70)
-    print("DeepSeek + Talebook MCP 会话式代理")
+    print("DeepSeek + MyBooks MCP 会话式代理")
     print("=" * 70)
     print("指令：")
     print("  - 输入问题开始对话")

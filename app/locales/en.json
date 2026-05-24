@@ -1,6 +1,6 @@
 {
     "install": {
-        "title": "Install TaleBook",
+        "title": "Install MyBooks",
         "siteTitle": "Site Title",
         "defaultLanguage": "Default Language",
         "languageChinese": "Chinese",
@@ -443,7 +443,7 @@
         "douban_baseurl": "Address of Douban plugin(Ex: http://10.0.0.1:8080 )",
         "douban_api_key": "Douban plugin API key, available keys are limited, you can find and replace them yourself",
         "douban_max_count": "Max results of Douban plugin query",
-        "douban_plugin_description": "If you need to enable the Douban plugin, please refer to the installation documentation. If it fails, try changing the mirror, such as talebook/douban-api-rs.",
+        "douban_plugin_description": "If you need to enable the Douban plugin, please refer to the installation documentation. If it fails, try changing the mirror, such as poxenstudio/douban-api-rs.",
         "import_and_upload": "Importing and Uploading",
         "category_with_folder": "Set category with top folder name",
         "auto_importing": "Monitor importing folder and import automatically (only process new books, deleting files has no effect)",
@@ -867,7 +867,7 @@
         "message_notification": "Message Notifications",
         "clear_messages": "Clear All",
         "defaultFooter": "This site is built on Calibre, thanks to the power of open source. All resources are collected from the internet. If there is any infringement, please contact us via email.",
-        "defaultHeader": "Welcome! If you like this project, please visit Github <a target=\"_blank\" href=\"https://github.com/PoxenStudio/talebook\"> and give talebook a Star!</a>",
+        "defaultHeader": "Welcome! If you like this project, please visit Github <a target=\"_blank\" href=\"https://github.com/PoxenStudio/mybooks\"> and give us a Star!</a>",
         "favorites": "My Favorites",
         "wants": "Want to Read",
         "reading": "Reading",

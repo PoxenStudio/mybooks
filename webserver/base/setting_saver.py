@@ -66,7 +66,7 @@ class SettingsSaver:
                 os._exit(0)
 
         threading.Thread(
-            target=_delayed_restart, name="talebook-restart", daemon=True
+            target=_delayed_restart, name="mybooks-restart", daemon=True
         ).start()
 
     def update_nuxtjs_env(self):

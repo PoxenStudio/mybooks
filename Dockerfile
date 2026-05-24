@@ -28,7 +28,7 @@ RUN mkdir -p /app-ssr/ /app-static/ && \
 
 # ----------------------------------------
 # 测试阶段 (--break-system-packages)
-FROM docker.1ms.run/poxenstudio/talebook_base:latest AS test
+FROM docker.1ms.run/poxenstudio/mybooks_base:latest AS test
 RUN pip install flake8 pytest --break-system-packages
 COPY webserver/ /var/www/talebook/webserver/
 COPY tests/ /var/www/talebook/tests/
@@ -36,15 +36,15 @@ CMD ["pytest", "/var/www/talebook/tests"]
 
 # ----------------------------------------
 # 生产环境
-FROM docker.1ms.run/poxenstudio/talebook_base:latest AS production
+FROM docker.1ms.run/poxenstudio/mybooks_base:latest AS production
 ARG BUILD_COUNTRY="CN"
 ARG GIT_VERSION=""
 
 LABEL Author="horky <horky.chen@gmail.com>"
 LABEL Thanks="Rex <talebook@foxmail.com>, oldiy <oldiy2018@gmail.com>"
-LABEL org.opencontainers.image.title="talebook" \
+LABEL org.opencontainers.image.title="mybooks" \
       org.opencontainers.image.vendor="PoxenStudio" \
-      org.opencontainers.image.source="https://github.com/PoxenStudio/talebook"
+      org.opencontainers.image.source="https://github.com/PoxenStudio/mybooks"
 
 # set default language
 ENV TZ=Asia/Shanghai

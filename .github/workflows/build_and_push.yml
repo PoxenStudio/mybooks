@@ -79,7 +79,7 @@ jobs:
           # Prepare tags
           TAGS="${{ steps.meta.outputs.tags }}"
           if [[ "${{ github.event.inputs.push_latest }}" == "true" ]]; then
-            TAGS="${TAGS},${{ env.REGISTRY }}/poxenstudio/talebook:latest,${{ env.REGISTRY }}/poxenstudio/talebook:master"
+            TAGS="${TAGS},${{ env.REGISTRY }}/poxenstudio/mybooks:latest,${{ env.REGISTRY }}/poxenstudio/mybooks:master"
           fi
           echo "tags=${TAGS}" >> $GITHUB_OUTPUT
 
@@ -90,7 +90,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           labels: ${{ steps.meta.outputs.labels }}
           push: ${{ github.event_name != 'pull_request' }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/poxenstudio/talebook:latest
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/poxenstudio/mybooks:latest
           cache-to: type=inline,mode=max
           provenance: false
           tags: ${{ steps.prep.outputs.tags }}

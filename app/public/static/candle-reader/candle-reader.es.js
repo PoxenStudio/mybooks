@@ -8364,11 +8364,11 @@ const iy = Td({
         if (l.status === 502)
           throw a = "服务器正在启动中...", e.$alert("info", a), a;
         if (l.status !== 200)
-          throw a = "服务器异常，状态码: " + l.status + "<br/>请查阅服务器日志:<br/>talebook.log", e.$alert("error", a), a;
+          throw a = "服务器异常，状态码: " + l.status + "<br/>请查阅服务器日志:<br/>mybooks.log", e.$alert("error", a), a;
         try {
           return l.json();
         } catch {
-          throw a = "服务器异常，响应非JSON<br/>请查阅服务器日志:<br/>talebook.log", e.$alert("error", a), a;
+          throw a = "服务器异常，响应非JSON<br/>请查阅服务器日志:<br/>mybooks.log", e.$alert("error", a), a;
         }
       }).then((l) => (l.err === "exception" && e.$store.commit("alert", { type: "error", msg: l.msg, to: null }), l));
     };

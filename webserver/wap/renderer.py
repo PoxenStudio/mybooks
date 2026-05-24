@@ -98,7 +98,7 @@ class WapRenderer:
     # ------------------------------------------------------------------
 
     @classmethod
-    def render_page(cls, title, body, user=None, site_title="Talebook"):
+    def render_page(cls, title, body, user=None, site_title="MyBooks"):
         """Wrap *body* HTML in a complete standalone HTML page."""
         t = cls.esc(title)
         st = cls.esc(site_title)
@@ -121,7 +121,7 @@ class WapRenderer:
             f'{user_links}'
             f'</div>\n'
             f'{body}\n'
-            f'<div class="wap-footer">PoxenStudio/Talebook &mdash; Kindle版</div>\n'
+            f'<div class="wap-footer">PoxenStudio/MyBooks &mdash; Kindle版</div>\n'
             '</body>\n'
             '</html>\n'
         )

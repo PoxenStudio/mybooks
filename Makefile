@@ -1,12 +1,12 @@
 .PHONY: all build push test
 
 VER := $(shell git branch --show-current)
-IMAGE := poxenstudio/talebook:$(VER)
-REPO1 := poxenstudio/talebook:latest
-TAG1 := poxenstudio/talebook:server-side-render
-TAG2 := poxenstudio/talebook:server-side-render-$(VER)
-BASE_IMAGE := poxenstudio/talebook_base:$(VER)
-BASE_REPO1 := poxenstudio/talebook_base:latest
+IMAGE := poxenstudio/mybooks:$(VER)
+REPO1 := poxenstudio/mybooks:latest
+TAG1 := poxenstudio/mybooks:server-side-render
+TAG2 := poxenstudio/mybooks:server-side-render-$(VER)
+BASE_IMAGE := poxenstudio/mybooks_base:$(VER)
+BASE_REPO1 := poxenstudio/mybooks_base:latest
 BUILDER := shukubuilder
 ARCH := $(shell uname -m)
 PLATFORM ?= linux/$(shell if [ "$(ARCH)" = "x86_64" ]; then echo "amd64"; elif [ "$(ARCH)" = "aarch64" ] || [ "$(ARCH)" = "arm64" ]; then echo "arm64"; else echo "amd64"; fi)

@@ -1,13 +1,13 @@
-[![GitHub License](https://img.shields.io/github/license/poxenstudio/talebook?style=flat-square)](https://github.com/poxenstudio/talebook/blob/master/LICENSE)
-[![Docker Pulls](https://img.shields.io/docker/pulls/poxenstudio/talebook.svg)](https://hub.docker.com/r/poxenstudio/talebook)
-![GitHub stars](https://img.shields.io/github/stars/PoxenStudio/talebook.svg?logo=github)
+[![GitHub License](https://img.shields.io/github/license/poxenstudio/mybooks?style=flat-square)](https://github.com/poxenstudio/mybooks/blob/master/LICENSE)
+[![Docker Pulls](https://img.shields.io/docker/pulls/poxenstudio/mybooks.svg)](https://hub.docker.com/r/poxenstudio/mybooks)
+![GitHub stars](https://img.shields.io/github/stars/PoxenStudio/mybooks.svg?logo=github)
 
 
 # TaleBook: Personal Calibre WebServer
 An enhanced personal books management web server built on Calibre + Vue, beautiful and easy to use. ([Chinese](../README.md))
 
 ## A Simple and Practical Personal Library System
-This project is developed based on [talebook](https://github.com/talebook/talebook). It focuses on personal and family management of eBooks and physical books, plus multi-account reading management. It is not intended for public book-site operation.
+This project is developed based on [mybooks](https://github.com/PoxenStudio/mybooks). It focuses on personal and family management of eBooks and physical books, plus multi-account reading management. It is not intended for public book-site operation.
 
 The long-term direction is to integrate AI for extended reading and knowledge organization, building a personal knowledge base.
 
@@ -17,7 +17,7 @@ This system is not an eBook reader itself. Its core value is library management.
 
 **Important notice: In mainland China, operating a public online publishing/book site as an individual is not permitted. This project is intended for personal use only.**
 
-### Project Highlights (Added in poxenstudio/talebook)
+### Project Highlights (Added in poxenstudio/mybooks)
 * Watch import folders and auto-import new books.
 * Provide Podcast service (turn your library into podcasts).
 * Support WebDAV connection and synchronization.
@@ -56,7 +56,7 @@ TaleBook is a simple personal library management system based on Calibre with **
 ### Follow the Project
 WeChat public account: Talebook
 
-![Talebook](gongzhonghao_talebook.jpg)
+![MyBooks](gongzhonghao_talebook.jpg)
 
 
 ## Docker ![Docker Pulls](https://img.shields.io/docker/pulls/poxenstudio/talebook.svg)
@@ -70,7 +70,7 @@ Image: [Docker Hub](https://hub.docker.com/r/poxenstudio/talebook)
 Using docker-compose is recommended. Download [docker-compose.yml](../docker-compose.yml) and start:
 
 ```bash
-wget https://raw.githubusercontent.com/PoxenStudio/talebook/master/docker-compose.yml
+wget https://raw.githubusercontent.com/PoxenStudio/mybooks/master/docker-compose.yml
 docker-compose -f docker-compose.yml up -d
 ```
 
@@ -79,13 +79,13 @@ If you need custom mount paths or ports, edit docker-compose.yml first.
 If using plain docker:
 
 ```bash
-docker run -d --name talebook -p <local_port>:80 -v <local_data_dir>:/data poxenstudio/talebook
+docker run -d --name mybooks -p <local_port>:80 -v <local_data_dir>:/data poxenstudio/mybooks
 ```
 
 Example:
 
 ```bash
-docker run -d --name talebook -p 8080:80 -v /tmp/demo:/data poxenstudio/talebook
+docker run -d --name mybooks -p 8080:80 -v /tmp/demo:/data poxenstudio/mybooks
 ```
 
 
@@ -119,13 +119,13 @@ Explorer view:
 
 
 ## Use MCP Service
-From v3.15.0, TaleBook supports MCP service integration with AI tools.
+From v3.15.0, MyBooks supports MCP service integration with AI tools.
 Current flow may require account login information before use.
 
 ```json
 {
     "mcpServers": {
-        "talebook": {
+        "mybooks": {
             "type": "streamableHttp",
             "url": "http://<ip>:<port>/api/mcp/stream",
             "description": "Local ebooks management system"
@@ -135,8 +135,8 @@ Current flow may require account login information before use.
 ```
 
 
-## Use TaleBook Skill
-See [TaleBook Skill](https://clawhub.ai/poxenstudio/talebook).
+## Use MyBooks Skill
+See [MyBooks Skill](https://clawhub.ai/poxenstudio/talebook).
 
 
 ## FAQ
@@ -155,11 +155,11 @@ NAS setup references:
 
 
 ## Contributors
-[![](https://contrib.rocks/image?repo=PoxenStudio/talebook)](https://github.com/PoxenStudio/talebook/graphs/contributors)
+[![](https://contrib.rocks/image?repo=PoxenStudio/mybooks)](https://github.com/PoxenStudio/mybooks/graphs/contributors)
 
 
 ## Project Homepage
-[PoxenStudio TaleBook](https://mybooks.top)
+[PoxenStudio MyBooks](https://mybooks.top)
 
 
 ## Contact

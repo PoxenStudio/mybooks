@@ -50,7 +50,7 @@ async def main():
     print("=" * 40)
 
     # 测试文本
-    test_text = "欢迎使用TaleBook电子书管理系统。这是一个基于 EdgeTTS 的文本转语音测试。"
+    test_text = "欢迎使用MyBooks电子书管理系统。这是一个基于 EdgeTTS 的文本转语音测试。"
 
     # 输出文件路径
     output_dir = "/tmp"

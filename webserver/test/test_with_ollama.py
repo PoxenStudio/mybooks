@@ -12,7 +12,7 @@ def main():
     ollama_url = f"http://{args.ollama_host}:11434/api/chat"
     mcp_url = args.mcp_url
     model = "qwen2.5:0.5b" # "qwen3:0.6b"
-    mcp_name = "talebook"
+    mcp_name = "mybooks"
 
     print(f"Target MCP Service: {mcp_name} at {mcp_url}")
     print(f"Target Ollama: {ollama_url} with model {model}")
@@ -28,16 +28,16 @@ def main():
         response = requests.post(mcp_url, json=payload)
         response.raise_for_status()
         mcp_tools_response = response.json()
-        
+
         if "error" in mcp_tools_response:
             print(f"MCP Error: {mcp_tools_response['error']}")
             sys.exit(1)
-            
+
         mcp_tools = mcp_tools_response.get("result", {}).get("tools", [])
         print(f"Found {len(mcp_tools)} tools.")
         for t in mcp_tools:
             print(f" - {t['name']}: {t.get('description', 'No description')}")
-            
+
     except Exception as e:
         print(f"Error fetching tools: {e}")
         sys.exit(1)
@@ -57,7 +57,7 @@ def main():
 
     # 3. Chat with Ollama
     messages = [
-        {"role": "user", "content": "帮我查看一下 talebook 里面有多少本书？"}
+        {"role": "user", "content": "帮我查看一下 mybooks 里面有多少本书？"}
     ]
 
     print("\n[2] Sending request to Ollama...")
@@ -72,7 +72,7 @@ def main():
         response = requests.post(ollama_url, json=payload)
         response.raise_for_status()
         chat_response = response.json()
-        
+
         message = chat_response.get("message", {})
         print("Ollama response message:")
         print(json.dumps(message, ensure_ascii=False, indent=2))
@@ -85,10 +85,10 @@ def main():
             for tool_call in message["tool_calls"]:
                 function_name = tool_call["function"]["name"]
                 arguments = tool_call["function"]["arguments"]
-                
+
                 print(f"Executing tool: {function_name}")
                 print(f"Arguments: {arguments}")
-                
+
                 # Call MCP tool
                 mcp_payload = {
                     "jsonrpc": "2.0",
@@ -101,7 +101,7 @@ def main():
                 }
                 mcp_response = requests.post(mcp_url, json=mcp_payload)
                 mcp_result = mcp_response.json()
-                
+
                 tool_content = ""
                 if "result" in mcp_result:
                     tool_content = json.dumps(mcp_result["result"], ensure_ascii=False)
@@ -120,7 +120,7 @@ def main():
             # 5. Follow up with Ollama
             print("\n[4] Sending follow-up to Ollama with tool results...")
             payload["messages"] = messages
-            
+
             response = requests.post(ollama_url, json=payload)
             response.raise_for_status()
             final_response = response.json()

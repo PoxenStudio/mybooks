@@ -3135,7 +3135,7 @@ export default {
                 let curY = PADDING;
 
                 // --- Section 1: Header (siteTitle left + date right) ---
-                const siteTitle = localStorage.getItem('sys_title') || 'Talebook';
+                const siteTitle = localStorage.getItem('sys_title') || 'MyBooks';
                 ctx.font = `500 19px ${FONT}`;
                 ctx.fillStyle = TEXT_COLOR;
                 ctx.fillText(siteTitle, PADDING, curY + Math.round((HEADER_H - 19) / 2));

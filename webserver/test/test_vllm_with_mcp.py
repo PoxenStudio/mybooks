@@ -107,7 +107,7 @@ def main():
 
     # 3. Prepare Chat
     messages = [
-        {"role": "user", "content": "帮我查看一下 talebook 里面有多少本书？"}
+        {"role": "user", "content": "帮我查看一下 mybooks 里面有多少本书？"}
     ]
 
     # Sampling params

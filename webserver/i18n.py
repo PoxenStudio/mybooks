@@ -18,7 +18,7 @@ _current_language = contextvars.ContextVar("talebook_i18n_language", default=Non
 _catalog_cache: Dict[str, Dict[str, str]] = {}
 
 _DEFAULT_SETTINGS_ZH = {
-    "site_title": "Talebook",
+    "site_title": "MyBooks",
     "push_title": "%(site_title)s：推送给您一本书《%(title)s》",
     "push_content": "为您奉上一本《%(title)s》, 欢迎常来访问%(site_title)s！%(site_url)s",
     'BOOK_NAV': '''经济金融=经济学/管理/经济/金融/商业/投资/营销/理财/创业/广告/股票/企业史/策划/经济管理/中国经济/市场营销/财政/投资理财/金融学/个人理财/企业与企业家/企业管理/经管/世界经济/经济学理论/管理学/经济金融/商业模式/银行/各行业经济/货币/金融史/经济史/管理学理论/新经济/价值投资/投资 交易/金融危机/证券/财经/商业管理/零售/电商/宏观经济/流行财经读物/对冲基金/经济与管理/商战/投资交易/金融投资/货币史/贸易经济/经管经管
@@ -53,7 +53,7 @@ Hi, %(username)s！
 }
 
 _DEFAULT_SETTINGS_ZH_TW = {
-    "site_title": "Talebook",
+    "site_title": "MyBooks",
     "push_title": "%(site_title)s：推送給您一本書《%(title)s》",
     "push_content": "为您奉上一本《%(title)s》, 欢迎常来访问%(site_title)s！%(site_url)s",
     'BOOK_NAV': '''經濟金融=經濟學/管理/經濟/金融/商業/投資

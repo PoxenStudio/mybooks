@@ -2,7 +2,7 @@
 # 基础环境镜像：ubuntu 系统包 + python 依赖 + calibre 补丁
 # 此镜像变动较少，单独构建以复用 layer，加速主镜像构建。
 # 构建：make build-base-multiarch
-# 镜像：poxenstudio/talebook_base
+# 镜像：poxenstudio/mybooks_base
 FROM docker.1ms.run/library/ubuntu:24.04
 ARG BUILD_COUNTRY="CN"
 

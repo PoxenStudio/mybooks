@@ -123,7 +123,7 @@ class MailService(AsyncService):
             f'<p style="margin:0 0 16px 0;color:#374151;">{html.escape(_("我们新入库以下新书，欢迎阅览："))}</p>'
             f'<ul style="padding-left:20px;margin:0 0 16px 0;">{book_items_html}</ul>'
             f'{site_link_html}'
-            '<p style="margin:20px 0 0 0;color:#6b7280;font-size:12px;">Talebook Notification</p>'
+            '<p style="margin:20px 0 0 0;color:#6b7280;font-size:12px;">MyBooks Notification</p>'
             '</div></div>'
         )
 

@@ -78,7 +78,7 @@ class AIAssistantMCPAgent:
             for tool in tools
         ])
 
-        system_message = f"""你是一个智能助手，可以调用本地Talebook工具来帮助用户。
+        system_message = f"""你是一个智能助手，可以调用本地MyBooks工具来帮助用户。
 你可以使用的工具有：
 {tool_descriptions}
 

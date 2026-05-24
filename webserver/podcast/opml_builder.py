@@ -57,7 +57,7 @@ def _format_rfc2822(dt):
     )
 
 
-def build_book_opml(book_info, episodes, site_url, site_title="Talebook", token=None):
+def build_book_opml(book_info, episodes, site_url, site_title="MyBooks", token=None):
     """
     Build an OPML 2.0 document for a single audiobook with all episodes embedded.
 

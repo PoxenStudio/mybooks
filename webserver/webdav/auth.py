@@ -5,7 +5,7 @@ import logging
 
 class TalebookDomainController:
     """
-    Custom authentication controller for Talebook WebDAV service.
+    Custom authentication controller for WebDAV service.
     Uses the same authentication mechanism as user.SignIn.
 
     Implements the WsgiDAV DomainController interface without inheritance.
@@ -22,7 +22,7 @@ class TalebookDomainController:
         # Get the sqlite_session from config
         self.sqlite_session = config.get('talebook_session', None)
         if not self.sqlite_session:
-            logging.error("TalebookDomainController: sqlite_session not found in config")
+            logging.error("DomainController: sqlite_session not found in config")
 
     def require_authentication(self, realm, environ):
         """Return True to require authentication for this path."""
@@ -81,7 +81,7 @@ class TalebookDomainController:
 
     def get_domain_realm(self, path_info, environ):
         """Return the realm for the given path."""
-        return "Talebook WebDAV"
+        return "MyBooks WebDAV"
 
     def is_share_anonymous(self, share):
         """Return True if the share allows anonymous access."""
@@ -100,5 +100,5 @@ class TalebookDomainController:
                 Reader.username == username
             ).first()
             return user is not None
-        except:
+        except Exception:
             return False

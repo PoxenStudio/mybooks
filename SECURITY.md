@@ -30,7 +30,7 @@
 - 可能的修复建议（如果有）
 - 你的联系方式，以及是否希望在修复公告中署名
 
-邮件标题建议使用：`[security] PoxenStudio/Talebook Vulnerability Report`
+邮件标题建议使用：`[security] PoxenStudio/MyBooks Vulnerability Report`
 
 ## Response Process
 

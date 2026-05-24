@@ -1334,7 +1334,7 @@ class AdminSyslogDownload(BaseHandler):
     @is_admin
     def get(self):
         today = datetime.datetime.now().strftime("%Y_%m_%d")
-        filename = f"talebook_log_{today}.log"
+        filename = f"mybooks_log_{today}.log"
         try:
             if not os.path.exists(LOG_PATH):
                 content = b""

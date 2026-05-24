@@ -58,7 +58,7 @@ class PodcastBaseHandler(BaseHandler):
 
     def _get_site_title(self):
         """Get configured site title."""
-        return CONF.get("site_title", "Talebook(PoxenStudio)")
+        return CONF.get("site_title", "MyBooks(PoxenStudio)")
 
     def _get_user_by_token(self, token):
         """Look up a user by their podcast_token."""
@@ -298,7 +298,7 @@ class PodcastIndex(PodcastBaseHandler):
                 html.append(f'<li><a href="{url}">{author_name}</a> ({count}本)</li>')
             html.append("</ul></div>")
 
-        title = f'{CONF.get("site_title", "Talebook(PoxenStudio)")} Podcast'
+        title = f'{CONF.get("site_title", "MyBooks(PoxenStudio)")} Podcast'
         self.render_html_page(title, "\n".join(html), show_back=False)
 
 

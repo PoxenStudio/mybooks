@@ -78,13 +78,13 @@ def _format_rfc2822(dt):
 
 def _make_guid(book_id, episode_index=None):
     """Generate a stable GUID for a podcast item."""
-    key = f"talebook-podcast-{book_id}"
+    key = f"mybooks-podcast-{book_id}"
     if episode_index is not None:
         key += f"-ep{episode_index}"
     return hashlib.sha256(key.encode("utf-8")).hexdigest()[:32]
 
 
-def build_book_feed(book_info, episodes, site_url, site_title="Talebook", token=None):
+def build_book_feed(book_info, episodes, site_url, site_title="MyBooks", token=None):
     """
     Build an RSS 2.0 podcast feed for a single audiobook.
 
@@ -211,7 +211,7 @@ def build_book_feed(book_info, episodes, site_url, site_title="Talebook", token=
 
 
 def build_catalog_feed(
-    title, description, book_entries, site_url, language="zh-cn", site_title="Talebook"
+    title, description, book_entries, site_url, language="zh-cn", site_title="MyBooks"
 ):
     """
     Build an RSS 2.0 feed listing multiple audiobooks (catalog/aggregation feed).
