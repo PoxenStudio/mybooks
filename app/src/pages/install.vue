@@ -52,7 +52,7 @@ export default {
         code: "",
         invite: false,
         language: "zh",
-        title: "MyBooks (PoxenStudio/Talebook)",
+        title: "MyBooks",
         tips: "",
         retry: 20,
         installing: false,
