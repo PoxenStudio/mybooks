@@ -49,7 +49,7 @@ MyBooks特性包括:
 ![Talebook](document/gongzhonghao_talebook.jpg)
 
 
-## Docker ![Docker Pulls](https://img.shields.io/docker/pulls/poxenstudio/talebook.svg)
+## Docker
 
 部署比较简单，建议采用docker，镜像地址：[dockerhub](https://hub.docker.com/r/poxenstudio/mybooks)
 * 已经调整基于```Ubuntu 24.04```和```Calibre 7.6```构建, 改善兼容性。Docker运行的UID/GID不要设置为```root```(ID:0)。
