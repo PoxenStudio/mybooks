@@ -27,7 +27,7 @@ class BaseTool(AsyncService):
     service_item_name: str = ""
 
     # 工具数据根目录；子类可覆盖
-    TOOL_DATA_ROOT: str = "/data"
+    TOOL_DATA_ROOT: str = "/data/toolbox"
 
     # 支持的入库文件格式
     SUPPORTED_FORMATS = {"epub", "pdf", "azw3", "mobi", "txt"}

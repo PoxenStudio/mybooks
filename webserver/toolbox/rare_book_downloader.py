@@ -2,6 +2,7 @@
 古书下载导入工具
 """
 import logging
+import os
 from typing import Callable, Optional
 
 from webserver.services import AsyncService
@@ -53,6 +54,7 @@ class RareBookDownloader(BaseTool):
 
             work_dir = self.get_work_dir(url)
             logging.info("[RareBookDownloader] start download: %s -> %s", url, work_dir)
+            os.makedirs(work_dir, exist_ok=True)
 
             pdf_path = downloader.download(work_dir, callback=progress_callback)
 

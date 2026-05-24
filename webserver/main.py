@@ -4,7 +4,6 @@
 import logging
 import os
 import re
-import subprocess
 import sys
 from webserver.handlers import static_files
 from webserver.i18n import _
