@@ -311,9 +311,9 @@ class BooksCollection(VirtualCollection):
         return books
 
 
-class TalebookProvider(DAVProvider):
+class MyBooksDavProvider(DAVProvider):
     def __init__(self, cache, get_session_func=None):
-        super(TalebookProvider, self).__init__()
+        super(MyBooksDavProvider, self).__init__()
         self.cache = cache
         self.get_session_func = get_session_func
         self.readonly = False  # Allow read-write for sync folder

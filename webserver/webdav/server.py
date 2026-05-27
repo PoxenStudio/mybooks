@@ -1,7 +1,7 @@
 # -*- coding: UTF-8 -*-
 import logging
 from wsgidav.wsgidav_app import WsgiDAVApp
-from .dav_provider import TalebookProvider
+from .dav_provider import MyBooksDavProvider
 
 
 def create_webdav_app(calibre_cache, sqlite_session):
@@ -21,7 +21,7 @@ def create_webdav_app(calibre_cache, sqlite_session):
         return sqlite_session()
 
     # Create the custom provider with session function
-    provider = TalebookProvider(calibre_cache, get_session_func=get_session)
+    provider = MyBooksDavProvider(calibre_cache, get_session_func=get_session)
 
     # Configure WsgiDAV with v4.x configuration format
     # Use module path for domain controller
