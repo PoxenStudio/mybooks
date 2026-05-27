@@ -262,6 +262,36 @@ class WapRenderer:
         return f'<div class="meta-list">\n{"".join(tags)}\n</div>\n'
 
     # ------------------------------------------------------------------
+    # Welcome / invite-code form
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def render_welcome_form(cls, error="", next_url="/wap"):
+        """Render the HTML form for entering an invite code."""
+        error_html = (
+            f'<div class="alert">{cls.esc(error)}</div>\n' if error else ""
+        )
+        next_val = cls.esc(next_url)
+        return (
+            f'<div class="login-form">\n'
+            f'<h2>输入访问码</h2>\n'
+            f'<p>请输入访问码以继续。</p>\n'
+            f'{error_html}'
+            f'<form method="post" action="/wap/welcome">\n'
+            f'<input type="hidden" name="next" value="{next_val}">\n'
+            f'<div class="form-row">\n'
+            f'<label for="wap-invite">访问码</label>\n'
+            f'<input id="wap-invite" type="password" name="invite_code" autocomplete="off">\n'
+            f'</div>\n'
+            f'<div class="form-actions">\n'
+            f'<input type="submit" value="确认">\n'
+            f'</div>\n'
+            f'</form>\n'
+            f'<p><a href="/wap">&laquo; 返回首页</a></p>\n'
+            f'</div>\n'
+        )
+
+    # ------------------------------------------------------------------
     # Login form
     # ------------------------------------------------------------------
 

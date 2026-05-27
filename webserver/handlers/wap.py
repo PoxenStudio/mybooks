@@ -37,6 +37,14 @@ class WapBaseHandler(BaseHandler):
     Provides write_page(), require_login(), get_page_num() and a lazy provider.
     """
 
+    def should_be_invited(self):
+        """
+        Override BaseHandler's prepare()-time invite check.
+        WAP handlers do their own invite redirect via require_invite(),
+        so we must NOT return JSON here – just do nothing.
+        """
+        pass
+
     def write_page(self, title, body):
         """Render a complete HTML page and write it to the response."""
         site_title = CONF.get("site_title", "MyBooks")
@@ -55,6 +63,18 @@ class WapBaseHandler(BaseHandler):
         if not self.current_user:
             next_url = quote_plus(self.request.uri)
             self.redirect(f"/wap/login?next={next_url}")
+            return True
+        return False
+
+    def require_invite(self):
+        """
+        Redirect to the WAP welcome page when invite mode is active and the
+        current visitor has not yet provided a valid invite code.
+        Returns True when a redirect was issued so the caller can return early.
+        """
+        if self.need_invited() and not self.invited_code_is_ok():
+            next_url = quote_plus(self.request.uri)
+            self.redirect(f"/wap/welcome?next={next_url}")
             return True
         return False
 
@@ -81,6 +101,8 @@ class WapIndex(WapBaseHandler):
     """Homepage: search form + recent books."""
 
     def get(self):
+        if self.require_invite():
+            return
         site_title = CONF.get("site_title", "MyBooks")
         body = WapRenderer.render_search_form()
         body += "<h2>最新书籍</h2>\n"
@@ -246,6 +268,49 @@ class WapWants(WapBaseHandler):
         self.write_page("待读清单", body)
 
 
+class WapWelcome(WapBaseHandler):
+    """WAP invite-code page – GET renders the form, POST validates the code."""
+
+    # Error messages for the invite form
+    _ERRORS = {
+        "invalid": "访问码无效，请重新输入",
+    }
+
+    def get(self):
+        # Already invited or invite mode off → go to next/home
+        if not self.need_invited() or self.invited_code_is_ok():
+            self.redirect(self._safe_next())
+            return
+        err_code = self.get_argument("err", "").strip()
+        error_msg = self._ERRORS.get(err_code, "")
+        body = WapRenderer.render_welcome_form(error=error_msg, next_url=self._safe_next())
+        self.write_page("输入访问码", body)
+
+    def post(self):
+        invite_code = self.get_argument("invite_code", "").strip()
+        next_url = self._safe_next()
+        next_enc = quote_plus(next_url)
+
+        if not invite_code or invite_code != CONF.get("INVITE_CODE", ""):
+            self.redirect(f"/wap/welcome?err=invalid&next={next_enc}")
+            return
+
+        self.mark_invited()
+        self.redirect(next_url)
+
+    def _safe_next(self):
+        """
+        Return a validated redirect destination from the ``next`` query param.
+        Only paths starting with ``/`` (not ``//``) are accepted.
+        Falls back to ``/wap``.
+        """
+        raw = self.get_argument("next", "/wap").strip()
+        decoded = unquote_plus(raw)
+        if decoded.startswith("/") and not decoded.startswith("//"):
+            return decoded
+        return "/wap"
+
+
 class WapLogin(WapBaseHandler):
     """WAP login page – GET renders the form, POST processes credentials."""
 
@@ -325,6 +390,7 @@ def routes():
         (r"/wap/reading", WapReading),
         (r"/wap/favorites", WapFavorites),
         (r"/wap/wants", WapWants),
+        (r"/wap/welcome", WapWelcome),
         (r"/wap/login", WapLogin),
         (r"/wap/logout", WapLogout),
     ]
