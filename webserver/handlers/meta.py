@@ -186,12 +186,15 @@ class MetaBooks(ListHandler):
         }
         title = titles.get(meta, _(u"未知")) % vars()  # noqa: F841
         category = meta + "s" if meta in ["tag", "author", "language"] else meta
-        if meta in ["rating"]:
+        if meta == "rating":
             name = int(name)
         elif meta == "language":
             name = LanguageNameUtil.get_language_code(name)
         books = self.get_item_books(category, name)
-        books.sort(key=cmp_to_key(utils.compare_books_by_rating_or_id), reverse=True)
+        if meta == "series":
+            books.sort(key=cmp_to_key(utils.compare_books_by_series_index_or_name), reverse=False)
+        else:
+            books.sort(key=cmp_to_key(utils.compare_books_by_rating_or_id), reverse=True)
         return self.render_book_list(books, title=title)
 
 

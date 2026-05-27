@@ -1080,8 +1080,7 @@ class ListHandler(BaseHandler):
                 books = [
                     b
                     for b in books
-                    if not b.get("tags")
-                    and not b.get(constants.CALIBRE_COLUMN_CATEGORY)
+                    if not b.get("tags") and not b.get(constants.CALIBRE_COLUMN_CATEGORY)
                 ]
             elif getattr(user, "read_limit", 0) > 0:
                 books = [b for b in books if self.is_book_in_reading_range(b, user)]
