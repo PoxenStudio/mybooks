@@ -4,3 +4,6 @@
 [submodule "third-party/epub.js"]
 	path = third-party/epub.js
 	url = git@github.com:PoxenStudio/epub.js.git
+[submodule "extensions"]
+	path = extensions
+	url = git@github.com:PoxenStudio/extensions.git
