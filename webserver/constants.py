@@ -16,6 +16,7 @@ CUSTOM_COVER_IMAGE = "/data/books/logo/default_cover.jpg"
 
 CALIBRE_ERROR_FLAG = "<*ERROR*>"
 SUPPORTED_EBOOK_FORMATS = ["azw3", "epub", "mobi", "pdf", "txt", "azw", "docx"]
+SUPPORTED_AUDIO_FORMATS = ['.mp3', ".m4a", ".m4b", ".wav", ".wma", ".opus"]
 
 COLUMN_CATEGORY = "category"
 CALIBRE_COLUMN_CATEGORY = "#category"

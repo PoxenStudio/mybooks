@@ -23,7 +23,7 @@ from webserver.base.formatter import BookFormatter
 from webserver.handlers.base import BaseHandler, auth, js, is_admin
 from webserver.models import BizKey, ReaderPaidBook, ReaderLog, Message
 from webserver.worker.epub2audio_worker import EpubToAudioWorker
-from webserver.constants import ENABLE_VIP_QUOTA_KEY
+from webserver.constants import ENABLE_VIP_QUOTA_KEY, SUPPORTED_AUDIO_FORMATS
 from webserver.services.background_service import BackgroundService, BackgroundTask
 
 
@@ -261,7 +261,7 @@ class AudioDetail(BaseHandler):
                 audio_files = [
                     f
                     for f in os.listdir(audio_dir)
-                    if f.endswith((".mp3", ".wav", ".m4a", ".opus"))
+                    if f.lower().endswith(tuple(SUPPORTED_AUDIO_FORMATS))
                 ]
                 if audio_files:
                     user = self.get_current_user()
@@ -809,16 +809,16 @@ class AudioFile(BaseHandler):
                 raise web.HTTPError(404, "Audio file not found")
 
             # 设置适当的Content-Type
-            if filename.endswith(".mp3"):
-                self.set_header("Content-Type", "audio/mpeg")
-            elif filename.endswith(".wav"):
-                self.set_header("Content-Type", "audio/wav")
-            elif filename.endswith(".m4a"):
-                self.set_header("Content-Type", "audio/mp4")
-            elif filename.endswith(".opus"):
-                self.set_header("Content-Type", "audio/opus")
-            else:
-                self.set_header("Content-Type", "audio/mpeg")
+            ext = os.path.splitext(filename)[1].lower()
+            content_types = {
+                ".mp3": "audio/mpeg",
+                ".wav": "audio/wav",
+                ".m4a": "audio/mp4",
+                ".m4b": "audio/mp4",
+                ".opus": "audio/opus",
+                ".wma": "audio/x-ms-wma",
+            }
+            self.set_header("Content-Type", content_types.get(ext, "audio/mpeg"))
 
             # 支持范围请求 (Range requests) 用于音频播放
             self.set_header("Accept-Ranges", "bytes")
@@ -957,7 +957,7 @@ class AudioCollection(BaseHandler):
             audio_files = [
                 f
                 for f in os.listdir(audio_dir)
-                if f.endswith((".mp3", ".wav", ".m4a", ".opus"))
+                if f.lower().endswith(tuple(SUPPORTED_AUDIO_FORMATS))
             ]
             if not audio_files:
                 return {"err": "audio.not_found", "msg": _("音频文件不存在")}

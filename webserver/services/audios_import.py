@@ -18,7 +18,6 @@ CONF = loader.get_settings()
 
 AUDIO_IMPORT_DIR = os.path.join(CONF.get("scan_upload_path", "/data/books/imports/"), constants.AUDIO_BOOK_IMPORTS)
 AUDIO_OUTPUT_DIR = CONF.get("audio_output_folder", "/data/books/audios/")
-SUPPORTED_AUDIO_FORMATS = ['.mp3', ".m4a", ".m4b", ".wav", ".wma"]
 
 COVER_NAMES = {"cover.jpg", "cover.jpeg", "cover.png"}
 
@@ -60,7 +59,21 @@ def _extract_audio_metadata(audio_path, fallback_title):
                 title = str(title_tag[0]).strip() if isinstance(title_tag, list) else str(title_tag).strip()
             if author_tag:
                 author = str(author_tag[0]).strip() if isinstance(author_tag, list) else str(author_tag).strip()
-            logging.debug("[AUDIO_IMPORT] Extracted metadata from %s: title=%s, author=%s", audio_path, title, author)
+        
+        # Fallback for some m4b files (e.g. lavf) where easy=True doesn't map the tags
+        if not title or not author:
+            raw_audio = mutagen.File(audio_path, easy=False)
+            if hasattr(raw_audio, "tags") and raw_audio.tags:
+                if not title:
+                    title_tag = raw_audio.tags.get("\x00\x00\x00\x01")
+                    if title_tag:
+                        title = str(title_tag[0]).strip() if isinstance(title_tag, list) else str(title_tag).strip()
+                if not author:
+                    author_tag = raw_audio.tags.get("\x00\x00\x00\x02")
+                    if author_tag:
+                        author = str(author_tag[0]).strip() if isinstance(author_tag, list) else str(author_tag).strip()
+
+        logging.debug("[AUDIO_IMPORT] Extracted metadata from %s: title=%s, author=%s", audio_path, title, author)
         return title or fallback_title, author
     except Exception as e:
         logging.warning("[AUDIO_IMPORT] Failed to read audio metadata from %s: %s", audio_path, e)
@@ -128,7 +141,7 @@ class AudioBookImporter(AsyncService):
         audio_dir = os.path.join(AUDIO_OUTPUT_DIR, str(book_id))
         if not os.path.isdir(audio_dir):
             return False
-        audio_files = [f for f in os.listdir(audio_dir) if f.lower().endswith(tuple(SUPPORTED_AUDIO_FORMATS))]
+        audio_files = [f for f in os.listdir(audio_dir) if f.lower().endswith(tuple(constants.SUPPORTED_AUDIO_FORMATS))]
         if audio_files:
             return True
         return False
