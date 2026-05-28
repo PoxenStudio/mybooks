@@ -18,7 +18,7 @@ CONF = loader.get_settings()
 
 AUDIO_IMPORT_DIR = os.path.join(CONF.get("scan_upload_path", "/data/books/imports/"), constants.AUDIO_BOOK_IMPORTS)
 AUDIO_OUTPUT_DIR = CONF.get("audio_output_folder", "/data/books/audios/")
-SUPPORTED_AUDIO_FORMATS = ['.mp3', ".m4a", ".m4b", ".wav"]
+SUPPORTED_AUDIO_FORMATS = ['.mp3', ".m4a", ".m4b", ".wav", ".wma"]
 
 COVER_NAMES = {"cover.jpg", "cover.jpeg", "cover.png"}
 
