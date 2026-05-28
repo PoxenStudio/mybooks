@@ -144,12 +144,14 @@
         "note": "請注意",
         "moonReaderNote": "因為靜讀天下 APP 不支援 cookie 登入，因此需要做如下設定：",
         "disablePrivateLibrary": "關閉「私人圖書館」模式。",
-        "enableGuestAccess": "開啟「允許任意下載」（訪客無需註冊或登入）"
+        "enableGuestAccess": "開啟「允許任意下載」（訪客無需註冊或登入）",
+        "copyButton": "複製連結"
     },
     "webdav": {
         "introduction": "透過 WebDAV 存取書庫",
         "link": "WebDAV 位址",
-        "linkDescription": "您的 WebDAV 連結為："
+        "linkDescription": "您的 WebDAV 連結為：",
+        "copyButton": "複製連結"
     },
     "signup": {
         "title": "填寫註冊資訊",

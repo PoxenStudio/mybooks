@@ -71,7 +71,6 @@ class TalebookResource(DAVNonCollection):
     def get_display_name(self):
         # Format: ID.书名.ext
         name = "%d.%s.%s" % (self.id, self.title, self.ext)
-        logging.info(f"****** Getting display name: {name}")
         return safe_xml(name)
 
     def get_content_length(self):
@@ -240,6 +239,7 @@ class BooksCollection(VirtualCollection):
 
         try:
             for book_id in self.book_ids:
+                logging.info(f"Processing book ID {book_id} for collection '{self.title}'")
                 try:
                     # Get metadata for this book
                     mi = self.provider.cache.get_metadata(book_id, get_cover=False, get_user_categories=False)
@@ -254,7 +254,6 @@ class BooksCollection(VirtualCollection):
                         logging.info(f"Skipping book ID {book_id} due to reading range restriction")
                         continue
 
-                    logging.info(f"Fetching book ID {book_id}, title: {mi.title}, id:{mi.id}")
                     # Convert Metadata object to dict-like structure
                     item = {
                         'id': book_id,
@@ -294,7 +293,6 @@ class BooksCollection(VirtualCollection):
                     book_name = f"{item['id']}.{safe_filename(item['title'])}.{ext}"
                     # Ensure book name is XML safe
                     book_name = safe_xml(book_name)
-                    logging.info(f"Adding book resource: {book_name}")
                     books.append(TalebookResource(
                         base + book_name,
                         self.environ,
@@ -730,7 +728,7 @@ class MyBooksDavProvider(DAVProvider):
         """处理最新添加书籍"""
         if len(parts) == 1:
             try:
-                sql = "SELECT id FROM books ORDER BY timestamp DESC LIMIT 100"
+                sql = "SELECT id FROM books ORDER BY id DESC LIMIT 100"
                 book_ids = [v[0] for v in self.cache.backend.conn.get(sql)]
             except Exception as e:
                 logging.error(f"Error getting recent books: {e}")

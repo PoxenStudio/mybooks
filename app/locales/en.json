@@ -144,7 +144,14 @@
         "note": "Note",
         "moonReaderNote": "Since Moon+ Reader does not support cookie login, please configure as follows:",
         "disablePrivateLibrary": "Disable 'Private Library' mode.",
-        "enableGuestAccess": "Enable 'Allow arbitrary downloads' (guests do not need to register or log in)"
+        "enableGuestAccess": "Enable 'Allow arbitrary downloads' (guests do not need to register or log in)",
+        "copyButton": "Copy Link"
+    },
+    "webdav": {
+        "introduction": "Access Book Library via WebDAV",
+        "link": "WebDAV Address",
+        "linkDescription": "Your WebDAV link is:",
+        "copyButton": "Copy Link"
     },
     "signup": {
         "title": "Fill in registration information",

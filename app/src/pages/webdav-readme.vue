@@ -4,16 +4,22 @@
     <img class="webdav-icon" src="/icons/webdav.svg" alt="WebDAV Icon" />
     <section>
       <h2>{{ $t('webdav.link') }}</h2>
-      <p>{{ $t('webdav.linkDescription') }}<code>{{ opdsUrl }}</code></p>
+      <p>
+        {{ $t('webdav.linkDescription') }}
+        <code>{{ webdavUrl }}</code>
+        <v-btn icon @click="copyWebdavUrl">
+          <v-icon :color="copied ? 'green' : ''">{{ copied ? 'mdi-check' : 'mdi-content-copy' }}</v-icon>
+        </v-btn>
+      </p>
     </section>
     <section>
       <h2>客户端访问</h2>
       <p>可以在任何支持WebDAV访问的阅读器、应用程序或者电子书上直接访问书库内容，如Koodo Reader，以及文石、汉王等设备。</p>
-      <br/>
-      <p>参考文章：<a href="https://mp.weixin.qq.com/s/82zFUwv46CLFzHnIf57IyQ" target="_blank" rel="noopener noreferrer">支持以WebDAV直接访问书库</a><br/>
+      <br />
+      <p>参考文章：<a href="https://mp.weixin.qq.com/s/82zFUwv46CLFzHnIf57IyQ" target="_blank" rel="noopener noreferrer">支持以WebDAV直接访问书库</a><br />
         不支持匿名访问，需要输入书库中的用户名和密码。
       </p>
-      <br/>
+      <br />
       <p>如果启用了WebDAV同步功能，支持WebDAV同步数据的阅读器，如Koodo Reader, 可以在reader目录下进行读写操作，实现同步功能。</p>
     </section>
   </div>
@@ -23,7 +29,21 @@
 export default {
   data() {
     return {
-      opdsUrl: process.client ? window.location.origin + '/books/' : ''
+      webdavUrl: process.client ? window.location.origin + '/books/' : '',
+      copied: false
+    }
+  },
+  methods: {
+    async copyWebdavUrl() {
+      try {
+        await navigator.clipboard.writeText(this.webdavUrl)
+        this.copied = true
+        setTimeout(() => {
+          this.copied = false
+        }, 2000)
+      } catch (err) {
+        console.error('复制失败:', err)
+      }
     }
   }
 }
@@ -55,7 +75,8 @@ h2 {
   margin-bottom: 15px;
 }
 
-ul, ol {
+ul,
+ol {
   padding-left: 20px;
 }
 
@@ -63,5 +84,6 @@ code {
   background: #f5f5f5;
   padding: 2px 5px;
   border-radius: 3px;
+  margin-right: 8px;
 }
 </style>

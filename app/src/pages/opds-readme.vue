@@ -4,7 +4,13 @@
     <img class="opds-icon" src="/icons/opds.svg" alt="OPDS Icon" />
     <section>
       <h2>{{ $t('opds.link') }}</h2>
-      <p>{{ $t('opds.linkDescription') }}<code>{{ opdsUrl }}</code></p>
+      <p>
+        {{ $t('opds.linkDescription') }}
+        <code>{{ opdsUrl }}</code>
+        <v-btn icon @click="copyOpdsUrl">
+          <v-icon :color="copied ? 'green' : ''">{{ copied ? 'mdi-check' : 'mdi-content-copy' }}</v-icon>
+        </v-btn>
+      </p>
     </section>
     <section>
       <h2>{{ $t('opds.commonReaders') }}</h2>
@@ -25,8 +31,8 @@
       <h2>{{ $t('opds.note') }}</h2>
       <p>{{ $t('opds.moonReaderNote') }}</p>
       <ol>
-          <li>{{ $t('opds.disablePrivateLibrary') }}</li>
-          <li>{{ $t('opds.enableGuestAccess') }}</li>
+        <li>{{ $t('opds.disablePrivateLibrary') }}</li>
+        <li>{{ $t('opds.enableGuestAccess') }}</li>
       </ol>
     </section>
   </div>
@@ -36,7 +42,21 @@
 export default {
   data() {
     return {
-      opdsUrl: process.client ? window.location.origin + '/opds/' : ''
+      opdsUrl: process.client ? window.location.origin + '/opds/' : '',
+      copied: false
+    }
+  },
+  methods: {
+    async copyOpdsUrl() {
+      try {
+        await navigator.clipboard.writeText(this.opdsUrl)
+        this.copied = true
+        setTimeout(() => {
+          this.copied = false
+        }, 2000)
+      } catch (err) {
+        console.error('复制失败:', err)
+      }
     }
   }
 }
@@ -68,7 +88,8 @@ h2 {
   margin-bottom: 15px;
 }
 
-ul, ol {
+ul,
+ol {
   padding-left: 20px;
 }
 
@@ -76,5 +97,6 @@ code {
   background: #f5f5f5;
   padding: 2px 5px;
   border-radius: 3px;
+  margin-right: 8px;
 }
 </style>
