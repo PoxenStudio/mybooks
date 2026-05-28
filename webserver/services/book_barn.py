@@ -115,13 +115,11 @@ class BookBarnClient:
         if VERSION == "v0.0.1":
             logging.info("Current version is v0.0.1, skip checking latest release for development version.")
             return None
-
         params = {
             "version": VERSION,
             "token": token,
             "platform": get_os() + "-" + get_arch()
         }
-
         result = None
         try:
             response = requests.get(self.HOST_BASE + self.CHECK_LATEST_RELEASE_API, params=params, verify=False)
@@ -307,7 +305,7 @@ class BookBarnService(AsyncService):
                     logging.info(f"[BARN]New version available: {latest_release['rev']}, released on {latest_release['date']}")
                     if self.admin_uids is None or len(self.admin_uids) == 0:
                         self.get_admin_uids()
-                    CONF[UPGRABLE_REVISION] = latest_release
+                    CONF[UPGRABLE_REVISION] = latest_release.get("rev", "")
                     if len(self.admin_uids) > 0:
                         message = f"有新版本发布: {latest_release['rev']}，发布日期: {latest_release['date']}，\
                                     更新内容: {latest_release['notes']}，请重新构建容器以获取更新。"
