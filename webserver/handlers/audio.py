@@ -243,6 +243,39 @@ class AudioUtils:
 
 
 class AudioDetail(BaseHandler):
+    def _extract_m4b_chapters(self, file_path, file_size, book_id, file):
+        try:
+            from mutagen.mp4 import MP4
+            audio = MP4(file_path)
+            if not audio.chapters:
+                return None
+                
+            chapter_urls = []
+            total_duration = audio.info.length if audio.info else 0
+            for i, chapter in enumerate(audio.chapters):
+                title = getattr(chapter, 'title', f"Chapter {i+1}")
+                start = getattr(chapter, 'start', 0)
+                if i + 1 < len(audio.chapters):
+                    end = getattr(audio.chapters[i+1], 'start', total_duration)
+                else:
+                    end = total_duration
+                
+                # Estimate size for the chapter based on duration
+                chapter_duration = end - start
+                chapter_size = int((chapter_duration / total_duration) * file_size) if total_duration > 0 else file_size
+                
+                chapter_urls.append(
+                    {
+                        "filename": title,
+                        "url": f"{self.site_url}/api/audio/{book_id}/{file}#t={start},{end}",
+                        "size": chapter_size,
+                    }
+                )
+            return chapter_urls
+        except Exception as e:
+            logging.error(f"Error parsing chapters from {file}: {e}")
+            return None
+
     @js
     def get(self, book_id):
         # get the audio file path from the book id, if not found, check the book id in the worker map,
@@ -283,11 +316,21 @@ class AudioDetail(BaseHandler):
                     for file in sorted(audio_files):
                         if file.find(SKIP_AUDIO_FILE_PREFIX) > 0:
                             continue
+
+                        file_path = os.path.join(audio_dir, file)
+                        file_size = os.path.getsize(file_path)
+
+                        if file.lower().endswith('.m4b'):
+                            chapter_urls = self._extract_m4b_chapters(file_path, file_size, book_id, file)
+                            if chapter_urls:
+                                file_urls.extend(chapter_urls)
+                                continue # Skip adding the whole m4b file
+
                         file_urls.append(
                             {
                                 "filename": os.path.splitext(file)[0],
                                 "url": f"{self.site_url}/api/audio/{book_id}/{file}",
-                                "size": os.path.getsize(os.path.join(audio_dir, file)),
+                                "size": file_size,
                             }
                         )
                     return {
@@ -768,7 +811,6 @@ class AudioFile(BaseHandler):
             user = self.get_current_user()
             if not user:
                 raise web.HTTPError(401, "未登录")
-
         try:
             book_id = int(book_id)
 
@@ -1284,5 +1326,5 @@ def routes():
         (
             r"/api/audios/([0-9]+)/collection/download",
             AudioCollectionDownloadFile,
-        ),  # 音频合集文件下载
+        ),
     ]
