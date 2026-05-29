@@ -249,21 +249,20 @@ class AudioDetail(BaseHandler):
             audio = MP4(file_path)
             if not audio.chapters:
                 return None
-                
             chapter_urls = []
             total_duration = audio.info.length if audio.info else 0
             for i, chapter in enumerate(audio.chapters):
-                title = getattr(chapter, 'title', f"Chapter {i+1}")
+                title = getattr(chapter, 'title', f"Chapter {i + 1}")
                 start = getattr(chapter, 'start', 0)
                 if i + 1 < len(audio.chapters):
-                    end = getattr(audio.chapters[i+1], 'start', total_duration)
+                    end = getattr(audio.chapters[i + 1], 'start', total_duration)
                 else:
                     end = total_duration
-                
+
                 # Estimate size for the chapter based on duration
                 chapter_duration = end - start
                 chapter_size = int((chapter_duration / total_duration) * file_size) if total_duration > 0 else file_size
-                
+
                 chapter_urls.append(
                     {
                         "filename": title,
@@ -326,7 +325,7 @@ class AudioDetail(BaseHandler):
                             chapter_urls = self._extract_m4b_chapters(file_path, file_size, book_id, file)
                             if chapter_urls:
                                 file_urls.extend(chapter_urls)
-                                continue # Skip adding the whole m4b file
+                                continue  # Skip adding the whole m4b file
 
                         file_urls.append(
                             {

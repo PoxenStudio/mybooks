@@ -59,7 +59,7 @@ def _extract_audio_metadata(audio_path, fallback_title):
                 title = str(title_tag[0]).strip() if isinstance(title_tag, list) else str(title_tag).strip()
             if author_tag:
                 author = str(author_tag[0]).strip() if isinstance(author_tag, list) else str(author_tag).strip()
-        
+
         # Fallback for some m4b files (e.g. lavf) where easy=True doesn't map the tags
         if not title or not author:
             raw_audio = mutagen.File(audio_path, easy=False)
@@ -234,7 +234,7 @@ class AudioBookImporter(AsyncService):
 
             logging.info("[AUDIO_IMPORT] new record for %s, will attempt to import", dir_path)
             audio_files = sorted([
-                f for f in os.listdir(dir_path) if f.lower().endswith(tuple(SUPPORTED_AUDIO_FORMATS))
+                f for f in os.listdir(dir_path) if f.lower().endswith(tuple(constants.SUPPORTED_AUDIO_FORMATS))
             ])
             if not audio_files:
                 logging.info("[AUDIO_IMPORT] no audio files in %s, skipping", dir_path)
