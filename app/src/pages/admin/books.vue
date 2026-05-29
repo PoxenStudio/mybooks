@@ -321,6 +321,17 @@
                 </v-edit-dialog>
             </template>
 
+            <template v-slot:item.language="{ item }">
+                <v-edit-dialog large :return-value.sync="item.languages" @save="save(item, 'languages')" :save-text="$t('admin.books.save')" :cancel-text="$t('admin.books.cancel')">
+                    <span v-if="item.languages != null">{{ languageOptions.find(l => l.code === item.languages)?.name || item.languages }}</span>
+                    <span v-else> - </span>
+                    <template v-slot:input>
+                        <div class="mt-4 text-h6">{{ $t('admin.books.editLanguage') }}</div>
+                        <v-select :items="languageOptions" item-text="name" item-value="code" v-model="item.languages" color="yellow accent-4" dense></v-select>
+                    </template>
+                </v-edit-dialog>
+            </template>
+
             <template v-slot:item.series="{ item }">
                 <v-edit-dialog
                     large
@@ -570,6 +581,8 @@
 </template>
 
 <script>
+import { languageOptions } from "~/utils/languageCodes";
+
 export default {
     data: () => ({
         snack: false,
@@ -602,6 +615,7 @@ export default {
             count_skipped: 0,
         },
         categories: [],
+        languageOptions,
     }),
     created() {
         this.checkCurrentState();
@@ -692,6 +706,7 @@ export default {
                 { text: this.$t('admin.books.header.title'), sortable: true, value: "title" },
                 { text: this.$t('admin.books.header.author'), sortable: true, value: "author", width: "100px" },
                 { text: this.$t('admin.books.header.category'), sortable: false, value: "category", width: "80px" },
+                { text: this.$t('admin.books.header.language'), sortable: false, value: "language", width: "60px" },
                 { text: this.$t('admin.books.header.series'), sortable: false, value: "series", width: "80px" },
                 { text: this.$t('admin.books.header.rating'), sortable: false, value: "rating", width: "60px" },
                 { text: this.$t('admin.books.header.publisher'), sortable: false, value: "publisher" },
