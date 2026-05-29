@@ -160,7 +160,7 @@
                 <v-chip small v-else-if="item.status == 'imported'" class="primary">{{ $t('imports.status.imported') }}</v-chip>
                 <v-chip small v-else-if="item.status == 'new'" class="grey">{{ $t('imports.status.new') }}</v-chip>
                 <v-chip small v-else-if="item.status == 'drop'" class="warning" style="color:black;">{{ $t('imports.status.drop') }}</v-chip>
-                <v-chip small v-else-if="item.status == 'invalid'" class="error" style="color:black;">{{ $t('imports.status.invalid') }}</v-chip>
+                <v-chip small v-else-if="item.status == 'invalid'" class="error" style="color:black;">{{ item.path.startsWith('/') ? $t('imports.status.invalid') : $t('imports.status.isbn_invalid') }}</v-chip>
                 <v-chip small v-else-if="item.status == 'missed'" class="error" style="color:black;">{{ $t('imports.status.missed') }}</v-chip>
                 <v-chip small v-else-if="item.status == 'permission'" class="error" style="color:black;">{{ $t('imports.status.permission') }}</v-chip>
                 <v-chip small v-else class="info">{{ item.status }}</v-chip>

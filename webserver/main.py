@@ -316,12 +316,11 @@ def make_app():
         added_category = add_meta_in_calibre(cache, COLUMN_CATEGORY, "Book Category", "text")
         added_phy_count = add_meta_in_calibre(cache, COLUMN_PHY_COUNT, "Physical Book Count", "int")
         added_source = add_meta_in_calibre(cache, COLUMN_BOOK_TYPE, "Book Type", "int")
+        added_location = add_meta_in_calibre(cache, COLUMN_LOCATION, "Location", "text")
         _ = add_meta_in_calibre(cache, COLUMN_EXT_LINK, "External Link", "text")
         _ = add_meta_in_calibre(cache, COLUMN_DYNAMIC_COVER, "Dynamic Cover", "int")
-        _ = add_meta_in_calibre(cache, COLUMN_LOCATION, "Location", "text")
-        if added_source or added_category or added_phy_count:
+        if added_source or added_category or added_phy_count or added_location:
             need_sync_item_to_calibre = True
-            # reload the db to make the new columns take effect
             book_db = LibraryDatabase(os.path.expanduser(options.with_library))
             cache = book_db.new_api
     except Exception as e:

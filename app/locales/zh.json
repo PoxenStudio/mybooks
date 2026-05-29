@@ -366,6 +366,7 @@
             "new": "待扫描",
             "drop": "文件重复",
             "invalid": "文件无效",
+            "isbn_invalid": "ISBN无效",
             "missed": "文件丢失",
             "permission": "权限不足"
         },

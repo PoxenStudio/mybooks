@@ -169,7 +169,7 @@ class BatchAddService(AsyncService):
             books = set()
 
             # 搜索ISBN
-            ids = self.db.search(f'isbn:{isbn} AND {CALIBRE_COLUMN_BOOK_TYPE}:={BOOK_TYPE_PHYSICAL}', return_matches=True)
+            ids = self.db.search(f'isbn:={isbn} AND {CALIBRE_COLUMN_BOOK_TYPE}:={BOOK_TYPE_PHYSICAL}', return_matches=True)
             if ids:
                 books.update(ids)
 
@@ -202,7 +202,8 @@ class BatchAddService(AsyncService):
 
             # 更新calibre custom data
             try:
-                self.db.set_field(CALIBRE_COLUMN_PHY_COUNT, {book_id: book_count})
+                self.db.new_api.set_field(CALIBRE_COLUMN_BOOK_TYPE, {book_id: BOOK_TYPE_PHYSICAL})
+                self.db.new_api.set_field(CALIBRE_COLUMN_PHY_COUNT, {book_id: book_count})
             except Exception as e:
                 logging.error(f"Error update book count for book_id={book_id}: {e}")
 
@@ -264,8 +265,8 @@ class BatchAddService(AsyncService):
                 return None
 
             try:
-                self.db.set_field(CALIBRE_COLUMN_BOOK_TYPE, {book_id: BOOK_TYPE_PHYSICAL})
-                self.db.set_field(CALIBRE_COLUMN_PHY_COUNT, {book_id: 1})
+                self.db.new_api.set_field(CALIBRE_COLUMN_BOOK_TYPE, {book_id: BOOK_TYPE_PHYSICAL})
+                self.db.new_api.set_field(CALIBRE_COLUMN_PHY_COUNT, {book_id: 1})
             except Exception as e:
                 logging.error(f"Failed to set custom fields for book ID {book_id}: {e}")
 
@@ -334,10 +335,10 @@ class BatchAddService(AsyncService):
                 self._record_invalid_isbn(csv_filename, isbn, title, author)
                 return None
             try:
-                self.db.set_field(CALIBRE_COLUMN_BOOK_TYPE, {book_id: BOOK_TYPE_PHYSICAL})
-                self.db.set_field(CALIBRE_COLUMN_PHY_COUNT, {book_id: 1})
+                self.db.new_api.set_field(CALIBRE_COLUMN_BOOK_TYPE, {book_id: BOOK_TYPE_PHYSICAL})
+                self.db.new_api.set_field(CALIBRE_COLUMN_PHY_COUNT, {book_id: 1})
                 if location:
-                    self.db.set_field(CALIBRE_COLUMN_LOCATION, {book_id: location})
+                    self.db.new_api.set_field(CALIBRE_COLUMN_LOCATION, {book_id: location})
             except Exception as e:
                 logging.error(f"Failed to set custom fields for book ID {book_id}: {e}")
 

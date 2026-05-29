@@ -1149,19 +1149,13 @@ class PrintBooks(BaseHandler):
         db_items = self.sqlite_session.query(Item).filter(
             Item.book_type == BOOK_TYPE_PHYSICAL
         ).order_by(Item.create_time.desc())
+        total_cnt = db_items.count()
 
         try:
             start = self.get_argument_start()
-            delta = 60
+            delta = CONF.get("DEFAULT_PAGE_SIZE", 60)
             items = db_items.limit(delta).offset(start).all()
             ids = [item.book_id for item in items]
-            total_items = 0
-
-            if len(ids) > 0:
-                # 获取总数用于分页
-                total_items = self.sqlite_session.query(Item).filter(
-                    Item.book_type == BOOK_TYPE_PHYSICAL
-                ).count()
             books = self.get_books(ids=ids)
             books.sort(key=lambda x: x["id"], reverse=True)
 
@@ -1172,10 +1166,9 @@ class PrintBooks(BaseHandler):
 
             return {"err": "ok",
                     "title": title,
-                    "total": total_items,
+                    "total": total_cnt,
                     "books": books_result}
         except Exception as e:
-            import traceback
             traceback.print_exc()
             logging.error("Failed to get print books: %s", e)
             return {"err": "internal", "msg": _("获取实体书失败")}
@@ -1884,8 +1877,12 @@ class BookAddByISBN(BaseHandler):
                 self.sqlite_session.commit()
 
             # 更新calibre custom data
-            self.calibre_db_cache.set_field(CALIBRE_COLUMN_PHY_COUNT, {book_id: book_count})
-            self.calibre_db_cache.set_field(CALIBRE_COLUMN_BOOK_TYPE, {book_id: BOOK_TYPE_PHYSICAL})
+            try:
+                self.calibre_db_cache.set_field(CALIBRE_COLUMN_BOOK_TYPE, {book_id: BOOK_TYPE_PHYSICAL})
+                self.calibre_db_cache.set_field(CALIBRE_COLUMN_PHY_COUNT, {book_id: book_count})
+            except Exception as e:
+                logging.error(f"Failed to set custom fields for book ID {book_id}: {e}")
+
             return {"err": "ok", "msg": _("实体书数量已更新，当前数量：%d") % book_count, "book_id": book_id}
 
         logging.info("Adding new book by ISBN: %s" % isbn)
@@ -1931,6 +1928,7 @@ class BookAddByISBN(BaseHandler):
             try:
                 self.calibre_db_cache.set_field(CALIBRE_COLUMN_BOOK_TYPE, {book_id: BOOK_TYPE_PHYSICAL})
                 self.calibre_db_cache.set_field(CALIBRE_COLUMN_PHY_COUNT, {book_id: 1})
+                BaseHandler._physical_books_count_cache_time = 0
             except Exception as e:
                 logging.error(f"Failed to set custom fields for book ID {book_id}: {e}")
 
