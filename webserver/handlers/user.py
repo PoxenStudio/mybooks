@@ -458,6 +458,7 @@ class UserInfo(BaseHandler):
             "users": count_all_users,
             "active": count_hot_users,
             "version": VERSION,
+            "installed": CONF.get("installed", False),
             "upgrable": CONF.get(UPGRABLE_REVISION, ""),
             "title": CONF["site_title"] if "site_title" in CONF else "MyBooks",
             "language": CONF["site_language"] if "site_language" in CONF else "",

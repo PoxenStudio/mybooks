@@ -469,12 +469,13 @@ class AdminInstall(BaseHandler):
 
     @js
     def get(self):
-        err = "installed" if CONF.get("installed", True) else "not_intalled"
-        return {"err": err}
+        installed = CONF.get("installed", False)
+        err = "installed" if installed else "not_intalled"
+        return {"err": err, "installed": installed}
 
     @js
     def post(self):
-        if CONF.get("installed", True):
+        if CONF.get("installed", False):
             return {"err": "installed", "msg": _("不可重复执行安装操作")}
 
         code = self.get_argument("code", "").strip()
