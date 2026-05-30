@@ -87,7 +87,15 @@ export default {
         // 页面销毁时移除install-page类名
         if (process.client) {
             document.body.classList.remove('install-page');
-        }    },
+        }
+    },
+    mounted() {
+        this.$backend('/admin/install').then(rsp => {
+            if (rsp.installed) {
+                this.$router.push('/');
+            }
+        });
+    },
     methods: {
         getDefaultLanguage() {
             // Prefer current UI locale, then browser locale; support zh/en only.
