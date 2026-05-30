@@ -1195,7 +1195,7 @@
     "autoContrastLabel": "自動對比度",
     "autoContrastDesc": "是否自動校正對比度（基於直方圖）",
     "maxWidthLabel": "最大寬度",
-    "maxWidthDesc": "頁面渲染時的最大寬度（像素）",
+    "maxWidthDesc": "頁面渲染時的最大寬度（像素）, 600~2048之間",
     "qualifyLabel": "壓縮品質",
     "qualifyDesc": "JPEG 重編碼品質（60-95），用於控制壓縮品質",
     "skipPagesLabel": "跳過處理的頁碼",

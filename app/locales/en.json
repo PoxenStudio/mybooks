@@ -1195,7 +1195,7 @@
     "autoContrastLabel": "Auto Contrast",
     "autoContrastDesc": "Whether to apply automatic contrast correction (histogram-based). Default is False.",
     "maxWidthLabel": "Max Width",
-    "maxWidthDesc": "Maximum width for page rendering (in pixels)",
+    "maxWidthDesc": "Maximum width for page rendering (in pixels), must be between 600 and 2048.",
     "qualifyLabel": "Compression Quality",
     "qualifyDesc": "JPEG re-encoding quality (60-95) for compression control.",
     "skipPagesLabel": "Skip Pages",

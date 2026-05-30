@@ -1197,7 +1197,7 @@
     "autoContrastLabel": "自动对比度",
     "autoContrastDesc": "是否对比度自动校正（基于直方图）",
     "maxWidthLabel": "最大宽度",
-    "maxWidthDesc": "页面渲染时的最大宽度（像素）",
+    "maxWidthDesc": "页面渲染时的最大宽度（像素）, 600~2048之间",
     "qualifyLabel": "压缩质量",
     "qualifyDesc": "JPEG 重编码质量（60-95），用于控制压缩质量",
     "skipPagesLabel": "跳过处理的页码",

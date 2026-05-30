@@ -206,7 +206,7 @@ export default {
     mode: 'gray', // 'gray' or 'bw'
     maxBrightness: 200,
 
-    maxWidth: 800,
+    maxWidth: 1200,
     autoContrast: true,
     skipPages: '',
     dropPages: '',
