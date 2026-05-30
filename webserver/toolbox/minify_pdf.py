@@ -193,6 +193,7 @@ class MinifyPdfTool(BaseTool):
             return
         cls.cleaned = True
 
+        logging.info("[MinifyPdfTool] cleaning up old files in work dir")
         tool = cls()
         work_dir = tool.get_work_dir("")
         for d in ["sources", "processed"]:
