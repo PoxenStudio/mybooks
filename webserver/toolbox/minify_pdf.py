@@ -16,6 +16,7 @@ from webserver.toolbox.base_tool import BaseTool
 import io
 from PIL import ImageOps
 
+
 def _otsu_threshold(gray_img: Image.Image) -> int:
     """Compute Otsu threshold from a grayscale image."""
     hist = gray_img.histogram()
