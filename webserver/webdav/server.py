@@ -2,6 +2,10 @@
 import logging
 from wsgidav.wsgidav_app import WsgiDAVApp
 from .dav_provider import MyBooksDavProvider
+from webserver import loader
+
+
+CONF = loader.get_settings()
 
 
 def create_webdav_app(calibre_cache, sqlite_session):
@@ -52,6 +56,8 @@ def create_webdav_app(calibre_cache, sqlite_session):
             "ms_sharepoint_support": False,
             "ignore": [".DS_Store", "Thumbs.db", "._*"],
             "show_user": True,
+            "show_logout": True,
+            "htdocs_path": CONF["resource_path"] + "/webdav/",
         },
         # Store sqlite_session in config for domain controller to access
         "talebook_session": sqlite_session,
