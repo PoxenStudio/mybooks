@@ -89,9 +89,12 @@ class ToolSet:
         from .rare_book_downloader import RareBookDownloader
         from .merge_formats_tool import MergeFormatsTool
         from .review_cht_books_tool import ReviewTraditionalChineseTool
+        from .minify_pdf import MinifyPdfTool
         ToolSet.register(RareBookDownloader.info())
         ToolSet.register(MergeFormatsTool.info())
         ToolSet.register(ReviewTraditionalChineseTool.info())
+        ToolSet.register(MinifyPdfTool.info())
+        MinifyPdfTool.cleanup_old_files()
 
     @staticmethod
     def register(info: dict):

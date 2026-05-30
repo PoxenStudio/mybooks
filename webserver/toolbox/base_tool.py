@@ -62,8 +62,11 @@ class BaseTool(AsyncService):
 
         :param unique_key: 任意字符串（URL、任务参数等），用于生成唯一子目录。
         """
-        key_hash = hashlib.md5(unique_key.encode()).hexdigest()[:16]
-        work_dir = os.path.join(self.TOOL_DATA_ROOT, self.tool_id(), key_hash)
+        if unique_key:
+            key_hash = hashlib.md5(unique_key.encode()).hexdigest()[:16]
+            work_dir = os.path.join(self.TOOL_DATA_ROOT, self.tool_id(), key_hash)
+        else:
+            work_dir = os.path.join(self.TOOL_DATA_ROOT, self.tool_id())
         os.makedirs(work_dir, exist_ok=True)
         return work_dir
 
