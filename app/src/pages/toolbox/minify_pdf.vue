@@ -16,7 +16,7 @@
     <v-row justify="center">
       <v-col cols="12" md="8" lg="6">
         <v-card rounded="xl" outlined class="minify-card pa-6">
-          
+
           <!-- Upload Area -->
           <div v-if="!uploadedFilename" class="mb-4">
             <v-file-input
@@ -36,12 +36,12 @@
           <div v-if="uploadedFilename" class="mb-4">
             <v-alert type="success" dense outlined class="mb-4">
               {{ $t('minifyPdf.uploadedFile') }}: {{ uploadedFilename }}<br>
-              {{ $t('minifyPdf.pageCount') }}: {{ pdfInfo.page_count }}, 
+              {{ $t('minifyPdf.pageCount') }}: {{ pdfInfo.page_count }},
               {{ $t('minifyPdf.fileSize') }}: {{ formatBytes(pdfInfo.file_size) }}
             </v-alert>
 
             <!-- Mode Selection -->
-            <v-radio-group v-model="mode" :label="$t('minifyPdf.modeLabel')" row>
+            <v-radio-group v-model="mode" :label="$t('minifyPdf.modeLabel')" row hide-details>
               <v-radio :label="$t('minifyPdf.modeGray')" value="gray"></v-radio>
               <v-radio :label="$t('minifyPdf.modeBw')" value="bw"></v-radio>
             </v-radio-group>
@@ -52,20 +52,91 @@
 
             <!-- Max Brightness (only if gray) -->
             <v-expand-transition>
-              <div v-if="mode === 'gray'" class="mb-3">
+              <div v-if="mode === 'gray'">
                 <v-slider
                   v-model="maxBrightness"
                   :label="$t('minifyPdf.maxBrightnessLabel')"
-                  min="0"
+                  min="150"
                   max="255"
                   thumb-label
-                  class="mt-4"
+                  hide-details
                 ></v-slider>
-                <div class="text-caption text-grey">
+                <div class="text-caption text-grey mt-1">
                   {{ $t('minifyPdf.maxBrightnessDesc') }}
                 </div>
               </div>
             </v-expand-transition>
+
+            <!-- Auto Contrast -->
+            <v-switch
+              v-model="autoContrast"
+              :label="$t('minifyPdf.autoContrastLabel')"
+              dense
+              class="mt-2"
+              hide-details
+            ></v-switch>
+            <div class="text-caption text-grey mb-3">
+              {{ $t('minifyPdf.autoContrastDesc') }}
+            </div>
+
+            <!-- Max Width -->
+            <v-text-field
+              v-model.number="maxWidth"
+              :label="$t('minifyPdf.maxWidthLabel')"
+              type="number"
+              min="600"
+              max="2048"
+              outlined
+              dense
+              class="mt-4"
+              hide-details
+              :rules="[v => (v >= 600 && v <= 2048) || $t('minifyPdf.maxWidthError') ]"
+            ></v-text-field>
+            <div class="text-caption text-grey mb-3 mt-1">
+              {{ $t('minifyPdf.maxWidthDesc') }}
+            </div>
+
+            <!-- Quality -->
+            <v-slider
+              v-model="qualify"
+              :label="$t('minifyPdf.qualifyLabel')"
+              min="60"
+              max="95"
+              thumb-label
+              hide-details
+              class="mt-4"
+            ></v-slider>
+            <div class="text-caption text-grey mb-3">
+              {{ $t('minifyPdf.qualifyDesc') }}
+            </div>
+
+            <!-- Skip Pages -->
+            <v-text-field
+              v-model="skipPages"
+              :label="$t('minifyPdf.skipPagesLabel')"
+              outlined
+              dense
+              class="mt-4"
+              hide-details
+              :placeholder="$t('minifyPdf.skipPagesPlaceholder')"
+            ></v-text-field>
+            <div class="text-caption text-grey mb-3 mt-1">
+              {{ $t('minifyPdf.skipPagesDesc') }}
+            </div>
+
+            <!-- Drop Pages -->
+            <v-text-field
+              v-model="dropPages"
+              :label="$t('minifyPdf.dropPagesLabel')"
+              outlined
+              dense
+              class="mt-4"
+              hide-details
+              :placeholder="$t('minifyPdf.dropPagesPlaceholder')"
+            ></v-text-field>
+            <div class="text-caption text-grey mb-3 mt-1">
+              {{ $t('minifyPdf.dropPagesDesc') }}
+            </div>
 
             <v-btn
               color="primary"
@@ -131,15 +202,21 @@ export default {
     uploading: false,
     uploadedFilename: '',
     pdfInfo: {},
-    
+
     mode: 'gray', // 'gray' or 'bw'
     maxBrightness: 200,
-    
+
+    maxWidth: 800,
+    autoContrast: true,
+    skipPages: '',
+    dropPages: '',
+    qualify: 75,
+
     processing: false,
     progress: 0,
     status: '', // '', 'running', 'completed', 'error'
     downloadUrl: '',
-    
+
     resultMsg: '',
     resultType: 'success',
     pollInterval: null,
@@ -163,17 +240,17 @@ export default {
       if (!this.file) return;
       this.uploading = true;
       this.resultMsg = '';
-      
+
       const formData = new FormData();
       formData.append('file', this.file);
-      
+
       try {
         const response = await fetch('/api/toolbox/minify_pdf/upload', {
           method: 'POST',
           body: formData,
         });
         const rsp = await response.json();
-        
+
         if (rsp.err === 'ok') {
           this.uploadedFilename = rsp.data.filename;
           this.pdfInfo = rsp.data;
@@ -191,31 +268,43 @@ export default {
       }
     },
     async processPdf() {
+      if (this.maxWidth < 600 || this.maxWidth > 2048) {
+        this.resultMsg = this.$t('minifyPdf.maxWidthError');
+        this.resultType = 'error';
+        return;
+      }
+
       this.resultMsg = '';
       this.processing = true;
       this.progress = 0;
       this.status = 'running';
       this.downloadUrl = '';
-      
+
       const params = {
         bw: this.mode === 'bw',
         gray: this.mode === 'gray',
+        max_width: this.maxWidth,
+        auto: this.autoContrast,
+        qualify: this.qualify,
       };
-      
+
+      if (this.skipPages) params.skip_pages = this.skipPages;
+      if (this.dropPages) params.drop_pages = this.dropPages;
+
       if (this.mode === 'gray') {
         params.max_brightness = this.maxBrightness;
       }
-      
+
       try {
         const rsp = await this.$backend('/toolbox/minify_pdf/process', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             filename: this.uploadedFilename,
             params: params
           }),
         });
-        
+
         if (rsp.err === 'ok') {
           this.resultMsg = rsp.msg || this.$t('minifyPdf.processStartSuccess');
           this.resultType = 'success';
@@ -235,15 +324,15 @@ export default {
     },
     pollProgress() {
       if (this.pollInterval) clearInterval(this.pollInterval);
-      
+
       this.pollInterval = setInterval(async () => {
         try {
           const rsp = await this.$backend(`/toolbox/minify_pdf/progress?filename=${this.uploadedFilename}`);
-          
+
           if (rsp.err === 'ok') {
             const data = rsp.data;
             this.progress = data.progress;
-            
+
             if (data.status === 'completed') {
               this.status = 'completed';
               this.downloadUrl = data.download_url;
