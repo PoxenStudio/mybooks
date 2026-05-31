@@ -179,7 +179,7 @@ class AudioUtils:
             }
 
         worker = ConversionWorkerMap.get(book_id)
-        audio_files = [f for f in os.listdir(audio_dir) if f.endswith((".mp3", ".wav"))]
+        audio_files = [f for f in os.listdir(audio_dir) if f.endswith(tuple(SUPPORTED_AUDIO_FORMATS))]
         if not audio_files:
             if worker:
                 return {
@@ -1324,8 +1324,5 @@ def routes():
         (r"/api/audiobooks", AudioBooks),  # 音频书籍列表
         (r"/api/audio/([0-9]+)/([^/]+)", AudioFile),
         (r"/api/audios/([0-9]+)/collection", AudioCollection),  # 音频合集下载接口
-        (
-            r"/api/audios/([0-9]+)/collection/download",
-            AudioCollectionDownloadFile,
-        ),
+        (r"/api/audios/([0-9]+)/collection/download", AudioCollectionDownloadFile),
     ]

@@ -5,6 +5,7 @@ import hashlib
 import logging
 import os
 import shutil
+import subprocess
 import time
 import traceback
 
@@ -42,6 +43,55 @@ def _read_cover_data(cover_path):
         return ext, data
     except OSError:
         return None, None
+
+
+def _get_dest_filename(filename):
+    """Get the destination filename, converting .wma to .mp3 extension."""
+    name, ext = os.path.splitext(filename)
+    if ext.lower() == ".wma":
+        return name + ".mp3"
+    return filename
+
+
+def _convert_wma_to_mp3(src_path, dst_path):
+    """Convert a WMA file to MP3 using ffmpeg."""
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", src_path, "-codec:a", "libmp3lame", "-q:a", "2", dst_path],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        logging.info("[AUDIO_IMPORT] Converted WMA to MP3: %s -> %s", src_path, dst_path)
+        return True
+    except FileNotFoundError:
+        logging.error("[AUDIO_IMPORT] ffmpeg not found. Please install ffmpeg to convert WMA files.")
+        return False
+    except subprocess.CalledProcessError as e:
+        logging.error("[AUDIO_IMPORT] ffmpeg conversion failed for %s: %s", src_path, e)
+        return False
+
+
+def _copy_or_convert_file(src_path, dst_dir):
+    """Copy a file to dst_dir. If it's a WMA file, convert to MP3 instead."""
+    filename = os.path.basename(src_path)
+    dest_filename = _get_dest_filename(filename)
+    dst_path = os.path.join(dst_dir, dest_filename)
+
+    if os.path.exists(dst_path):
+        return
+
+    if filename.lower().endswith(".wma"):
+        # remove original wma file if existed
+        try:
+            dst_wma_file = os.path.join(dst_dir, filename)
+            if os.path.exists(dst_wma_file):
+                os.remove(dst_wma_file)
+        except Exception:
+            pass
+        _convert_wma_to_mp3(src_path, dst_path)
+    else:
+        shutil.copy2(src_path, dst_path)
 
 
 def _extract_audio_metadata(audio_path, fallback_title):
@@ -149,13 +199,11 @@ class AudioBookImporter(AsyncService):
     def _synch_audio_files(self, src_dir, dest_dir):
         logging.debug(f"[AUDIO_IMPORT] Synchronizing audio files from {src_dir} to {dest_dir}")
         if not os.path.exists(dest_dir):
-            shutil.copytree(src_dir, dest_dir)
-        else:
-            for fname in os.listdir(src_dir):
-                src = os.path.join(src_dir, fname)
-                dst = os.path.join(dest_dir, fname)
-                if os.path.isfile(src) and not os.path.exists(dst):
-                    shutil.copy2(src, dst)
+            os.makedirs(dest_dir)
+        for fname in os.listdir(src_dir):
+            src = os.path.join(src_dir, fname)
+            if os.path.isfile(src):
+                _copy_or_convert_file(src, dest_dir)
 
     @AsyncService.register_service
     def do_import(self, user_id):
@@ -287,13 +335,11 @@ class AudioBookImporter(AsyncService):
                 if status == ScanFile.IMPORTED:
                     dest_dir = os.path.join(output_dir, str(book_id))
                     if not os.path.exists(dest_dir):
-                        shutil.copytree(dir_path, dest_dir)
-                    else:
-                        for fname in os.listdir(dir_path):
-                            src = os.path.join(dir_path, fname)
-                            dst = os.path.join(dest_dir, fname)
-                            if os.path.isfile(src) and not os.path.exists(dst):
-                                shutil.copy2(src, dst)
+                        os.makedirs(dest_dir)
+                    for fname in os.listdir(dir_path):
+                        src = os.path.join(dir_path, fname)
+                        if os.path.isfile(src):
+                            _copy_or_convert_file(src, dest_dir)
                     imported_ids.append(book_id)
                     if not has_cover:
                         imported_without_cover.append(book_id)
