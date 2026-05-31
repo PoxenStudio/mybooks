@@ -1351,7 +1351,7 @@ export default {
     modelNameRule() {
       return (v) => {
         if (!v) return true;
-        const pattern = /^(?![.-])[a-zA-Z0-9]+(?:[_.][a-zA-Z0-9]+)*$/;
+        const pattern = /^(?![.-])[a-zA-Z0-9]+(?:[_.-][a-zA-Z0-9]+)*$/;
         return pattern.test(v) || this.$t('settings.model_name_rule_error');
       };
     },

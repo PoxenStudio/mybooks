@@ -92,8 +92,8 @@ def is_traditional_chinese(text: str) -> bool:
 
 
 def compare_books_by_rating_or_id(x, y):
-    a = x.get("rating", 0)
-    b = y.get("rating", 0)
+    a = x.get("rating", 0) or 0
+    b = y.get("rating", 0) or 0
 
     if a != b:
         return 1 if a > b else -1
@@ -101,14 +101,14 @@ def compare_books_by_rating_or_id(x, y):
 
 
 def compare_books_by_series_index_or_name(x, y):
-    x_index = x.get("series_index", 0)
-    y_index = y.get("series_index", 0)
+    x_index = x.get("series_index", 0) or 0
+    y_index = y.get("series_index", 0) or 0
 
     if x_index != y_index:
         return 1 if x_index > y_index else -1
 
-    x_title_sort = x.get("title_sort", "")
-    y_title_sort = x.get("title_sort", "")
+    x_title_sort = x.get("title_sort", "") or ""
+    y_title_sort = x.get("title_sort", "") or ""
     return 1 if x_title_sort > y_title_sort else -1
 
 
