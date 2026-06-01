@@ -7,7 +7,7 @@
       <p>
         {{ $t('opds.linkDescription') }}
         <code>{{ opdsUrl }}</code>
-        <v-btn icon @click="copyOpdsUrl">
+        <v-btn icon @click="copyOpdsUrl($event)" :data-copy-text="opdsUrl" class="copy-btn">
           <v-icon :color="copied ? 'green' : ''">{{ copied ? 'mdi-check' : 'mdi-content-copy' }}</v-icon>
         </v-btn>
       </p>
@@ -47,16 +47,26 @@ export default {
     }
   },
   methods: {
-    async copyOpdsUrl() {
+    copyOpdsUrl(event) {
+      const btn = event.target.closest('.copy-btn')
+      if (!btn) return
+      const text = btn.getAttribute('data-copy-text') || ''
+      if (!text) return
+
+      const ta = document.createElement('textarea')
+      ta.value = text
+      document.body.appendChild(ta)
+      ta.select()
       try {
-        await navigator.clipboard.writeText(this.opdsUrl)
+        document.execCommand('copy')
         this.copied = true
         setTimeout(() => {
           this.copied = false
         }, 2000)
-      } catch (err) {
-        console.error('复制失败:', err)
+      } catch (e) {
+        console.error('复制失败:', e)
       }
+      document.body.removeChild(ta)
     }
   }
 }

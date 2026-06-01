@@ -7,7 +7,7 @@
       <p>
         {{ $t('webdav.linkDescription') }}
         <code>{{ webdavUrl }}</code>
-        <v-btn icon @click="copyWebdavUrl">
+        <v-btn icon @click="copyWebdavUrl($event)" :data-copy-text="webdavUrl" class="copy-btn">
           <v-icon :color="copied ? 'green' : ''">{{ copied ? 'mdi-check' : 'mdi-content-copy' }}</v-icon>
         </v-btn>
       </p>
@@ -34,16 +34,26 @@ export default {
     }
   },
   methods: {
-    async copyWebdavUrl() {
+    copyWebdavUrl(event) {
+      const btn = event.target.closest('.copy-btn')
+      if (!btn) return
+      const text = btn.getAttribute('data-copy-text') || ''
+      if (!text) return
+
+      const ta = document.createElement('textarea')
+      ta.value = text
+      document.body.appendChild(ta)
+      ta.select()
       try {
-        await navigator.clipboard.writeText(this.webdavUrl)
+        document.execCommand('copy')
         this.copied = true
         setTimeout(() => {
           this.copied = false
         }, 2000)
-      } catch (err) {
-        console.error('复制失败:', err)
+      } catch (e) {
+        console.error('复制失败:', e)
       }
+      document.body.removeChild(ta)
     }
   }
 }
