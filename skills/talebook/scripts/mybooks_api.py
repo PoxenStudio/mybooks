@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-mybooks_api.py — Talebook REST API Client
+mybooks_api.py — MyBooks REST API Client
 
 Usage:
     python3 mybooks_api.py <tool-name> '<json-args>'
 
 Environment Variables:
-    TALEBOOK_HOST       Server URL with port (e.g., http://192.168.1.2:8082)
-    TALEBOOK_USER       Login username
-    TALEBOOK_PASSWORD   Login password
+    MYBOOKS_HOST       Server URL with port (e.g., http://192.168.1.2:8082)
+    MYBOOKS_USER       Login username
+    MYBOOKS_PASSWORD   Login password
 
 Authentication:
     Automatically signs in via /api/user/sign_in before each tool invocation.
@@ -28,16 +28,16 @@ from typing import Any, Dict
 # Constants
 # ============================================================================
 
-REQUIRED_ENV_VARS = ["TALEBOOK_HOST", "TALEBOOK_USER", "TALEBOOK_PASSWORD"]
+REQUIRED_ENV_VARS = ["MYBOOKS_HOST", "MYBOOKS_USER", "MYBOOKS_PASSWORD"]
 
 ERROR_MESSAGES = {
     "env_missing": {
         "status": "error",
-        "message": "TALEBOOK_HOST is not set. Please configure TALEBOOK_HOST (e.g. http://192.168.31.102:8082), TALEBOOK_USER and TALEBOOK_PASSWORD."
+        "message": "MYBOOKS_HOST is not set. Please configure MYBOOKS_HOST (e.g. http://192.168.31.102:8082), MYBOOKS_USER and MYBOOKS_PASSWORD."
     },
     "auth_missing": {
         "status": "error",
-        "message": "TALEBOOK_USER or TALEBOOK_PASSWORD is not set. Authentication is required."
+        "message": "MYBOOKS_USER or MYBOOKS_PASSWORD is not set. Authentication is required."
     }
 }
 
@@ -47,11 +47,11 @@ ERROR_MESSAGES = {
 # ============================================================================
 
 class MyBooksAPI:
-    """Main API client for Talebook REST API."""
+    """Main API client for MyBooks REST API."""
 
     def __init__(self, host: str, username: str, password: str):
         """
-        Initialize Talebook API client.
+        Initialize MyBooks API client.
 
         Args:
             host: Server URL with port (e.g., http://127.0.0.1:8082)
@@ -538,9 +538,9 @@ def main():
         sys.exit(1)
 
     # Check environment variables
-    host = os.environ.get("TALEBOOK_HOST", "")
-    username = os.environ.get("TALEBOOK_USER", "")
-    password = os.environ.get("TALEBOOK_PASSWORD", "")
+    host = os.environ.get("MYBOOKS_HOST", "")
+    username = os.environ.get("MYBOOKS_USER", "")
+    password = os.environ.get("MYBOOKS_PASSWORD", "")
 
     if not host:
         print(json.dumps(ERROR_MESSAGES["env_missing"]), file=sys.stderr)

@@ -100,9 +100,9 @@ WebDAV URL地址: `http://<ip or domain>:<port>/books`
 }
 ```
 
-## 使用Talebook Skill操作书库
-详情见[Talebook Skill](https://clawhub.ai/poxenstudio/talebook)。
-**暂时未更名**
+## 使用Skill操作书库
+详情见[Talebook Skill](https://clawhub.ai/poxenstudio/mybooks)。
+旧的Talebook Skill[Talebook Skill](https://clawhub.ai/poxenstudio/talebook)。
 
 ## 常见问题
 
