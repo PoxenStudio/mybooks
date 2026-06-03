@@ -1409,7 +1409,7 @@ class AdminAITestConnection(BaseHandler):
             return {"err": "params.error", "msg": _("缺少必要的参数，请确认API信息填写完整")}
 
         try:
-            result, msg = BookAIClient().test_connection()
+            result, msg = BookAIClient(api_url, api_key, api_model).test_connection()
             if result:
                 return {"err": "ok", "msg": _("AI服务连接测试成功")}
             return {"err": "error", "msg": _("AI服务连接测试失败: %s") % msg}
