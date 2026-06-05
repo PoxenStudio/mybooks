@@ -533,6 +533,7 @@ export default {
             { value: 'author', label: 'appHeader.searchAuthor' },
             { value: 'isbn', label: 'appHeader.searchISBN' },
             { value: 'comments', label: 'appHeader.searchComments' },
+            { value: 'tag', label: 'appHeader.searchTag' },
         ],
         categoryMenu: false,
         mobileCategoryMenu: false,
@@ -726,7 +727,7 @@ export default {
                 this.$vuetify.theme.dark = rsp.sys.theme === 'dark';
             }
             if (rsp.sys.footer === '') {
-                rsp.sys.footer = this.$t('footer.base_message');
+                rsp.sys.footer = this.$t('appHeader.defaultFooter');
                 this.$store.commit("set_footer", rsp.sys.footer);
             }
             if (rsp.user.is_login) {

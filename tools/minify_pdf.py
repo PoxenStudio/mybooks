@@ -8,6 +8,7 @@ from typing import Optional
 
 import fitz
 from PIL import Image
+from PIL import ImageFilter
 from PIL import ImageOps
 
 
@@ -82,6 +83,20 @@ def _apply_qualify(img: Image.Image, qualify: int) -> Image.Image:
     return result
 
 
+def _apply_dilation(img: Image.Image, dilate: int) -> Image.Image:
+    """Apply dilation to thicken text strokes before blur or binarization."""
+    if dilate <= 0:
+        return img
+
+    size = dilate * 2 + 1
+    if size < 3:
+        size = 3
+    if size % 2 == 0:
+        size += 1
+
+    return img.filter(ImageFilter.MaxFilter(size=size))
+
+
 def _parse_page_selection(page_spec: str, total_pages: int, option_name: str) -> set[int]:
     """Parse comma-separated page numbers (1-based, supports negative reverse index)."""
     if not page_spec.strip():
@@ -118,6 +133,8 @@ def _render_page(
     to_gray: bool,
     auto_correct: bool,
     max_brightness: Optional[int],
+    dilate: int,
+    blur: float,
 ) -> Image.Image:
     src_width = float(page.rect.width)
     if max_width and src_width > 0:
@@ -133,6 +150,12 @@ def _render_page(
 
     if auto_correct:
         img = _auto_correct_by_histogram(img)
+
+    if dilate and dilate > 0:
+        img = _apply_dilation(img, dilate)
+
+    if blur and blur > 0:
+        img = img.filter(ImageFilter.GaussianBlur(radius=blur))
 
     if to_bw:
         img = _to_binary(img)
@@ -183,6 +206,18 @@ def parse_args() -> argparse.Namespace:
         help="Output directory. Defaults to ./output",
     )
     parser.add_argument(
+        "--blur",
+        type=float,
+        default=0.0,
+        help="Gaussian blur radius applied to each page image before binarization/grayscale. Useful for smoothing stroke gaps.",
+    )
+    parser.add_argument(
+        "--dilate",
+        type=int,
+        default=0,
+        help="Dilation radius applied to each page image before blur, to thicken text strokes. Must be an integer.",
+    )
+    parser.add_argument(
         "--skip-pages",
         default="",
         help="Comma-separated pages to skip bw/gray/auto (supports negative, e.g. 1,3,-1).",
@@ -221,6 +256,10 @@ def main() -> int:
         raise ValueError("--dry-run-pages must be >= 0")
     if args.qualify < 1 or args.qualify > 100:
         raise ValueError("--qualify must be in range 1-100")
+    if args.blur < 0:
+        raise ValueError("--blur must be >= 0")
+    if args.dilate < 0:
+        raise ValueError("--dilate must be >= 0")
     if args.max_brightness is not None and (args.max_brightness < 0 or args.max_brightness > 255):
         raise ValueError("--max-brightness must be in range 0-255")
     if args.max_brightness is not None and not args.gray:
@@ -253,6 +292,8 @@ def main() -> int:
                 args.gray and not skip_filters,
                 args.auto and not skip_filters,
                 args.max_brightness if args.gray and not skip_filters else None,
+                args.dilate if not skip_filters else 0,
+                args.blur if not skip_filters else 0.0,
             )
             preview_path = output_dir / f"{input_path.stem}_preview_{output_index:04d}.png"
             img.save(preview_path, format="PNG")
@@ -272,6 +313,8 @@ def main() -> int:
             args.gray and not skip_filters,
             args.auto and not skip_filters,
             args.max_brightness if args.gray and not skip_filters else None,
+            args.dilate if not skip_filters else 0.0,
+            args.blur if not skip_filters else 0.0,
         )
         # PDF encoder expects RGB/L/1 with consistent dimensions per page.
         if img.mode not in ("RGB", "L", "1"):

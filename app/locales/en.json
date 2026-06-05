@@ -870,6 +870,7 @@
     "searchAuthor": "Author",
     "searchISBN": "ISBN",
     "searchComments": "Comments",
+    "searchTag": "Tags",
     "feedback": "Feedback",
     "feedbackDialogTitle": "Contact Us",
     "feedbackScanQrCode": "Scan QR code to follow our WeChat account and send us feedback",

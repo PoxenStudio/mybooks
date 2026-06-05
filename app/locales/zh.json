@@ -871,6 +871,7 @@
     "searchAuthor": "作者",
     "searchISBN": "ISBN",
     "searchComments": "简介",
+    "searchTag": "标签",
     "feedback": "反馈问题",
     "feedbackDialogTitle": "联系我们",
     "feedbackScanQrCode": "扫码关注公众号，私信反馈问题",
@@ -882,7 +883,7 @@
     "not_login": "未登录",
     "message_notification": "消息通知",
     "clear_messages": "全部清空",
-    "defaultFooter": "本
+    "defaultFooter": "基于Calibre构建, 任何问题或建议请前往下方MyBooks主页扫码公众号私信联系。",
     "reading": "在读",
     "readDone": "已读",
     "gongzhonghao": "关注公众号",
