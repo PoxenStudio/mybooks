@@ -84,7 +84,7 @@ class BookAIClient:
 
     @staticmethod
     def _format_search_results(books) -> str:
-        """将 BookSearch.plugin_search_books 的结果格式化为文本参考信息。"""
+        """将 BookSearch.search_books 的结果格式化为文本参考信息。"""
         parts = []
         for idx, book in enumerate(books[:3], 1):
             source = getattr(book, "source", "") or ""
@@ -156,7 +156,7 @@ class BookAIClient:
         # 从网络搜索补充参考信息
         try:
             search_isbn = isbn if (isbn and self._is_valid_isbn(isbn)) else None
-            search_results = BookSearch.plugin_search_books(title=title, isbn=search_isbn)
+            search_results = BookSearch.search_books(title=title, isbn=search_isbn)
             if search_results:
                 ref_text = self._format_search_results(search_results)
                 lines.append("\n以下是从互联网搜索到的参考信息：")

@@ -11,13 +11,12 @@ import traceback
 
 from webserver import loader
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT
-from webserver.constants import META_SOURCE_DOUBAN, CALIBRE_COLUMN_LOCATION
+from webserver.constants import CALIBRE_COLUMN_LOCATION
 from webserver.constants import BOOK_TYPE_PHYSICAL, AUTO_FILL_META
 from webserver.i18n import _
 from webserver.models import Item, ScanFile
 from webserver.services import AsyncService
-from webserver.plugins.meta import douban
-from webserver.plugins.meta import xhsd
+from webserver.services.book_search import BookSearch
 
 CONF = loader.get_settings()
 
@@ -227,31 +226,8 @@ class BatchAddService(AsyncService):
                 self._record_scan_file(csv_filename, isbn, title, author, ScanFile.DROP, book_id)
                 return None
 
-            book_data = None
-            if META_SOURCE_DOUBAN in CONF["META_SELECTED_SOURCES"]:
-                try:
-                    api = douban.DoubanBookApi(
-                        CONF["douban_apikey"],
-                        CONF["douban_baseurl"],
-                        copy_image=True,
-                        maxCount=1
-                    )
-
-                    md = douban.SimpleMetaData(isbn=isbn)
-                    book_data = api.get_book(md)
-                except Exception as e:
-                    logging.error(f"Douban API error for ISBN {isbn}: {e}")
-                    book_data = None
-
-            if not book_data:
-                # 尝试使用XhsdBookApi
-                try:
-                    logging.info(f"Trying Xhsd API for ISBN {isbn}")
-                    xhsd_api = xhsd.XhsdBookApi()
-                    book_data = xhsd_api.get_book_by_isbn(isbn)
-                except Exception as e:
-                    logging.error(f"Xhsd API error for ISBN {isbn}: {e}")
-                    book_data = None
+            # 通过 BookSearch 查询ISBN的图书信息（依次尝试豆瓣、新华书店兜底）
+            book_data = BookSearch.find_physical_book_by_isbn(isbn)
 
             if not book_data:
                 logging.error("No book data found for ISBN: %s", isbn)

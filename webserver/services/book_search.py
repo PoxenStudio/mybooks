@@ -3,47 +3,61 @@
 
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 from webserver.i18n import _
 
 from webserver import loader
-from webserver.plugins.meta import baike, douban, youshu
-from webserver.constants import META_SELECTED_SOURCES, META_SOURCE_DOUBAN, META_SOURCE_BAIDU
-from webserver.constants import META_SOURCE_GOOGLE, META_SOURCE_AMAZON, META_SOURCE_YOUSHU
+from webserver.constants import META_SELECTED_SOURCES
+from webserver.plugins.meta.douban import DoubanMetaPlugin, has_proper_book
+from webserver.plugins.meta.baike import BaikeMetaPlugin
+from webserver.plugins.meta.youshu import YoushuMetaPlugin
+from webserver.plugins.meta.calibre import CalibreMetaPlugin
+from webserver.plugins.meta.xhsd import XhsdMetaPlugin
 
 CONF = loader.get_settings()
 
+# 聚合搜索 / 自动刮削时，按此声明顺序作为信息源的优先级与展示顺序
+# （与改造前 plugin_search_books / plugin_search_best_book 中的判断顺序保持一致）
+_PLUGIN_CLASSES = [DoubanMetaPlugin, BaikeMetaPlugin, CalibreMetaPlugin, YoushuMetaPlugin]
+
+# 支持按 provider_key 反查插件的全部插件（含 xhsd，仅用于刷新封面 / 详情）
+_PROVIDER_PLUGIN_CLASSES = _PLUGIN_CLASSES + [XhsdMetaPlugin]
+
 
 class BookSearch:
-    """图书搜索工具类，用于从多个来源搜索图书元数据"""
+    """图书搜索工具类，统一对外暴露各信息源插件的检索能力"""
+
+    has_proper_book = staticmethod(has_proper_book)
+
+    _search_executor = None
+
+    @classmethod
+    def _get_search_executor(cls):
+        if cls._search_executor is None:
+            cls._search_executor = ThreadPoolExecutor(
+                max_workers=max(1, len(_PLUGIN_CLASSES)),
+                thread_name_prefix="meta-search",
+            )
+        return cls._search_executor
 
     @staticmethod
-    def has_proper_book(books, title, isbn, publisher=None):
-        """
-        检查搜索结果中是否包含合适的图书
-
-        Args:
-            books: 搜索结果列表
-            title: 图书标题
-            isbn: ISBN号
-            publisher: 出版社（可选）
-
-        Returns:
-            bool: 如果找到合适的图书返回True，否则返回False
-        """
-        if not books or not isbn or isbn == baike.BAIKE_ISBN:
-            return False
-
-        for b in books:
-            if isbn == b.get("isbn13", "xxx"):
-                return True
-            if publisher and title == b.get("title") and publisher == b.get("publisher"):
-                return True
-        return False
+    def _enabled_plugins(sources):
+        """按声明顺序返回当前 META_SELECTED_SOURCES 下已启用的插件实例"""
+        plugins = (klass() for klass in _PLUGIN_CLASSES)
+        return [p for p in plugins if p.is_enabled(sources)]
 
     @staticmethod
-    def plugin_search_books(title=None, isbn=None, publisher=None):
+    def _find_plugin_by_provider_key(provider_key):
+        for klass in _PROVIDER_PLUGIN_CLASSES:
+            plugin = klass()
+            if plugin.PROVIDER_KEY == provider_key:
+                return plugin
+        return None
+
+    @staticmethod
+    def search_books(title=None, isbn=None, publisher=None):
         """
-        从多个插件源搜索图书信息
+        从已启用的信息源插件并行搜索图书信息（多结果聚合，供候选列表展示）
 
         Args:
             title: 图书标题（可选）
@@ -51,7 +65,7 @@ class BookSearch:
             publisher: 出版社（可选）
             * title & isbn 至少有一个
         Returns:
-            list: 搜索到的图书元数据列表
+            list: 搜索到的图书元数据列表，按信息源声明顺序拼接
         """
         sources = CONF.get(META_SELECTED_SOURCES, [])
         if not sources:
@@ -68,72 +82,109 @@ class BookSearch:
         else:
             clean_title = ""
 
+        plugins = BookSearch._enabled_plugins(sources)
+        if not plugins:
+            return []
+
+        # 每个已启用的信息源各自分配一个 worker 并行搜索，未启用的源不创建 worker
+        executor = BookSearch._get_search_executor()
+        futures = {
+            executor.submit(plugin.search, title=clean_title, isbn=isbn, publisher=publisher): plugin
+            for plugin in plugins
+        }
+
+        results = {}
+        for future, plugin in futures.items():
+            try:
+                results[plugin] = future.result(timeout=60) or []
+            except Exception as e:
+                logging.error("信息源[%s]查询失败: %s" % (plugin.name, str(e)))
+                results[plugin] = []
+
+        # 按信息源声明顺序拼接，保持与改造前一致的展示顺序
         books = []
-
-        # 豆瓣搜索
-        if META_SOURCE_DOUBAN in sources:
-            douban_api = douban.DoubanBookApi(
-                CONF["douban_apikey"],
-                CONF["douban_baseurl"],
-                copy_image=False,
-                manual_select=False,
-                maxCount=CONF["douban_max_count"],
-            )
-            if clean_title:
-                try:
-                    books = douban_api.search_books(clean_title) or []
-                except Exception as e:
-                    logging.error(_(u"豆瓣接口查询 %s 失败: %s" % (clean_title, str(e))))
-
-            # 如果有ISBN号但没搜索到合适的书，则精准查询一次ISBN
-            if isbn and not BookSearch.has_proper_book(books, clean_title, isbn, publisher):
-                try:
-                    book = douban_api.get_book_by_isbn(isbn)
-                    if book:
-                        books = list(books)
-                        books.insert(0, book)  # 总是把最佳书籍放在第一位
-                except Exception as e:
-                    logging.error(_(u"豆瓣ISBN查询失败: %s" % str(e)))
-
-            # 转换为元数据格式
-            books = [douban_api._metadata(b) for b in books]
-
-        # 百度百科搜索
-        if META_SOURCE_BAIDU in sources:
-            baike_api = baike.BaiduBaikeApi(copy_image=False)
-            try:
-                book = baike_api.get_book(clean_title)
-                if book:
-                    books.append(book)
-            except Exception as e:
-                logging.error(_(u"百度百科查询失败: %s" % str(e)))
-
-        # Google & Amazon 搜索（使用 Calibre Metadata API）
-        if any(s in sources for s in [META_SOURCE_GOOGLE, META_SOURCE_AMAZON]):
-            logging.info(_("使用 Calibre Metadata API 搜索图书，title: %s, isbn: %s, sources: %s") % (clean_title, isbn, sources))
-            try:
-                from webserver.plugins.meta.calibre import CalibreMetadataApi
-                calibre_books = CalibreMetadataApi.get_book_by_isbn(isbn, sources) if isbn else None
-                if calibre_books:
-                    books.extend(calibre_books)
-                calibre_books = CalibreMetadataApi.get_book_by_title(title=clean_title, sources=sources, timeout=10) if clean_title else None
-                if calibre_books:
-                    books.extend(calibre_books)
-            except Exception as e:
-                logging.error("Calibre Metadata API查询失败: %s" % str(e))
-        else:
-            logging.debug("未启用 Calibre Metadata API 搜索，跳过 Google 和 Amazon 搜索")
-
-        # 优书网搜索
-        if META_SOURCE_YOUSHU in sources:
-            logging.info("使用优书网搜索图书，title: %s, sources: %s" % (clean_title, sources))
-            youshu_api = youshu.YoushuApi(copy_image=True)
-            try:
-                book = youshu_api.get_book(clean_title)
-                if book:
-                    books.append(book)
-            except Exception as e:
-                logging.error("优书网查询失败: %s" % str(e))
+        for plugin in plugins:
+            books.extend(results.get(plugin, []))
 
         logging.info("搜索完成，找到 %d 本书" % len(books))
         return books
+
+    @staticmethod
+    def search_best_book(mi):
+        """
+        按信息源优先级顺序逐个查询，返回第一个可用的最佳匹配（找到即停止，不再查询后续信息源）
+
+        Args:
+            mi: 参考的书籍元数据（Metadata），至少需要 title；isbn/author/publisher 按需使用
+
+        Returns:
+            Metadata or None: 找到的最佳匹配書籍信息，找不到时返回 None
+        """
+        sources = CONF.get(META_SELECTED_SOURCES, [])
+        if not sources:
+            return None
+
+        title = re.sub("[(（].*", "", mi.title)
+        search_mi = mi
+        if title != mi.title:
+            search_mi = mi.deepcopy()
+            search_mi.title = title
+
+        for plugin in BookSearch._enabled_plugins(sources):
+            try:
+                book = plugin.search_best(search_mi)
+                if book:
+                    return book
+            except Exception:
+                logging.error(_("信息源[%s]查询 %s 失败"), plugin.name, title)
+
+        return None
+
+    @staticmethod
+    def get_cover(provider_key, cover_url):
+        """根据 provider_key 找到对应信息源插件并拉取封面数据"""
+        plugin = BookSearch._find_plugin_by_provider_key(provider_key)
+        return plugin.get_cover(cover_url) if plugin else None
+
+    @staticmethod
+    def get_metadata_by_provider(provider_key, provider_value, mi):
+        """根据 provider_key 找到对应信息源插件，依据 provider_value 拉取完整详情；
+        找不到匹配插件时返回原 mi（与改造前 plugin_get_book_meta 行为一致）"""
+        plugin = BookSearch._find_plugin_by_provider_key(provider_key)
+        if plugin is None:
+            return mi
+        metadata = plugin.get_metadata_by_provider(provider_value, mi)
+        return metadata if metadata is not None else mi
+
+    @staticmethod
+    def find_physical_book_by_isbn(isbn):
+        """
+        通过 ISBN 查询实体书信息：先豆瓣（受 META_SELECTED_SOURCES 限制），
+        查不到再用新华书店(xhsd)兜底（不受 META_SELECTED_SOURCES 限制，与改造前行为一致）
+
+        Args:
+            isbn: ISBN号
+
+        Returns:
+            Metadata or None
+        """
+        sources = CONF.get(META_SELECTED_SOURCES, [])
+        book_data = None
+
+        douban_plugin = DoubanMetaPlugin()
+        if douban_plugin.is_enabled(sources):
+            try:
+                book_data = douban_plugin.search_physical_by_isbn(isbn)
+            except Exception as e:
+                logging.error(f"Douban API error for ISBN {isbn}: {e}")
+                book_data = None
+
+        if not book_data:
+            try:
+                logging.info(f"Trying Xhsd API for ISBN {isbn}")
+                book_data = XhsdMetaPlugin().search_by_isbn(isbn)
+            except Exception as e:
+                logging.error(f"Xhsd API error for ISBN {isbn}: {e}")
+                book_data = None
+
+        return book_data

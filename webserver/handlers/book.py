@@ -40,8 +40,7 @@ from webserver.services.extract import ExtractService
 from webserver.services.mail import MailService
 from webserver.handlers.base import BaseHandler, ListHandler, auth, js
 from webserver.models import Item, ReadingState, Reader
-from webserver.plugins.meta import baike, douban, youshu, xhsd
-from webserver.plugins.meta.calibre import CalibreMetadataApi
+from webserver.plugins.meta import douban, youshu
 from webserver.plugins.meta.bookbarn_tags import BookBarnTags
 from webserver.plugins.parser.txt import get_content_encoding
 from webserver.handlers.audio import AudioUtils
@@ -50,7 +49,6 @@ from webserver.constants import COLUMN_CATEGORY, CALIBRE_COLUMN_CATEGORY
 from webserver.constants import CALIBRE_ERROR_FLAG, SUPPORTED_EBOOK_FORMATS
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT
 from webserver.constants import BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL, AUTO_FILL_META
-from webserver.constants import META_SOURCE_GOOGLE, META_SOURCE_AMAZON, META_SOURCE_DOUBAN, META_SELECTED_SOURCES
 from webserver.constants import COLUMN_EXT_LINK, CALIBRE_COLUMN_EXT_LINK
 from webserver.constants import CALIBRE_COLUMN_LOCATION, COLUMN_LOCATION
 from webserver.constants import CALIBRE_COLUMN_DYNAMIC_COVER, COLUMN_DYNAMIC_COVER
@@ -677,38 +675,10 @@ class BookRefer(BaseHandler):
         return mi
 
     def plugin_fill_book_cover(self, provider_key, cover_url):
-        if provider_key == baike.KEY:
-            return baike.BaiduBaikeApi.get_cover(cover_url)
-        elif provider_key == douban.KEY:
-            return douban.DoubanBookApi.get_cover(cover_url)
-        elif provider_key == youshu.KEY:
-            return youshu.YoushuApi.get_cover(cover_url)
-        elif provider_key in (META_SOURCE_GOOGLE, META_SOURCE_AMAZON):
-            return CalibreMetadataApi.get_cover(cover_url)
-        return None
+        return BookSearch.get_cover(provider_key, cover_url)
 
     def plugin_get_book_meta(self, provider_key, provider_value, mi):
-        if provider_key == douban.KEY:
-            mi.douban_id = provider_value
-            api = douban.DoubanBookApi(
-                CONF["douban_apikey"],
-                CONF["douban_baseurl"],
-                copy_image=True,
-                maxCount=CONF["douban_max_count"],
-            )
-            try:
-                return api.get_book(mi)
-            except:
-                raise RuntimeError({"err": "httprequest.douban.failed", "msg": _("豆瓣接口查询失败")})
-
-        if provider_key == youshu.KEY:
-            title = re.sub(u"[(（].*", "", mi.title)
-            api = youshu.YoushuApi(copy_image=True)
-            try:
-                return api.get_book(title)
-            except:
-                raise RuntimeError({"err": "httprequest.youshu.failed", "msg": _("优书网查询失败")})
-        return mi
+        return BookSearch.get_metadata_by_provider(provider_key, provider_value, mi)
 
     def reset_book_meta(self, book_id):
         book = self.get_book(book_id)
@@ -821,7 +791,7 @@ class BookRefer(BaseHandler):
                 if fut is None:
                     fut = loop.run_in_executor(
                         self._search_executor,
-                        BookSearch.plugin_search_books,
+                        BookSearch.search_books,
                         title,
                         isbn,
                         publisher,
@@ -1914,7 +1884,6 @@ class BookAddByISBN(BaseHandler):
 
         # 使用基类方法查找已存在的ISBN实体书
         existing_books = self.find_phy_books_by_isbn(isbn)
-        sources = CONF.get(META_SELECTED_SOURCES, [])
 
         # 如果已存在该ISBN的图书，更新相关计数
         if existing_books:
@@ -1949,36 +1918,9 @@ class BookAddByISBN(BaseHandler):
             return {"err": "ok", "msg": _("实体书数量已更新，当前数量：%d") % book_count, "book_id": book_id}
 
         logging.info("Adding new book by ISBN: %s" % isbn)
-        # 通过Douban API查询ISBN的图书信息
-        if META_SOURCE_DOUBAN in sources:
-            douban_api = douban.DoubanBookApi(
-                CONF["douban_apikey"],
-                CONF["douban_baseurl"],
-                copy_image=True,
-                maxCount=1
-            )
         try:
-            try:
-                md = douban.SimpleMetaData(isbn=isbn)
-                if META_SOURCE_DOUBAN in sources:
-                    book_data = douban_api.get_book(md)
-                if not book_data:
-                    xhsd_api = xhsd.XhsdBookApi()
-                    book_data = xhsd_api.get_book_by_isbn(isbn)
-            except Exception as e:
-                logging.error(f"Douban API error for ISBN {isbn}: {e}")
-                book_data = None
-
-            if not book_data:
-                # 尝试使用XhsdBookApi
-                try:
-                    logging.info(f"Trying Xhsd API for ISBN {isbn}")
-                    xhsd_api = xhsd.XhsdBookApi()
-                    book_data = xhsd_api.get_book_by_isbn(isbn)
-                except Exception as e:
-                    logging.error(f"Xhsd API error for ISBN {isbn}: {e}")
-                    book_data = None
-
+            # 通过 BookSearch 查询ISBN的图书信息（依次尝试豆瓣、新华书店兜底）
+            book_data = BookSearch.find_physical_book_by_isbn(isbn)
             if not book_data:
                 return {"err": "book.notfound", "msg": _("未找到该ISBN号对应的图书")}
 

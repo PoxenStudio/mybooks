@@ -490,7 +490,7 @@ class MCPService:
                 }))]
 
             # 使用BookSearch查询图书元数据
-            books = BookSearch.plugin_search_books(title=title if title else None, isbn=isbn if isbn else None)
+            books = BookSearch.search_books(title=title if title else None, isbn=isbn if isbn else None)
 
             if not books:
                 return [TextContent(type="text", text=json.dumps({
