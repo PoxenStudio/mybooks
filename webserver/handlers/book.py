@@ -2514,6 +2514,36 @@ class BookRead(BaseHandler):
         self.user_history("read_history", book)
         self.count_increase(book_id, count_download=1)
 
+        # 若指定了格式且书籍存在该格式，优先按指定格式处理
+        fmt_arg = self.get_argument("format", "").lower()
+        fpath_arg = book.get("fmt_%s" % fmt_arg, None) if fmt_arg else None
+        if fpath_arg:
+            if fmt_arg == "txt":
+                return self.redirect(f'/book/{book_id}/readtxt')
+
+            if fmt_arg == "pdf":
+                if not CONF["ALLOW_GUEST_DOWNLOAD"] and not self.current_user:
+                    return self.redirect("/login")
+
+                if self.current_user and not self.current_user.can_save():
+                    raise web.HTTPError(403, reason=_("无权在线阅读"))
+
+                pdf_url = urllib.parse.quote_plus(self.api_url + "/api/book/%(id)d.PDF" % book)
+                pdf_reader_url = CONF["PDF_VIEWER"] % {"pdf_url": pdf_url}
+                return self.redirect(pdf_reader_url)
+
+            if fmt_arg in ("epub", "mobi", "azw", "azw3"):
+                if fmt_arg != 'epub':
+                    ConvertService().convert_and_save(self.user_id(), book, fpath_arg, "epub")
+
+                epub_dir = "/get/extract/%s" % book["id"]
+                return self.html_page("book/" + CONF["EPUB_VIEWER"], {
+                    "book": book,
+                    "epub_dir": epub_dir,
+                    "is_ready": (fmt_arg == 'epub'),
+                    "CANDLE_READER_SERVER": CONF["CANDLE_READER_SERVER"],
+                })
+
         # 优先阅读epub/azw3/mobi/txt格式
         for fmt in ["epub", "mobi", "azw", "azw3", "txt"]:
             fpath = book.get("fmt_%s" % fmt, None)

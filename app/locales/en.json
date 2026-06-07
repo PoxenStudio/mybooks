@@ -629,6 +629,7 @@
     "languages": "Language",
     "push": "Push",
     "read": "Read",
+    "selectReadFormat": "Select Format to Read",
     "manage": "Manage",
     "process": "File Processing",
     "syncBookInfo": "Sync meta from the internet",

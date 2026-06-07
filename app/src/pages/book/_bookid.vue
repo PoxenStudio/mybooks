@@ -158,6 +158,39 @@
                 </v-card>
             </v-dialog>
 
+            <v-dialog v-model="dialog_read_format" persistent width="300">
+                <v-card>
+                    <v-card-title color="primary" class="">{{ $t('book.selectReadFormat') }}</v-card-title>
+                    <v-card-text>
+                        <v-list>
+                            <v-list-item :href="'/read/' + book.id + '?format=' + readEbookFormat" target="_blank"
+                                         @click="dialog_read_format = false">
+                                <v-list-item-avatar color='primary'>
+                                    <v-icon dark>import_contacts</v-icon>
+                                </v-list-item-avatar>
+                                <v-list-item-content>
+                                    <v-list-item-title>{{ readEbookFormat.toUpperCase() }}</v-list-item-title>
+                                </v-list-item-content>
+                            </v-list-item>
+                            <v-list-item :href="'/read/' + book.id + '?format=pdf'" target="_blank"
+                                         @click="dialog_read_format = false">
+                                <v-list-item-avatar color='primary'>
+                                    <v-icon dark>import_contacts</v-icon>
+                                </v-list-item-avatar>
+                                <v-list-item-content>
+                                    <v-list-item-title>PDF</v-list-item-title>
+                                </v-list-item-content>
+                            </v-list-item>
+                        </v-list>
+                    </v-card-text>
+                    <v-card-actions>
+                        <v-spacer></v-spacer>
+                        <v-btn text @click="dialog_read_format = false">{{ $t('common.close') }}</v-btn>
+                        <v-spacer></v-spacer>
+                    </v-card-actions>
+                </v-card>
+            </v-dialog>
+
             <v-card v-if="dialog_refer">
                 <v-toolbar flat dense dark color="primary">
                     {{ $t('book.syncBookInfo') }}
@@ -264,7 +297,8 @@
                         </span>
                     </v-btn>
                     <v-btn :small="tiny" dark color="primary" class="mx-2 d-flex d-sm-flex" :style="tiny ? { padding: '0px 2px', margin: '0px 3px !important' } : {}"
-                           :href="'/read/' + book.id"
+                           :href="needsReadFormatChoice ? undefined : '/read/' + book.id"
+                           @click="onReadClick"
                            target="_blank">
                         <v-icon left v-if="!tiny">import_contacts</v-icon>
                         {{ $t('book.read') }}
@@ -601,7 +635,7 @@
         <v-col cols="12" sm="6" class="book-action-col" :class="{ 'book-action-col--txt': is_txt }">
             <v-card outlined>
                 <v-list>
-                    <v-list-item :href="'/read/' + book.id" target="_blank" :disabled="book.book_type == this.BOOK_TYPE.PHYSICAL">
+                    <v-list-item :href="needsReadFormatChoice ? undefined : '/read/' + book.id" @click="onReadClick" target="_blank" :disabled="book.book_type == this.BOOK_TYPE.PHYSICAL">
                         <v-list-item-avatar large :color="book.book_type == this.BOOK_TYPE.PHYSICAL ? 'grey' : 'primary'">
                             <v-icon dark>import_contacts</v-icon>
                         </v-list-item-avatar>
@@ -1415,6 +1449,21 @@ export default {
             return this.book.files.some(file => file.format.toLowerCase() === 'pdf');
         },
 
+        // 在线阅读时使用的电子书格式（优先级：epub > azw3 > mobi）
+        readEbookFormat() {
+            if (!this.book || !this.book.files) return '';
+            const formats = this.book.files.map(f => f.format.toLowerCase());
+            for (const format of ['epub', 'azw3', 'mobi']) {
+                if (formats.includes(format)) return format;
+            }
+            return '';
+        },
+
+        // 同时存在 PDF 和其它电子书格式时，阅读前需要先选择格式
+        needsReadFormatChoice() {
+            return this.hasPDF && !!this.readEbookFormat;
+        },
+
         // 检查是否有兼容邮箱发送的文件格式（EPUB/AZW3/PDF/MOBI/TXT）
         hasCompatibleEmailFormats: function() {
             if (!this.book || !this.book.files) return false;
@@ -1587,6 +1636,7 @@ export default {
         wantsLoading: false,
         readingStateLoading: false,
         dialog_download: false,
+        dialog_read_format: false,
         dialog_epub2audio: false,
         dialog_audiolist: false,
         dialog_refer: false,
@@ -1929,6 +1979,12 @@ export default {
                 this.$router.push("/audio/" + this.book.id);
             } else {
                 this.switchAudioDialog();
+            }
+        },
+        onReadClick(e) {
+            if (this.needsReadFormatChoice) {
+                e.preventDefault();
+                this.dialog_read_format = true;
             }
         },
         switchAudioDialog() {

@@ -449,6 +449,7 @@
     "languages": "语言",
     "push": "推送",
     "read": "阅读",
+    "selectReadFormat": "选择阅读格式",
     "manage": "管理",
     "process": "文件处理",
     "syncBookInfo": "从互联网同步书籍信息",
