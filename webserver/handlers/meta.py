@@ -28,6 +28,9 @@ class LanguageNameUtil:
                  "Korean": "kor",
                  "Dutch": "nld",
                  "Arabic": "ara",
+                 "Mongolian": "mon",
+                 "满文": "mnc",
+                 "Tibetan": "bod",
                  "Hindi": "hin",
                  "Turkish": "tur",
                  "Vietnamese": "vie",
@@ -57,7 +60,8 @@ class LanguageNameUtil:
                  "Estonian": "est",
                  "Slovenian": "slv",
                  "Galician": "glg",
-                 "Basque": "eus"}
+                 "Basque": "eus"
+                 }
     language_codes = {v: k for k, v in languages.items()}
 
     @staticmethod

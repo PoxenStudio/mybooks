@@ -467,6 +467,7 @@
     "pinyin_directory": "Use Pinyin Directory Names (High Compatibility)",
     "utf8_directory": "Use Chinese Directory Names (UTF8 Encoding, More Aesthetic)",
     "pdf_tile_with_file_name": "Use file name as PDF title (useful when the imported PDF metadata title is not the real title, e.g., scanned PDF files)",
+    "default_language": "Default Language",
     "enable_txt_to_txtz_plugin": "Enable TXT to TXTZ plugin (converts TXT format books to TXTZ format, TXTZ is an internal format, enabling this will make importing TXT take longer)",
     "epub_viewer": "EPUB Viewer",
     "epubjs": "Epub Reader (Old Version)",

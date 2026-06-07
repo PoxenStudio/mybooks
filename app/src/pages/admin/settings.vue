@@ -703,6 +703,8 @@
 
 <script>
 import SSLManager from "~/components/SSLManager.vue";
+import { languageOptions } from "~/utils/languageCodes";
+
 export default {
   components: {
     "ssl-manager": SSLManager,
@@ -1063,6 +1065,16 @@ export default {
             icon: "info",
             key: "CHUNK_UPLOAD_SIZE",
             label: "settings.chunk_upload_size",
+          },
+          {
+            icon: "mdi-language",
+            key: "DEFAULT_LANGUAGE",
+            label: "settings.default_language",
+            type: "select",
+            items: languageOptions.map((lang) => ({
+              text: lang.name,
+              value: lang.code,
+            })),
           },
           {
             icon: "mdi-file-pdf-box",

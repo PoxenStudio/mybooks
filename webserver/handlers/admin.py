@@ -402,6 +402,7 @@ class AdminSettings(BaseHandler):
             "SEND_MAIL_FOR_NEW_BOOKS",
             "USE_DYNAMIC_COVER",
             "BATCH_ADD_IN_FORCE",
+            "DEFAULT_LANGUAGE",
         ]
 
         current_icon = CONF.get(

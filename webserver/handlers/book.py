@@ -2022,6 +2022,8 @@ class BookUpload(BaseHandler):
         mi.title_sort = utils.get_title_sort(mi.title)
         if utils.is_traditional_chinese(mi.title):
             mi.languages = constants.TRADITIONAL_CHINESE_CODE
+        if not mi.languages:
+            mi.languages = CONF.get("DEFAULT_LANGUAGE", constants.DEFAULT_LANGUAGE_CODE)
 
         if CONF.get("USE_DYNAMIC_COVER", False):
             fmt, cover_data = mi.cover_data
@@ -2261,6 +2263,8 @@ class BookUploadChunk(BaseHandler):
         mi.title_sort = utils.get_title_sort(mi.title)
         if utils.is_traditional_chinese(mi.title):
             mi.languages = constants.TRADITIONAL_CHINESE_CODE
+        if not mi.languages:
+            mi.languages = CONF.get("DEFAULT_LANGUAGE", constants.DEFAULT_LANGUAGE_CODE)
 
         if CONF.get("USE_DYNAMIC_COVER", False):
             fmt, cover_data = mi.cover_data

@@ -351,7 +351,7 @@ class UserReset(BaseHandler):
             user.save()
             self.add_msg("success", _("你刚刚重置了密码"))
             return {"err": "ok"}
-        except:
+        except Exception:
             return {"err": "db.error", "msg": _("系统繁忙")}
 
 
@@ -362,6 +362,11 @@ class SignOut(BaseHandler):
         self.set_secure_cookie("user_id", "")
         self.set_secure_cookie("admin_id", "")
         return {"err": "ok", "msg": _("你已成功退出登录。")}
+
+    @js
+    @auth
+    def post(self):
+        return self.get()
 
 
 class UserMessages(BaseHandler):

@@ -446,6 +446,8 @@ class ScanService(AsyncService):
                             dynamic_cover = True
                 if utils.is_traditional_chinese(mi.title):
                     mi.languages = constants.TRADITIONAL_CHINESE_CODE
+                if not mi.languages:
+                    mi.languages = CONF.get("DEFAULT_LANGUAGE", constants.DEFAULT_LANGUAGE_CODE)
                 row.book_id = self.db.import_book(mi, [fpath], notify=False, import_hooks=False)
                 if row.book_id is not None and dynamic_cover:
                     self.db.set_field(CALIBRE_COLUMN_DYNAMIC_COVER, {row.book_id: 1})

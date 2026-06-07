@@ -665,6 +665,7 @@
     "pinyin_directory": "使用拼音字母目錄名 (相容性高)",
     "utf8_directory": "使用中文目錄名 (UTF8 編碼，更美觀)",
     "pdf_tile_with_file_name": "添加 PDF 檔案時書名直接使用檔案名 (如果匯入的 PDF 檔案詮釋資料中的書名不是真實書名時使用，例如掃描的 PDF 檔案)",
+    "default_language": "預設語言",
     "enable_txt_to_txtz_plugin": "啟用 TXT 轉 TXTZ 外掛（將 TXT 格式的書籍轉換為 TXTZ 格式，TXTZ 為內部格式，啟用後匯入 TXT 耗時較長）",
     "epub_viewer": "EPUB 閱讀器",
     "epubjs": "EPUB Reader（純本地，簡潔清爽）",
