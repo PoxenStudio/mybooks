@@ -14,7 +14,7 @@ from .api import YoushuApi, KEY
 class YoushuMetaPlugin(MetaSourcePlugin):
     """优书网信息源插件"""
 
-    SOURCE_KEYS = frozenset({META_SOURCE_YOUSHU})
+    SOURCE_KEYS = (META_SOURCE_YOUSHU,)
     PROVIDER_KEY = KEY
 
     def search(self, title=None, isbn=None, publisher=None):

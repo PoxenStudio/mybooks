@@ -19,7 +19,7 @@ class CalibreMetaPlugin(MetaSourcePlugin):
     因此沿用改造前的做法，把两个来源放在同一个插件里统一处理（也减少了并行 worker 数量）。
     """
 
-    SOURCE_KEYS = frozenset({META_SOURCE_GOOGLE, META_SOURCE_AMAZON})
+    SOURCE_KEYS = (META_SOURCE_GOOGLE, META_SOURCE_AMAZON)
     PROVIDER_KEY = KEY
 
     def _selected_sources(self, sources=None):

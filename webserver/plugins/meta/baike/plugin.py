@@ -13,7 +13,7 @@ from .api import BaiduBaikeApi, KEY
 class BaikeMetaPlugin(MetaSourcePlugin):
     """百度百科信息源插件"""
 
-    SOURCE_KEYS = frozenset({META_SOURCE_BAIDU})
+    SOURCE_KEYS = (META_SOURCE_BAIDU,)
     PROVIDER_KEY = KEY
 
     def search(self, title=None, isbn=None, publisher=None):

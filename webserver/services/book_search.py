@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
+"""
+图书搜索工具类，统一对外暴露各信息源插件的检索能力
+@author: PoxenStudio, 2026-06
+"""
 
 import logging
 import re
@@ -15,18 +19,11 @@ from webserver.plugins.meta.calibre import CalibreMetaPlugin
 from webserver.plugins.meta.xhsd import XhsdMetaPlugin
 
 CONF = loader.get_settings()
-
-# 聚合搜索 / 自动刮削时，按此声明顺序作为信息源的优先级与展示顺序
-# （与改造前 plugin_search_books / plugin_search_best_book 中的判断顺序保持一致）
 _PLUGIN_CLASSES = [DoubanMetaPlugin, BaikeMetaPlugin, CalibreMetaPlugin, YoushuMetaPlugin]
-
-# 支持按 provider_key 反查插件的全部插件（含 xhsd，仅用于刷新封面 / 详情）
 _PROVIDER_PLUGIN_CLASSES = _PLUGIN_CLASSES + [XhsdMetaPlugin]
 
 
 class BookSearch:
-    """图书搜索工具类，统一对外暴露各信息源插件的检索能力"""
-
     has_proper_book = staticmethod(has_proper_book)
 
     _search_executor = None
@@ -42,9 +39,17 @@ class BookSearch:
 
     @staticmethod
     def _enabled_plugins(sources):
-        """按声明顺序返回当前 META_SELECTED_SOURCES 下已启用的插件实例"""
         plugins = (klass() for klass in _PLUGIN_CLASSES)
         return [p for p in plugins if p.is_enabled(sources)]
+
+    @staticmethod
+    def all_sources():
+        keys = []
+        for klass in _PROVIDER_PLUGIN_CLASSES:
+            for key in klass.SOURCE_KEYS:
+                if key not in keys:
+                    keys.append(key)
+        return keys
 
     @staticmethod
     def _find_plugin_by_provider_key(provider_key):
@@ -142,14 +147,11 @@ class BookSearch:
 
     @staticmethod
     def get_cover(provider_key, cover_url):
-        """根据 provider_key 找到对应信息源插件并拉取封面数据"""
         plugin = BookSearch._find_plugin_by_provider_key(provider_key)
         return plugin.get_cover(cover_url) if plugin else None
 
     @staticmethod
     def get_metadata_by_provider(provider_key, provider_value, mi):
-        """根据 provider_key 找到对应信息源插件，依据 provider_value 拉取完整详情；
-        找不到匹配插件时返回原 mi（与改造前 plugin_get_book_meta 行为一致）"""
         plugin = BookSearch._find_plugin_by_provider_key(provider_key)
         if plugin is None:
             return mi

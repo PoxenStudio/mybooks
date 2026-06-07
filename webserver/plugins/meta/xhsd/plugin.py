@@ -14,7 +14,7 @@ class XhsdMetaPlugin(MetaSourcePlugin):
     不参与聚合搜索 / 自动刮削，也不受 META_SELECTED_SOURCES 限制——这与改造前的行为保持一致。
     """
 
-    SOURCE_KEYS = frozenset({META_SOURCE_XHSD})
+    SOURCE_KEYS = (META_SOURCE_XHSD,)
     PROVIDER_KEY = KEY
 
     def search_by_isbn(self, isbn):

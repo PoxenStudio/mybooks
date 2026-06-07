@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-(PoxenStudio)图片处理工具
+图片处理工具
+@author: PoxenStudio, 2026
 """
 
 import io

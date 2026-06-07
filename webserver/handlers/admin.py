@@ -29,6 +29,7 @@ from webserver.services.save_meta_to_files import SaveMetaToFilesService
 from webserver.services.mail import MailService
 from webserver.services.book_barn import BookBarnClient
 from webserver.services.background_service import BackgroundService, BackgroundTask
+from webserver.services.book_search import BookSearch
 from webserver.handlers.base import BaseHandler, auth, js, is_admin
 from webserver.models import Reader, Item
 from webserver.base.formatter import SimpleBookFormatter
@@ -49,7 +50,6 @@ CONF = loader.get_settings()
 USER_UPDATE_TS_MAP = {}
 ENABLE_VIP_QUOTA_KEY = "ENABLE_VIP_QUOTA"
 IMPORT_BY_INOTIFY = "IMPORT_BY_INOTIFY"
-META_ALL_SOURCES = ["douban", "baidu", "google", "amazon", "xinhua", "youshu"]
 DEFAULT_META_SOURCES = ["douban", "baidu", "xinhua"]
 LOG_PATH = "/data/log/mybooks.log"
 
@@ -288,7 +288,7 @@ class AdminSettings(BaseHandler):
             CONF["DEFAULT_PAGE_SIZE"] = 60  # 默认每页显示60本书
 
         CONF["site_icon"] = "favicon_0"  # default icon, means use current favicon.ico
-        CONF["META_ALL_SOURCES"] = META_ALL_SOURCES
+        CONF["META_ALL_SOURCES"] = BookSearch.all_sources()
 
         sns = [
             {"value": "qq", "text": "QQ", "link": "https://connect.qq.com/"},
@@ -433,7 +433,7 @@ class AdminSettings(BaseHandler):
             # 如果启用基于 inotify 的文件导入，不能默认删除文件
             args["REMOVE_IMPORTED_FILE"] = False
 
-        args["META_ALL_SOURCES"] = META_ALL_SOURCES
+        args["META_ALL_SOURCES"] = BookSearch.all_sources()
         if "META_SELECTED_SOURCES" not in args:
             args["META_SELECTED_SOURCES"] = DEFAULT_META_SOURCES
 

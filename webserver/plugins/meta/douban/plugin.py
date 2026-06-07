@@ -16,7 +16,7 @@ CONF = loader.get_settings()
 class DoubanMetaPlugin(MetaSourcePlugin):
     """豆瓣信息源插件"""
 
-    SOURCE_KEYS = frozenset({META_SOURCE_DOUBAN})
+    SOURCE_KEYS = (META_SOURCE_DOUBAN,)
     PROVIDER_KEY = KEY
 
     def _api(self, copy_image=True):

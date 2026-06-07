@@ -19,15 +19,15 @@ CONF = loader.get_settings()
 class MetaSourcePlugin(ABC):
     """图书元数据信息源插件基类"""
 
-    # 本插件关联的 META_SELECTED_SOURCES 取值集合
+    # 本插件关联的 META_SELECTED_SOURCES 取值（保持声明顺序，用于汇总全部可选信息源）
     # （大多数插件只对应一个值，Calibre 插件同时覆盖 google 与 amazon）
-    SOURCE_KEYS = frozenset()
+    SOURCE_KEYS = ()
 
     def is_enabled(self, sources=None):
         """该插件是否应参与本次检索（由 META_SELECTED_SOURCES 配置决定）"""
         if sources is None:
             sources = CONF.get(META_SELECTED_SOURCES, [])
-        return bool(self.SOURCE_KEYS & set(sources))
+        return bool(set(self.SOURCE_KEYS) & set(sources))
 
     def search(self, title=None, isbn=None, publisher=None):
         """多结果聚合搜索，用于候选列表展示。返回 list[Metadata]，找不到时返回 []"""
