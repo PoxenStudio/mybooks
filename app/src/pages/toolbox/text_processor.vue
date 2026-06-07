@@ -42,13 +42,19 @@
               :class="{ selected: selectedBook && selectedBook.id === book.id }"
               @click="selectBook(book)"
             >
-              <span class="tp-book-result-title">{{ book.title }}</span>
-              <span class="tp-book-result-author">{{ (book.authors || []).join(', ') }}</span>
+              <v-img class="tp-book-result-cover" :src="book.thumb" :alt="book.title">
+                <template #error>
+                  <v-icon color="grey lighten-1">mdi-book-outline</v-icon>
+                </template>
+              </v-img>
+              <div class="tp-book-result-info">
+                <span class="tp-book-result-title">{{ book.title }}</span>
+                <span class="tp-book-result-author">{{ (book.authors || []).join(', ') }}</span>
+              </div>
             </div>
             <div v-if="bookResults.length === 0" class="tp-book-no-results text-muted">{{ $t('textProcessor.noResults') }}</div>
           </div>
         </div>
-        <span v-if="selectedBook" class="tp-selected-book-chip" :title="selectedBook.title">📖 {{ selectedBook.title }}</span>
         <button class="tp-btn accent" :disabled="!selectedBook || updating" @click="updateBook">
           💾 {{ updating ? $t('textProcessor.updatingBtn') : $t('textProcessor.updateBookBtn') }}
         </button>
@@ -619,8 +625,8 @@ export default {
 
 .tp-book-result-item {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 10px;
   padding: 8px 12px;
   cursor: pointer;
   border-bottom: 1px solid var(--tp-border);
@@ -638,9 +644,28 @@ export default {
   background: rgba(137, 180, 250, 0.2);
 }
 
+.tp-book-result-cover {
+  flex: none;
+  width: 36px;
+  height: 48px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--tp-surface);
+}
+
+.tp-book-result-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .tp-book-result-title {
   font-size: 13px;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tp-book-result-author {

@@ -1211,7 +1211,7 @@
     "maxWidthError": "宽度必须在 600 到 2048 之间"
   },
   "textProcessor": {
-    "title": "文字处理工具",
+    "title": "文本处理工具",
     "close": "关闭",
     "processBtn": "处理",
     "copyHtmlBtn": "复制HTML",
