@@ -533,7 +533,7 @@ export default {
             { value: 'author', label: 'appHeader.searchAuthor' },
             { value: 'isbn', label: 'appHeader.searchISBN' },
             { value: 'comments', label: 'appHeader.searchComments' },
-            { value: 'tag', label: 'appHeader.searchTag' },
+            { value: 'tags', label: 'appHeader.searchTag' },
         ],
         categoryMenu: false,
         mobileCategoryMenu: false,
