@@ -1,8 +1,8 @@
 """
 格式精简工具
 
-遍历书库中所有书籍，当一本书存在多个格式文件时，仅保留用户指定要保留的格式，
-删除其余已存在的格式文件，以节省书库空间。
+遍历书库中所有书籍，当一本书存在多个格式文件时，删除用户指定要删除的格式，
+以节省书库空间。
 """
 import logging
 import os
@@ -17,11 +17,11 @@ from webserver.toolbox.base_tool import BaseTool
 
 
 class FormatsPruningTool(BaseTool):
-    """遍历所有书籍，按指定的保留规则清理多余的格式文件。"""
+    """遍历所有书籍，删除指定要清理的格式文件。"""
 
     service_item_name = "格式精简"
 
-    # 前端可选的保留格式项 -> 对应的实际 Calibre 格式名集合（大写）
+    # 前端可选的删除格式项 -> 对应的实际 Calibre 格式名集合（大写）
     FORMAT_GROUPS = {
         "pdf": {"PDF"},
         "epub": {"EPUB"},
@@ -37,19 +37,19 @@ class FormatsPruningTool(BaseTool):
         return {
             "tool_id": "formats_pruning",
             "name": "格式精简",
-            "description": "遍历书库中所有书籍，当书籍存在多个格式文件时，仅保留指定格式并清理其余格式以节省空间",
+            "description": "遍历书库中所有书籍，当书籍存在多个格式文件时，删除指定格式以节省空间",
             "revision": "0.1.0",
             "author": "MyBooks",
             "publish_date": "2026-06-08",
         }
 
     @classmethod
-    def resolve_keep_formats(cls, keep_keys: List[str]) -> set:
+    def resolve_delete_formats(cls, delete_keys: List[str]) -> set:
         """将前端选项 key 列表转换为实际的 Calibre 格式名集合（大写）。"""
-        keep = set()
-        for key in keep_keys:
-            keep |= cls.FORMAT_GROUPS.get(key, set())
-        return keep
+        delete = set()
+        for key in delete_keys:
+            delete |= cls.FORMAT_GROUPS.get(key, set())
+        return delete
 
     @classmethod
     def is_running(cls) -> bool:
@@ -65,24 +65,27 @@ class FormatsPruningTool(BaseTool):
     @AsyncService.register_service
     def prune(
         self,
-        keep_keys: List[str],
+        delete_keys: List[str],
         user_id: int,
         callback: Optional[Callable[[int], None]] = None,
     ) -> Optional[dict]:
-        """异步遍历所有书籍，清理未被指定保留的已存在格式文件。
+        """异步遍历所有书籍，删除指定的已存在格式文件。
 
-        :param keep_keys: 需要保留的格式选项 key 列表，取值范围见 :attr:`FORMAT_GROUPS` 的键
-                           （如 ``["pdf", "epub", "azw3_mobi", "txt", "docx"]``）。
-                           不允许传入全部 key（否则将无法清理任何格式）。
-        :param user_id:   操作关联的用户 ID（保留字段，目前仅记录日志）。
-        :param callback:  进度回调，参数为 0-100 的整数进度值。
-        :return:          同步模式下返回统计 dict；异步模式下返回 None。
+        :param delete_keys: 需要删除的格式选项 key 列表，取值范围见 :attr:`FORMAT_GROUPS` 的键
+                            （如 ``["pdf", "epub", "azw3_mobi", "txt", "docx"]``）。
+                            不允许传入全部 key（否则书籍将变得无格式可读）。
+        :param user_id:    操作关联的用户 ID（保留字段，目前仅记录日志）。
+        :param callback:   进度回调，参数为 0-100 的整数进度值。
+        :return:           同步模式下返回统计 dict；异步模式下返回 None。
         """
-        if len(set(keep_keys) & set(self.FORMAT_GROUPS)) >= len(self.FORMAT_GROUPS):
-            raise ValueError(_("不能选择全部格式，请至少保留一种格式用于清理"))
+        if len(set(delete_keys) & set(self.FORMAT_GROUPS)) >= len(self.FORMAT_GROUPS):
+            raise ValueError(_("不能选择全部格式"))
 
-        keep_formats = self.resolve_keep_formats(keep_keys)
+        delete_formats = self.resolve_delete_formats(delete_keys)
+        if not delete_formats:
+            raise ValueError(_("删除格式不能为空，请至少选择一种格式"))
 
+        logging.info("[FormatsPruningTool] Starting prune with delete_keys=%s (delete_formats=%s) [uid:%d]", delete_keys, delete_formats, user_id)
         task_id = self.create_task(progress_data={"status": "starting"})
         FormatsPruningTool._last_task_id = task_id
 
@@ -106,15 +109,12 @@ class FormatsPruningTool(BaseTool):
 
             for idx, book_id in enumerate(book_ids, start=1):
                 try:
-                    removed = self._prune_book(book_id, keep_formats)
+                    removed = self._prune_book(book_id, delete_formats)
                     if removed:
                         total_pruned_books += 1
                         total_pruned_formats += len(removed)
                 except Exception as err:
-                    logging.warning(
-                        "[FormatsPruningTool] Failed to process book_id=%d: %s",
-                        book_id, err,
-                    )
+                    logging.warning("[FormatsPruningTool] Failed to process book_id=%d: %s", book_id, err)
 
                 total_checked += 1
                 progress = int(idx * 100 / total) if total else 100
@@ -158,8 +158,8 @@ class FormatsPruningTool(BaseTool):
             "pruned_formats": total_pruned_formats,
         }
 
-    def _prune_book(self, book_id: int, keep_formats: set) -> List[str]:
-        """检查单本书籍，删除不在保留集合中且文件实际存在的格式。
+    def _prune_book(self, book_id: int, delete_formats: set) -> List[str]:
+        """检查单本书籍，删除在指定删除集合中且文件实际存在的格式。
 
         书籍仅有单一格式时跳过；为避免书籍变成无格式可读，删除后至少保留一个格式。
 
@@ -176,7 +176,7 @@ class FormatsPruningTool(BaseTool):
 
         to_remove = []
         for fmt in fmts:
-            if fmt in keep_formats:
+            if fmt not in delete_formats:
                 continue
             fpath = self.db.format_abspath(book_id, fmt, index_is_id=True)
             if fpath and os.path.exists(fpath):
@@ -186,11 +186,10 @@ class FormatsPruningTool(BaseTool):
             to_remove.pop()
 
         if not to_remove:
+            logging.info("[FormatsPruningTool] book_id=%d no formats to remove (fmts=%s, delete=%s)", book_id, fmts, delete_formats)
             return []
 
+        logging.info("[FormatsPruningTool] book_id=%d will remove formats=%s (fmts=%s, delete=%s)", book_id, to_remove, fmts, delete_formats)
         self.db.new_api.remove_formats({book_id: to_remove})
-        logging.info(
-            "[FormatsPruningTool] book_id=%d removed formats=%s",
-            book_id, to_remove,
-        )
+        logging.info("[FormatsPruningTool] book_id=%d removed formats=%s", book_id, to_remove)
         return to_remove

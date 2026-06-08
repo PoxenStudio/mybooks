@@ -227,23 +227,23 @@ class AdminFormatsPruningStart(BaseHandler):
     @is_admin
     def post(self):
         data = tornado.escape.json_decode(self.request.body)
-        keep = data.get("keep")
-        if not isinstance(keep, list) or not keep:
-            return {"err": "params.missing", "msg": _("请至少选择一种需要保留的格式")}
+        delete = data.get("delete")
+        if not isinstance(delete, list) or not delete:
+            return {"err": "params.missing", "msg": _("请至少选择一种需要删除的格式")}
 
         valid_keys = set(FormatsPruningTool.FORMAT_GROUPS.keys())
-        keep_keys = [k for k in keep if k in valid_keys]
-        if not keep_keys:
+        delete_keys = [k for k in delete if k in valid_keys]
+        if not delete_keys:
             return {"err": "params.invalid", "msg": _("无效的格式选项")}
 
-        if len(set(keep_keys)) >= len(valid_keys):
-            return {"err": "params.invalid", "msg": _("不能选择全部格式，请至少取消勾选一项以便清理")}
+        if len(set(delete_keys)) >= len(valid_keys):
+            return {"err": "params.invalid", "msg": _("不能选择全部格式，请至少取消勾选一项以便保留")}
 
         tool = FormatsPruningTool()
         if tool.is_running():
             return {"err": "task.running", "msg": _("已有格式精简任务正在运行，请稍后再试")}
 
-        tool.prune(keep_keys, self.user_id())
+        tool.prune(delete_keys, self.user_id())
         return {"err": "ok", "msg": _("格式精简任务已启动，右上角可以查看进度")}
 
 

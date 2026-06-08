@@ -96,7 +96,7 @@ export default {
       { key: 'txt', labelKey: 'formatsPruning.optTxt' },
       { key: 'docx', labelKey: 'formatsPruning.optDocx' },
     ],
-    selected: ['pdf', 'epub', 'txt', 'docx'],
+    selected: ['azw3_mobi'],
 
     processing: false,
     progress: 0,
@@ -136,7 +136,7 @@ export default {
         const rsp = await this.$backend('/toolbox/formats_pruning/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ keep: this.selected }),
+          body: JSON.stringify({ delete: this.selected }),
         });
 
         if (rsp.err === 'ok') {
