@@ -4,6 +4,8 @@
 将纯文本按空行拆分为段落并转换为 HTML，支持关键词规则（加粗/加大/高亮）
 及书名号自动加粗，提供实时预览与 HTML 代码导出。所有处理均在前端完成，
 本类仅提供工具元数据，供 ToolSet 注册与展示。
+
+@author: PoxenStudio, 2026
 """
 from webserver.toolbox.base_tool import BaseTool
 

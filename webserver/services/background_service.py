@@ -35,7 +35,6 @@ class BackgroundTask:
         with BackgroundTask._id_lock:
             BackgroundTask._id_counter += 1
             self.id = BackgroundTask._id_counter
-
         self.service_type = service_type
         self.service_item = service_item
         self.status = self.STATUS_RUNNING

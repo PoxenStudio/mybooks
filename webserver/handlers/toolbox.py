@@ -13,6 +13,7 @@ from webserver.toolbox.merge_formats_tool import MergeFormatsTool
 from webserver.toolbox.review_cht_books_tool import ReviewTraditionalChineseTool
 from webserver.toolbox.minify_pdf import MinifyPdfTool
 from webserver.toolbox.formats_pruning import FormatsPruningTool
+from webserver.toolbox.epub_fixer import EpubFixerTool
 from webserver.services.background_service import BackgroundTask
 from pathlib import Path
 
@@ -274,6 +275,25 @@ class AdminFormatsPruningProgress(BaseHandler):
         return {"err": "ok", "data": result}
 
 
+class AdminEpubFixerFix(BaseHandler):
+    @js
+    @is_admin
+    def post(self):
+        data = tornado.escape.json_decode(self.request.body)
+        book_id = data.get("book_id")
+        backup = bool(data.get("backup", False))
+
+        if not book_id:
+            return {"err": "params.missing", "msg": _("请提供书籍ID")}
+
+        tool = EpubFixerTool()
+        if tool.is_running():
+            return {"err": "task.running", "msg": _("已有 EPUB 修复任务正在执行，请稍后再试")}
+
+        tool.fix(int(book_id), backup, self.user_id())
+        return {"err": "ok", "msg": _("EPUB 修复任务已启动")}
+
+
 def routes():
     return [
         (r"/api/toolbox/list", AdminToolList),
@@ -286,4 +306,5 @@ def routes():
         (r"/api/toolbox/minify_pdf/download", AdminMinifyPdfDownload),
         (r"/api/toolbox/formats_pruning/start", AdminFormatsPruningStart),
         (r"/api/toolbox/formats_pruning/progress", AdminFormatsPruningProgress),
+        (r"/api/toolbox/epub_fixer/fix", AdminEpubFixerFix),
     ]

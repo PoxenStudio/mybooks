@@ -24,14 +24,6 @@ CONF = loader.get_settings()
 
 
 def shell_quote_for_log(value):
-    """Quote a value for display in logs, favoring readability for copy-paste into a shell.
-
-    shlex.quote() always wraps in single quotes, so a value containing single quotes
-    (e.g. an XPath expression like //*[local-name()='p' and ...]) turns into the
-    hard-to-read '...'"'"'...' form. When a value needs quoting solely because of
-    single quotes (no double quotes or other characters special inside double quotes),
-    wrap it in double quotes instead, matching what one would naturally type by hand.
-    """
     quoted = shlex.quote(value)
     if quoted != value and "'" in value and not any(c in value for c in "\"\\$`"):
         return '"%s"' % value

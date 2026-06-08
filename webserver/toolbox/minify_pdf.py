@@ -1,5 +1,6 @@
 """
 PDF 扫描档瘦身工具
+@author: PoxenStudio, 2026
 """
 import logging
 import os

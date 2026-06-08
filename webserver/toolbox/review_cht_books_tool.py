@@ -9,6 +9,8 @@
    若转换后与原文不同，说明原文含有繁体中文字符。
 3. 若 OpenCC 不可用，则回退至字符集范围检测：
    检查 title 是否含有仅属于繁体的常见 Unicode 字符。
+
+@author: PoxenStudio, 2026
 """
 import logging
 import time

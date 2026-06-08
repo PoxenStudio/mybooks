@@ -1,5 +1,7 @@
 """
 工具管理类，所有工具进行注册
+
+@author: PoxenStudio, 2026
 """
 
 
@@ -92,12 +94,14 @@ class ToolSet:
         from .minify_pdf import MinifyPdfTool
         from .text_processor import TextProcessor
         from .formats_pruning import FormatsPruningTool
+        from .epub_fixer import EpubFixerTool
         ToolSet.register(RareBookDownloader.info())
         ToolSet.register(MergeFormatsTool.info())
         ToolSet.register(ReviewTraditionalChineseTool.info())
         ToolSet.register(MinifyPdfTool.info())
         ToolSet.register(TextProcessor.info())
         ToolSet.register(FormatsPruningTool.info())
+        ToolSet.register(EpubFixerTool.info())
         MinifyPdfTool.cleanup_old_files()
 
     @staticmethod

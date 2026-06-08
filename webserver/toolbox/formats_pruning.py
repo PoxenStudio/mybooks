@@ -3,6 +3,8 @@
 
 遍历书库中所有书籍，当一本书存在多个格式文件时，删除用户指定要删除的格式，
 以节省书库空间。
+
+@author: PoxenStudio, 2026
 """
 import logging
 import os

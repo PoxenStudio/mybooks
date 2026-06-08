@@ -1,5 +1,6 @@
 """
 古书下载导入工具
+@author: PoxenStudio, 2026
 """
 import logging
 import os

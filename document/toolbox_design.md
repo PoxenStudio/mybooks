@@ -98,6 +98,7 @@ class RareBookDownloader(BaseTool):
 8. `complete_task()` + `cleanup_work_dir()` — 完成任务、清理临时文件
 
 `@AsyncService.register_service` 装饰器使 `download()` 以异步方式运行，调用方立即返回，进度通过后台任务机制跟踪。
+所有工具类的实现，其入口方法都应当使用`@AsyncService.register_service` 装饰器。
 
 ---
 

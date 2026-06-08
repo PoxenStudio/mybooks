@@ -1227,6 +1227,18 @@
     "progressInfo": "Checked {checked}/{total} books, pruned {formats} format(s) from {books} book(s)",
     "taskRunning": "A formats pruning task is already running, please try again later"
   },
+  "epubFixer": {
+    "title": "EPUB Fixer",
+    "close": "Close",
+    "hint": "This tool performs an epub→epub conversion to rebuild the EPUB structure and fix formatting issues. The original file will be overwritten when complete. Check 「Backup before converting」 to keep a copy of the original.",
+    "searchPlaceholder": "Search by title",
+    "noResults": "No books found",
+    "backupLabel": "Backup original EPUB before converting",
+    "startBtn": "Start Fix",
+    "fixSuccess": "EPUB fixed successfully",
+    "noEpub": "The selected book has no EPUB format",
+    "taskRunning": "An EPUB fix task is already running, please try again later"
+  },
   "textProcessor": {
     "title": "Text Processor",
     "close": "Close",

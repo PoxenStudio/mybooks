@@ -1227,6 +1227,18 @@
     "progressInfo": "已檢查 {checked}/{total} 本，已清理 {books} 本書的 {formats} 個格式檔案。為安全起見，一次只允許刪除一個格式。",
     "taskRunning": "已有格式清理任務正在執行，請稍後再試"
   },
+  "epubFixer": {
+    "title": "EPUB 修復",
+    "close": "關閉",
+    "hint": "修復操作將對書籍執行 epub→epub 格式轉換，完成後將直接覆蓋原始檔案，請確認操作。如需保留原始檔案，請勾選「轉換前備份」選項。",
+    "searchPlaceholder": "搜尋書名",
+    "noResults": "未找到相關書籍",
+    "backupLabel": "轉換前備份原始 EPUB 檔案",
+    "startBtn": "開始修復",
+    "fixSuccess": "EPUB 修復成功",
+    "noEpub": "所選書籍沒有 EPUB 格式",
+    "taskRunning": "已有 EPUB 修復任務正在執行，請稍後再試"
+  },
   "textProcessor": {
     "title": "文字處理工具",
     "close": "關閉",
