@@ -18,7 +18,7 @@ from webserver.services.mail import MailService
 from webserver.services.background_service import BackgroundService, BackgroundTask
 
 EBOOK_CONVERT_CMD = "ebook-convert"
-DEFAULT_CONVERT_TIMEOUT = 3000
+DEFAULT_CONVERT_TIMEOUT = 3 * 60 * 1000  # 3 minutes, in milliseconds
 
 CONF = loader.get_settings()
 
@@ -103,7 +103,8 @@ class ConverterService(AsyncService):
 
         timeout = DEFAULT_CONVERT_TIMEOUT
         try:
-            timeout = int(CONF["convert_timeout"])
+            timeout = int(CONF.get("convert_timeout", DEFAULT_CONVERT_TIMEOUT))
+            timeout = max(timeout, DEFAULT_CONVERT_TIMEOUT)
         except Exception as e:
             logging.warning("Failed to get convert timeout from config: %s", e)
             timeout = DEFAULT_CONVERT_TIMEOUT
@@ -118,10 +119,8 @@ class ConverterService(AsyncService):
                 _, stde = p.communicate(timeout=timeout)
                 logging.info("ebook-convert finish: %s, err: %s" % (new_path, bytes.decode(stde)))
             except subprocess.TimeoutExpired:
-                p.kill()
                 logging.info("ebook-convert timeout: %s" % new_path)
-                log.info("ebook-convert timeout: %s" % new_path)
-                log.write(u"\n服务器转换书本格式时超时了。请在配置管理页面调大超时时间。\n[FINISH]")
+                p.kill()
                 return False
             return True
 
@@ -169,7 +168,7 @@ class ConverterService(AsyncService):
         if task:
             BackgroundService().complete_task(task.id)
         if not ok:
-            self.add_msg(user_id, "danger", u"[%s]文件格式转换失败！请查看日志，或到公众号上私信联系" % service_item)
+            self.add_msg(user_id, "danger", "[%s]文件格式转换失败！请在设置中调整转换超时时间后重试" % service_item)
             return
 
         with open(new_path, "rb") as f:

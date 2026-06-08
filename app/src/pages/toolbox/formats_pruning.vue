@@ -19,20 +19,16 @@
           <!-- Options -->
           <p class="fp-options-title mb-2">{{ $t('formatsPruning.optionsTitle') }}</p>
 
-          <v-checkbox
-            v-for="opt in options"
-            :key="opt.key"
-            v-model="selected"
-            :label="$t(opt.labelKey)"
-            :value="opt.key"
-            dense
-            hide-details
-            class="mt-1"
-          ></v-checkbox>
-
-          <v-alert v-if="allSelected" type="warning" dense outlined class="mt-4 mb-0">
-            {{ $t('formatsPruning.allSelectedError') }}
-          </v-alert>
+          <v-radio-group v-model="selected" hide-details class="mt-0">
+            <v-radio
+              v-for="opt in options"
+              :key="opt.key"
+              :label="$t(opt.labelKey)"
+              :value="opt.key"
+              dense
+              class="mt-1"
+            ></v-radio>
+          </v-radio-group>
 
           <!-- Start button -->
           <div class="d-flex justify-center mt-6">
@@ -40,8 +36,8 @@
               color="primary"
               class="fp-start-btn"
               :loading="processing"
-              :disabled="processing || allSelected || selected.length === 0"
-              @click="startPrune"
+              :disabled="processing || !selected"
+              @click="openConfirmDialog"
             >
               {{ $t('formatsPruning.startBtn') }}
             </v-btn>
@@ -83,6 +79,29 @@
         </v-card>
       </v-col>
     </v-row>
+
+    <!-- Confirm dialog -->
+    <v-dialog v-model="showConfirmDialog" max-width="400px">
+      <v-card>
+        <v-card-title class="headline">{{ $t('formatsPruning.confirmTitle') }}</v-card-title>
+        <v-card-text>
+          <p>{{ $t('formatsPruning.confirmDescription', { format: selectedLabel }) }}</p>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn color="grey" text @click="showConfirmDialog = false">
+            {{ $t('common.cancel') }}
+          </v-btn>
+          <v-btn
+            color="red"
+            @click="confirmStart"
+            :loading="processing"
+          >
+            {{ $t('formatsPruning.startBtn') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
@@ -96,7 +115,7 @@ export default {
       { key: 'txt', labelKey: 'formatsPruning.optTxt' },
       { key: 'docx', labelKey: 'formatsPruning.optDocx' },
     ],
-    selected: ['azw3_mobi'],
+    selected: 'azw3_mobi',
 
     processing: false,
     progress: 0,
@@ -106,10 +125,13 @@ export default {
     resultMsg: '',
     resultType: 'success',
     pollInterval: null,
+
+    showConfirmDialog: false,
   }),
   computed: {
-    allSelected() {
-      return this.selected.length >= this.options.length;
+    selectedLabel() {
+      const opt = this.options.find((o) => o.key === this.selected);
+      return opt ? this.$t(opt.labelKey) : '';
     },
   },
   created() {
@@ -119,12 +141,16 @@ export default {
     if (this.pollInterval) clearInterval(this.pollInterval);
   },
   methods: {
+    openConfirmDialog() {
+      if (!this.selected) return;
+      this.showConfirmDialog = true;
+    },
+    confirmStart() {
+      this.showConfirmDialog = false;
+      this.startPrune();
+    },
     async startPrune() {
-      if (this.allSelected) {
-        this.resultMsg = this.$t('formatsPruning.allSelectedError');
-        this.resultType = 'error';
-        return;
-      }
+      if (!this.selected) return;
 
       this.resultMsg = '';
       this.processing = true;
@@ -136,7 +162,7 @@ export default {
         const rsp = await this.$backend('/toolbox/formats_pruning/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ delete: this.selected }),
+          body: JSON.stringify({ delete: [this.selected] }),
         });
 
         if (rsp.err === 'ok') {

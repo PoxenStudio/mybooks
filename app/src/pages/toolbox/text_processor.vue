@@ -970,7 +970,7 @@ export default {
 /* Toast */
 .tp-toast {
   position: fixed;
-  bottom: 24px;
+  top: 30%;
   left: 50%;
   transform: translateX(-50%);
   background: var(--tp-accent2);

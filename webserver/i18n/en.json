@@ -231,6 +231,7 @@
   "文件名不合法，没有包含扩展名": "Illegal filename, does not contain extension",
   "文件名不能为空": "File Name cannot be empty",
   "文件格式转换失败，请到公众号上私信联系": "File format conversion failed. Please contact support via the official account",
+  "[%s]文件格式转换失败！请在设置中调整转换超时时间后重试": "[%s] File format conversion failed! Please adjust the conversion timeout in settings and try again",
   "文件格式错误，请上传CSV文件": "File format error, please upload a CSV file",
   "新书推荐": "New book recommendations",
   "无ISBN，跳过": "No ISBN; skipped",

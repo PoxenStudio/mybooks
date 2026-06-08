@@ -1209,22 +1209,23 @@
     "maxWidthError": "寬度必須在 600 到 2048 之間"
   },
   "formatsPruning": {
-    "title": "格式精簡",
+    "title": "格式清理",
     "close": "關閉",
+    "confirmTitle": "確認格式清理",
+    "confirmDescription": "即將從擁有多種格式的書籍中移除 {format} 格式，此操作無法復原，是否繼續？",
     "optionsTitle": "請選擇當書籍有多個格式時需要清理的格式，未選中的格式將被保留。不建議清理epub。",
     "optPdf": "PDF",
     "optEpub": "EPUB",
     "optAzw3Mobi": "AZW3 / MOBI",
     "optTxt": "TXT",
     "optDocx": "DOCX",
-    "allSelectedError": "不能選擇全部格式，否則書籍將無格式可讀，請至少取消勾選一項",
     "startBtn": "開始執行",
     "statusProcessing": "處理中",
     "statusCompleted": "處理完成",
-    "processStartSuccess": "格式精簡任務已啟動",
-    "processCompleted": "格式精簡任務已完成",
-    "progressInfo": "已檢查 {checked}/{total} 本，已清理 {books} 本書的 {formats} 個格式檔案",
-    "taskRunning": "已有格式精簡任務正在執行，請稍後再試"
+    "processStartSuccess": "格式清理任務已啟動",
+    "processCompleted": "格式清理任務已完成",
+    "progressInfo": "已檢查 {checked}/{total} 本，已清理 {books} 本書的 {formats} 個格式檔案。為安全起見，一次只允許刪除一個格式。",
+    "taskRunning": "已有格式清理任務正在執行，請稍後再試"
   },
   "textProcessor": {
     "title": "文字處理工具",

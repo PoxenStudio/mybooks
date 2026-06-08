@@ -1211,22 +1211,23 @@
     "maxWidthError": "宽度必须在 600 到 2048 之间"
   },
   "formatsPruning": {
-    "title": "格式精简",
+    "title": "格式清理",
     "close": "关闭",
-    "optionsTitle": "请选择当书籍有多个格式时需要清理的格式，未选中的格式将被保留。不建议清理epub。",
+    "confirmTitle": "确认清理",
+    "confirmDescription": "即将从拥有多种格式的书籍中移除 {format} 格式，此操作无法撤销，是否继续？",
+    "optionsTitle": "请选择当书籍有多个格式时需要清理的格式，未选中的格式将被保留。不建议清理epub。安全起见，一次只允许删除一个格式。",
     "optPdf": "PDF",
     "optEpub": "EPUB",
     "optAzw3Mobi": "AZW3 / MOBI",
     "optTxt": "TXT",
     "optDocx": "DOCX",
-    "allSelectedError": "不能选择全部格式，否则书籍将无格式可读，请至少取消勾选一项",
     "startBtn": "开始执行",
     "statusProcessing": "处理中",
     "statusCompleted": "处理完成",
-    "processStartSuccess": "格式精简任务已启动",
-    "processCompleted": "格式精简任务已完成",
+    "processStartSuccess": "格式清理任务已启动",
+    "processCompleted": "格式清理任务已完成",
     "progressInfo": "已检查 {checked}/{total} 本，已清理 {books} 本书的 {formats} 个格式文件",
-    "taskRunning": "已有格式精简任务正在运行，请稍后再试"
+    "taskRunning": "已有格式清理任务正在运行，请稍后再试"
   },
   "textProcessor": {
     "title": "文本处理工具",
