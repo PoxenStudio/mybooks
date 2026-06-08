@@ -163,7 +163,7 @@
                     <v-card-title color="primary" class="">{{ $t('book.selectReadFormat') }}</v-card-title>
                     <v-card-text>
                         <v-list>
-                            <v-list-item :href="'/read/' + book.id + '?format=' + readEbookFormat" target="_blank"
+                            <v-list-item v-if="readEbookFormat" :href="'/read/' + book.id + '?format=' + readEbookFormat" target="_blank"
                                          @click="dialog_read_format = false">
                                 <v-list-item-avatar color='primary'>
                                     <v-icon dark>import_contacts</v-icon>
@@ -172,13 +172,22 @@
                                     <v-list-item-title>{{ readEbookFormat.toUpperCase() }}</v-list-item-title>
                                 </v-list-item-content>
                             </v-list-item>
-                            <v-list-item :href="'/read/' + book.id + '?format=pdf'" target="_blank"
+                            <v-list-item v-if="hasPDF" :href="'/read/' + book.id + '?format=pdf'" target="_blank"
                                          @click="dialog_read_format = false">
                                 <v-list-item-avatar color='primary'>
                                     <v-icon dark>import_contacts</v-icon>
                                 </v-list-item-avatar>
                                 <v-list-item-content>
                                     <v-list-item-title>PDF</v-list-item-title>
+                                </v-list-item-content>
+                            </v-list-item>
+                            <v-list-item v-if="is_txt" :href="'/book/' + book.id + '/readtxt'" target="_blank"
+                                         @click="dialog_read_format = false">
+                                <v-list-item-avatar color='primary'>
+                                    <v-icon dark>import_contacts</v-icon>
+                                </v-list-item-avatar>
+                                <v-list-item-content>
+                                    <v-list-item-title>{{ $t('book.txtOnlineReading', { status: txt_parse_inited ? $t('book.parsed') : $t('book.notParsed') }) }}</v-list-item-title>
                                 </v-list-item-content>
                             </v-list-item>
                         </v-list>
@@ -632,7 +641,7 @@
                 </v-card-text>
             </v-card>
         </v-col>
-        <v-col cols="12" sm="6" class="book-action-col" :class="{ 'book-action-col--txt': is_txt }">
+        <v-col cols="12" sm="6" class="book-action-col">
             <v-card outlined>
                 <v-list>
                     <v-list-item :href="needsReadFormatChoice ? undefined : '/read/' + book.id" @click="onReadClick" target="_blank" :disabled="book.book_type == this.BOOK_TYPE.PHYSICAL">
@@ -649,24 +658,7 @@
                 </v-list>
             </v-card>
         </v-col>
-        <v-col cols="12" sm="6" class="book-action-col book-action-col--txt" v-show="is_txt">
-          <v-card outlined>
-            <v-list>
-              <v-list-item :href="'/book/' + book.id+'/readtxt'" target="_blank" :disabled="book.book_type == this.BOOK_TYPE.PHYSICAL">
-                <v-list-item-avatar large :color="book.book_type == this.BOOK_TYPE.PHYSICAL ? 'grey' : 'primary'">
-                  <v-icon dark>import_contacts</v-icon>
-                </v-list-item-avatar>
-                <v-list-item-content>
-                  <v-list-item-title :class="{ 'grey--text': book.book_type == this.BOOK_TYPE.PHYSICAL }">{{ $t('book.txtOnlineReading', { status: txt_parse_inited ? $t('book.parsed') : $t('book.notParsed') }) }}</v-list-item-title>
-                </v-list-item-content>
-                <v-list-item-action>
-                  <v-icon>mdi-arrow-right</v-icon>
-                </v-list-item-action>
-              </v-list-item>
-            </v-list>
-          </v-card>
-        </v-col>
-        <v-col cols="12" sm="6" class="book-action-col" :class="{ 'book-action-col--txt': is_txt }">
+        <v-col cols="12" sm="6" class="book-action-col">
             <v-card outlined>
                 <v-list>
                     <v-list-item @click="dialog_download = !dialog_download" :disabled="book.book_type == this.BOOK_TYPE.PHYSICAL">
@@ -683,7 +675,7 @@
                 </v-list>
             </v-card>
         </v-col>
-        <v-col cols="12" sm="6" class="book-action-col" :class="{ 'book-action-col--txt': is_txt }">
+        <v-col cols="12" sm="6" class="book-action-col">
             <v-card outlined>
                 <v-list>
                     <v-list-item @click="switchAudioDialog" :disabled="book.book_type == this.BOOK_TYPE.PHYSICAL">
@@ -710,7 +702,7 @@
                 </v-list>
             </v-card>
         </v-col>
-        <v-col cols="12" sm="6" class="book-action-col" :class="{ 'book-action-col--txt': is_txt }">
+        <v-col cols="12" sm="6" class="book-action-col">
             <v-card outlined>
                 <v-list>
                     <v-list-item @click="dialog_send_to_device = true" :disabled="!hasCompatibleFormats">
@@ -1459,9 +1451,9 @@ export default {
             return '';
         },
 
-        // 同时存在 PDF 和其它电子书格式时，阅读前需要先选择格式
+        // 同时存在 PDF 和其它电子书格式，或存在 TXT 格式时，阅读前需要先选择格式
         needsReadFormatChoice() {
-            return this.hasPDF && !!this.readEbookFormat;
+            return (this.hasPDF && !!this.readEbookFormat) || this.is_txt;
         },
 
         // 检查是否有兼容邮箱发送的文件格式（EPUB/AZW3/PDF/MOBI/TXT）
@@ -3541,11 +3533,6 @@ h1.book-detail-title {
     .book-action-col {
         flex: 0 0 25%;
         max-width: 25%;
-    }
-
-    .book-action-col.book-action-col--txt {
-        flex: 0 0 20%;
-        max-width: 20%;
     }
 }
 </style>
