@@ -650,6 +650,7 @@
     "meta_source_xinhua": "新华书店",
     "meta_source_youshu": "优书网",
     "meta_source_douban_v2": "豆瓣V2",
+    "meta_source_neodb": "NeoDB",
     "douban_baseurl": "豆瓣插件API地址(例如 http://10.0.0.1:8080 )",
     "douban_api_key": "豆瓣插件API密钥, 可用的key有限, 可以自行查找替换",
     "douban_max_count": "豆瓣插件API查询结果数量",

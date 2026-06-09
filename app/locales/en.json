@@ -450,6 +450,7 @@
     "meta_source_xinhua": "Xinhua Bookstore",
     "meta_source_youshu": "YouShu",
     "meta_source_douban_v2": "Douban V2",
+    "meta_source_neodb": "NeoDB",
     "douban_baseurl": "Address of Douban plugin(Ex: http://10.0.0.1:8080 )",
     "douban_api_key": "Douban plugin API key, available keys are limited, you can find and replace them yourself",
     "douban_max_count": "Max results of Douban plugin query",

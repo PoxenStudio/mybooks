@@ -73,3 +73,16 @@ class DoubanV2MetaPlugin(MetaSourcePlugin):
 
     def get_cover(self, cover_url):
         return api.get_cover(cover_url)
+
+    def search_physical_by_isbn(self, isbn):
+        """按 ISBN 精确查询实体书信息（用于 BookSearch.find_physical_book_by_isbn 兜底链）"""
+        if not isbn:
+            return None
+        items, search_url = api.search(isbn, max_count=1)
+        if not items:
+            return None
+        try:
+            return api.build_metadata(items[0], search_url, isbn=isbn, copy_image=True)
+        except Exception:
+            logging.error("豆瓣V2 ISBN查询 %s 失败", isbn)
+            return None

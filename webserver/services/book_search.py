@@ -182,6 +182,14 @@ class BookSearch:
                 logging.error(f"Douban API error for ISBN {isbn}: {e}")
                 book_data = None
 
+        douban_plugin = DoubanV2MetaPlugin()
+        if douban_plugin.is_enabled(sources) and not book_data:
+            try:
+                book_data = douban_plugin.search_physical_by_isbn(isbn)
+            except Exception as e:
+                logging.error(f"Douban V2 API error for ISBN {isbn}: {e}")
+                book_data = None
+
         if not book_data:
             try:
                 logging.info(f"Trying Xhsd API for ISBN {isbn}")
