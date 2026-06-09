@@ -20,7 +20,7 @@ from webserver.plugins.meta.calibre import CalibreMetaPlugin
 from webserver.plugins.meta.xhsd import XhsdMetaPlugin
 
 CONF = loader.get_settings()
-_PLUGIN_CLASSES = [DoubanMetaPlugin, DoubanV2MetaPlugin, BaikeMetaPlugin, CalibreMetaPlugin, YoushuMetaPlugin]
+_PLUGIN_CLASSES = [DoubanMetaPlugin, BaikeMetaPlugin, CalibreMetaPlugin, YoushuMetaPlugin, DoubanV2MetaPlugin]
 _PROVIDER_PLUGIN_CLASSES = _PLUGIN_CLASSES + [XhsdMetaPlugin]  # XhsdMetaPlugin 不参与聚合搜索但需要 provider 路由
 
 

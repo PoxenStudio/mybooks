@@ -1380,7 +1380,8 @@ export default {
         "google",
         "amazon",
         "xinhua",
-        "youshu"
+        "youshu",
+        "douban_v2"
       ];
       return allSources.map((source) => ({
         text: this.$t("settings.meta_source_" + source),

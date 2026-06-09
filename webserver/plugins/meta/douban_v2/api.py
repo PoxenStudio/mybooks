@@ -4,10 +4,12 @@
 # 豆瓣(V2) 元数据搜索 API
 #
 # 使用 subject_search 接口，仅依赖搜索结果中的字段，不发二次详情请求。
+# 可选：get_book_detail(url) 额外抓取书籍页面，提取作者、ISBN 和 div.intro 简介。
 # 搜索结果 abstract 格式：作者 / 出版社 / 出版日期 / 定价（" / " 分隔）。
 # 封面反爬处理同 tools/meta_source/search_on_douban.py：
 #   CDN 返回 text/html JS 挑战时，解析 WTKkN/bOYDu/wyeCN 三个硬编码常量，
 #   携带 __tst_status cookie 重试即可。
+# @author: PoxenStudio, 2026-06
 
 import datetime
 import json
@@ -18,6 +20,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import requests
+from html.parser import HTMLParser
 
 KEY = "douban_v2"
 
@@ -51,7 +54,7 @@ def _parse_js_challenge_cookies(html):
     return cookies
 
 
-def search(query):
+def search(query, max_count=1):
     """搜索豆瓣图书，返回 (items, search_url)。items 为过滤后的 search_subject 列表。"""
     encoded = urllib.parse.quote(str(query))
     url = f"{_SEARCH_BASE}?search_text={encoded}&cat=1001"
@@ -75,7 +78,110 @@ def search(query):
         return [], url
 
     items = [i for i in data.get("items", []) if i.get("tpl_name") == "search_subject"]
-    return items, url
+    return items[:max_count], url
+
+
+class _BookDetailParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self._in_all_span = False
+        self._in_intro = False
+        self._div_depth = 0
+        self._chunks = []
+        self._fallback_in_intro = False
+        self._fallback_div_depth = 0
+        self._fallback_chunks = []
+        self.authors = []
+        self.isbn = None
+
+    def handle_starttag(self, tag, attrs):
+        attrs_d = dict(attrs)
+        if tag == "meta":
+            prop = attrs_d.get("property", "")
+            content = attrs_d.get("content", "")
+            if prop == "book:author" and content:
+                self.authors.append(content)
+            elif prop == "book:isbn" and content:
+                self.isbn = content
+            return
+        classes = attrs_d.get("class", "").split()
+        if tag == "span" and "all" in classes:
+            self._in_all_span = True
+            return
+        if self._in_all_span and not self._in_intro and tag == "div" and "intro" in classes:
+            self._in_intro = True
+            self._div_depth = 1
+            return
+        if self._in_intro:
+            if tag == "div":
+                self._div_depth += 1
+            attrs_str = "".join(f' {k}="{v}"' if v is not None else f" {k}" for k, v in attrs)
+            self._chunks.append(f"<{tag}{attrs_str}>")
+            return
+        # 兜底：span.all 之外的任意 div.intro
+        if not self._in_all_span and not self._fallback_in_intro and tag == "div" and "intro" in classes:
+            self._fallback_in_intro = True
+            self._fallback_div_depth = 1
+            return
+        if self._fallback_in_intro:
+            if tag == "div":
+                self._fallback_div_depth += 1
+            attrs_str = "".join(f' {k}="{v}"' if v is not None else f" {k}" for k, v in attrs)
+            self._fallback_chunks.append(f"<{tag}{attrs_str}>")
+
+    def handle_endtag(self, tag):
+        if self._in_intro:
+            if tag == "div":
+                self._div_depth -= 1
+                if self._div_depth == 0:
+                    self._in_intro = False
+                    return
+            self._chunks.append(f"</{tag}>")
+        elif self._fallback_in_intro:
+            if tag == "div":
+                self._fallback_div_depth -= 1
+                if self._fallback_div_depth == 0:
+                    self._fallback_in_intro = False
+                    return
+            self._fallback_chunks.append(f"</{tag}>")
+        elif tag == "span" and self._in_all_span:
+            self._in_all_span = False
+
+    def handle_data(self, data):
+        if self._in_intro:
+            self._chunks.append(data)
+        elif self._fallback_in_intro:
+            self._fallback_chunks.append(data)
+
+    def get_intro(self):
+        primary = "".join(self._chunks).strip()
+        return primary if primary else "".join(self._fallback_chunks).strip()
+
+
+def get_book_detail(book_url, search_url):
+    logging.info("[D2]get book detail: %s", book_url)
+    if not book_url:
+        return None
+    headers = {**_SEARCH_HEADERS, "Referer": search_url}
+    try:
+        resp = requests.get(book_url, headers=headers, timeout=15)
+        resp.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        logging.error("豆瓣V2获取书籍页面失败 %s: %s", book_url, e)
+        return None
+
+    if resp.status_code != 200:
+        logging.error("豆瓣V2获取书籍页面失败，状态码 %s != 200", resp.status_code)
+        return None
+
+    parser = _BookDetailParser()
+    parser.feed(resp.text)
+    logging.info("[D2]parsed book detail: authors=%s, isbn=%s, intro_len=%d", parser.authors, parser.isbn, len(parser.get_intro() or ""))
+    return {
+        "intro": parser.get_intro() or None,
+        "authors": parser.authors,
+        "isbn": parser.isbn,
+    }
 
 
 def get_cover(cover_url, referer="https://book.douban.com/"):
@@ -126,15 +232,20 @@ def _parse_date(s):
 
 
 def build_metadata(item, search_url, isbn=None, copy_image=False):
-    """将 subject_search 返回的单条 item 构建为 Calibre Metadata 对象。"""
     from calibre.ebooks.metadata.book.base import Metadata
     from calibre.utils.date import utcnow
 
     title = item.get("title", "")
     parsed = _parse_abstract(item.get("abstract", ""))
+    book_url = item.get("url", "")
 
-    author_str = parsed["author"] or "佚名"
-    authors = [author_str]
+    # 从书籍详情页获取精确作者、ISBN 和简介（失败时回退到 abstract 解析值）
+    detail = get_book_detail(book_url, search_url) if book_url else None
+
+    if detail and detail["authors"]:
+        authors = detail["authors"]
+    else:
+        authors = [parsed["author"] or "佚名"]
 
     mi = Metadata(title)
     mi.authors = authors
@@ -145,10 +256,15 @@ def build_metadata(item, search_url, isbn=None, copy_image=False):
     mi.source = "豆瓣(V2)"
     mi.provider_key = KEY
     mi.provider_value = str(item.get("id", ""))
-    mi.website = item.get("url", "")
+    mi.website = book_url
 
     if isbn:
         mi.isbn = isbn
+    elif detail and detail["isbn"]:
+        mi.isbn = detail["isbn"]
+
+    if detail and detail["intro"]:
+        mi.comments = detail["intro"]
 
     rating_val = item.get("rating", {}).get("value", 0)
     if rating_val:

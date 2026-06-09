@@ -16,7 +16,7 @@ CONF = loader.get_settings()
 class DoubanMetaPlugin(MetaSourcePlugin):
     """豆瓣信息源插件"""
 
-    SOURCE_KEYS = (META_SOURCE_DOUBAN,)
+    SOURCE_KEYS: tuple = (META_SOURCE_DOUBAN,)
     PROVIDER_KEY = KEY
 
     def _api(self, copy_image=True):
@@ -25,7 +25,7 @@ class DoubanMetaPlugin(MetaSourcePlugin):
             CONF["douban_baseurl"],
             copy_image=copy_image,
             manual_select=False,
-            maxCount=CONF["douban_max_count"],
+            maxCount=CONF.get("douban_max_count", 2),
         )
 
     def search(self, title=None, isbn=None, publisher=None):

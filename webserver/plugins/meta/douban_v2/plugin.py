@@ -14,14 +14,14 @@ from .api import KEY
 class DoubanV2MetaPlugin(MetaSourcePlugin):
     """豆瓣(V2)信息源插件 —— 仅使用 subject_search 接口，不发二次详情请求。"""
 
-    SOURCE_KEYS = (META_SOURCE_DOUBAN_V2,)
+    SOURCE_KEYS: tuple = (META_SOURCE_DOUBAN_V2, )
     PROVIDER_KEY = KEY
 
     def search(self, title=None, isbn=None, publisher=None):
         query = isbn or title
         if not query:
             return []
-        items, search_url = api.search(query)
+        items, search_url = api.search(query, max_count=1)
         results = []
         for item in items:
             try:
