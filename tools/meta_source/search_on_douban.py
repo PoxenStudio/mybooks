@@ -113,15 +113,22 @@ def search_douban_books(book_name):
                 continue
 
             title = item.get("title")
-            abstract = item.get("abstract")
+            abstract = item.get("abstract", "")
             book_url = item.get("url")
             cover_url = item.get("cover_url", "")
             rating_info = item.get("rating", {})
             rating_val = rating_info.get("value", "暂无")
             rating_count = rating_info.get("count", 0)
 
+            parts = [p.strip() for p in abstract.split(" / ")]
+            author = parts[0] if len(parts) > 0 else ""
+            publisher = parts[1] if len(parts) > 1 else ""
+            pub_date = parts[2] if len(parts) > 2 else ""
+            price = parts[3] if len(parts) > 3 else ""
+
             print(f"[{index}] 书名: {title}")
-            print(f"    基本信息: {abstract}")
+            print(f"    作者: {author}")
+            print(f"    出版社: {publisher}  出版日期: {pub_date}  定价: {price}")
             print(f"    评分: {rating_val} ({rating_count}人评价)")
             print(f"    链接: {book_url}")
             print(f"    封面: {cover_url}")
