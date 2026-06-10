@@ -284,6 +284,32 @@ class BookCategory(BaseHandler):
             return {"err": "internal", "msg": _("更新分类失败")}
 
 
+class BookLocation(BaseHandler):
+    @js
+    @auth
+    def post(self, id):
+        book_id = int(id)
+        book = self.get_book(book_id, raise_exception=False)
+        if not book:
+            return {"err": "params.book.invalid", "msg": _("书籍不存在")}
+
+        if not self.is_admin() and not self.is_book_owner(book_id, self.user_id()):
+            return {"err": "user.no_permission", "msg": _("无权限")}
+
+        data = tornado.escape.json_decode(self.request.body)
+        location = data.get(COLUMN_LOCATION, "").strip()
+        if len(location) > 20:
+            return {"err": "params.location.invalid", "msg": _("位置信息过长")}
+
+        logging.info(f"Updating location for book {book_id}: {location}")
+        try:
+            self.calibre_db_cache.set_field(CALIBRE_COLUMN_LOCATION, {book_id: location})
+            return {"err": "ok", "msg": _("位置更新成功")}
+        except Exception as e:
+            logging.error(f"Error updating location for book {book_id}: {e}")
+            return {"err": "internal", "msg": _("更新位置失败")}
+
+
 class BookCategoryBatch(BaseHandler):
     @js
     @auth
@@ -3369,6 +3395,7 @@ def routes():
         (r"/api/book/update_tags", BookUpdateTags),
         (r"/api/book/category", BookCategoryBatch),
         (r"/api/book/([0-9]+)/category", BookCategory),
+        (r"/api/book/([0-9]+)/location", BookLocation),
         (r"/api/categories", BookCategories),
         (r"/api/tags/search", TagSearch),
         (r"/api/book/([0-9]+)/suggestion", BookSuggestion),

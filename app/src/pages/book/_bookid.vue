@@ -512,7 +512,25 @@
                                     </v-chip>
                                 </span>
                                 <span v-if="book.book_type==this.BOOK_TYPE.PHYSICAL">{{ $t('book.bookCount') }}: {{book.book_count}}</span>
-                                <span v-if="book.book_type==this.BOOK_TYPE.PHYSICAL">, {{ $t('book.location') }}: {{book.location || "*" }}</span>
+                                <span v-if="book.book_type==this.BOOK_TYPE.PHYSICAL">
+                                    , {{ $t('book.location') }}:
+                                    <span v-if="!editing_location">
+                                        {{book.location || "*" }}
+                                        <v-icon small @click="startEditLocation">edit</v-icon>
+                                    </span>
+                                    <v-text-field
+                                        v-else
+                                        v-model="location_input"
+                                        autofocus
+                                        dense
+                                        hide-details
+                                        single-line
+                                        maxlength="20"
+                                        style="display: inline-flex; width: 120px;"
+                                        @keyup.enter="confirmEditLocation"
+                                        @blur="cancelEditLocation"
+                                    ></v-text-field>
+                                </span>
                                 <template v-for="(file, index) in book.files.slice(0, 3)" :key="'file-size-' + index">
                                     <span
                                         color="grey--text"
@@ -1621,6 +1639,8 @@ export default {
         debug: false,
         loaded: false,
         ai_filling: false,
+        editing_location: false,
+        location_input: "",
         mail_to: "",
         kindle_sender: "",
         txt_parse_inited: false,
@@ -2856,6 +2876,34 @@ export default {
                 }
             } catch (error) {
                 console.error('更新分类失败:', error);
+                this.$alert('error', this.$t('message.networkError'));
+            }
+        },
+
+        startEditLocation() {
+            this.location_input = this.book.location || "";
+            this.editing_location = true;
+        },
+
+        cancelEditLocation() {
+            this.editing_location = false;
+        },
+
+        async confirmEditLocation() {
+            const location = this.location_input.trim();
+            try {
+                const response = await this.$backend(`/book/${this.book.id}/location`, {
+                    method: 'POST',
+                    body: JSON.stringify({ location }),
+                });
+                if (response.err === 'ok') {
+                    this.book.location = location;
+                    this.editing_location = false;
+                } else {
+                    this.$alert('error', response.msg || '更新失败');
+                }
+            } catch (error) {
+                console.error('更新位置失败:', error);
                 this.$alert('error', this.$t('message.networkError'));
             }
         },
