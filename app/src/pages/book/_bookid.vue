@@ -1468,7 +1468,7 @@ export default {
         readFormats() {
             if (!this.book) return [];
             const formats = [];
-            if (this.is_txt) formats.push({ key: 'txt', label: 'TXT', href: '/book' + this.book.id + '/readtxt/' });
+            if (this.is_txt) formats.push({ key: 'txt', label: 'TXT', href: '/book/' + this.book.id + '/readtxt' });
             // TXT 默认同时支持转换为 EPUB 阅读
             if (this.hasEpubFormat || this.is_txt) formats.push({ key: 'epub', label: this.$t('book.epubReader'), href: '/read/' + this.book.id + '?format=epub' });
             if (this.hasPDF) formats.push({ key: 'pdf', label: this.$t('book.pdfReader'), href: '/read/' + this.book.id + '?format=pdf' });

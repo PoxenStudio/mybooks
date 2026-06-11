@@ -154,7 +154,7 @@ export default {
       const {title, start, end} = {...this.content[i]};
       this.loading = true;
       console.log(title, start, end);
-      this.$backend(`/read/txt?id=${this.bookid}&start=${start}&end=${end}`)
+      this.$backend(`/read/txt/${this.bookid}?start=${start}&end=${end}`)
         .then(res => {
           if (res.err !== "ok") {
             this.novelContent = this.$t('reader.contentError', { msg: res.msg });
