@@ -149,7 +149,7 @@ class ConverterService(AsyncService):
             CONF["convert_path"], "book-%s-%s.%s" % (book["id"], int(time.time()), new_fmt),
         )
         progress_file = ConverterService().get_path_progress(book["id"])
-        logging.info("convert book: %s => %s, progress: %s" % (fpath, new_path, progress_file))
+        logging.info("convert book: %s => %s, progress file: %s" % (fpath, new_path, progress_file))
 
         title = book.get("title", "Unknown Title")
         if len(title) > 20:

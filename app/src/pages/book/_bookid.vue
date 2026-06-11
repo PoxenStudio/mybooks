@@ -263,23 +263,27 @@
                             ({{ audios.count }})
                         </span>
                     </v-btn>
-                    <v-btn :small="tiny" dark color="primary" class="mx-2 d-flex d-sm-flex" :style="tiny ? { padding: '0px 2px', margin: '0px 3px !important' } : {}"
-                           :href="readHref" target="_blank">
-                        {{ $t('book.read') }}
-                    </v-btn>
-                    <v-menu v-if="needsReadFormatChoice" offset-y>
-                        <template v-slot:activator="{ on, attrs }">
-                            <v-btn :small="tiny" dark color="primary" icon class="mr-2" style="margin-left: -12px"
-                                   v-bind="attrs" v-on="on">
-                                <v-icon small>mdi-menu-down</v-icon>
-                            </v-btn>
-                        </template>
-                        <v-list dense>
-                            <v-list-item v-for="fmt in extraReadFormats" :key="fmt.key" :href="fmt.href">
-                                <v-list-item-title>{{ fmt.label }}</v-list-item-title>
-                            </v-list-item>
-                        </v-list>
-                    </v-menu>
+                    <div class="d-inline-flex" :class="tiny ? 'mx-1' : 'mx-2'">
+                        <v-btn :small="tiny" dark color="primary" class="d-flex d-sm-flex" :class="{ 'read-btn-grouped': needsReadFormatChoice }"
+                               :style="tiny ? { padding: '0px 2px', margin: '0px !important' } : { margin: '0px' }"
+                               :href="readHref" target="_blank">
+                            {{ $t('book.read') }}
+                        </v-btn>
+                        <v-menu v-if="needsReadFormatChoice" offset-y left>
+                            <template v-slot:activator="{ on, attrs }">
+                                <v-btn :small="tiny" dark color="primary" min-width="0" class="read-format-btn"
+                                       :style="tiny ? { padding: '0px 2px', margin: '0px !important' } : { padding: '0 6px', margin: '0px' }"
+                                       v-bind="attrs" v-on="on">
+                                    <v-icon small>more_vert</v-icon>
+                                </v-btn>
+                            </template>
+                            <v-list dense>
+                                <v-list-item v-for="fmt in extraReadFormats" :key="fmt.key" :href="fmt.href" target="_blank">
+                                    <v-list-item-title>{{ fmt.label }}</v-list-item-title>
+                                </v-list-item>
+                            </v-list>
+                        </v-menu>
+                    </div>
                     <template v-if="book.is_owner">
                         <v-menu offset-y>
                             <template v-slot:activator="{ on }">
@@ -635,10 +639,10 @@
                             <v-icon dark>import_contacts</v-icon>
                         </v-list-item-avatar>
                         <v-list-item-content>
-                            <v-list-item-title :class="{ 'grey--text': book.book_type == this.BOOK_TYPE.PHYSICAL }">{{ $t('book.onlineReading') }}</v-list-item-title>
+                            <v-list-item-title :class="{ 'grey--text': book.book_type == this.BOOK_TYPE.PHYSICAL }">{{ $t('book.read') }}</v-list-item-title>
                         </v-list-item-content>
                         <v-list-item-action>
-                            <v-menu v-if="needsReadFormatChoice" offset-y>
+                            <v-menu v-if="needsReadFormatChoice" offset-y left>
                                 <template v-slot:activator="{ on, attrs }">
                                     <v-btn icon v-bind="attrs" v-on="on" @click.stop.prevent>
                                         <v-icon>mdi-menu-down</v-icon>
@@ -1452,8 +1456,8 @@ export default {
             const formats = [];
             if (this.is_txt) formats.push({ key: 'txt', label: 'TXT', href: '/book' + this.book.id + '/readtxt/' });
             // TXT 默认同时支持转换为 EPUB 阅读
-            if (this.hasEpubFormat || this.is_txt) formats.push({ key: 'epub', label: 'EPUB阅读', href: '/read/' + this.book.id + '?format=epub' });
-            if (this.hasPDF) formats.push({ key: 'pdf', label: 'PDF阅读', href: '/read/' + this.book.id + '?format=pdf' });
+            if (this.hasEpubFormat || this.is_txt) formats.push({ key: 'epub', label: this.$t('book.epubReader'), href: '/read/' + this.book.id + '?format=epub' });
+            if (this.hasPDF) formats.push({ key: 'pdf', label: this.$t('book.pdfReader'), href: '/read/' + this.book.id + '?format=pdf' });
             return formats;
         },
 
@@ -3531,6 +3535,17 @@ h1.book-detail-title {
 
 .audio-scroll-container::-webkit-scrollbar-corner {
     background: #f1f1f1;
+}
+
+.read-btn-grouped {
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+}
+
+.read-format-btn {
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    border-left: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 /* Dialog border styles */

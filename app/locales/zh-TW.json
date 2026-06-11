@@ -448,6 +448,8 @@
     "languages": "語言",
     "push": "推送",
     "read": "閱讀",
+    "epubReader": "EPUB閱讀器",
+    "pdfReader": "PDF閱讀器",
     "manage": "管理",
     "process": "檔案處理",
     "syncBookInfo": "從網際網路同步書籍資訊",
