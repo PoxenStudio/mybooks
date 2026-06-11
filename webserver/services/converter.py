@@ -13,6 +13,7 @@ import psutil
 
 from webserver import loader
 from webserver import utils
+from webserver.plugins.parser.txt import get_content_encoding
 from webserver.services import AsyncService
 from webserver.services.mail import MailService
 from webserver.services.background_service import BackgroundService, BackgroundTask
@@ -31,6 +32,14 @@ def shell_quote_for_log(value):
 
 
 class ConverterService(AsyncService):
+    def _check_txt_encoding(self, file_path):
+        with open(file_path, mode='rb') as file:
+            content = file.read(4096)
+        if not content:
+            return 'utf-8'
+        return get_content_encoding(content)
+
+
     def get_fmt(self, path):
         fmt = os.path.splitext(path)[1]
         return fmt[1:].lower() if fmt else ""
@@ -69,9 +78,10 @@ class ConverterService(AsyncService):
         if new_fmt == "epub":
             args += ["--epub-version", "2"]
             if old_path.lower().endswith(".txt"):
+                encode = self._check_txt_encoding(old_path)
                 args += ["--chapter-mark", "pagebreak",
                          "--output-profile", "kindle",
-                         "--input-encoding", "utf-8",
+                         "--input-encoding", encode,
                          "--language", "zh",
                          "--chapter", "//*[local-name()='p' and re:test(., '(^第?[0-9一二三四五六七八九十百千]+[章节卷回集].*|^章[0-9]+.*|^引子|^楔子|^尾声)', 'i')]",
                          "--flow-size", "260"]
@@ -106,6 +116,7 @@ class ConverterService(AsyncService):
             logging.info("CMD: %s" % cmd)
             env = os.environ.copy()
             env["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
+            env["XDG_RUNTIME_DIR"] = "/tmp/runtime-ubuntu"
             p = subprocess.Popen(args, stdout=log, stderr=subprocess.PIPE, env=env)
             try:
                 _, stde = p.communicate(timeout=timeout)
