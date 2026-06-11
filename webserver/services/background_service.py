@@ -197,6 +197,7 @@ class BackgroundService:
         Returns:
             bool: 是否更新成功
         """
+        logging.debug(f"[BACKGROUND] {task_id} is completed!!")
         with self._tasks_lock:
             task = self._tasks.get(task_id)
 
@@ -266,9 +267,7 @@ class BackgroundService:
                         task.progress = 0
             running_tasks.sort(key=lambda t: t.update_time, reverse=True)
 
-            # 限制返回数量
             tasks = running_tasks[:limit]
-
             return [task.to_dict() for task in tasks]
 
     def get_task(self, task_id: int) -> Optional[Dict]:

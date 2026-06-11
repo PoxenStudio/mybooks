@@ -2507,7 +2507,7 @@ class BookRead(BaseHandler):
                 if self.current_user and not self.current_user.can_save():
                     raise web.HTTPError(403, reason=_("无权在线阅读"))
 
-                pdf_url = urllib.parse.quote_plus(self.api_url + "/api/book/%(id)d.PDF" % book)
+                pdf_url = urllib.parse.quote_plus(self.api_url + "/api/book/%(id)d.pdf" % book)
                 pdf_reader_url = CONF["PDF_VIEWER"] % {"pdf_url": pdf_url}
                 return self.redirect(pdf_reader_url)
 
@@ -2534,6 +2534,7 @@ class BookRead(BaseHandler):
             if fmt != 'epub':
                 service = ConverterService()
                 if not service.is_book_converting(book):
+                    logging.info(f"[READ]Convert book {bid} to epub format, {fpath}")
                     service.convert_and_save(self.user_id(), book, fpath, "epub")
 
             # epub_dir is for javascript

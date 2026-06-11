@@ -158,6 +158,7 @@ class ConverterService(AsyncService):
         task = BackgroundService().add_task(BackgroundTask.SERVICE_TYPE_CONVERT, service_item, book_id=book["id"])
         ok = ConverterService().do_ebook_convert(fpath, new_path, progress_file)
         if task:
+            logging.info(f"[CONVERT] complete the task {task.id}, book:{title}")
             BackgroundService().complete_task(task.id)
         if not ok:
             self.add_msg(user_id, "danger", "[%s]文件格式转换失败！请在设置中调整转换超时时间后重试" % service_item)
