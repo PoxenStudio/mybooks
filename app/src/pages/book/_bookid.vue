@@ -2,6 +2,20 @@
   <div>
     <v-row align="start">
         <v-col cols="12">
+            <v-dialog v-model="dialog_converting" persistent width="420">
+                <v-card class="dialog-border">
+                    <div style="height: 16px;"></div>
+                    <v-card-text class="d-flex align-center">
+                        <v-progress-circular indeterminate color="primary" class="mr-3"></v-progress-circular>
+                        <span>{{ $t('book.convertingPleaseWait') }}</span>
+                    </v-card-text>
+                    <v-card-actions>
+                        <v-spacer></v-spacer>
+                        <v-btn color="" text @click="cancelConvertingDialog()">{{ $t('common.cancel') }}</v-btn>
+                    </v-card-actions>
+                </v-card>
+            </v-dialog>
+
             <v-dialog v-model="dialog_epub2audio" persistent width="380">
                 <v-card class="dialog-border">
                     <v-card-title class="">{{ $t('book.convertToAudio') }}</v-card-title>
@@ -266,7 +280,7 @@
                     <div class="d-inline-flex" :class="tiny ? 'mx-1' : 'mx-2'">
                         <v-btn :small="tiny" dark color="primary" class="d-flex d-sm-flex" :class="{ 'read-btn-grouped': needsReadFormatChoice }"
                                :style="tiny ? { padding: '0px 2px', margin: '0px !important' } : { margin: '0px' }"
-                               :href="readHref" target="_blank">
+                               :href="readHref" target="_blank" @click="onReadClick($event, defaultReadFormat)">
                             {{ $t('book.read') }}
                         </v-btn>
                         <v-menu v-if="needsReadFormatChoice" offset-y left>
@@ -278,7 +292,7 @@
                                 </v-btn>
                             </template>
                             <v-list dense>
-                                <v-list-item v-for="fmt in extraReadFormats" :key="fmt.key" :href="fmt.href" target="_blank">
+                                <v-list-item v-for="fmt in extraReadFormats" :key="fmt.key" :href="fmt.href" target="_blank" @click="onReadClick($event, fmt)">
                                     <v-list-item-title>{{ fmt.label }}</v-list-item-title>
                                 </v-list-item>
                             </v-list>
@@ -634,7 +648,7 @@
         <v-col cols="12" sm="6" class="book-action-col">
             <v-card outlined>
                 <v-list>
-                    <v-list-item :href="readHref" target="_blank" :disabled="book.book_type == this.BOOK_TYPE.PHYSICAL">
+                    <v-list-item :href="readHref" target="_blank" :disabled="book.book_type == this.BOOK_TYPE.PHYSICAL" @click="onReadClick($event, defaultReadFormat)">
                         <v-list-item-avatar large :color="book.book_type == this.BOOK_TYPE.PHYSICAL ? 'grey' : 'primary'">
                             <v-icon dark>import_contacts</v-icon>
                         </v-list-item-avatar>
@@ -649,7 +663,7 @@
                                     </v-btn>
                                 </template>
                                 <v-list dense>
-                                    <v-list-item v-for="fmt in extraReadFormats" :key="fmt.key" :href="fmt.href" target="_blank">
+                                    <v-list-item v-for="fmt in extraReadFormats" :key="fmt.key" :href="fmt.href" target="_blank" @click="onReadClick($event, fmt)">
                                         <v-list-item-title>{{ fmt.label }}</v-list-item-title>
                                     </v-list-item>
                                 </v-list>
@@ -1654,6 +1668,10 @@ export default {
         wantsLoading: false,
         readingStateLoading: false,
         dialog_download: false,
+        // 转换中等待对话框
+        dialog_converting: false,
+        converting_poll_timer: null,
+        converting_target_href: '',
         dialog_epub2audio: false,
         dialog_audiolist: false,
         dialog_refer: false,
@@ -1869,6 +1887,7 @@ export default {
         this.stopCurrentAudio();
         this.stopAudioFilePlayback();
         this.stopAudioProgressPolling();
+        this.stopConvertingPolling();
     },
     methods: {
         async toggleFavorite() {
@@ -2365,10 +2384,8 @@ export default {
                 if (rsp.err === "ok") {
                     this.dialog_delete_format = false;
                     this.$alert("success", rsp.msg || this.$t('book.deleteFormatSuccess'));
-                    // 刷新当前页面
-                    setTimeout(() => {
-                        location.reload();
-                    }, 1000);
+                    // remove the deleted format from files
+                    this.book.files = this.book.files.filter((f) => f.format.toLowerCase() !== this.selectedDeletedFormat);
                 } else {
                     this.$alert("error", rsp.msg || this.$t('book.deleteFormatFailed'));
                 }
@@ -2552,6 +2569,58 @@ export default {
                 clearInterval(this.progressTimer);
                 this.progressTimer = null;
             }
+        },
+        // 在打开阅读器之前，检测目标格式是否就绪（如未就绪则启动转换）
+        async checkReadStatus(formatKey) {
+            try {
+                return await this.$backend(`/book/${this.book.id}/read`, {
+                    method: 'POST',
+                    body: JSON.stringify({ format: formatKey }),
+                });
+            } catch (e) {
+                return null;
+            }
+        },
+        // 阅读按钮点击：epub格式需要先检查转换状态，其它格式直接打开
+        async onReadClick(event, fmt) {
+            if (!fmt || fmt.key !== 'epub') return;
+            event.preventDefault();
+
+            const rsp = await this.checkReadStatus(fmt.key);
+            if (rsp && rsp.data && rsp.data.status === 'ready') {
+                window.open(fmt.href, '_blank');
+                return;
+            }
+
+            this.converting_target_href = fmt.href;
+            this.dialog_converting = true;
+            this.startConvertingPolling();
+        },
+        startConvertingPolling() {
+            this.stopConvertingPolling();
+            this.converting_poll_timer = setInterval(() => {
+                this.pollConvertingStatus();
+            }, 3000);
+        },
+        stopConvertingPolling() {
+            if (this.converting_poll_timer) {
+                clearInterval(this.converting_poll_timer);
+                this.converting_poll_timer = null;
+            }
+        },
+        async pollConvertingStatus() {
+            const rsp = await this.checkReadStatus('epub');
+            if (rsp && rsp.data && rsp.data.status === 'ready') {
+                const href = this.converting_target_href;
+                this.cancelConvertingDialog();
+                window.open(href, '_blank');
+            }
+        },
+        // 取消转换轮询等待
+        cancelConvertingDialog() {
+            this.stopConvertingPolling();
+            this.dialog_converting = false;
+            this.converting_target_href = '';
         },
         async updateAudioProgress() {
             try {

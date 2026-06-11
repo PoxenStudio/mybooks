@@ -610,6 +610,7 @@
     "enterKindleEmail": "Enter Kindle recipient email address:",
     "emailLabel": "Email*",
     "kindleSenderNote": "* Please add this site's email to Kindle sender list:",
+    "convertingPleaseWait": "Conversion in progress, please wait...",
     "convertToAudio": "Audio Conversion",
     "convertToAudioNote": "Converting to audiobook may take some time, please be patient.",
     "audioGenerated": "Audiobook generated successfully, please refresh the page to view",

@@ -2574,6 +2574,58 @@ class BookRead(BaseHandler):
 
         raise web.HTTPError(404, reason=_("抱歉，在线阅读器暂不支持该格式的书籍，可以转为epub或者pdf后阅读"))
 
+    def _epub_conversion_source(self, book, fmt_arg=""):
+        """返回需要转换为epub的源文件路径；如果无需转换（已就绪或该格式不需要转换）则返回None"""
+        if fmt_arg and fmt_arg not in ("epub"):
+            return None
+
+        for fmt in ["epub", "txt", "mobi", "azw", "azw3"]:
+            fpath = book.get("fmt_%s" % fmt, None)
+            if not fpath:
+                continue
+            if fmt in ("epub"):
+                return None
+            return None if book.get("fmt_epub") else fpath
+        return None
+
+    @js
+    def post(self, bid):
+        """检测目标阅读格式是否就绪，如未就绪则按需启动转换任务"""
+        if not CONF["ALLOW_GUEST_READ"] and not self.current_user:
+            return {"err": "user.no_permission", "msg": _("请先登录")}
+
+        if self.current_user:
+            if self.current_user.can_read():
+                if not self.current_user.is_active():
+                    return {"err": "user.no_permission", "msg": _("无权在线阅读，请先登录注册邮箱激活账号。")}
+            else:
+                return {"err": "user.no_permission", "msg": _("无权在线阅读")}
+
+        book = self.get_book(bid, raise_exception=False)
+        if not book:
+            return {"err": "params.book.invalid", "msg": _("书籍已不存在")}
+
+        data = {}
+        if self.request.body:
+            try:
+                data = tornado.escape.json_decode(self.request.body)
+            except (ValueError, json.JSONDecodeError):
+                data = {}
+        fmt_arg = str(data.get("format") or self.get_argument("format", "")).lower()
+
+        fpath = self._epub_conversion_source(book, fmt_arg)
+        if not fpath:
+            return {"err": "ok", "msg": _("可以直接打开"), "data": {"status": "ready", "path": fpath}}
+
+        service = ConverterService()
+        if not service.is_book_converting(book):
+            logging.info(f"[READ]Convert book {bid} to epub format, {fpath}")
+            service.convert_and_save(self.user_id(), book, fpath, "epub")
+        else:
+            logging.info("[READ]One converting task is running.")
+
+        return {"err": "ok", "msg": _("正在执行转换任务，请稍候..."), "data": {"status": "converting"}}
+
 
 class TxtRead(BaseHandler):
     @js
@@ -3391,6 +3443,7 @@ def routes():
         (r"/api/book/([0-9]+)/send_to_device", BookSendToDevice),
         (r"/api/book/([0-9]+)/mailto", BookSendToMail),
         (r"/read/([0-9]+)", BookRead),
+        (r"/api/book/([0-9]+)/read", BookRead),
         (r"/api/read/txt/([0-9]+)", TxtRead),
         (r"/api/book/txt/init", BookTxtInit),
         (r"/api/book/([0-9]+)/convert", BookConverter),
