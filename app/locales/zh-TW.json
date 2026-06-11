@@ -567,8 +567,6 @@
     "directory": "目錄",
     "next": "下一章",
     "error": "錯誤",
-    "error_page_not_found": "404 Not Found",
-    "error_server_starting": "服務正在啟動中，稍後重試",
     "parsed": "已解析",
     "queue": "佇列中",
     "queueMessage": "前方等待 {queLen} 個轉換待完成，已步入後台佇列",
@@ -1284,5 +1282,7 @@
     "toastCopyFail": "❌ 複製失敗，請手動選取複製",
     "toastCleared": "已清空",
     "sampleText": "這是一段範例文字，用於示範文字處理工具的功能。\n\n重要：請注意，這個工具可以自動將文字內容轉換為 HTML 格式。\n\n提示：你可以在設定面板中新增自訂關鍵詞規則，讓特定文字自動加粗、放大或高亮顯示。\n\n警告：請確保輸入的文字內容符合你的預期格式，每段之間用空行分隔。\n\n關鍵功能包括：自動段落標籤、關鍵詞高亮、即時預覽、HTML 代碼複製等。"
-  }
+  },
+  "error_page_not_found": "404: 頁面已走失，回首頁再看看",
+  "error_server_starting": "服務正在啟動中，稍後重試"
 }

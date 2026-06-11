@@ -148,6 +148,13 @@ class ConverterService(AsyncService):
         new_path = os.path.join(
             CONF["convert_path"], "book-%s-%s.%s" % (book["id"], int(time.time()), new_fmt),
         )
+
+        # double confirm the new format not existed
+        new_fmt_file_path = self.db.format_abspath(book['id'], new_fmt, index_is_id=True)
+        if new_fmt_file_path:
+            logging.info(f"[CONVERT] the format file of {new_fmt} is existed. Skip!")
+            return
+
         progress_file = ConverterService().get_path_progress(book["id"])
         logging.info("convert book: %s => %s, progress file: %s" % (fpath, new_path, progress_file))
 

@@ -568,8 +568,6 @@
     "directory": "目录",
     "next": "下一章",
     "error": "错误",
-    "error_page_not_found": "404: 页面未找到",
-    "error_server_starting": "[MyBooks] 服务正在启动中，稍后重试",
     "parsed": "已解析",
     "queue": "队列中",
     "queueMessage": "前方等待{queLen}个转换待完成，已步入后台队列",
@@ -1285,5 +1283,7 @@
     "toastCopyFail": "❌ 复制失败，请手动选择复制",
     "toastCleared": "已清空",
     "sampleText": "这是一段示例文字，用于演示文字处理工具的功能。\n\n重要：请注意，这个工具可以自动将文字内容转换为 HTML 格式。\n\n提示：你可以在设置面板中添加自定义关键词规则，让特定文字自动加粗、加大或高亮显示。\n\n警告：请确保输入的文字内容符合你的预期格式，每段之间用空行分隔。\n\n关键功能包括：自动段落标签、关键词高亮、实时预览、HTML 代码复制等。"
-  }
+  },
+  "error_page_not_found": "404: 页面已走失，请回首页",
+  "error_server_starting": "[MyBooks] 服务正在启动中，稍后重试"
 }

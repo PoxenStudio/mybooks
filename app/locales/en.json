@@ -752,8 +752,6 @@
     "directory": "Directory",
     "next": "Next Chapter",
     "error": "Error",
-    "error_page_not_found": "404 Not Found",
-    "error_server_starting": "Service is starting, please try again later",
     "parsed": "Parsed",
     "queue": "In Queue",
     "queueMessage": "Waiting for {queLen} conversions ahead, added to the background queue",
@@ -1284,5 +1282,7 @@
     "toastCopyFail": "❌ Copy failed, please copy manually",
     "toastCleared": "Cleared",
     "sampleText": "This is sample text used to demonstrate the text processor.\n\nImportant: Note that this tool automatically converts text into HTML format.\n\nTip: You can add custom keyword rules in the settings panel to make specific words bold, enlarged, or highlighted automatically.\n\nWarning: Make sure the input text matches the expected format, with paragraphs separated by blank lines.\n\nKey features include: automatic paragraph tags, keyword highlighting, live preview, and HTML code copying."
-  }
+  },
+  "error_page_not_found": "404 Not Found",
+  "error_server_starting": "Service is starting, please try again later"
 }
