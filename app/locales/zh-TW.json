@@ -425,7 +425,7 @@
     "enterKindleEmail": "填寫 Kindle 收件人信箱位址：",
     "emailLabel": "Email*",
     "kindleSenderNote": "* 請先將本站信箱加入至 Kindle 發件人中:",
-    "convertingPleaseWait": "正在執行轉換任務，請稍候...",
+    "convertingPleaseWait": "正在執行轉換，請稍候...",
     "parseringPleaseWait": "正在解析目錄，請稍候...",
     "convertToAudio": "有聲書",
     "convertToAudioNote": "將使用EPUB文件進行有聲書轉換，需要花費一段時間，請耐心等待。",

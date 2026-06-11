@@ -2638,7 +2638,7 @@ export default {
             if (this.isReadConversionReady(this.converting_format, rsp)) {
                 const href = this.converting_target_href;
                 this.cancelConvertingDialog();
-                window.open(href, '_blank');
+                window.location.href = href;
             }
         },
         // 取消转换轮询等待
