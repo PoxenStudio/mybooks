@@ -110,9 +110,6 @@ begin
   BatchFile := ExpandConstant('{app}\StartMyBooks.bat');
   DataPath := GetWslPath(ExpandConstant('{app}\data'));
 
-  // ==========================================
-  // ⚠️ 重要：请在此处修改您的实际入口命令！
-  // ==========================================
   // 在独立窗口中以前台方式运行服务（保留日志输出），主窗口等待片刻后打开默认浏览器
   // 启动前先将本机的 data 目录绑定挂载到容器内的 /data，实现书库数据持久化到本机
   BatchContent := '@echo off' + #13#10 +
@@ -122,7 +119,7 @@ begin
                   'timeout /t 5 /nobreak >nul' + #13#10 +
                   'start "" "http://localhost"' + #13#10 +
                   'echo.' + #13#10 +
-                  'echo MyBooks 已启动，服务日志显示在另一个窗口中。' + #13#10 +
+                  'echo MyBooks 已启动，可以在浏览器中使用 http://<本机IP> 访问。服务日志显示在另一个窗口中。' + #13#10 +
                   'echo 关闭此窗口不会停止服务，如需停止请使用 Stop MyBooks。' + #13#10 +
                   'echo 按任意键关闭此窗口...' + #13#10 +
                   'pause >nul';
