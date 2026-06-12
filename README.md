@@ -78,10 +78,10 @@ docker-compose -f docker-compose.yml  up -d
 
 ## Windows安装
 自v3.47起提供在Windows 10之后版本上独立的安装程序，不依赖Docker。可以在各个release的附件中下载。
-[Wins Installer](document/win_installer.png)
+![Wins Installer](document/win_installer.png)
 安装后可以会出现```MyBooks Service```程序, 提供停止、重启和卸载操作。
 启动后，服务通过本机ip可以访问。
-[windows_service](document/win_service.png)
+![windows_service](document/win_service.png)
 
 数据目录在当前用户的AppData/Local目录下， 可以直接查看。
 
