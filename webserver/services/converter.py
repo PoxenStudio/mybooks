@@ -39,7 +39,6 @@ class ConverterService(AsyncService):
             return 'utf-8'
         return get_content_encoding(content)
 
-
     def get_fmt(self, path):
         fmt = os.path.splitext(path)[1]
         return fmt[1:].lower() if fmt else ""
