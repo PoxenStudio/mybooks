@@ -72,6 +72,20 @@ define(
 os.environ["QT_IMAGEIO_MAXALLOC"] = "400"
 
 
+def drop_old_table_as_needed(session):
+    if not session:
+        return
+    result = session.execute(text("""
+        PRAGMA table_info(items)
+    """)).fetchall()
+    columns = [row[1] for row in result]
+    if "scope" not in columns:
+        return
+    session.execute(text("""
+        DROP TABLE items
+    """))
+
+
 def add_meta_in_calibre(calibre_db, key, name, datatype):
     found = False
     for k, v in calibre_db.field_metadata.items():
@@ -282,6 +296,7 @@ def make_app():
         sys.exit(1)
 
     if options.syncdb:
+        drop_old_table_as_needed(ScopedSession)
         models.user_syncdb(engine)
         logging.info("Create tables into DB")
         sys.exit(0)
