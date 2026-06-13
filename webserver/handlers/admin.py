@@ -1331,7 +1331,7 @@ class AdminSyslog(BaseHandler):
                 lines = f.readlines()
             return {
                 "err": "ok",
-                "lines": [line.rstrip("\n") for line in lines[-self.MAX_LINES :]],
+                "lines": [line.rstrip("\n") for line in lines[-self.MAX_LINES:]],
                 "href": self.cdn_url + "/api/admin/syslog/download",
             }
         except Exception as e:
