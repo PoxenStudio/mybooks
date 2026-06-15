@@ -144,4 +144,4 @@ def search_douban_books(book_name):
 
 if __name__ == "__main__":
     # 测试搜索
-    search_douban_books("双天至尊")
+    search_douban_books("等到一切风平浪静")

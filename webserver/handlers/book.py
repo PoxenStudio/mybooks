@@ -671,7 +671,7 @@ class BookRefer(BaseHandler):
                 d = {k: v for k, v in d.items() if v}
                 pubdate = b.get("pubdate")
                 if b.rating:
-                    d["rating"] = round(float(b.rating) / 2, 1)
+                    d["rating"] = round(b.rating, 1)
                 d["pubyear"] = pubdate.strftime("%Y") if pubdate else ""
                 if not d.get("comments", ""):
                     d["comments"] = _("无详细介绍")
@@ -806,7 +806,7 @@ class BookRefer(BaseHandler):
         key = self._build_search_key(title, isbn, publisher)
         cached_books = self._get_cached_books(key)
         if cached_books is not None:
-            return {"err": "ok", "books": self._format_refer_books(cached_books), "cached": True}
+            return {"err": "ok", "books": self._format_refer_books(cached_books, ), "cached": True}
 
         semaphore = self._get_search_semaphore()
         loop = asyncio.get_running_loop()

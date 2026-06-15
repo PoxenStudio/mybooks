@@ -285,3 +285,11 @@ def build_metadata(item, search_url, isbn=None, copy_image=False):
                 mi.cover_url = cover_url
 
     return mi
+
+
+if __name__ == "__main__":
+    items, search_url = search("白鹿原")
+    for item in items:
+        print(item)
+        rating = item.get("rating", {}).get("value", 0)
+        print(f"Rating: {rating}")
