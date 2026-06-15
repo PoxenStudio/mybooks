@@ -601,7 +601,6 @@ class BookSetSole(BaseHandler):
 
 class BookRefer(BaseHandler):
     _search_executor = ThreadPoolExecutor(max_workers=int(CONF.get("REFER_SEARCH_MAX_WORKERS", 6)))
-    _search_timeout = float(CONF.get("REFER_SEARCH_TIMEOUT", 60))
     _search_cache_ttl = int(CONF.get("REFER_SEARCH_CACHE_TTL", 180))
     _search_max_concurrency = int(CONF.get("REFER_SEARCH_MAX_CONCURRENCY", 16))
     _search_cache = {}
@@ -829,8 +828,9 @@ class BookRefer(BaseHandler):
             if created:
                 fut.add_done_callback(lambda f, _key=key: self._cleanup_inflight(_key, f))
 
+            search_timeout = float(CONF.get("REFER_SEARCH_TIMEOUT", 60))
             try:
-                books = await asyncio.wait_for(asyncio.shield(fut), timeout=self._search_timeout)
+                books = await asyncio.wait_for(asyncio.shield(fut), timeout=search_timeout)
             except asyncio.TimeoutError:
                 logging.warning("BookRefer search timeout: key=%s", key)
                 fallback = self._get_cached_books(key) or []
