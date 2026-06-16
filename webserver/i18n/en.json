@@ -57,7 +57,7 @@
   "RATING: %s<br />": "RATING: %s<br />",
   "SERIES: %(series)s [%(sidx)s]<br />": "SERIES: %(series)s [%(sidx)s]<br />",
   "Set new favicon: %s": "Set new favicon: %s",
-  "Settings saved.": "Settings saved.",
+  "设置已保存": "Settings saved.",
   "TAGS: %s<br />": "TAGS: %s<br />",
   "The host address on which to listen": "The host address on which to listen",
   "The port on which to listen.": "The port on which to listen.",

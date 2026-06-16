@@ -57,7 +57,7 @@
     "RATING: %s": "評分: %s",
     "SERIES: %(series)s [%(sidx)s]": "叢書: %(series)s [%(sidx)s]",
     "Set new favicon: %s": "設定新網站圖示: %s",
-    "Settings saved.": "設定已儲存。",
+    "设置已保存": "設定已儲存。",
     "TAGS: %s": "標籤: %s",
     "The host address on which to listen": "監聽的主機位址",
     "The port on which to listen.": "監聽的連接埠。",

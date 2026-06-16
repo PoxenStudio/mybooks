@@ -104,9 +104,9 @@ class UserUpdate(BaseHandler):
 
         try:
             user.save()
-            self.add_msg("success", _("Settings saved."))
+            self.add_msg("success", _("设置已保存"))
             return {"err": "ok"}
-        except:
+        except Exception:
             return {"err": "db.error", "msg": _("数据库操作异常，请重试")}
 
 
