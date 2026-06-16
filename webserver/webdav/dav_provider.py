@@ -17,7 +17,6 @@ CONF = loader.get_settings()
 
 # WebDAV sync folder configuration
 SYNC_FOLDER_NAME = "reader"  # WebDAV显示的目录名
-SYNC_FOLDER_PATH = f"/data/{SYNC_FOLDER_NAME}"  # 实际文件系统路径
 
 SUPPORTED_FORMATS = ["epub", "azw3", "mobi", "pdf", "txt"]
 INVALID_TAG_CHARS = ("#", "!", "@", "&", "$", "%", "^", "=", "+", "?", ";",
@@ -328,9 +327,9 @@ class MyBooksDavProvider(DAVProvider):
 
         # 读取WEBDAV_SYNC_FOLDER配置
         self.enable_sync_folder = False
-        self.sync_folder_path = SYNC_FOLDER_PATH
         self.sync_folder_name = SYNC_FOLDER_NAME
-        self.fs_provider = None
+        # per-user FilesystemProvider cache: {user_id: FilesystemProvider}
+        self._user_fs_providers = {}
 
         try:
             self.enable_sync_folder = CONF.get("WEBDAV_SYNC_FOLDER", False)
@@ -338,14 +337,9 @@ class MyBooksDavProvider(DAVProvider):
             custom_sync_name = CONF.get("WEBDAV_SYNC_FOLDER_NAME")
             if custom_sync_name:
                 self.sync_folder_name = custom_sync_name
-                self.sync_folder_path = f"/data/{custom_sync_name}"
 
             if self.enable_sync_folder:
-                # 确保sync目录存在
-                self._ensure_sync_folder()
-                # 创建FilesystemProvider实例用于处理sync目录
-                self.fs_provider = FilesystemProvider(self.sync_folder_path)
-                logging.info(f"WebDAV sync folder enabled: {self.sync_folder_path}")
+                logging.info(f"WebDAV sync folder enabled (per-user isolation, folder name: {self.sync_folder_name})")
         except Exception as e:
             logging.error(f"Error initializing sync folder: {e}")
             self.enable_sync_folder = False
@@ -370,28 +364,36 @@ class MyBooksDavProvider(DAVProvider):
             logging.error(f"Error fetching soled books: {e}")
             return set()
 
-    def _ensure_sync_folder(self):
-        """确保sync目录存在并设置正确的权限"""
-        try:
-            if not os.path.exists(self.sync_folder_path):
-                os.makedirs(self.sync_folder_path, mode=0o755, exist_ok=True)
-                logging.info(f"Created sync folder: {self.sync_folder_path}")
+    def _get_user_sync_path(self, user_id):
+        return f"/data/{self.sync_folder_name}/{user_id}/"
 
-                # 设置目录所有者为当前用户
+    def _get_or_create_fs_provider(self, user_id):
+        if user_id not in self._user_fs_providers:
+            path = self._get_user_sync_path(user_id)
+            self._ensure_sync_folder(path)
+            self._user_fs_providers[user_id] = FilesystemProvider(path)
+            logging.info(f"Created FilesystemProvider for user {user_id}: {path}")
+        return self._user_fs_providers[user_id]
+
+    def _ensure_sync_folder(self, folder_path):
+        try:
+            if not os.path.exists(folder_path):
+                os.makedirs(folder_path, mode=0o755, exist_ok=True)
+                logging.info(f"Created sync folder: {folder_path}")
+
                 try:
                     current_user = pwd.getpwuid(os.getuid())
-                    os.chown(self.sync_folder_path, current_user.pw_uid, current_user.pw_gid)
+                    os.chown(folder_path, current_user.pw_uid, current_user.pw_gid)
                     logging.info(f"Set owner of sync folder to: {current_user.pw_name}")
                 except Exception as e:
                     logging.warning(f"Could not set owner of sync folder: {e}")
             else:
-                logging.info(f"Sync folder already exists: {self.sync_folder_path}")
+                logging.debug(f"Sync folder already exists: {folder_path}")
         except Exception as e:
             logging.error(f"Error ensuring sync folder exists: {e}")
             raise
 
     def _parse_book_id_from_filename(self, filename):
-        """从文件名中解析book ID，过滤macOS隐藏文件"""
         # 忽略以.开头的文件（macOS隐藏文件如._filename）
         if filename.startswith('.'):
             return None
@@ -430,32 +432,43 @@ class MyBooksDavProvider(DAVProvider):
 
         if path == "/":
             children = [VirtualCollection("/" + s, environ, s, self) for s in self.sections.keys()]
-            # 如果启用了sync文件夹，添加到根目录
-            # sync目录直接使用FilesystemProvider返回的资源
-            if self.enable_sync_folder and self.fs_provider:
-                sync_resource = self.fs_provider.get_resource_inst("/", environ)
-                if sync_resource:
-                    # 修改path为folder name以便正确路由
-                    sync_resource.path = f"/{self.sync_folder_name}"
-                    children.append(sync_resource)
+            # 如果启用了sync文件夹，添加到根目录（按当前用户隔离）
+            if self.enable_sync_folder:
+                user_id = self._get_user_id_from_environ(environ)
+                if user_id:
+                    try:
+                        fs_provider = self._get_or_create_fs_provider(user_id)
+                        sync_resource = fs_provider.get_resource_inst("/", environ)
+                        if sync_resource:
+                            sync_resource.path = f"/{self.sync_folder_name}"
+                            children.append(sync_resource)
+                    except Exception as e:
+                        logging.error(f"Error getting sync folder for user {user_id}: {e}")
             return VirtualCollection("/", environ, "root", self, children)
 
         parts = path.lstrip("/").split("/")
         section = parts[0]
         logging.debug(f"Processing path: {path}, section: {section}, parts: {parts}")
 
-        # 处理sync目录（唯一支持读写的目录）
-        if section == self.sync_folder_name and self.enable_sync_folder and self.fs_provider:
-            # 将路径映射到文件系统
-            # 从/reader/... 映射到实际文件系统路径
+        # 处理sync目录（唯一支持读写的目录，按用户隔离）
+        if section == self.sync_folder_name and self.enable_sync_folder:
+            user_id = self._get_user_id_from_environ(environ)
+            if not user_id:
+                logging.warning("WebDAV sync folder access denied: no authenticated user")
+                return None
+            try:
+                fs_provider = self._get_or_create_fs_provider(user_id)
+            except Exception as e:
+                logging.error(f"Error getting sync folder provider for user {user_id}: {e}")
+                return None
+            # 将 /reader/... 映射到用户目录内的相对路径
             prefix_len = len(self.sync_folder_name) + 1  # +1 for leading /
             fs_path = path[prefix_len:] if len(path) > prefix_len else "/"
             if not fs_path:
                 fs_path = "/"
-            logging.debug(f"Mapping WebDAV path {path} to filesystem path: {fs_path}")
-            resource = self.fs_provider.get_resource_inst(fs_path, environ)
+            logging.debug(f"Mapping WebDAV path {path} -> user {user_id} fs path: {fs_path}")
+            resource = fs_provider.get_resource_inst(fs_path, environ)
             if resource:
-                # 包装资源以确保路径正确映射
                 wrapped = SyncFolderResourceWrapper(resource, path, self.sync_folder_name)
                 return wrapped._fs_resource if wrapped else None
             return None
@@ -480,17 +493,19 @@ class MyBooksDavProvider(DAVProvider):
             # Unknown section - check if it might be a misconfigured sync folder
             # or if sync folder is enabled but section doesn't match
             logging.warning(f"Unknown section '{section}' in path '{path}'")
-            if self.enable_sync_folder and self.fs_provider:
-                # Try to handle as filesystem path anyway (might be custom folder name)
-                logging.info(f"Attempting to handle '{section}' as filesystem path")
-                prefix_len = len(section) + 1
-                fs_path = path[prefix_len:] if len(path) > prefix_len else "/"
-                if not fs_path:
-                    fs_path = "/"
-                try:
-                    return self.fs_provider.get_resource_inst(fs_path, environ)
-                except Exception as e:
-                    logging.error(f"Failed to handle as filesystem path: {e}")
+            if self.enable_sync_folder:
+                user_id = self._get_user_id_from_environ(environ)
+                if user_id:
+                    logging.info(f"Attempting to handle '{section}' as filesystem path for user {user_id}")
+                    prefix_len = len(section) + 1
+                    fs_path = path[prefix_len:] if len(path) > prefix_len else "/"
+                    if not fs_path:
+                        fs_path = "/"
+                    try:
+                        fs_provider = self._get_or_create_fs_provider(user_id)
+                        return fs_provider.get_resource_inst(fs_path, environ)
+                    except Exception as e:
+                        logging.error(f"Failed to handle as filesystem path: {e}")
             return None
 
     def handle_category(self, path, environ, parts):
@@ -589,7 +604,7 @@ class MyBooksDavProvider(DAVProvider):
             try:
                 ids = self.cache.search(f'tags:"={tag_name}"')
                 return BooksCollection(path, environ, safe_xml(tag_name), self, ids)
-            except:
+            except Exception:
                 return None
         elif len(parts) == 3:
             try:
@@ -620,14 +635,13 @@ class MyBooksDavProvider(DAVProvider):
                     children.append(VirtualCollection(child_path, environ, author_str, self))
             except Exception as e:
                 logging.error(f"Error getting authors: {e}")
-                pass
             return VirtualCollection(path, environ, "作者", self, children)
         elif len(parts) == 2:
             author_name = unquote(parts[1])  # Ensure decoded
             try:
                 ids = self.cache.search(f'authors:"={author_name}"')
                 return BooksCollection(path, environ, safe_xml(author_name), self, ids)
-            except:
+            except Exception:
                 pass
         elif len(parts) == 3:
             try:
@@ -883,15 +897,19 @@ class MyBooksDavProvider(DAVProvider):
 
     def _loc_to_file_path(self, path, environ=None):
         """Convert WebDAV path to filesystem path (for sync folder only)"""
-        if not self.enable_sync_folder or not self.fs_provider:
+        if not self.enable_sync_folder:
             raise DAVError(403, "Filesystem operations not supported")
 
-        # Remove the sync folder prefix from the path
+        user_id = self._get_user_id_from_environ(environ) if environ else None
+        if not user_id:
+            raise DAVError(403, "Cannot resolve filesystem path: no authenticated user")
+
+        fs_provider = self._get_or_create_fs_provider(user_id)
+
         if path.startswith("/" + self.sync_folder_name):
             prefix_len = len(self.sync_folder_name) + 1  # +1 for leading /
             fs_path = path[prefix_len:] if len(path) > prefix_len else "/"
         else:
             fs_path = path
 
-        # Delegate to the filesystem provider
-        return self.fs_provider._loc_to_file_path(fs_path, environ)
+        return fs_provider._loc_to_file_path(fs_path, environ)
