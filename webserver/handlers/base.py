@@ -130,7 +130,15 @@ class BaseHandler(web.RequestHandler):
         normalized = normalized.strip().replace("\x00", "")
         if normalized in ("", ".", ".."):
             return ""
-        return normalized
+        # Most filesystems cap filenames at 255 bytes; truncate stem to fit.
+        stem, ext = os.path.splitext(normalized)
+        max_stem_bytes = 255 - len(ext.encode("utf-8"))
+        if max_stem_bytes <= 0:
+            return ""
+        stem_bytes = stem.encode("utf-8")
+        if len(stem_bytes) > max_stem_bytes:
+            stem = stem_bytes[:max_stem_bytes].decode("utf-8", errors="ignore")
+        return stem + ext
 
     def _safe_upload_path(self, filename):
         """Join filename to upload dir and enforce it stays within upload dir."""
