@@ -188,12 +188,12 @@ class SignUp(BaseHandler):
         user.create_time = datetime.datetime.now()
         user.update_time = datetime.datetime.now()
         user.access_time = datetime.datetime.now()
-        user.active = False
         user.extra = {"kindle_email": ""}
         user.set_secure_password(password)
+        user.active = CONF.get("ENABLE_AUTO_NEW_USER_APPROVAL", False)
         try:
             user.save()
-        except:
+        except Exception:
             logging.error(traceback.format_exc())
             return {"err": "db.error", "msg": _("系统异常，请重试或更换注册信息")}
         self.send_active_email(user)

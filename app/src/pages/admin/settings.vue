@@ -930,6 +930,12 @@ export default {
                 label: "settings.reset_mail_content",
                 type: "textarea",
               },
+              {
+                icon: "mdi-account-check-outline",
+                key: "ENABLE_AUTO_NEW_USER_APPROVAL",
+                label: "settings.enable_auto_new_user_approval",
+                type: "checkbox",
+              }
             ],
           },
         ],

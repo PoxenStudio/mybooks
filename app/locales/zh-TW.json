@@ -626,6 +626,7 @@
     "signup_mail_content": "啟用郵件內文",
     "reset_mail_title": "重設密碼郵件標題",
     "reset_mail_content": "重設密碼郵件內文",
+    "enable_auto_new_user_approval": "啟用新使用者註冊的自動審批（如果停用，新使用者註冊需要管理員手動審批）",
     "socials_description": "所啟用的社群網路將會在登入頁面自動顯示按鈕。",
     "select_socials": "選擇要啟用的社群網路帳號",
     "email_service": "郵件服務",
