@@ -88,8 +88,18 @@ class _BookDetailParser(HTMLParser):
         self._fallback_in_intro = False
         self._fallback_div_depth = 0
         self._fallback_chunks = []
+        self._in_info = False
+        self._info_div_depth = 0
+        self._capturing_label = False
+        self._label_buffer = []
+        self._info_buffer = []
+        self._current_label = None
         self.authors = []
         self.isbn = None
+        self.publisher = None
+        self.pub_date = None
+        self.series = None
+        self.translators = []
 
     def handle_starttag(self, tag, attrs):
         attrs_d = dict(attrs)
@@ -102,6 +112,18 @@ class _BookDetailParser(HTMLParser):
                 self.isbn = content
             return
         classes = attrs_d.get("class", "").split()
+        if tag == "div" and attrs_d.get("id") == "info" and not self._in_info:
+            self._in_info = True
+            self._info_div_depth = 1
+            return
+        if self._in_info:
+            if tag == "div":
+                self._info_div_depth += 1
+            elif tag == "span" and "pl" in classes:
+                self._flush_info_field()
+                self._capturing_label = True
+                self._label_buffer = []
+            return
         if tag == "span" and "all" in classes:
             self._in_all_span = True
             return
@@ -127,6 +149,18 @@ class _BookDetailParser(HTMLParser):
             self._fallback_chunks.append(f"<{tag}{attrs_str}>")
 
     def handle_endtag(self, tag):
+        if self._in_info:
+            if tag == "div":
+                self._info_div_depth -= 1
+                if self._info_div_depth == 0:
+                    self._flush_info_field()
+                    self._in_info = False
+            elif tag == "span" and self._capturing_label:
+                label = "".join(self._label_buffer).strip()
+                self._current_label = label.rstrip(":：").strip()
+                self._capturing_label = False
+                self._info_buffer = []
+            return
         if self._in_intro:
             if tag == "div":
                 self._div_depth -= 1
@@ -145,10 +179,33 @@ class _BookDetailParser(HTMLParser):
             self._in_all_span = False
 
     def handle_data(self, data):
+        if self._in_info:
+            if self._capturing_label:
+                self._label_buffer.append(data)
+            elif self._current_label:
+                self._info_buffer.append(data)
+            return
         if self._in_intro:
             self._chunks.append(data)
         elif self._fallback_in_intro:
             self._fallback_chunks.append(data)
+
+    def _flush_info_field(self):
+        if not self._current_label:
+            return
+        value = "".join(self._info_buffer).strip().lstrip(":：").strip()
+        value = re.sub(r"\s+", " ", value)
+        if self._current_label == "译者":
+            if value:
+                self.translators.append(value)
+        elif self._current_label == "出版社":
+            self.publisher = value or self.publisher
+        elif self._current_label == "出版年":
+            self.pub_date = value or self.pub_date
+        elif self._current_label == "丛书":
+            self.series = value or self.series
+        self._current_label = None
+        self._info_buffer = []
 
     def get_intro(self):
         primary = "".join(self._chunks).strip()
@@ -173,11 +230,18 @@ def get_book_detail(book_url, search_url):
 
     parser = _BookDetailParser()
     parser.feed(resp.text)
-    logging.info("[D2]parsed book detail: authors=%s, isbn=%s, intro_len=%d", parser.authors, parser.isbn, len(parser.get_intro() or ""))
+    authors = list(parser.authors)
+    authors.extend(f"{translator}(译)" for translator in parser.translators)
+    logging.info(
+        "[D2]parsed book detail: authors=%s, isbn=%s, publisher=%s, pub_date=%s, series=%s, intro_len=%d",
+        authors, parser.isbn, parser.publisher, parser.pub_date, parser.series, len(parser.get_intro() or ""))
     return {
         "intro": parser.get_intro() or None,
-        "authors": parser.authors,
+        "authors": authors,
         "isbn": parser.isbn,
+        "publisher": parser.publisher,
+        "pub_date": parser.pub_date,
+        "series": parser.series,
     }
 
 
@@ -248,7 +312,7 @@ def build_metadata(item, search_url, isbn=None, copy_image=False):
     mi.authors = authors
     mi.author = authors[0]
     mi.author_sort = authors[0]
-    mi.publisher = parsed["publisher"]
+    mi.publisher = (detail and detail["publisher"]) or parsed["publisher"]
     mi.timestamp = utcnow()
     mi.source = "豆瓣(V2)"
     mi.provider_key = KEY
@@ -267,9 +331,12 @@ def build_metadata(item, search_url, isbn=None, copy_image=False):
     if rating_val:
         mi.rating = round(float(rating_val))
 
-    pub_date_str = parsed["pub_date"]
+    pub_date_str = (detail and detail["pub_date"]) or parsed["pub_date"]
     if pub_date_str:
         mi.pubdate = _parse_date(pub_date_str)
+
+    if detail and detail["series"]:
+        mi.series = detail["series"]
 
     cover_url = item.get("cover_url", "")
     if cover_url:

@@ -98,7 +98,6 @@ settings = {
     "WEBDAV_SYNC_FOLDER": False,
     "ALLOW_NEW_USER_MANAGE_BOOK": True,
     "ALLOW_NEW_USER_PUSH_BOOK": True,
-
     "ALLOW_READ_RANGE_SETTING": False,
     "IMPORT_BY_INOTIFY": False,
     "IMPORT_CATEGORY_WITH_FOLDER": False,

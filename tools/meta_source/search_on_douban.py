@@ -107,11 +107,14 @@ def search_douban_books(book_name):
         items = data.get("items", [])
         print(f"搜索词: {book_name}，共找到 {len(items)} 条结果：\n")
 
+        cnt = 0
         for index, item in enumerate(items, 1):
             # 过滤掉非书籍类型的条目（如广告或特殊标签）
             if item.get("tpl_name") != "search_subject":
                 continue
-
+            cnt += 1
+            if cnt > 3:
+                break
             title = item.get("title")
             abstract = item.get("abstract", "")
             book_url = item.get("url")
@@ -122,9 +125,9 @@ def search_douban_books(book_name):
 
             parts = [p.strip() for p in abstract.split(" / ")]
             author = parts[0] if len(parts) > 0 else ""
-            publisher = parts[1] if len(parts) > 1 else ""
-            pub_date = parts[2] if len(parts) > 2 else ""
-            price = parts[3] if len(parts) > 3 else ""
+            publisher = parts[-3] if len(parts) > 1 else ""
+            pub_date = parts[-2] if len(parts) > 2 else ""
+            price = parts[-1] if len(parts) > 3 else ""
 
             print(f"[{index}] 书名: {title}")
             print(f"    作者: {author}")
@@ -144,4 +147,4 @@ def search_douban_books(book_name):
 
 if __name__ == "__main__":
     # 测试搜索
-    search_douban_books("等到一切风平浪静")
+    search_douban_books("亂馬1/2典藏版 6")

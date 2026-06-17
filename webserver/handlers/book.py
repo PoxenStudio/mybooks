@@ -623,7 +623,8 @@ class BookRefer(BaseHandler):
         "isbn13",
         "language",
         "identifiers",
-        "tags"
+        "tags",
+        "series"
     ]
 
     @classmethod
@@ -672,6 +673,7 @@ class BookRefer(BaseHandler):
                 if b.rating:
                     d["rating"] = round(b.rating, 1)
                 d["pubyear"] = pubdate.strftime("%Y") if pubdate else ""
+                d["pubdate"] = pubdate.strftime("%Y-%m-%d") if pubdate else ""
                 if not d.get("comments", ""):
                     d["comments"] = _("无详细介绍")
                 rsp.append(d)
@@ -690,7 +692,6 @@ class BookRefer(BaseHandler):
         mi.isbn13 = metadata.get("isbn13", None)
         mi.language = metadata.get("language", "zho")
         mi.identifiers = metadata.get("identifiers", None)
-        mi.tags = metadata.get("tags", None)
         mi.comments = metadata.get("comments", None)
         mi.website = metadata.get("website", None)
         mi.source = metadata.get("source", None)
@@ -698,6 +699,10 @@ class BookRefer(BaseHandler):
         mi.provider_value = metadata.get("provider_value", None)
         mi.cover_url = metadata.get("cover_url", None)
         mi.rating = metadata.get("rating", 0)
+        mi.series = metadata.get("series", None)
+        mi.tags = metadata.get("tags", [])
+        if "pubdate" in metadata:
+            mi.pubdate = utils.parse_date(metadata["pubdate"])
         return mi
 
     def plugin_fill_book_cover(self, provider_key, cover_url):
@@ -927,7 +932,7 @@ class BookRefer(BaseHandler):
             mi.smart_update(refer_mi, replace_metadata=True)
 
         mi.timestamp = nowf()
-        self.calibre_db.set_metadata(book_id, mi)
+        self.calibre_db.set_metadata(book_id, mi, force_changes=True)
         return {"err": "ok"}
 
 
