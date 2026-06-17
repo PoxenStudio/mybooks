@@ -1,10 +1,22 @@
 #!/usr/bin/env python3
+import datetime
 import logging
 import re
 
 
 # 匹配包含z-library的括号内容，例如 (z-library.sk, 1lib.sk, z-lib.sk)
 ZLIBRARY_PATTERN = re.compile(r'\([^)]*?(?:z-?lib(?:rary)?|1lib)[^)]*?\)', re.IGNORECASE)
+
+
+def parse_date(date_str):
+    if not date_str:
+        return None
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y-%m", "%Y年%m月%d日", "%Y年%m月", "%Y年", "%Y"):
+        try:
+            return datetime.datetime.strptime(date_str, fmt).replace(tzinfo=datetime.timezone.utc)
+        except ValueError:
+            continue
+    return None
 
 
 def remove_zlibrary_suffix(text):
