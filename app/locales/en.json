@@ -430,6 +430,7 @@
     "signup_mail_content": "Activation Email Content",
     "reset_mail_title": "Password Reset Email Title",
     "reset_mail_content": "Password Reset Email Content",
+    "enable_auto_new_user_approval": "Enable Automatic Approval of New User Registrations (If disabled, new user registrations require manual approval by an administrator)",
     "socials_description": "Enabled social networks will automatically display buttons on the login page.",
     "select_socials": "Select social network accounts to enable",
     "save": "Save",

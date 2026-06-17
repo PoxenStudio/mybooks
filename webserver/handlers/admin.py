@@ -396,6 +396,7 @@ class AdminSettings(BaseHandler):
             "ALLOW_NEW_USER_MANAGE_BOOK",
             "ALLOW_NEW_USER_PUSH_BOOK",
             "ALLOW_READ_RANGE_SETTING",
+            "ENABLE_AUTO_NEW_USER_APPROVAL",
             "IMPORT_BY_INOTIFY",
             "IMPORT_CATEGORY_WITH_FOLDER",
             "REMOVE_IMPORTED_FILE",
