@@ -488,5 +488,6 @@
   "书籍 [%s] EPUB 修复成功！": "Book [%s] EPUB fixed successfully!",
   "书籍 [%s] EPUB 修复失败！": "Book [%s] EPUB fix failed!",
   "请提供书籍ID": "Please provide a book ID",
-  "EPUB修复任务已启动,不要重复执行,注意查看消息通知中的处理结果": "EPUB fix task has started, do not execute repeatedly, check the message notifications for results"
+  "EPUB修复任务已启动,不要重复执行,注意查看消息通知中的处理结果": "EPUB fix task has started, do not execute repeatedly, check the message notifications for results",
+  "保存上传文件失败, 请检查文件名是否过长或者书库所在路径空间不足!": "Failed to save uploaded file, please check if the filename is too long or if there is insufficient space in the library path!"
 }
