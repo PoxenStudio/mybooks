@@ -2101,10 +2101,14 @@ class BookUpload(BaseHandler):
             fpath = self._safe_upload_path(name)
         except ValueError:
             return {"err": "params.filename", "msg": _("文件名不合法")}
-        with open(fpath, "wb") as f:
-            f.write(data)
-        logging.info(f"Save format file to [{fpath}]")
+        try:
+            with open(fpath, "wb") as f:
+                f.write(data)
+        except Exception as e:
+            logging.error(f"Failed to save uploaded file for book {book_id}: {e}")
+            return {"err": "internal", "msg": _("保存上传文件失败, 请检查文件名是否过长或者书库所在路径空间不足!")}
 
+        logging.info(f"Save format file to [{fpath}]")
         try:
             self.calibre_db.add_format(book_id, fmt.upper(), fpath, True)
             logging.info(f"Successfully added {fmt.upper()} format to book {book_id}")
@@ -2162,9 +2166,14 @@ class BookUpload(BaseHandler):
             fpath = self._safe_upload_path(name)
         except ValueError:
             return {"err": "params.filename", "msg": _("文件名不合法")}
-        with open(fpath, "wb") as f:
-            f.write(data)
+
         logging.info("save upload file into [%s]", fpath)
+        try:
+            with open(fpath, "wb") as f:
+                f.write(data)
+        except Exception as e:
+            logging.error("Failed to save uploaded file: %s", e)
+            return {"err": "internal", "msg": _("保存上传文件失败, 请检查文件名是否过长或者书库所在路径空间不足!") % str(e)}
 
         # read ebook meta
         failed = False
