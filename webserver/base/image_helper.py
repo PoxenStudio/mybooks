@@ -78,6 +78,15 @@ class ImageHelper:
             return None
 
     @staticmethod
+    def convert_to_jpeg(image_data, quality=90):
+        img = Image.open(io.BytesIO(image_data))
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        output = io.BytesIO()
+        img.save(output, format='JPEG', quality=quality)
+        return output.getvalue()
+
+    @staticmethod
     def _get_white_border_thickness(img, tolerance=200):
         """
         计算图像四周符合纯白（R, G, B 均大于等于 tolerance）的白边厚度。

@@ -33,9 +33,10 @@ import threading
 import time
 import traceback
 
-from webserver.i18n import _
 from sqlalchemy.exc import IntegrityError
 
+from webserver.i18n import _
+from webserver.base.image_helper import ImageHelper
 from webserver.base.cover_generator import CoverGenerator
 from webserver.services import AsyncService
 from webserver.models import Item, ScanFile, Reader
@@ -445,6 +446,8 @@ class ScanService(AsyncService):
                         if data:
                             mi.cover_data = ("jpeg", data)
                             dynamic_cover = True
+                if mi.cover_data and mi.cover_data[1][:4] == b"RIFF":
+                    mi.cover_data = ("jpeg", ImageHelper.convert_to_jpeg(mi.cover_data[1]))
                 if utils.is_traditional_chinese(mi.title):
                     mi.languages = constants.TRADITIONAL_CHINESE_CODE
                 if not mi.languages:

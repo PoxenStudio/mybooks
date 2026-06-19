@@ -783,6 +783,8 @@ class BookRefer(BaseHandler):
                 if data:
                     org_mi.cover_data = ("jpeg", data)
                     dynamic_cover = True
+        if org_mi.cover_data and org_mi.cover_data[1][:4] == b"RIFF":
+            org_mi.cover_data = ("jpeg", ImageHelper.convert_to_jpeg(org_mi.cover_data[1]))
         org_mi.timestamp = nowf()
         self.calibre_db.set_metadata(book_id, org_mi, force_changes=True)
         self.calibre_db_cache.set_field(CALIBRE_COLUMN_CATEGORY, {book_id: ""})
@@ -2195,7 +2197,6 @@ class BookUpload(BaseHandler):
             Path(fpath).unlink(missing_ok=True)
             return {"err": "book.invalid", "msg": _("此书籍文件无法识别, 或者受DRM保护无法导入")}
 
-        # 非结构化的格式，calibre无法识别准确的信息，直接从文件名提取
         name = name[:-len(fmt) - 1]
         if fmt == "txt":
             mi.title = utils.remove_zlibrary_suffix(name)
@@ -2215,6 +2216,8 @@ class BookUpload(BaseHandler):
                 mi.authors = [_("佚名")]
 
         logging.info("upload mi.title = " + repr(mi.title))
+        if mi.cover_data and mi.cover_data[1][:4] == b"RIFF":
+            mi.cover_data = ("jpeg", ImageHelper.convert_to_jpeg(mi.cover_data[1]))
         books = self.calibre_db.books_with_same_title(mi)
         if books:
             book_id = None
@@ -2267,6 +2270,8 @@ class BookUploadChunk(BaseHandler):
                 if data:
                     mi.cover_data = ("jpeg", data)
                     dynamic_cover = True
+        if mi.cover_data and mi.cover_data[1][:4] == b"RIFF":
+            mi.cover_data = ("jpeg", ImageHelper.convert_to_jpeg(mi.cover_data[1]))
         book_id = self.calibre_db.import_book(mi, fpaths)
         if book_id is not None and dynamic_cover:
             try:
