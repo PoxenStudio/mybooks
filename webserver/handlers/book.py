@@ -735,7 +735,8 @@ class BookRefer(BaseHandler):
         with open(book_path, "rb") as stream:
             org_mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
             org_mi.title = utils.super_strip(org_mi.title)
-            org_mi.authors = [utils.super_strip(org_mi.author_sort)]
+            if not org_mi.authors:
+                org_mi.authors = [utils.super_strip(org_mi.author_sort)]
             logging.info(f"[RESET] get the book title from book file: {org_mi.title}")
             if org_mi.isbn:
                 org_mi.set("isbn", utils.super_strip(org_mi.isbn))
@@ -1655,7 +1656,7 @@ class BookDeleteFormat(BaseHandler):
         try:
             data = tornado.escape.json_decode(self.request.body)
             fmt = data.get("format", "").strip().lower()
-        except:
+        except Exception:
             return {"err": "params.invalid", "msg": _("请求参数格式错误")}
 
         if not fmt:
@@ -1898,7 +1899,7 @@ class SearchBook(ListHandler):
         # 查询被别的用户标记为sole的图书ID，并将ids中对应的ID去除
         sole_book_ids = set(item.book_id for item in self.sqlite_session.query(Item).filter(Item.sole == 1, Item.collector_id != self.user_id()).all())
         ids = [book_id for book_id in ids if book_id not in sole_book_ids]
-
+        logging.info(f"Search result IDs after excluding sole books: {ids}")
         return self.render_book_list([], ids=ids, title=title, sort_fields=order_by)
 
 
@@ -2064,7 +2065,7 @@ class BookUpload(BaseHandler):
         p = self.request.files["ebook"][0]
         return (p["filename"], p["body"])
 
-    def _add_format_to_existing_book(self, book_id):
+    def _add_format_to_existing_book(self, book_id, update_metadata=True):
         """向已存在的书籍添加新格式文件"""
         book = self.get_book(book_id, raise_exception=False)
         if not book:
@@ -2116,8 +2117,9 @@ class BookUpload(BaseHandler):
             logging.info(f"Successfully added {fmt.upper()} format to book {book_id}")
 
             try:
-                self.save_book_meta(book_id, fmt=fmt)
-                logging.info(f"Metadata written to new format {fmt.upper()} for book {book_id}")
+                if update_metadata:
+                    self.save_book_meta(book_id, fmt=fmt)
+                    logging.info(f"Metadata written to new format {fmt.upper()} for book {book_id}")
             except Exception as e:
                 logging.warning(f"Failed to write metadata to new format: {e}")
 
@@ -2143,8 +2145,9 @@ class BookUpload(BaseHandler):
 
         # 检查是否为添加格式到已有书籍
         target_book_id = self.get_argument("bid", None)
+        update_metadata = self.get_argument("update_meta", 1)
         if target_book_id:
-            return self._add_format_to_existing_book(int(target_book_id))
+            return self._add_format_to_existing_book(int(target_book_id), update_metadata==1)
 
         name, data = self.get_upload_file()
         if name is None:
