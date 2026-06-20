@@ -2264,7 +2264,7 @@ class BookUploadChunk(BaseHandler):
                 if data:
                     mi.cover_data = ("jpeg", data)
                     dynamic_cover = True
-        if mi.cover_data and mi.cover_data[1][:4] == b"RIFF":
+        if mi.cover_data and mi.cover_data[1] and mi.cover_data[1][:4] == b"RIFF":
             mi.cover_data = ("jpeg", ImageHelper.convert_to_jpeg(mi.cover_data[1]))
         book_id = self.calibre_db.import_book(mi, fpaths)
         if book_id is not None and dynamic_cover:
