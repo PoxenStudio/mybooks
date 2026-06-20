@@ -2219,7 +2219,7 @@ class BookUpload(BaseHandler):
                 mi.authors = [_("佚名")]
 
         logging.info("upload mi.title = " + repr(mi.title))
-        if mi.cover_data and mi.cover_data[1][:4] == b"RIFF":
+        if mi.cover_data and mi.cover_data[1] and mi.cover_data[1][:4] == b"RIFF":
             mi.cover_data = ("jpeg", ImageHelper.convert_to_jpeg(mi.cover_data[1]))
         books = self.calibre_db.books_with_same_title(mi)
         if books:
