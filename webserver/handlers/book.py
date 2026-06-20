@@ -784,7 +784,7 @@ class BookRefer(BaseHandler):
                 if data:
                     org_mi.cover_data = ("jpeg", data)
                     dynamic_cover = True
-        if org_mi.cover_data and org_mi.cover_data[1][:4] == b"RIFF":
+        if org_mi.cover_data and org_mi.cover_data[1] and org_mi.cover_data[1][:4] == b"RIFF":
             org_mi.cover_data = ("jpeg", ImageHelper.convert_to_jpeg(org_mi.cover_data[1]))
         org_mi.timestamp = nowf()
         self.calibre_db.set_metadata(book_id, org_mi, force_changes=True)
