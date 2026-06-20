@@ -446,7 +446,7 @@ class ScanService(AsyncService):
                         if data:
                             mi.cover_data = ("jpeg", data)
                             dynamic_cover = True
-                if mi.cover_data and mi.cover_data[1][:4] == b"RIFF":
+                if mi.cover_data and mi.cover_data[1] and mi.cover_data[1][:4] == b"RIFF":
                     mi.cover_data = ("jpeg", ImageHelper.convert_to_jpeg(mi.cover_data[1]))
                 if utils.is_traditional_chinese(mi.title):
                     mi.languages = constants.TRADITIONAL_CHINESE_CODE
