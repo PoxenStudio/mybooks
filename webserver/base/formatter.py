@@ -41,7 +41,7 @@ class SimpleBookFormatter:
             files.append(item)
         return files
 
-    def format(self, include_comments=True):
+    def format(self, include_comments=True, strip_comments=False):
         b = self.book
         b["ts"] = int(b["timestamp"].timestamp())
         category = self.val(CALIBRE_COLUMN_CATEGORY, '').strip()
@@ -50,6 +50,9 @@ class SimpleBookFormatter:
         ext_link = self.val(CALIBRE_COLUMN_EXT_LINK, '').strip()
         location = self.val(CALIBRE_COLUMN_LOCATION, '').strip() if book_type == BOOK_TYPE_PHYSICAL else ""
         dynamic_cover = self.book.get(CALIBRE_COLUMN_DYNAMIC_COVER, 0)
+        comments = self.val("comments", _(u"暂无简介")) if include_comments else ""
+        if strip_comments and comments:
+            comments = comments[:120] + "..." if len(comments) > 120 else comments
         return {
             "id": b["id"],
             "title": b["title"],
@@ -62,7 +65,7 @@ class SimpleBookFormatter:
             "tag": " / ".join(b["tags"]),
             "tags": b["tags"],
             "publisher": self.val("publisher"),
-            "comments": self.val("comments", _(u"暂无简介")) if include_comments else "",
+            "comments": comments,
             "series": self.val("series", None),
             "series_index": self.val("series_index", None),
             "languages": self.val("languages", None),
@@ -151,9 +154,9 @@ class BookFormatter:
             "is_owner": h.is_admin() or h.is_book_owner(self.book["id"], h.user_id()),
         }
 
-    def format(self, with_files=False, with_perms=False, include_comments=True):
+    def format(self, with_files=False, with_perms=False, include_comments=True, strip_comments=False):
         f = SimpleBookFormatter(self.book, self.cdn_url)
-        data = f.format(include_comments=include_comments)
+        data = f.format(include_comments=include_comments, strip_comments=strip_comments)
         data.update(
             {
                 "author_url": self.api_url + "/author/" + f.val("author_sort"),
