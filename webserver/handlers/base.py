@@ -1132,12 +1132,9 @@ class ListHandler(BaseHandler):
     ):
         """Get a list of books."""
         start = self.get_argument_start()
-        max_size = CONF.get("DEFAULT_PAGE_SIZE", 60)
-        try:
-            size = int(self.get_argument("size"))
-        except:
-            size = int(CONF.get("DEFAULT_PAGE_SIZE", 60))
-        delta = min(max(size, 60), max_size)
+        page_size = CONF.get("DEFAULT_PAGE_SIZE", 60)
+        size = min(int(self.get_argument("size", "0").strip()), 1000)
+        delta = size if size > 0 else max(page_size, 60)
 
         if ids:
             ids = list(ids)
@@ -1167,12 +1164,12 @@ class ListHandler(BaseHandler):
             "err": "ok",
             "title": title,
             "total": count,
-            "books": [self.fmt(b, include_comments=include_comments) for b in books],
+            "books": [self.fmt(b, include_comments=include_comments, strip_comments=True) for b in books],
         }
 
     @js
     def render_book_list(self, all_books, ids=None, title=None, sort_fields=None):
         return self.get_book_list(all_books, ids, title, sort_fields)
 
-    def fmt(self, b, include_comments=True):
-        return BookFormatter(self, b).format(include_comments=include_comments)
+    def fmt(self, b, include_comments=True, strip_comments=False):
+        return BookFormatter(self, b).format(include_comments=include_comments, strip_comments=strip_comments)
