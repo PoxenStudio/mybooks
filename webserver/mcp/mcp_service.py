@@ -451,6 +451,52 @@ class MCPService:
             logging.error(traceback.format_exc())
             return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
 
+    async def save_meta_to_file(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
+        """将书籍元数据保存到电子书文件中（仅支持 epub/azw3/pdf）"""
+        # 验证token
+        user_info = self._require_auth(arguments)
+        if not user_info:
+            return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Authentication required"}))]
+
+        try:
+            book_id = arguments.get("book_id")
+            if not book_id:
+                return [TextContent(type="text", text=json.dumps({"status": "error",
+                                                                  "message": "Missing required parameter: book_id"}))]
+            book_id = int(book_id)
+
+            fmt = arguments.get("fmt")
+            if fmt is not None:
+                fmt = str(fmt).strip().lower()
+
+            # 检查权限 - 需要管理员权限或者是书籍拥有者
+            from webserver.models import Reader
+            user = self.base_handler.sqlite_session.query(Reader).get(user_info["user_id"])
+            if not user:
+                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "User not found"}))]
+
+            if not (user.is_admin() or self.base_handler.is_book_owner(book_id, user_info["user_id"])):
+                return [TextContent(type="text", text=json.dumps({"status": "error",
+                                                                  "message": "Permission denied: not book owner or admin"}))]
+
+            raw_result = self.base_handler.save_book_meta(book_id, fmt=fmt)
+            result = {
+                "status": "success" if raw_result.get("err") == "ok" else "error",
+                "message": raw_result.get("msg", ""),
+                "book_id": book_id,
+                "success_formats": raw_result.get("success_formats", []),
+                "failed_formats": raw_result.get("failed_formats", []),
+                "updated_by": user_info["username"]
+            }
+            logging.info(f"Book {book_id} metadata saved to file via MCP by {user_info['username']}: fmt={fmt}")
+            return [TextContent(type="text", text=json.dumps(result))]
+
+        except Exception as e:
+            error_msg = f"Error saving book metadata to file: {str(e)}"
+            logging.error(error_msg)
+            logging.error(traceback.format_exc())
+            return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
+
     async def logout(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
         """用户登出，删除token"""
         try:
@@ -1307,6 +1353,32 @@ class MCPService:
                     ]
                 }
             ),
+            Tool(
+                name="save_meta_to_file",
+                description="Save book metadata (title, author, comments, cover, etc.) into the ebook file "
+                            "itself. Only epub, azw3, and pdf formats are supported." + self.need_login_prompt + "\n\n"
+                            "Required parameters:\n"
+                            "- book_id: ID of the book to save metadata for\n\n"
+                            "Optional parameters:\n"
+                            "- fmt: Limit the operation to one format (epub/azw3/pdf). "
+                            "If omitted, all supported formats present on the book are updated.\n\n"
+                            "Returns:\n"
+                            "- success/error status, list of formats updated successfully and formats that failed",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "book_id": {
+                            "type": ["string", "integer"],
+                            "description": "ID of the book to save metadata for"
+                        },
+                        "fmt": {
+                            "type": "string",
+                            "description": "Optional format to limit the save to: epub, azw3, or pdf"
+                        }
+                    },
+                    "required": ["book_id"]
+                }
+            ),
             # Tool(
             #     name="upload_book",
             #     description="Upload a new ebook file to the collection. Supports epub, pdf, and azw3 formats. "
@@ -1527,6 +1599,9 @@ class MCPService:
                     return self._create_tool_result(request_id, result[0].text)
                 elif tool_name == "auto_fill_book_info":
                     result = await self.auto_fill_book_info(arguments)
+                    return self._create_tool_result(request_id, result[0].text)
+                elif tool_name == "save_meta_to_file":
+                    result = await self.save_meta_to_file(arguments)
                     return self._create_tool_result(request_id, result[0].text)
                 elif tool_name == "upload_book":
                     result = await self.upload_book(arguments)
