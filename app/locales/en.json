@@ -1028,6 +1028,7 @@
     "cancel": "Mark as unread",
     "setReading": "Mark as reading",
     "setDone": "Mark as done",
+    "setUnread": "Mark as unread",
     "favoriteHint": "Click to favorite/unfavorite",
     "wantsHint": "Click to add to/remove from want-to-read list",
     "readingDays": "Reading for {days} days",

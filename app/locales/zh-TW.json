@@ -1028,6 +1028,7 @@
     "cancel": "取消閱讀",
     "setReading": "設為閱讀中",
     "setDone": "標記讀完",
+    "setUnRead": "設為未讀",
     "favoriteHint": "點擊收藏或取消收藏",
     "wantsHint": "點擊添加到待讀清單或從待讀清單移除",
     "readingDays": "已閱讀 {days} 天",

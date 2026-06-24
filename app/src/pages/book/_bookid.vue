@@ -1316,10 +1316,12 @@ export default {
         readingStateButtonText: function () {
             if (!this.book.state) return this.$t('readingState.setReading');
             const readState = this.book.state.read_state;
-            if (readState === 1) {
+            if (readState === 0) {
+                return this.$t('readingState.setReading');
+            } else if (readState === 1) {
                 return this.$t('readingState.setDone');
             } else {
-                return this.$t('readingState.setReading');
+                return this.$t('readingState.setUnRead');
             }
         },
         readingDaysText: function () {
@@ -1962,14 +1964,18 @@ export default {
                 let newReadState;
                 let successMessage;
 
-                if (!this.book.state || this.book.state.read_state === this.READING_STATE.UNREAD || this.book.state.read_state === this.READING_STATE.FINISHED) {
-                    // 未读或已读完 -> 设为在读
+                if (!this.book.state || this.book.state.read_state === this.READING_STATE.UNREAD) {
+                    // 未读 -> 设为在读
                     newReadState = this.READING_STATE.READING;
                     successMessage = this.$t('message.setToReading');
                 } else if (this.book.state.read_state === this.READING_STATE.READING) {
                     // 在读 -> 设为读完
                     newReadState = this.READING_STATE.FINISHED;
                     successMessage = this.$t('message.markedAsRead');
+                } else if (this.book.state.read_state === this.READING_STATE.FINISHED) {
+                    // 读完 -> 设为未读
+                    newReadState = this.READING_STATE.UNREAD;
+                    successMessage = this.$t('message.setUnread');
                 }
 
                 const response = await this.$backend(`/book/${this.book.id}/readstate`, {
