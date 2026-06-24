@@ -213,13 +213,22 @@ export MYBOOKS_PASSWORD="your_password"
     "comments": "《活着》讲述了...",
     "category": "现代文学",
     "available_formats": ["epub", "pdf"],
-    "fmt_epub": "/path/to/file.epub",
+    "files": [
+      {
+        "format": "EPUB",
+        "size": 1330899,
+        "href": "/api/book/42.EPUB"
+      }
+    ],
     "cover_url": "/get/cover/42",
+    "series": "余华作品集",
+    "series_index": 1,
     "state": {
       "favorite": 0,
       "wants": 0,
       "read_state": 1
-    }
+    },
+    "tags": ["小说", "中国文学"]
   },
   "kindle_sender": "sender@example.com"
 }
@@ -244,8 +253,9 @@ export MYBOOKS_PASSWORD="your_password"
 | `publisher` | string | ❌ | 出版社 |
 | `isbn` | string | ❌ | ISBN 编号 |
 | `series` | string | ❌ | 系列/丛书名 |
+| `series_index` | int | ❌ | 系列中的顺序号 |
 | `rating` | number | ❌ | 评分（0–10） |
-| `languages` | array | ❌ | 语言代码列表，如 `["zho"]`（中文）、`["eng"]`（英文）、`["zht"]`（繁体中文） |
+| `languages` | array | ❌ | 语言代码列表，如 `["zho"]`（中文）、`["eng"]`（英文）、`["zha"]`（繁体中文） |
 | `pubdate` | string | ❌ | 出版日期，格式：`"2024-01-15"` / `"2024-01"` / `"2024"` |
 | `comments` | string | ❌ | 书籍简介，支持 HTML，请勿将 `<>` 转义为 `&lt;&gt;` |
 | `category` | string | ❌ | 自定义分类（最长 80 字符；传 `"清除"` 或 `"clear"` 清空分类） |
