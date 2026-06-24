@@ -307,6 +307,46 @@ export MYBOOKS_PASSWORD="your_password"
 
 ---
 
+### `save_meta_to_file` — 将元数据保存到电子书文件
+
+**使用场景**：
+- 在书库中修改了书名/作者/简介/标签等元数据后，希望这些信息也写入电子书文件本身（而不只是存在书库数据库里）
+- 仅支持 epub / azw3 / pdf 格式；其余格式（如 mobi、txt）不受影响
+
+**权限**：需要登录，且为管理员或该书籍的所有者
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `book_id` | int | ✅ | 书籍 ID |
+| `fmt` | string | ❌ | 仅同步指定格式（`epub`/`azw3`/`pdf`），省略则同步所有支持的格式 |
+
+**执行脚本**：
+```bash
+# 同步所有支持的格式
+<skill-installation-path>/scripts/mybooks_api.py save_meta_to_file '{"book_id":42}'
+
+# 仅同步 epub
+<skill-installation-path>/scripts/mybooks_api.py save_meta_to_file '{"book_id":42,"fmt":"epub"}'
+```
+
+**响应示例**：
+```json
+{ "err": "ok", "msg": "成功将元数据同步到文件：EPUB", "success_formats": ["EPUB"], "failed_formats": [] }
+```
+
+**常见错误**：
+| `err` 值 | 含义 |
+|----------|------|
+| `"user.no_permission"` | 非管理员或非书籍所有者 |
+| `"book.not_found"` | 书籍不存在 |
+| `"format.not_supported"` | 书籍没有 epub/azw3/pdf 格式（或没有指定的 `fmt`） |
+| `"book.meta.not_found"` | 无法获取书籍元数据 |
+| `"save.failed"` | 所有格式均同步失败（返回中含 `failed_formats`） |
+
+---
+
 ### `mailto` — 发送书籍到邮箱
 
 **使用场景**：将书籍以附件形式发送到指定邮箱（如 Kindle 邮箱）
@@ -656,6 +696,9 @@ export MYBOOKS_PASSWORD="your_password"
 ├─ "手动修改《XX》的标签/分类/书名等字段"
 │   → 先 search_books 确认 book_id → 再 edit_book
 │
+├─ "把修改后的元数据也写入电子书文件本身" / "同步元数据到文件"
+│   → save_meta_to_file（仅 epub/azw3/pdf，需管理员或书籍所有者权限）
+│
 ├─ "把书发给我的 Kindle / 发到邮箱"
 │   → mailto（发邮箱附件）
 │
@@ -693,6 +736,7 @@ export MYBOOKS_PASSWORD="your_password"
 | `"task.running"` | 后台有任务在运行 | 等待当前任务完成后重试 |
 | `"book.notfound"` | ISBN 对应的书籍未在网上找到 | 换其他数据源或手动添加 |
 | `"connection.failed"` | 无法连接到设备 | 检查设备 IP 和 WiFi 接收功能是否开启 |
+| `"format.not_supported"` | 书籍没有 epub/azw3/pdf 格式 | 提示用户该书无法同步元数据到文件 |
 
 ---
 

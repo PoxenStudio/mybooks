@@ -265,6 +265,25 @@ class MyBooksAPI:
             json={"idlist": idlist}
         )
 
+    def save_meta_to_file(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Save book metadata into the ebook file itself (epub/azw3/pdf only).
+
+        Args:
+            book_id (int, required): Book ID
+            fmt (str, optional): Limit to one format (epub/azw3/pdf); if omitted, all supported formats are updated
+        """
+        book_id = args.get("book_id")
+        if not book_id:
+            return {"status": "error", "message": "book_id is required"}
+
+        fmt = args.get("fmt")
+        path = f"/api/book/{book_id}/savemeta"
+        if fmt:
+            path += f"?fmt={urllib.parse.quote(str(fmt))}"
+
+        return self._call_with_auto_relogin("POST", path)
+
     def mailto(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """
         Send book to email as attachment.
@@ -496,7 +515,7 @@ class MyBooksAPI:
             available_tools = [
                 "get_user_info", "library_stats", "reading_stats",
                 "search_books", "search_by_category", "get_book", "edit_book",
-                "book_fill", "mailto", "send_to_device", "categories",
+                "book_fill", "save_meta_to_file", "mailto", "send_to_device", "categories",
                 "list_authors", "get_author_books", "book_upload",
                 "book_add_by_isbn", "wants", "list_wants", "favorite",
                 "list_favorites", "reading", "list_reading", "read_done",
