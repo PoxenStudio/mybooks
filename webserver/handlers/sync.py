@@ -17,30 +17,30 @@ import tornado.websocket
 
 from webserver.handlers.base import BaseHandler, auth, js
 from webserver.i18n import _
-from webserver.services import sync_service
+from webserver.services.sync_service import MyReaderSyncService
 
 
 class SyncHandler(BaseHandler):
     @js
     @auth
     def get(self):
-        if not sync_service.is_enabled():
+        if not MyReaderSyncService.is_enabled():
             return {"err": "sync.disabled", "msg": _("数据同步功能未启用")}
 
         since = self.get_argument("since", None)
         if since is None or not since.lstrip("-").isdigit():
             return {"err": "params.invalid", "msg": _("缺少或非法的 since 参数")}
         type_ = self.get_argument("type", None)
-        if type_ and type_ not in sync_service.KEY_FIELDS:
+        if type_ and type_ not in MyReaderSyncService.KINDS:
             return {"err": "params.invalid", "msg": _("非法的 type 参数")}
         book_hash = self.get_argument("book", None)
 
-        return sync_service.pull(self.current_user.id, int(since), type_, book_hash)
+        return MyReaderSyncService.pull(self.current_user.id, int(since), type_, book_hash)
 
     @js
     @auth
     async def post(self):
-        if not sync_service.is_enabled():
+        if not MyReaderSyncService.is_enabled():
             return {"err": "sync.disabled", "msg": _("数据同步功能未启用")}
         logging.debug("[sync] push request from user %s: %s", self.current_user.id, self.request.body)
         try:
@@ -52,7 +52,7 @@ class SyncHandler(BaseHandler):
             logging.error("[sync] invalid payload type from user %s: %s", self.current_user.id, type(payload))
             return {"err": "params.invalid", "msg": _("请求体格式错误")}
 
-        return await sync_service.push(self.current_user.id, payload)
+        return await MyReaderSyncService.push(self.current_user.id, payload)
 
 
 class SyncWebSocketHandler(tornado.websocket.WebSocketHandler):
@@ -66,16 +66,18 @@ class SyncWebSocketHandler(tornado.websocket.WebSocketHandler):
         return True
 
     async def open(self):
-        if not sync_service.is_enabled():
+        if not MyReaderSyncService.is_enabled():
             self.close(code=4004, reason="Sync service disabled")
+            logging.warning("[sync] WebSocket connection attempt while sync service is disabled.")
             return
         user_id = self.get_current_user()
         if not user_id:
             logging.warning("[sync] WebSocket connection attempt without login.")
             self.close(code=4003, reason="Authentication required")
             return
+        logging.debug("[sync] WebSocket connection opened for user %s", user_id)
         self.uid = int(user_id)
-        sync_service.register_connection(self.uid, self)
+        MyReaderSyncService.register_connection(self.uid, self)
 
     def on_message(self, message):
         try:
@@ -89,7 +91,7 @@ class SyncWebSocketHandler(tornado.websocket.WebSocketHandler):
 
     def on_close(self):
         if hasattr(self, "uid"):
-            sync_service.unregister_connection(self.uid, self)
+            MyReaderSyncService.unregister_connection(self.uid, self)
 
 
 def routes():
