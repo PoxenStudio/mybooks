@@ -81,6 +81,8 @@ def search(query, max_count=1):
 class _BookDetailParser(HTMLParser):
     def __init__(self):
         super().__init__()
+        self._in_link_report = False
+        self._link_report_depth = 0
         self._in_all_span = False
         self._in_intro = False
         self._div_depth = 0
@@ -124,6 +126,19 @@ class _BookDetailParser(HTMLParser):
                 self._capturing_label = True
                 self._label_buffer = []
             return
+
+        # 内容简介只出现在 id="link-report" 容器内；豆瓣页面里"作者简介"区块
+        # 也使用相同的 span.short/span.all + div.intro 结构，必须排除在外，
+        # 否则会把作者简介误判为图书简介。
+        if not self._in_link_report:
+            if tag == "div" and attrs_d.get("id") == "link-report":
+                self._in_link_report = True
+                self._link_report_depth = 1
+            return
+
+        if tag == "div":
+            self._link_report_depth += 1
+
         if tag == "span" and "all" in classes:
             self._in_all_span = True
             return
@@ -137,8 +152,8 @@ class _BookDetailParser(HTMLParser):
             attrs_str = "".join(f' {k}="{v}"' if v is not None else f" {k}" for k, v in attrs)
             self._chunks.append(f"<{tag}{attrs_str}>")
             return
-        # 兜底：span.all 之外的任意 div.intro
-        if not self._in_all_span and not self._fallback_in_intro and tag == "div" and "intro" in classes:
+        # 兜底：link-report 内 span.all 之外的第一个 div.intro（未被截断的简介）
+        if not self._in_all_span and not self._fallback_in_intro and not self._fallback_chunks and tag == "div" and "intro" in classes:
             self._fallback_in_intro = True
             self._fallback_div_depth = 1
             return
@@ -161,11 +176,23 @@ class _BookDetailParser(HTMLParser):
                 self._capturing_label = False
                 self._info_buffer = []
             return
+
+        if not self._in_link_report:
+            return
+
+        exiting_link_report = False
+        if tag == "div":
+            self._link_report_depth -= 1
+            if self._link_report_depth == 0:
+                exiting_link_report = True
+
         if self._in_intro:
             if tag == "div":
                 self._div_depth -= 1
                 if self._div_depth == 0:
                     self._in_intro = False
+                    if exiting_link_report:
+                        self._in_link_report = False
                     return
             self._chunks.append(f"</{tag}>")
         elif self._fallback_in_intro:
@@ -173,10 +200,15 @@ class _BookDetailParser(HTMLParser):
                 self._fallback_div_depth -= 1
                 if self._fallback_div_depth == 0:
                     self._fallback_in_intro = False
+                    if exiting_link_report:
+                        self._in_link_report = False
                     return
             self._fallback_chunks.append(f"</{tag}>")
         elif tag == "span" and self._in_all_span:
             self._in_all_span = False
+
+        if exiting_link_report:
+            self._in_link_report = False
 
     def handle_data(self, data):
         if self._in_info:
@@ -359,4 +391,21 @@ if __name__ == "__main__":
     for item in items:
         print(item)
         rating = item.get("rating", {}).get("value", 0)
+        comments = item.get("comments", "")
         print(f"Rating: {rating}")
+        print(f"Comments: {comments}")
+
+        book_url = item.get("url", "")
+        if book_url:
+            detail = get_book_detail(book_url, search_url)
+            if detail:
+                print(f"Authors: {detail['authors']}")
+                print(f"ISBN: {detail['isbn']}")
+                print(f"Publisher: {detail['publisher']}")
+                print(f"Pub Date: {detail['pub_date']}")
+                print(f"Series: {detail['series']}")
+                print(f"Intro: {detail['intro']}")
+            else:
+                print("Failed to get book detail.")
+
+        break
