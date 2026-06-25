@@ -96,6 +96,8 @@ settings = {
     "ENABLE_PODCAST_SERVICE": False,
     "ENABLE_WEBDAV_SERVICE": True,
     "WEBDAV_SYNC_FOLDER": False,
+    "ENABLE_DATA_SYNC": True,
+    "MYREADER_SYNC_PATH": "/data/sync/",
     "ALLOW_NEW_USER_MANAGE_BOOK": True,
     "ALLOW_NEW_USER_PUSH_BOOK": True,
     "ENABLE_AUTO_NEW_USER_APPROVAL": False,

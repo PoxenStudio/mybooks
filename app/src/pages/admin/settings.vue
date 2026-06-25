@@ -1194,6 +1194,12 @@ export default {
             type: "checkbox",
           },
           {
+            icon: "mdi-sync",
+            key: "ENABLE_DATA_SYNC",
+            label: "settings.enable_data_sync",
+            type: "checkbox",
+          },
+          {
             icon: "mdi-cloud-check-outline",
             key: "ENABLE_WEBDAV_SERVICE",
             label: "settings.enable_webdav_service",

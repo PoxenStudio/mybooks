@@ -409,6 +409,7 @@ class AdminSettings(BaseHandler):
             "USE_DYNAMIC_COVER",
             "BATCH_ADD_IN_FORCE",
             "DEFAULT_LANGUAGE",
+            "ENABLE_DATA_SYNC"
         ]
 
         current_icon = CONF.get(
