@@ -10,26 +10,29 @@ import random
 import time
 import traceback
 from collections import defaultdict
-from webserver.i18n import _, choose_language, set_language
-
+from urllib.parse import urlparse
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import func as sql_func
 from tornado import web
+
+from webserver.i18n import _, choose_language, set_language
 from webserver import loader, utils
 from webserver.base.formatter import BookFormatter
-
-# import social_tornado.handlers
+from webserver.services.resource_service import ResourceService
 from webserver.models import Item, Message, Reader
 from webserver import constants
+from webserver.version import VERSION
+from webserver.constants import UPGRABLE_REVISION
 
 messages = defaultdict(list)
 CONF = loader.get_settings()
+AUDIO_OUTPUT_FOLDER = CONF.get("audio_output_folder", "/data/books/audios/")
 
 
 def day_format(value, format="%Y-%m-%d"):
     try:
         return value.strftime(format)
-    except:
+    except Exception:
         return "1990-01-01"
 
 
@@ -565,6 +568,17 @@ class BaseHandler(web.RequestHandler):
             BaseHandler._path_to_env[temp_path] = env
         return env
 
+    def get_audio_books_count(self):
+        """Get the total count of books with audio files."""
+        if not os.path.exists(AUDIO_OUTPUT_FOLDER):
+            return 0
+        count = 0
+        for item in os.listdir(AUDIO_OUTPUT_FOLDER):
+            item_path = os.path.join(AUDIO_OUTPUT_FOLDER, item)
+            if os.path.isdir(item_path) and item.isdigit():
+                count += 1
+        return count
+
     def get_physical_books_count(self):
         # 统计实体书数量, 通过自定义栏位CALIBRE_COLUMN_BOOK_TYPE来统计，缓存5分钟
         now = time.time()
@@ -802,7 +816,7 @@ class BaseHandler(web.RequestHandler):
     def count_increase(self, book_id, **kwargs):
         try:
             item = self.sqlite_session.query(Item).filter(Item.book_id == book_id).one()
-        except:
+        except Exception:
             item = Item()
             item.book_id = book_id
 
@@ -1038,6 +1052,93 @@ class BaseHandler(web.RequestHandler):
             logging.error(f"[SAVE_META] Error saving metadata for book {book_id}: {e}")
             logging.error(traceback.format_exc())
             return {"err": "internal", "msg": _("同步元数据时发生错误: %s") % str(e)}
+
+    def _build_friends_with_favicon(self):
+        """构建带有 favicon 图标信息的友情链接列表"""
+        friends = CONF.get("FRIENDS", [])
+        result = []
+        need_loading_urls = []
+
+        for friend in friends:
+            href = friend.get("href", "")
+            parsed = urlparse(href)
+            domain = parsed.netloc
+            item = {"text": friend.get("text", ""), "href": href, "icon": ""}
+
+            if domain:
+                icon = ResourceService.check_favicon(domain)
+                if icon is None:
+                    # 文件不存在，需要加载
+                    need_loading_urls.append(href)
+                elif icon:
+                    item["icon"] = icon
+
+            result.append(item)
+
+        if need_loading_urls:
+            ResourceService().load_favicons(need_loading_urls)
+
+        return result
+
+    def get_sys_info(self):
+        from sqlalchemy import func
+
+        db = self.calibre_db
+        last_week = datetime.datetime.now() - datetime.timedelta(days=7)
+        count_all_users = self.sqlite_session.query(func.count(Reader.id)).scalar()
+        count_hot_users = (
+            self.sqlite_session.query(func.count(Reader.id))
+            .filter(Reader.access_time > last_week)
+            .scalar()
+        )
+
+        audio_book_cnt = self.get_audio_books_count()
+        physical_book_cnt = self.get_physical_books_count()
+
+        return {
+            "books": db.count(),
+            "tags": len(db.all_tags()),
+            "authors": len(db.all_authors()),
+            "audiobooks": audio_book_cnt,
+            "publishers": len(db.all_publishers()),
+            "series": len(db.all_series()),
+            "physicals": physical_book_cnt,
+            "mtime": db.last_modified().strftime("%Y-%m-%d"),
+            "users": count_all_users,
+            "version": VERSION,
+            "active": count_hot_users,
+            "installed": CONF.get("installed", False),
+            "upgrable": CONF.get(UPGRABLE_REVISION, ""),
+            "title": CONF["site_title"] if "site_title" in CONF else "MyBooks",
+            "language": CONF["site_language"] if "site_language" in CONF else "",
+            "theme": CONF["site_theme"] if "site_theme" in CONF else "light",
+            "maxUploadSize": (
+                CONF["MAX_UPLOAD_SIZE"] if "MAX_UPLOAD_SIZE" in CONF else "100MB"
+            ),
+            "chunkUploadSize": (
+                CONF["CHUNK_UPLOAD_SIZE"] if "CHUNK_UPLOAD_SIZE" in CONF else "0MB"
+            ),
+            "icon": CONF["site_icon"] if "site_icon" in CONF else "favicon_1",
+            "socials": CONF["SOCIALS"],
+            "friends": self._build_friends_with_favicon(),
+            "footer": CONF["FOOTER"] if "FOOTER" in CONF else "",
+            "footer_watermark": CONF.get("FOOTER_WATERMARK", ""),
+            "header": CONF["HEADER"] if "HEADER" in CONF else "",
+            "allow": {
+                "register": CONF["ALLOW_REGISTER"],
+                "download": CONF["ALLOW_GUEST_DOWNLOAD"],
+                "push": CONF["ALLOW_GUEST_PUSH"],
+                "read": CONF["ALLOW_GUEST_READ"],
+                "physical_books": CONF.get("ENABLE_PHYSICAL_BOOKS", True),
+                "upload": CONF.get("ALLOW_GUEST_UPLOAD", False),
+                "sync": CONF.get("ENABLE_DATA_SYNC", False)
+            },
+            "indexPage": CONF.get("INDEX_PAGE_TYPE", "index"),
+            "defaultPageSize": CONF.get("DEFAULT_PAGE_SIZE", 60),
+            "aiEnabled": CONF.get("AI_ENABLED", False),
+            "standalone": CONF.get("STANDALONE", False),
+            "hide_project_links": CONF.get("HIDE_PROJECT_LINKS", False),
+        }
 
 
 class ListHandler(BaseHandler):
