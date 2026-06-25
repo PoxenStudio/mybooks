@@ -42,12 +42,14 @@ class SyncHandler(BaseHandler):
     async def post(self):
         if not sync_service.is_enabled():
             return {"err": "sync.disabled", "msg": _("数据同步功能未启用")}
-
+        logging.debug("[sync] push request from user %s: %s", self.current_user.id, self.request.body)
         try:
             payload = tornado.escape.json_decode(self.request.body or b"{}")
         except ValueError:
+            logging.error("[sync] invalid JSON payload from user %s: %s", self.current_user.id, self.request.body)
             return {"err": "params.invalid", "msg": _("请求体不是合法的 JSON")}
         if not isinstance(payload, dict):
+            logging.error("[sync] invalid payload type from user %s: %s", self.current_user.id, type(payload))
             return {"err": "params.invalid", "msg": _("请求体格式错误")}
 
         return await sync_service.push(self.current_user.id, payload)

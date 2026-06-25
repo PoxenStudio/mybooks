@@ -109,12 +109,14 @@ async def push(uid, payload: dict) -> dict:
         for kind, key_field in KEY_FIELDS.items():
             records = payload.get(kind) or []
             if not records:
+                logging.debug("[sync] no records for kind %s from user %s", kind, uid)
                 continue
             store = _load(uid, kind)
             merged_list = []
             for incoming in records:
                 key = incoming.get(key_field)
                 if not key:
+                    logging.debug("[sync] invalid record for kind %s from user %s", kind, uid)
                     continue
                 existing = store.get(key)
                 merged, applied = _merge_one(existing, incoming)
