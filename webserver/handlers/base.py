@@ -762,8 +762,9 @@ class BaseHandler(web.RequestHandler):
             logging.error(f"删除ID为{book_id},名为《{book_title}》的书籍Item记录失败: {e}")
         try:
             self.calibre_db.delete_book(book_id)
-            self.add_msg("success", _(u"删除书籍《%s》") % book_title)
-            return {"err": "ok", "msg": _(u"删除成功")}
+            user_name = self.current_user.name if self.current_user else ""
+            self.add_msg("success", _("%s删除了书籍《%s》") % (user_name, book_title))
+            return {"err": "ok", "msg": _("删除成功")}
         except Exception as e:
             logging.error(f"删除书籍《{book_title}》失败: {e}")
             result = False
