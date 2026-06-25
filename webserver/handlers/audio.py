@@ -149,18 +149,6 @@ class AudioUtils:
         return sum(1 for worker in ConversionWorkerMap.values() if worker.is_running())
 
     @staticmethod
-    def get_audio_books_count():
-        """Get the total count of books with audio files."""
-        if not os.path.exists(AUDIO_OUTPUT_FOLDER):
-            return 0
-        count = 0
-        for item in os.listdir(AUDIO_OUTPUT_FOLDER):
-            item_path = os.path.join(AUDIO_OUTPUT_FOLDER, item)
-            if os.path.isdir(item_path) and item.isdigit():
-                count += 1
-        return count
-
-    @staticmethod
     def get_audios(bid, uid=None):
         """Get audio files for a book."""
         if uid is None:

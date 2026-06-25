@@ -7,19 +7,14 @@ import logging
 import re
 import os
 import traceback
-from urllib.parse import urlparse
 from webserver.i18n import _
 
 import tornado.escape
 from tornado import web
 from webserver import loader
 from webserver.services.mail import MailService
-from webserver.services.resource_service import ResourceService
 from webserver.handlers.base import BaseHandler, auth, js
-from webserver.handlers.audio import AudioUtils
 from webserver.models import Device, ExpectedItem, Memo, Message, Reader, StickyItem
-from webserver.version import VERSION
-from webserver.constants import UPGRABLE_REVISION
 
 CONF = loader.get_settings()
 COOKIE_REDIRECT = "login_redirect"
@@ -436,65 +431,6 @@ class UserMessagesClear(BaseHandler):
 
 
 class UserInfo(BaseHandler):
-    def get_sys_info(self):
-        from sqlalchemy import func
-
-        db = self.calibre_db
-        last_week = datetime.datetime.now() - datetime.timedelta(days=7)
-        count_all_users = self.sqlite_session.query(func.count(Reader.id)).scalar()
-        count_hot_users = (
-            self.sqlite_session.query(func.count(Reader.id))
-            .filter(Reader.access_time > last_week)
-            .scalar()
-        )
-
-        audio_book_cnt = AudioUtils.get_audio_books_count()
-        physical_book_cnt = self.get_physical_books_count()
-
-        return {
-            "books": db.count(),
-            "tags": len(db.all_tags()),
-            "authors": len(db.all_authors()),
-            "audiobooks": audio_book_cnt,
-            "publishers": len(db.all_publishers()),
-            "series": len(db.all_series()),
-            "physicals": physical_book_cnt,
-            "mtime": db.last_modified().strftime("%Y-%m-%d"),
-            "users": count_all_users,
-            "active": count_hot_users,
-            "version": VERSION,
-            "installed": CONF.get("installed", False),
-            "upgrable": CONF.get(UPGRABLE_REVISION, ""),
-            "title": CONF["site_title"] if "site_title" in CONF else "MyBooks",
-            "language": CONF["site_language"] if "site_language" in CONF else "",
-            "theme": CONF["site_theme"] if "site_theme" in CONF else "light",
-            "maxUploadSize": (
-                CONF["MAX_UPLOAD_SIZE"] if "MAX_UPLOAD_SIZE" in CONF else "100MB"
-            ),
-            "chunkUploadSize": (
-                CONF["CHUNK_UPLOAD_SIZE"] if "CHUNK_UPLOAD_SIZE" in CONF else "0MB"
-            ),
-            "icon": CONF["site_icon"] if "site_icon" in CONF else "favicon_1",
-            "socials": CONF["SOCIALS"],
-            "friends": self._build_friends_with_favicon(),
-            "footer": CONF["FOOTER"] if "FOOTER" in CONF else "",
-            "footer_watermark": CONF.get("FOOTER_WATERMARK", ""),
-            "header": CONF["HEADER"] if "HEADER" in CONF else "",
-            "allow": {
-                "register": CONF["ALLOW_REGISTER"],
-                "download": CONF["ALLOW_GUEST_DOWNLOAD"],
-                "push": CONF["ALLOW_GUEST_PUSH"],
-                "read": CONF["ALLOW_GUEST_READ"],
-                "physical_books": CONF.get("ENABLE_PHYSICAL_BOOKS", True),
-                "upload": CONF.get("ALLOW_GUEST_UPLOAD", False),
-            },
-            "indexPage": CONF.get("INDEX_PAGE_TYPE", "index"),
-            "defaultPageSize": CONF.get("DEFAULT_PAGE_SIZE", 60),
-            "aiEnabled": CONF.get("AI_ENABLED", False),
-            "standalone": CONF.get("STANDALONE", False),
-            "hide_project_links": CONF.get("HIDE_PROJECT_LINKS", False),
-        }
-
     def get_user_info(self, detail):
         enable_vip_quota = CONF.get(ENABLE_VIP_QUOTA_KEY, False)
         if enable_vip_quota:
@@ -569,33 +505,6 @@ class UserInfo(BaseHandler):
                     d["extra"][k] = v
 
         return d
-
-    def _build_friends_with_favicon(self):
-        """构建带有 favicon 图标信息的友情链接列表"""
-        friends = CONF.get("FRIENDS", [])
-        result = []
-        need_loading_urls = []
-
-        for friend in friends:
-            href = friend.get("href", "")
-            parsed = urlparse(href)
-            domain = parsed.netloc
-            item = {"text": friend.get("text", ""), "href": href, "icon": ""}
-
-            if domain:
-                icon = ResourceService.check_favicon(domain)
-                if icon is None:
-                    # 文件不存在，需要加载
-                    need_loading_urls.append(href)
-                elif icon:
-                    item["icon"] = icon
-
-            result.append(item)
-
-        if need_loading_urls:
-            ResourceService().load_favicons(need_loading_urls)
-
-        return result
 
     @js
     def get(self):

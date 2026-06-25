@@ -1426,6 +1426,18 @@ class AdminAITestConnection(BaseHandler):
             return {"err": "error", "msg": _("AI服务连接测试异常: %s") % str(e)}
 
 
+class AdminSysInfo(BaseHandler):
+    @js
+    def get(self):
+        if CONF.get("installed", None) is False:
+            return {"err": "not_installed"}
+
+        return {
+            "err": "ok",
+            "data": self.get_sys_info()
+        }
+
+
 def routes():
     return [
         (r"/api/admin/ssl", AdminSSL),
@@ -1457,4 +1469,5 @@ def routes():
         (r"/api/admin/syslog/download", AdminSyslogDownload),
         (r"/api/admin/resources", AdminResources),
         (r"/api/admin/ai/test", AdminAITestConnection),
+        (r"/api/sysinfo", AdminSysInfo),
     ]
