@@ -18,7 +18,7 @@ def display_epub_info(epub_path):
             if "There is no item named" in error_msg:
                 print(f"⚠️  检测到 EPUB 内部文件路径配置错误: {error_msg}")
                 print("💡 正在尝试容错模式强制重载...")
-                
+
                 # 方案：利用 zipfile 检查真实路径，并临时拦截/重写内部 ZipFile 行为
                 # 或者更轻量的方法：我们直接用自定义逻辑处理
                 book = epub.EpubReader(epub_path).book
@@ -26,7 +26,7 @@ def display_epub_info(epub_path):
                 with zipfile.ZipFile(epub_path, 'r') as z:
                     # 找到真正存在的文件列表
                     real_files = z.namelist()
-                    
+
                     # 拦截并手动调用内部解析（跳过引发异常的坏文件）
                     reader = epub.EpubReader(epub_path)
                     try:
@@ -49,6 +49,46 @@ def display_epub_info(epub_path):
                 for item in items:
                     val = item if isinstance(item, tuple) else item
                     print(f"  - [{ns}:{key}]: {val}")
+
+        # 2.1 显示封面信息 (Cover Info)
+        print("\n 🎴 封面信息 (Cover Info):")
+        print("-" * 40)
+        cover_candidates = []
+        cover_meta = book.get_metadata('OPF', 'cover')
+        if cover_meta:
+            for item in cover_meta:
+                if isinstance(item, tuple):
+                    cover_candidates.append(item[0])
+                elif isinstance(item, str):
+                    cover_candidates.append(item)
+
+        # 直接搜索常见的封面图片 id/name
+        for item in book.get_items_of_type(ebooklib.ITEM_IMAGE):
+            item_id = item.get_id() or ''
+            item_name = item.get_name() or ''
+            lower_id = item_id.lower()
+            lower_name = item_name.lower()
+            if 'cover' in lower_id or 'cover' in lower_name:
+                cover_candidates.append(item_id)
+
+        # 额外尝试一些常见默认 id
+        for common_id in ('cover', 'cover-image', 'coverimage', 'cover_img'):
+            if book.get_item_with_id(common_id):
+                cover_candidates.append(common_id)
+
+        cover_candidates = list(dict.fromkeys([c for c in cover_candidates if c]))
+        if cover_candidates:
+            for idx, cover_id in enumerate(cover_candidates, start=1):
+                cover_item = book.get_item_with_id(cover_id)
+                if cover_item is not None:
+                    file_name = cover_item.get_name() or cover_item.get_id() or '未知路径'
+                    media_type = getattr(cover_item, 'media_type', 'unknown')
+                    size = len(cover_item.get_content() or b'')
+                    print(f"  {idx}. ID: {cover_id:<25} | 文件: {file_name} | 类型: {media_type} | 大小: {size} bytes")
+                else:
+                    print(f"  {idx}. ID: {cover_id:<25} | 错误: 未能找到对应的封面资源")
+        else:
+            print("  ⚠️ 未找到显式封面资源，尝试从 EPUB 元数据或 IMAGE 项目中自动识别")
 
         # 3. 显示骨架信息 (Spine)
         print("\n 🦴 骨架信息 (Spine / 阅读线性顺序):")
@@ -94,7 +134,7 @@ def fallback_display(epub_path):
     """当 ebooklib 完全崩溃时，使用标准 zipfile 暴力提取骨架和目录描述"""
     print("\n🚨 触发暴力提取模式（不依赖 ebooklib 解析媒体文件）...")
     from xml.etree import ElementTree as ET
-    
+
     with zipfile.ZipFile(epub_path, 'r') as z:
         # 寻找 opf 配置文件
         opf_path = None
@@ -102,29 +142,29 @@ def fallback_display(epub_path):
             if f.endswith('.opf'):
                 opf_path = f
                 break
-        
+
         if not opf_path:
             print("❌ 错误：无法在解压包中找到 .opf 配置文件")
             return
-            
+
         opf_data = z.read(opf_path)
         root = ET.fromstring(opf_data)
-        
+
         # 命名空间处理
         ns = {'opf': 'http://idpf.org', 'dc': 'http://purl.org'}
-        
+
         print("\n 🛠️  元数据 (从 OPF 强行提取):")
         for meta in root.findall('.//opf:metadata/*', ns):
             tag = meta.tag.split('}')[-1]
             if meta.text:
                 print(f"  - [dc:{tag}]: {meta.text.strip()}")
-                
+
         print("\n 🦴 骨架信息 (Spine 强行提取):")
         # 建立 manifest 映射字典
         manifest = {}
         for item in root.findall('.//opf:manifest/opf:item', ns):
             manifest[item.get('id')] = item.get('href')
-            
+
         for idx, item in enumerate(root.findall('.//opf:spine/opf:itemref', ns)):
             idref = item.get('idref')
             real_path = manifest.get(idref, "未知物理路径")
