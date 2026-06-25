@@ -467,6 +467,7 @@
     "send_mail_for_new_books": "Send email notifications for new books (combined send after 15 mins)",
     "advanced_settings": "Advanced Configuration",
     "enable_physical_books": "Enable Hardcopy Books",
+    "enable_data_sync": "Enable MyReader Data Synchronization (Users who log in with MyReader accounts can synchronize their reading data after enabling)",
     "cdn_domain": "CDN Domain",
     "book_names_format": "Directory and File Name Format",
     "pinyin_directory": "Use Pinyin Directory Names (High Compatibility)",

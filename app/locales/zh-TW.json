@@ -664,6 +664,7 @@
     "send_mail_for_new_books": "在上傳及匯入後發送信箱提醒(15分鐘合併發送)",
     "advanced_settings": "進階設定項目",
     "enable_physical_books": "啟用添加實體書功能",
+    "enable_data_sync": "啟用MyReader數據同步功能 (開啟後使用MyReader帳號登錄的用戶可以同步閱讀數據)",
     "cdn_domain": "CDN 網域",
     "book_names_format": "目錄和檔案名模式",
     "pinyin_directory": "使用拼音字母目錄名 (相容性高)",

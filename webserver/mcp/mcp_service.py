@@ -3,6 +3,7 @@
 MCP Service Module
 
 统一处理MCP协议请求的服务模块，供不同传输协议调用。
+@author: PoxenStudio, 2025-12
 """
 
 import logging
