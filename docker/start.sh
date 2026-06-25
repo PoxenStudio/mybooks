@@ -16,6 +16,16 @@ if [ ! -d "/data/books" ]; then
   cp -rf /prebuilt/books /data/
 fi
 
+if [ ! -d "/data/sync" ]; then
+  mkdir -p /data/sync
+  chown -R talebook:talebook /data/sync
+fi
+
+if [ ! -d "/data/reader" ]; then
+  mkdir -p /data/reader
+  chown -R talebook:talebook /data/reader
+fi
+
 if [ ! -d "/data/books/imports/audiobooks" ]; then
   mkdir -p /data/books/imports/audiobooks
   chown -R talebook:talebook /data/books/imports/audiobooks
