@@ -437,7 +437,7 @@
     "setCover": "设置封面",
     "selectCover": "选择封面图片",
     "noCoverSelected": "未选择封面",
-    "coverTooLarge": "封面大小不能超过 1MB",
+    "coverTooLarge": "封面大小不能超过 3MB",
     "coverTypeInvalid": "仅允许 JPEG 或 PNG 格式的图片",
     "coverUploadFailed": "封面上传失败",
     "conversionCancelled": "当前转换已取消",
