@@ -25,8 +25,8 @@
                 <div class="mb-4">
                     <div class="caption text--secondary mb-2">{{ $t('appearance.accent') }}</div>
                     <div class="d-flex flex-wrap" style="gap: 8px;">
-                        <div 
-                            v-for="color in accentColors" 
+                        <div
+                            v-for="color in accentColors"
                             :key="color.value"
                             class="color-swatch"
                             :style="{ backgroundColor: color.value }"
@@ -103,19 +103,15 @@ export default {
             return [
                 // Fundamental
                 { label: this.$t('appearance.bg.default'),       value: 'default' },
-                { label: this.$t('appearance.bg.dots'),          value: 'dots' },
                 { label: this.$t('appearance.bg.cross'),         value: 'cross' },
                 { label: this.$t('appearance.bg.left-diagonal'), value: 'left-diagonal' },
-                // Structural
-                { label: this.$t('appearance.bg.blueprint'),     value: 'blueprint' },
                 { label: this.$t('appearance.bg.right-diagonal'),value: 'right-diagonal' },
-                { label: this.$t('appearance.bg.carbon'),        value: 'carbon' },
-                { label: this.$t('appearance.bg.perforated'),    value: 'perforated' },
                 // Gradient / Ambient
                 { label: this.$t('appearance.bg.aurora'),        value: 'aurora' },
                 { label: this.$t('appearance.bg.horizon'),       value: 'horizon' },
                 { label: this.$t('appearance.bg.glow'),          value: 'glow' },
                 { label: this.$t('appearance.bg.mesh'),          value: 'mesh' }
+                // Repetat image
             ];
         }
     },

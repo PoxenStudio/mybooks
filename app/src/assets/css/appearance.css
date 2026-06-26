@@ -28,12 +28,6 @@
 
 /* ── Fundamental ──────────────────────────────────── */
 
-/* Dots */
-html[data-bg-pattern="dots"] .v-application {
-    background-image: radial-gradient(circle, var(--dot-color) 1px, transparent 1px);
-    background-size: 24px 24px;
-}
-
 /* Cross */
 html[data-bg-pattern="cross"] .v-application {
     background-image:
@@ -47,49 +41,24 @@ html[data-bg-pattern="cross"] .v-application {
 html[data-bg-pattern="left-diagonal"] .v-application {
     background-image: repeating-linear-gradient(
         45deg,
-        var(--dot-color),
-        var(--dot-color) 2px,
-        transparent 2px,
-        transparent 20px
+        transparent,
+        transparent 12px,
+        color-mix(in srgb, var(--dot-color) 20%, transparent) 12px,
+        color-mix(in srgb, var(--dot-color) 20%, transparent) 24px
     );
-}
-
-/* ── Structural ───────────────────────────────────── */
-
-/* Blueprint – fine grid */
-html[data-bg-pattern="blueprint"] .v-application {
-    background-image:
-        linear-gradient(to right, var(--dot-color) 1px, transparent 1px),
-        linear-gradient(to bottom, var(--dot-color) 1px, transparent 1px);
-    background-size: 4px 4px;
 }
 
 /* Right Diagonal – -45° stripes */
 html[data-bg-pattern="right-diagonal"] .v-application {
     background-image: repeating-linear-gradient(
         -45deg,
-        var(--dot-color),
-        var(--dot-color) 2px,
-        transparent 2px,
-        transparent 20px
+        transparent,
+        transparent 12px,
+        color-mix(in srgb, var(--dot-color) 20%, transparent) 12px,
+        color-mix(in srgb, var(--dot-color) 20%, transparent) 24px
     );
 }
 
-/* Carbon fibre */
-html[data-bg-pattern="carbon"] .v-application {
-    background-image:
-        linear-gradient(45deg, var(--dot-color) 25%, transparent 25%),
-        linear-gradient(-45deg, var(--dot-color) 25%, transparent 25%),
-        linear-gradient(45deg, transparent 75%, var(--dot-color) 75%),
-        linear-gradient(-45deg, transparent 75%, var(--dot-color) 75%);
-    background-size: 8px 8px;
-}
-
-/* Perforated */
-html[data-bg-pattern="perforated"] .v-application {
-    background-image: radial-gradient(circle at center, var(--dot-color) 1.5px, transparent 2px);
-    background-size: 12px 12px;
-}
 
 /* ── Gradient / Ambient ───────────────────────────── */
 
