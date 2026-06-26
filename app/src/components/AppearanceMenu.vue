@@ -110,8 +110,12 @@ export default {
                 { label: this.$t('appearance.bg.aurora'),        value: 'aurora' },
                 { label: this.$t('appearance.bg.horizon'),       value: 'horizon' },
                 { label: this.$t('appearance.bg.glow'),          value: 'glow' },
-                { label: this.$t('appearance.bg.mesh'),          value: 'mesh' }
-                // Repetat image
+                { label: this.$t('appearance.bg.mesh'),          value: 'mesh' },
+                // Repeat Images
+                { label: this.$t('appearance.bg.repeatImage1'), value: 'repeat-image-1' },
+                { label: this.$t('appearance.bg.repeatImage2'), value: 'repeat-image-2' },
+                { label: this.$t('appearance.bg.repeatImage3'), value: 'repeat-image-3' },
+                { label: this.$t('appearance.bg.repeatImage4'), value: 'repeat-image-4' }
             ];
         }
     },

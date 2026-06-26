@@ -99,7 +99,6 @@
             class="ma-1"
             v-for="item in visibleMetaItems"
             :key="item.name"
-            outlined
             color="primary"
             @click="selectAuthor(item.name)"
             style="cursor: pointer"

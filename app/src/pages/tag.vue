@@ -107,7 +107,6 @@
             class="ma-1"
             v-for="item in visibleMetaItems"
             :key="item.name"
-            outlined
             color="primary"
             @click="selectTag(item.name)"
             style="cursor: pointer;"

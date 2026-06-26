@@ -41,7 +41,7 @@
             </div>
         </v-col>
         <v-col cols=4 xs=4 sm=3 md=2 lg=1 v-for="(book,idx) in get_random_books" :key="'rec'+idx+book.id" class="book-card">
-            <v-card :to="book.href" class="ma-1">
+            <v-card :to="book.href" class="ma-1" outlined>
                 <div class="book-img-container" :title="book.title">
                     <v-img
                         :src="book.thumb"

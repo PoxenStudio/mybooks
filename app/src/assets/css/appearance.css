@@ -99,3 +99,33 @@ html[data-bg-pattern="mesh"] .v-application {
         radial-gradient(at 0%   100%, color-mix(in srgb, var(--primary-color) 15%, transparent) 0px, transparent 50%),
         radial-gradient(at 50%  50%,  color-mix(in srgb, var(--primary-color) 10%, transparent) 0px, transparent 50%);
 }
+
+/* ── Repeat Images ─────────────────────────────────── */
+
+/* Repeat Image 1 */
+html[data-bg-pattern="repeat-image-1"] .v-application {
+    background-image: url('/static/wallpaper/ba_1.jpg');
+    background-repeat: repeat;
+    background-size: auto;
+}
+
+/* Repeat Image 2 */
+html[data-bg-pattern="repeat-image-2"] .v-application {
+    background-image: url('/static/wallpaper/ba_2.jpg');
+    background-repeat: repeat;
+    background-size: auto;
+}
+
+/* Repeat Image 3 */
+html[data-bg-pattern="repeat-image-3"] .v-application {
+    background-image: url('/static/wallpaper/ba_3.jpg');
+    background-repeat: repeat;
+    background-size: auto;
+}
+
+/* Repeat Image 4 */
+html[data-bg-pattern="repeat-image-4"] .v-application {
+    background-image: url('/static/wallpaper/ba_4.jpg');
+    background-repeat: repeat;
+    background-size: auto;
+}

@@ -2,14 +2,14 @@
     <v-row>
         <template v-if="meta == 'rating'">
             <v-col cols=4 sm=2 v-for="item in meta_items" :key="item.name" >
-                <v-chip :to="item.href" outlined color="primary" >
+                <v-chip :to="item.href" color="primary" >
                     {{ item.name }}{{ $t('listMeta.ratingSuffix') }}
                     <span v-if="item.count">&nbsp;({{ item.count }})</span>
                 </v-chip>
             </v-col>
         </template >
         <v-col v-else>
-            <v-chip class="ma-1" v-for="item in meta_items" :to="item.href" :key="item.name" outlined color="primary" >
+            <v-chip class="ma-1" v-for="item in meta_items" :to="item.href" :key="item.name" color="primary" >
                 {{ item.name }}
                 <span v-if="item.count">&nbsp;({{ item.count }})</span>
             </v-chip>

@@ -1295,7 +1295,7 @@
     "theme": "主題模式",
     "light": "淺色",
     "dark": "深色",
-    "accent": "強調色",
+    "accent": "主色",
     "radius": "圓角半徑",
     "background": "背景圖案",
     "bg": {
@@ -1310,7 +1310,11 @@
       "aurora": "極光",
       "horizon": "地平線",
       "glow": "光暈",
-      "mesh": "網格"
+      "mesh": "網格",
+      "repeatImage1": "淺色圖1",
+      "repeatImage2": "淺色圖2",
+      "repeatImage3": "深色圖1",
+      "repeatImage4": "深色圖2"
     }
   }
 }

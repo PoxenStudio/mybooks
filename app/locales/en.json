@@ -1310,7 +1310,11 @@
       "aurora": "Aurora",
       "horizon": "Horizon",
       "glow": "Glow",
-      "mesh": "Mesh"
+      "mesh": "Mesh",
+      "repeatImage1": "Image 1",
+      "repeatImage2": "Image 2",
+      "repeatImage3": "Image 3",
+      "repeatImage4": "Image 4"
     }
   }
 }
