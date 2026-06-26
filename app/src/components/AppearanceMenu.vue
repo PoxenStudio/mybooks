@@ -1,29 +1,29 @@
 <template>
     <v-menu v-model="menu" :close-on-content-click="false" offset-y bottom left min-width="320" max-width="320">
         <template v-slot:activator="{ on, attrs }">
-            <v-btn icon v-bind="attrs" v-on="on" title="外观设置 (Appearance)">
+            <v-btn icon v-bind="attrs" v-on="on" :title="$t('appearance.title')">
                 <v-icon>mdi-palette-outline</v-icon>
             </v-btn>
         </template>
         <v-card class="appearance-menu-card">
-            <v-card-title class="subtitle-2 font-weight-bold pb-2 pt-4">APPEARANCE</v-card-title>
+            <v-card-title class="subtitle-2 font-weight-bold pb-2 pt-4">{{ $t('appearance.title') }}</v-card-title>
             <v-card-text>
                 <!-- Theme Mode -->
                 <div class="mb-4">
-                    <div class="caption text--secondary mb-2">Theme</div>
+                    <div class="caption text--secondary mb-2">{{ $t('appearance.theme') }}</div>
                     <v-btn-toggle v-model="settings.darkMode" mandatory dense class="w-100 d-flex" @change="applySettings">
                         <v-btn :value="false" class="flex-grow-1" small>
-                            <v-icon left small>mdi-white-balance-sunny</v-icon> Light
+                            <v-icon left small>mdi-white-balance-sunny</v-icon> {{ $t('appearance.light') }}
                         </v-btn>
                         <v-btn :value="true" class="flex-grow-1" small>
-                            <v-icon left small>mdi-weather-night</v-icon> Dark
+                            <v-icon left small>mdi-weather-night</v-icon> {{ $t('appearance.dark') }}
                         </v-btn>
                     </v-btn-toggle>
                 </div>
 
                 <!-- Accent Colors -->
                 <div class="mb-4">
-                    <div class="caption text--secondary mb-2">Accent</div>
+                    <div class="caption text--secondary mb-2">{{ $t('appearance.accent') }}</div>
                     <div class="d-flex flex-wrap" style="gap: 8px;">
                         <div 
                             v-for="color in accentColors" 
@@ -40,7 +40,7 @@
 
                 <!-- Radius -->
                 <div class="mb-4">
-                    <div class="caption text--secondary mb-2">Radius</div>
+                    <div class="caption text--secondary mb-2">{{ $t('appearance.radius') }}</div>
                     <v-btn-toggle v-model="settings.radius" mandatory dense class="w-100 d-flex" @change="applySettings">
                         <v-btn v-for="r in radiusOptions" :key="r.value" :value="r.value" class="flex-grow-1" small>
                             {{ r.label }}
@@ -50,7 +50,7 @@
 
                 <!-- Background Pattern -->
                 <div class="mb-2">
-                    <div class="caption text--secondary mb-2">Background</div>
+                    <div class="caption text--secondary mb-2">{{ $t('appearance.background') }}</div>
                     <div class="bg-name-grid">
                         <v-btn
                             v-for="bg in bgOptions"
@@ -95,25 +95,29 @@ export default {
                 { label: '0.25', value: '4px' },
                 { label: '0.5', value: '8px' },
                 { label: '1.0', value: '16px' },
-            ],
-            bgOptions: [
-                // Fundamental
-                { label: 'None',       value: 'default' },
-                { label: 'Dots',       value: 'dots' },
-                { label: 'Cross',      value: 'cross' },
-                { label: 'Left',       value: 'left-diagonal' },
-                // Structural
-                { label: 'Blueprint',  value: 'blueprint' },
-                { label: 'Right',      value: 'right-diagonal' },
-                { label: 'Carbon',     value: 'carbon' },
-                { label: 'Perforated', value: 'perforated' },
-                // Gradient / Ambient
-                { label: 'Aurora',     value: 'aurora' },
-                { label: 'Horizon',    value: 'horizon' },
-                { label: 'Glow',       value: 'glow' },
-                { label: 'Mesh',       value: 'mesh' }
             ]
         };
+    },
+    computed: {
+        bgOptions() {
+            return [
+                // Fundamental
+                { label: this.$t('appearance.bg.default'),       value: 'default' },
+                { label: this.$t('appearance.bg.dots'),          value: 'dots' },
+                { label: this.$t('appearance.bg.cross'),         value: 'cross' },
+                { label: this.$t('appearance.bg.left-diagonal'), value: 'left-diagonal' },
+                // Structural
+                { label: this.$t('appearance.bg.blueprint'),     value: 'blueprint' },
+                { label: this.$t('appearance.bg.right-diagonal'),value: 'right-diagonal' },
+                { label: this.$t('appearance.bg.carbon'),        value: 'carbon' },
+                { label: this.$t('appearance.bg.perforated'),    value: 'perforated' },
+                // Gradient / Ambient
+                { label: this.$t('appearance.bg.aurora'),        value: 'aurora' },
+                { label: this.$t('appearance.bg.horizon'),       value: 'horizon' },
+                { label: this.$t('appearance.bg.glow'),          value: 'glow' },
+                { label: this.$t('appearance.bg.mesh'),          value: 'mesh' }
+            ];
+        }
     },
     mounted() {
         this.loadSettings();
