@@ -51,11 +51,17 @@
                 <!-- Background Pattern -->
                 <div class="mb-2">
                     <div class="caption text--secondary mb-2">Background</div>
-                    <v-btn-toggle v-model="settings.background" mandatory dense class="w-100 d-flex" @change="applySettings">
-                        <v-btn v-for="bg in bgOptions" :key="bg.value" :value="bg.value" class="flex-grow-1" small>
-                            {{ bg.label }}
-                        </v-btn>
-                    </v-btn-toggle>
+                    <div class="bg-name-grid">
+                        <v-btn
+                            v-for="bg in bgOptions"
+                            :key="bg.value"
+                            x-small
+                            depressed
+                            :color="settings.background === bg.value ? 'primary' : ''"
+                            :class="settings.background === bg.value ? 'white--text' : 'bg-name-btn'"
+                            @click="selectBackground(bg.value)"
+                        >{{ bg.label }}</v-btn>
+                    </div>
                 </div>
             </v-card-text>
         </v-card>
@@ -69,7 +75,7 @@ export default {
         return {
             menu: false,
             settings: {
-                darkMode: false,
+                darkMode: true, // Default to dark mode
                 accent: '#1976D2', // Vuetify default primary
                 radius: '4px',
                 background: 'default'
@@ -91,9 +97,21 @@ export default {
                 { label: '1.0', value: '16px' },
             ],
             bgOptions: [
-                { label: 'None', value: 'default' },
-                { label: 'Dots', value: 'dots' },
-                { label: 'Grid', value: 'grid' },
+                // Fundamental
+                { label: 'None',       value: 'default' },
+                { label: 'Dots',       value: 'dots' },
+                { label: 'Cross',      value: 'cross' },
+                { label: 'Left',       value: 'left-diagonal' },
+                // Structural
+                { label: 'Blueprint',  value: 'blueprint' },
+                { label: 'Right',      value: 'right-diagonal' },
+                { label: 'Carbon',     value: 'carbon' },
+                { label: 'Perforated', value: 'perforated' },
+                // Gradient / Ambient
+                { label: 'Aurora',     value: 'aurora' },
+                { label: 'Horizon',    value: 'horizon' },
+                { label: 'Glow',       value: 'glow' },
+                { label: 'Mesh',       value: 'mesh' }
             ]
         };
     },
@@ -107,6 +125,10 @@ export default {
     methods: {
         selectAccent(color) {
             this.settings.accent = color;
+            this.applySettings();
+        },
+        selectBackground(value) {
+            this.settings.background = value;
             this.applySettings();
         },
         loadSettings() {
@@ -133,6 +155,14 @@ export default {
 
             // Apply Theme Mode
             this.$vuetify.theme.dark = this.settings.darkMode;
+
+            // Sync --dot-color for background patterns
+            const dotColor = this.settings.darkMode
+                ? 'rgba(255, 255, 255, 0.12)'
+                : 'rgba(0, 0, 0, 0.12)';
+            document.documentElement.style.setProperty('--dot-color', dotColor);
+            // Sync --primary-color for gradient patterns
+            document.documentElement.style.setProperty('--primary-color', this.settings.accent);
 
             // Apply Accent Color
             this.$vuetify.theme.themes.light.primary = this.settings.accent;
@@ -165,4 +195,16 @@ export default {
 .selected-swatch {
     box-shadow: 0 0 0 2px var(--v-background-base, #fff), 0 0 0 4px currentColor;
 }
+
+.bg-name-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+}
+.bg-name-grid .v-btn {
+    min-width: 0;
+    padding: 0 2px !important;
+    font-size: 10px;
+}
 </style>
+
