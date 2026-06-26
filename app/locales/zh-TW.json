@@ -609,7 +609,7 @@
     "site_header": "網站公告",
     "site_footer": "網站頁尾",
     "footer_watermark": "頁尾浮水印",
-    "hide_project_link_in_footer":"隱藏頁尾的項目連結",
+    "hide_project_link_in_footer": "隱藏頁尾的項目連結",
     "private_library_mode": "開啟私人圖書館模式",
     "access_code": "存取碼",
     "invite_message": "提示語",
@@ -1289,5 +1289,28 @@
     "sampleText": "這是一段範例文字，用於示範文字處理工具的功能。\n\n重要：請注意，這個工具可以自動將文字內容轉換為 HTML 格式。\n\n提示：你可以在設定面板中新增自訂關鍵詞規則，讓特定文字自動加粗、放大或高亮顯示。\n\n警告：請確保輸入的文字內容符合你的預期格式，每段之間用空行分隔。\n\n關鍵功能包括：自動段落標籤、關鍵詞高亮、即時預覽、HTML 代碼複製等。"
   },
   "error_page_not_found": "404: 頁面已走失，回首頁再看看",
-  "error_server_starting": "服務正在啟動中，稍後重試"
+  "error_server_starting": "服務正在啟動中，稍後重試",
+  "appearance": {
+    "title": "外觀設定",
+    "theme": "主題模式",
+    "light": "淺色",
+    "dark": "深色",
+    "accent": "強調色",
+    "radius": "圓角半徑",
+    "background": "背景圖案",
+    "bg": {
+      "default": "無",
+      "dots": "點陣",
+      "cross": "十字",
+      "left-diagonal": "左斜",
+      "blueprint": "藍圖",
+      "right-diagonal": "右斜",
+      "carbon": "碳纖維",
+      "perforated": "多孔",
+      "aurora": "極光",
+      "horizon": "地平線",
+      "glow": "光暈",
+      "mesh": "網格"
+    }
+  }
 }

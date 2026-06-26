@@ -610,7 +610,7 @@
     "site_header": "网站公告",
     "site_footer": "网站脚注",
     "footer_watermark": "脚注水印",
-    "hide_project_link_in_footer":"隐藏脚注中的项目链接",
+    "hide_project_link_in_footer": "隐藏脚注中的项目链接",
     "private_library_mode": "开启私人图书馆模式",
     "access_code": "访问码",
     "invite_message": "提示语",
@@ -1290,5 +1290,28 @@
     "sampleText": "这是一段示例文字，用于演示文字处理工具的功能。\n\n重要：请注意，这个工具可以自动将文字内容转换为 HTML 格式。\n\n提示：你可以在设置面板中添加自定义关键词规则，让特定文字自动加粗、加大或高亮显示。\n\n警告：请确保输入的文字内容符合你的预期格式，每段之间用空行分隔。\n\n关键功能包括：自动段落标签、关键词高亮、实时预览、HTML 代码复制等。"
   },
   "error_page_not_found": "404: 页面已走失，请回首页",
-  "error_server_starting": "[MyBooks] 服务正在启动中，稍后重试"
+  "error_server_starting": "[MyBooks] 服务正在启动中，稍后重试",
+  "appearance": {
+    "title": "外观设置",
+    "theme": "主题模式",
+    "light": "浅色",
+    "dark": "深色",
+    "accent": "强调色",
+    "radius": "圆角半径",
+    "background": "背景图案",
+    "bg": {
+      "default": "无",
+      "dots": "点阵",
+      "cross": "十字",
+      "left-diagonal": "左斜",
+      "blueprint": "蓝图",
+      "right-diagonal": "右斜",
+      "carbon": "碳纤维",
+      "perforated": "多孔",
+      "aurora": "极光",
+      "horizon": "地平线",
+      "glow": "光晕",
+      "mesh": "网格"
+    }
+  }
 }

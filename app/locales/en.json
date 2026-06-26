@@ -413,7 +413,7 @@
     "site_header": "Site Header",
     "site_footer": "Site Footer",
     "footer_watermark": "Footer Watermark",
-    "hide_project_link_in_footer":"Hide Project Links in Footer",
+    "hide_project_link_in_footer": "Hide Project Links in Footer",
     "private_library_mode": "Enable Private Library Mode",
     "access_code": "Access Code",
     "invite_message": "Invite Message",
@@ -1289,5 +1289,28 @@
     "sampleText": "This is sample text used to demonstrate the text processor.\n\nImportant: Note that this tool automatically converts text into HTML format.\n\nTip: You can add custom keyword rules in the settings panel to make specific words bold, enlarged, or highlighted automatically.\n\nWarning: Make sure the input text matches the expected format, with paragraphs separated by blank lines.\n\nKey features include: automatic paragraph tags, keyword highlighting, live preview, and HTML code copying."
   },
   "error_page_not_found": "404 Not Found",
-  "error_server_starting": "Service is starting, please try again later"
+  "error_server_starting": "Service is starting, please try again later",
+  "appearance": {
+    "title": "APPEARANCE",
+    "theme": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "accent": "Accent",
+    "radius": "Radius",
+    "background": "Background",
+    "bg": {
+      "default": "None",
+      "dots": "Dots",
+      "cross": "Cross",
+      "left-diagonal": "Left",
+      "blueprint": "Blueprint",
+      "right-diagonal": "Right",
+      "carbon": "Carbon",
+      "perforated": "Perforated",
+      "aurora": "Aurora",
+      "horizon": "Horizon",
+      "glow": "Glow",
+      "mesh": "Mesh"
+    }
+  }
 }
