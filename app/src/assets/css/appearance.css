@@ -1,0 +1,44 @@
+/* Radius Overrides using CSS Variables */
+.v-application .v-card,
+.v-application .v-btn:not(.v-btn--round):not(.v-btn--icon),
+.v-application .v-sheet,
+.v-application .v-dialog,
+.v-application .v-menu__content,
+.v-application .v-text-field__details,
+.v-application .v-input__slot {
+    border-radius: var(--app-radius, 4px) !important;
+}
+
+/* Make sure text fields also inherit the radius */
+.v-application .v-text-field--outlined fieldset {
+    border-radius: var(--app-radius, 4px) !important;
+}
+
+/* Background Patterns */
+
+/* Base background variable */
+.v-application {
+    --bg-pattern-color: rgba(128, 128, 128, 0.15);
+}
+.theme--dark.v-application {
+    --bg-pattern-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Dots Pattern */
+html[data-bg-pattern="dots"] body,
+html[data-bg-pattern="dots"] .v-application {
+    background-image: radial-gradient(var(--bg-pattern-color) 1.5px, transparent 1.5px);
+    background-size: 24px 24px;
+}
+
+/* Grid Pattern */
+html[data-bg-pattern="grid"] body,
+html[data-bg-pattern="grid"] .v-application {
+    background-image: 
+        linear-gradient(to right, var(--bg-pattern-color) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--bg-pattern-color) 1px, transparent 1px);
+    background-size: 24px 24px;
+}
+
+/* Make cards slightly translucent so background is more visible in some parts if desired,
+   though usually we keep cards opaque. We will keep cards opaque by default. */
