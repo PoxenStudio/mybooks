@@ -533,7 +533,8 @@ export default {
             { value: 'author', label: 'appHeader.searchAuthor' },
             { value: 'isbn', label: 'appHeader.searchISBN' },
             { value: 'comments', label: 'appHeader.searchComments' },
-            { value: 'tags', label: 'appHeader.searchTag' },
+            { value: 'tags', label: 'appHeader.searchTags' },
+            { value: 'series', label: 'appHeader.searchSeries' },
         ],
         categoryMenu: false,
         mobileCategoryMenu: false,
@@ -930,7 +931,7 @@ export default {
 
                 // Add the appropriate prefix based on selected category
                 if (this.searchCategory !== 'all') {
-                    searchText = searchText.replace(/^(title:|title_sort:|author:|isbn:|comments:|#)/i, '').trim();
+                    searchText = searchText.replace(/^(title:|title_sort:|author:|isbn:|comments:|tags:|series:|#)/i, '').trim();
                     searchText = this.searchCategory + ':' + searchText;
                 }
 
