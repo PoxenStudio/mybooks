@@ -11,7 +11,7 @@
                 <!-- Theme Mode -->
                 <div class="mb-4">
                     <div class="caption text--secondary mb-2">{{ $t('appearance.theme') }}</div>
-                    <v-btn-toggle v-model="settings.darkMode" mandatory dense class="w-100 d-flex" @change="applySettings">
+                    <v-btn-toggle v-model="settings.darkMode" mandatory dense class="w-100 d-flex" @change="applySettings(true)">
                         <v-btn :value="false" class="flex-grow-1" small>
                             <v-icon left small>mdi-white-balance-sunny</v-icon> {{ $t('appearance.light') }}
                         </v-btn>
@@ -164,23 +164,14 @@ export default {
 
             // Apply Theme Mode
             this.$vuetify.theme.dark = this.settings.darkMode;
-
-            // Sync --dot-color for background patterns
             const dotColor = this.settings.darkMode
                 ? 'rgba(255, 255, 255, 0.12)'
                 : 'rgba(0, 0, 0, 0.12)';
             document.documentElement.style.setProperty('--dot-color', dotColor);
-            // Sync --primary-color for gradient patterns
             document.documentElement.style.setProperty('--primary-color', this.settings.accent);
-
-            // Apply Accent Color
             this.$vuetify.theme.themes.light.primary = this.settings.accent;
             this.$vuetify.theme.themes.dark.primary = this.settings.accent;
-
-            // Apply Radius via CSS Variable
             document.documentElement.style.setProperty('--app-radius', this.settings.radius);
-
-            // Apply Background Pattern
             document.documentElement.setAttribute('data-bg-pattern', this.settings.background);
         }
     }

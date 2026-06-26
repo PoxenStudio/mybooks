@@ -7,7 +7,8 @@
 .v-application .v-dialog,
 .v-application .v-menu__content,
 .v-application .v-text-field__details,
-.v-application .v-input__slot {
+.v-application .v-input__slot,
+.v-application .v-navigation-drawer {
     border-radius: var(--app-radius, 4px) !important;
 }
 
