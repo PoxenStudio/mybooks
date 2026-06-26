@@ -130,19 +130,16 @@
                         outlined
                         hide-details
                         class="flex-shrink-0"
-                        style="max-width: 200px; min-width: 150px;"
+                        style="max-width: 150px; min-width: 100px;"
                     ></v-select>
-                    <v-text-field
-                        dense
-                        @keyup.enter="getDataFromApi"
+                    <search-bar
                         v-model="search"
-                        append-icon="mdi-magnify"
-                        @click:append="getDataFromApi"
+                        :categories="searchCategories"
+                        :default-category="searchCategory"
+                        :search-fn="doSearch"
                         :label="$t('admin.books.search')"
-                        single-line
-                        hide-details
-                        outlined
-                    ></v-text-field>
+                        style="min-width: 220px;"
+                    />
                 </v-col>
             </v-row>
         </v-card-actions>
@@ -582,8 +579,10 @@
 
 <script>
 import { languageOptions } from "~/utils/languageCodes";
+import SearchBar from "~/components/SearchBar.vue";
 
 export default {
+    components: { SearchBar },
     data: () => ({
         snack: false,
         snackColor: "",
@@ -599,6 +598,18 @@ export default {
         books_selected: [],
         tag_input: null,
         search: "",
+        apiSearch: "",
+        searchCategory: "all",
+        searchCategories: [
+            { value: 'all',        label: 'appHeader.searchAll' },
+            { value: 'title',      label: 'appHeader.searchTitle' },
+            { value: 'title_sort', label: 'appHeader.searchTitleSort' },
+            { value: 'author',     label: 'appHeader.searchAuthor' },
+            { value: 'isbn',       label: 'appHeader.searchISBN' },
+            { value: 'comments',   label: 'appHeader.searchComments' },
+            { value: 'tags',       label: 'appHeader.searchTags' },
+            { value: 'series',     label: 'appHeader.searchSeries' },
+        ],
         book_type_filter: -1,
         page: 1,
         items: [],
@@ -742,8 +753,8 @@ export default {
             if (itemsPerPage != undefined) {
                 data.append("num", itemsPerPage);
             }
-            if (this.search != undefined) {
-                data.append("search", this.search);
+            if (this.apiSearch != undefined) {
+                data.append("search", this.apiSearch);
             }
             if (this.book_type_filter != undefined && this.book_type_filter != -1) {
                 data.append("type", this.book_type_filter);
@@ -763,6 +774,12 @@ export default {
                     this.loading = false;
                 });
         },
+        doSearch({ fullQuery }) {
+            // fullQuery 带分类前缀（如 title:foo），仅用于 API 参数，不回写搜索框
+            this.apiSearch = fullQuery || '';
+            this.getDataFromApi();
+        },
+
         // 通用方法：获取选中书籍的ID列表
         getSelectedBookIds() {
             if (this.books_selected.length == 0) {

@@ -66,11 +66,15 @@ class EpubHelper:
             if lower.endswith("cover.jpg") or lower.endswith("cover.jpeg"):
                 return filename
 
+        first_image = None
         for filename in file_list:
             lower = filename.lower()
             stem = Path(lower).stem
             ext = Path(lower).suffix
-            if "cover" in stem and ext in IMAGE_EXTS:
-                return filename
+            if ext in IMAGE_EXTS:
+                if not first_image:
+                    first_image = filename
+                if "cover" in stem:
+                    return filename
 
-        return None
+        return first_image
