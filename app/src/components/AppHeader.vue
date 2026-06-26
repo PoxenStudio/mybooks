@@ -266,6 +266,8 @@
 
             <v-btn v-else icon class="d-flex d-sm-none" @click="btn_search = !btn_search"> <v-icon>search</v-icon> </v-btn>
 
+            <appearance-menu />
+
             <template v-if="err == 'ok' && user.is_login">
                 <v-menu offset-y right :close-on-content-click="false" v-if="runningTasks.length > 0">
                     <template v-slot:activator="{ on }">
@@ -498,7 +500,10 @@
 </template>
 
 <script>
+import AppearanceMenu from "~/components/AppearanceMenu.vue";
+
 export default {
+    components: { AppearanceMenu },
     data() {
         let sidebar = false;
         let miniVariant = false;

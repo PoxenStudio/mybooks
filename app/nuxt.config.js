@@ -35,7 +35,8 @@ export default {
     '@mdi/font/css/materialdesignicons.css',
     '~/assets/css/fonts.css',
     '~/assets/css/background.css',
-    '~/assets/css/scrollbar.css'
+    '~/assets/css/scrollbar.css',
+    '~/assets/css/appearance.css'
   ],
 
   // Plugins to run before rendering page: https://go.nuxtjs.dev/config-plugins
