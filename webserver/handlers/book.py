@@ -32,6 +32,7 @@ from webserver import loader, utils
 from webserver.base.formatter import BookFormatter, ReadingStateFormatter
 from webserver.base.cover_generator import CoverGenerator
 from webserver.base.image_helper import ImageHelper
+from webserver.base.epub_helper import EpubHelper
 from webserver.services.autofill import AutoFillService
 from webserver.services.ai_fillinfo import AIFillInfoService
 from webserver.services.book_search import BookSearch
@@ -2003,13 +2004,23 @@ class BookUpload(BaseHandler):
         except Exception:
             return s.group(0)
 
-    def _add_new_book(self, mi, fpaths):
+    def _add_new_book(self, mi, fpaths, fmt):
         dynamic_cover = False
         mi.title_sort = utils.get_title_sort(mi.title)
         if utils.is_traditional_chinese(mi.title):
             mi.languages = constants.TRADITIONAL_CHINESE_CODE
         if not mi.languages:
             mi.languages = CONF.get("DEFAULT_LANGUAGE", constants.DEFAULT_LANGUAGE_CODE)
+
+        cover_fmt, cover_data = mi.cover_data
+        if (cover_fmt is None or cover_data is None) and fmt == "epub":
+            # Try to extract cover from epub file directly
+            epub_fpath = next((p for p in fpaths if p.lower().endswith(".epub")), None)
+            if epub_fpath:
+                cover_buf = EpubHelper.extract_cover(epub_fpath)
+                if cover_buf:
+                    mi.cover_data = ("jpeg", cover_buf.read())
+                    logging.info("_add_new_book: 从 epub 文件提取封面成功: %s", epub_fpath)
 
         if CONF.get("USE_DYNAMIC_COVER", False):
             fmt, cover_data = mi.cover_data
@@ -2243,13 +2254,12 @@ class BookUpload(BaseHandler):
                     }
             logging.info("import [%s] from %s with format %s", repr(mi.title), fpath, fmt)
             if book_id is None:
-                # New EBOOK
-                book_id = self._add_new_book(mi, [fpath])
+                book_id = self._add_new_book(mi, [fpath], fmt)
             else:
                 self.calibre_db.add_format(book_id, fmt.upper(), fpath, True)
         else:
             fpaths = [fpath]
-            book_id = self._add_new_book(mi, fpaths)
+            book_id = self._add_new_book(mi, fpaths, fmt)
         self.add_msg("success", _("导入书籍成功！"))
         return {"err": "ok", "book_id": book_id}
 

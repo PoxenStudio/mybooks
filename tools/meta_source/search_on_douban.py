@@ -39,12 +39,14 @@ COVER_HEADERS = {"User-Agent": UA}
 def _parse_js_challenge_cookies(html: str) -> dict:
     """从豆瓣 CDN 的 JS 反爬挑战页中提取所需 cookie。"""
     cookies = {}
-    m_wt = re.search(r'WTKkN\s*:\s*(\d+)', html)
-    m_bo = re.search(r'bOYDu\s*:\s*(\d+)', html)
-    m_wy = re.search(r'wyeCN\s*:\s*(\d+)', html)
+    m_wt = re.search(r"WTKkN\s*:\s*(\d+)", html)
+    m_bo = re.search(r"bOYDu\s*:\s*(\d+)", html)
+    m_wy = re.search(r"wyeCN\s*:\s*(\d+)", html)
     if m_wt and m_bo and m_wy:
-        cookies["__tst_status"] = str(int(m_wt.group(1)) + int(m_bo.group(1)) + int(m_wy.group(1)))
-    m_eo = re.search(r'iTyzs\s*\([^,]+,\s*(\d+)\)', html)
+        cookies["__tst_status"] = str(
+            int(m_wt.group(1)) + int(m_bo.group(1)) + int(m_wy.group(1))
+        )
+    m_eo = re.search(r"iTyzs\s*\([^,]+,\s*(\d+)\)", html)
     if m_eo:
         cookies["EO_Bot_Ssid"] = m_eo.group(1)
     return cookies
@@ -65,7 +67,9 @@ def download_cover(cover_url: str, search_url: str, out_dir: str = "out") -> str
         if "text/html" in resp.headers.get("Content-Type", ""):
             cookies = _parse_js_challenge_cookies(resp.text)
             if cookies:
-                resp = session.get(cover_url, headers=headers, cookies=cookies, timeout=10)
+                resp = session.get(
+                    cover_url, headers=headers, cookies=cookies, timeout=10
+                )
                 resp.raise_for_status()
         if "image" not in resp.headers.get("Content-Type", ""):
             print(f"    封面下载失败: 响应非图片 ({resp.headers.get('Content-Type')})")
@@ -147,4 +151,4 @@ def search_douban_books(book_name):
 
 if __name__ == "__main__":
     # 测试搜索
-    search_douban_books("亂馬1/2典藏版 6")
+    search_douban_books("新世紀福音戰士 4")
