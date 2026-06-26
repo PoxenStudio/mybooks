@@ -342,6 +342,11 @@
                         </v-list>
                     </v-card>
                 </v-menu>
+
+                <v-btn icon v-if="user.is_login" :to="'/logout'" :title="$t('appHeader.logout')">
+                    <v-icon>logout</v-icon>
+                </v-btn>
+
             </template>
         </v-app-bar>
 
