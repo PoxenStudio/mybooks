@@ -6,6 +6,7 @@ import zipfile
 import tempfile
 import shutil
 
+
 def extract_cover_image_robust(epub_path):
     """
     从EPUB文件中提取封面图片（增强容错版本）
@@ -23,12 +24,12 @@ def extract_cover_image_robust(epub_path):
         try:
             print("尝试使用ebooklib读取...")
             # 使用allow_failure=True可以跳过某些错误
-            book = epub.read_epub(epub_path, {'skip_metadata': True})
+            book = epub.read_epub(epub_path, {"skip_metadata": True})
 
             # 遍历所有items，查找id为cover.jpg（不区分大小写）
             cover_item = None
             for item in book.get_items():
-                if item.get_name() and item.get_name().lower() == 'cover.jpg':
+                if item.get_name() and item.get_name().lower() == "cover.jpg":
                     cover_item = item
                     break
 
@@ -49,12 +50,13 @@ def extract_cover_image_robust(epub_path):
         print(f"处理EPUB文件时出错: {e}")
         return False
 
+
 def extract_from_zip(epub_path):
     """
     直接从ZIP文件中提取封面图片（备用方法）
     """
     try:
-        with zipfile.ZipFile(epub_path, 'r') as zip_file:
+        with zipfile.ZipFile(epub_path, "r") as zip_file:
             # 获取所有文件名
             file_list = zip_file.namelist()
 
@@ -62,11 +64,13 @@ def extract_from_zip(epub_path):
             cover_filename = None
             for filename in file_list:
                 # 检查文件名是否以cover.jpg结尾（不区分大小写）
-                if filename.lower().endswith('cover.jpg') or filename.lower().endswith('cover.jpeg'):
+                if filename.lower().endswith("cover.jpg") or filename.lower().endswith(
+                    "cover.jpeg"
+                ):
                     cover_filename = filename
                     break
                 # 也检查路径中是否包含cover.jpg
-                if 'cover.jpg' in filename.lower() or 'cover.jpeg' in filename.lower():
+                if "cover.jpg" in filename.lower() or "cover.jpeg" in filename.lower():
                     cover_filename = filename
                     break
 
@@ -89,6 +93,7 @@ def extract_from_zip(epub_path):
         print(f"ZIP解析失败: {e}")
         return False
 
+
 def save_image(image_data, epub_path, original_name=None):
     """
     保存图片到当前目录
@@ -99,9 +104,9 @@ def save_image(image_data, epub_path, original_name=None):
         # 从原始文件名中提取扩展名
         ext = Path(original_name).suffix
         if not ext:
-            ext = '.jpg'
+            ext = ".jpg"
     else:
-        ext = '.jpg'
+        ext = ".jpg"
 
     output_filename = f"cover_{base_name}{ext}"
     output_path = os.path.join(os.getcwd(), output_filename)
@@ -115,7 +120,7 @@ def save_image(image_data, epub_path, original_name=None):
 
     # 写入文件
     try:
-        with open(output_path, 'wb') as f:
+        with open(output_path, "wb") as f:
             f.write(image_data)
 
         print(f"封面图片已保存: {output_path}")
@@ -124,6 +129,7 @@ def save_image(image_data, epub_path, original_name=None):
     except Exception as e:
         print(f"保存文件失败: {e}")
         return False
+
 
 def main():
     # 检查命令行参数
@@ -135,6 +141,7 @@ def main():
 
     # 支持通配符
     import glob
+
     epub_files = []
     for pattern in sys.argv[1:]:
         matched = glob.glob(pattern)
