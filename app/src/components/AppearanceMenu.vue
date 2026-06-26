@@ -140,6 +140,11 @@ export default {
                 const saved = localStorage.getItem('appearance_settings');
                 if (saved) {
                     this.settings = { ...this.settings, ...JSON.parse(saved) };
+                } else {
+                    const siteTheme = localStorage.getItem('site_theme');
+                    if (siteTheme) {
+                        this.settings.darkMode = siteTheme === 'dark';
+                    }
                 }
             } catch (e) {
                 console.error("Could not load appearance settings", e);

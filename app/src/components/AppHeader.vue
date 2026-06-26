@@ -729,8 +729,11 @@ export default {
                 localStorage.setItem('chunk_upload_size', rsp.sys.chunkUploadSize);
             }
             if (process.client && rsp.sys.theme !== '') {
-                localStorage.setItem('site_theme', this.sys.theme);
-                this.$vuetify.theme.dark = rsp.sys.theme === 'dark';
+                localStorage.setItem('site_theme', rsp.sys.theme);
+                const userAppearanceSettings = localStorage.getItem('appearance_settings');
+                if (!userAppearanceSettings) {
+                    this.$vuetify.theme.dark = rsp.sys.theme === 'dark';
+                }
             }
             if (rsp.sys.footer === '') {
                 rsp.sys.footer = this.$t('appHeader.defaultFooter');
