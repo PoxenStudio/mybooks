@@ -14,6 +14,7 @@ from webserver.toolbox.review_cht_books_tool import ReviewTraditionalChineseTool
 from webserver.toolbox.minify_pdf import MinifyPdfTool
 from webserver.toolbox.formats_pruning import FormatsPruningTool
 from webserver.toolbox.epub_fixer import EpubFixerTool
+from webserver.toolbox.epub_split import EpubSplitTool
 from webserver.services.background_service import BackgroundTask
 from pathlib import Path
 
@@ -294,6 +295,45 @@ class AdminEpubFixerFix(BaseHandler):
         return {"err": "ok", "msg": _("EPUB修复任务已启动,不要重复执行,注意查看消息通知中的处理结果")}
 
 
+class AdminEpubSplitChapters(BaseHandler):
+    @js
+    @is_admin
+    def post(self):
+        data = tornado.escape.json_decode(self.request.body)
+        book_id = data.get("book_id")
+        if not book_id:
+            return {"err": "params.missing", "msg": _("请提供书籍ID")}
+
+        try:
+            result = EpubSplitTool().list_chapters(int(book_id))
+        except RuntimeError as err:
+            return {"err": "epub_split.failed", "msg": str(err)}
+
+        return {"err": "ok", "data": result}
+
+
+class AdminEpubSplitGenerate(BaseHandler):
+    @js
+    @is_admin
+    def post(self):
+        data = tornado.escape.json_decode(self.request.body)
+        book_id = data.get("book_id")
+        linenums = data.get("chapters")
+        use_first_chapter_cover = bool(data.get("use_first_chapter_cover", False))
+
+        if not book_id:
+            return {"err": "params.missing", "msg": _("请提供书籍ID")}
+        if not isinstance(linenums, list) or not linenums:
+            return {"err": "params.missing", "msg": _("请至少选择一个章节")}
+
+        try:
+            result = EpubSplitTool().split(int(book_id), linenums, use_first_chapter_cover, self.user_id())
+        except RuntimeError as err:
+            return {"err": "epub_split.failed", "msg": str(err)}
+
+        return {"err": "ok", "msg": _("新书生成成功"), "data": result}
+
+
 def routes():
     return [
         (r"/api/toolbox/list", AdminToolList),
@@ -307,4 +347,6 @@ def routes():
         (r"/api/toolbox/formats_pruning/start", AdminFormatsPruningStart),
         (r"/api/toolbox/formats_pruning/progress", AdminFormatsPruningProgress),
         (r"/api/toolbox/epub_fixer/fix", AdminEpubFixerFix),
+        (r"/api/toolbox/epub_split/chapters", AdminEpubSplitChapters),
+        (r"/api/toolbox/epub_split/generate", AdminEpubSplitGenerate),
     ]

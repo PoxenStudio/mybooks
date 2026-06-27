@@ -1245,6 +1245,19 @@
     "noEpub": "所選書籍沒有 EPUB 格式",
     "taskRunning": "已有 EPUB 修復任務正在執行，請稍後再試"
   },
+  "epubSplit": {
+    "title": "EPUB拆分新書",
+    "close": "關閉",
+    "hint": "從指定 EPUB 書籍中勾選若干章節，提取為一本獨立的新書。新書的作者、標籤、分類、出版社和叢書信息默認沿用原書。",
+    "searchPlaceholder": "搜尋書名",
+    "noResults": "未找到相關書籍",
+    "noEpub": "所選書籍沒有 EPUB 格式",
+    "chaptersTitle": "選擇章節",
+    "clearSelection": "清空選擇",
+    "useFirstChapterCoverLabel": "嘗試使用第一章節中的大圖作為封面",
+    "generateBtn": "提取為新書",
+    "generateSuccess": "新書生成成功："
+  },
   "textProcessor": {
     "title": "文字處理工具",
     "close": "關閉",

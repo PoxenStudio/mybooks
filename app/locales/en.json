@@ -1245,6 +1245,19 @@
     "noEpub": "The selected book has no EPUB format",
     "taskRunning": "An EPUB fix task is already running, please try again later"
   },
+  "epubSplit": {
+    "title": "EPUB Split",
+    "close": "Close",
+    "hint": "Pick chapters from a selected EPUB book and extract them into a new, independent book. The new book's author, tags, category, publisher and series default to the source book.",
+    "searchPlaceholder": "Search by title",
+    "noResults": "No books found",
+    "noEpub": "The selected book has no EPUB format",
+    "chaptersTitle": "Select chapters",
+    "clearSelection": "Clear selection",
+    "useFirstChapterCoverLabel": "Try using a large image from the first chapter as the cover",
+    "generateBtn": "Extract as new book",
+    "generateSuccess": "New book generated successfully: "
+  },
   "textProcessor": {
     "title": "Text Processor",
     "close": "Close",
