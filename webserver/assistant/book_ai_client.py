@@ -125,7 +125,7 @@ class BookAIClient:
                 messages=[{"role": "system", "content": "Check the connect, please answer with JSON format {\"response\": \"pong\"} if you can receive this message."}],
                 response_format={"type": "json_object"},
                 temperature=0.0,
-                max_tokens=10,
+                max_tokens=200,
             )
             content = response.choices[0].message.content
             if not content:
