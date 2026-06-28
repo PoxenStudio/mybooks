@@ -1,6 +1,6 @@
 ; -- MyBooks.iss --
 #define MyAppName "MyBooks Service"
-#define MyAppVersion "3.47.0"
+#define MyAppVersion "3.48.0"
 #define MyAppPublisher "PoxenStudio"
 #define MyAppExeName "MyBooks_Service"
 #define TarFileName "mybooks.tar"
