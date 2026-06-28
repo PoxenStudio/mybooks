@@ -2158,7 +2158,7 @@ class BookUpload(BaseHandler):
         target_book_id = self.get_argument("bid", None)
         update_metadata = self.get_argument("update_meta", 1)
         if target_book_id:
-            return self._add_format_to_existing_book(int(target_book_id), update_metadata==1)
+            return self._add_format_to_existing_book(int(target_book_id), update_metadata == 1)
 
         name, data = self.get_upload_file()
         if name is None:
