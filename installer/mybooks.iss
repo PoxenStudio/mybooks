@@ -3,7 +3,7 @@
 #define MyAppVersion "3.48.0"
 #define MyAppPublisher "PoxenStudio"
 #define MyAppExeName "MyBooks_Service"
-#define TarFileName "mybooks.tar"
+#define TarFileName "mybooks_v" + MyAppVersion + ".tar"
 #define IconFileName "mybooks.ico"
 
 [Setup]
