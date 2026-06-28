@@ -968,6 +968,7 @@
     "removedFromWants": "已從待讀清單中移除",
     "setToReading": "已設定為閱讀中狀態",
     "markedAsRead": "已標記為讀完",
+    "markedAsUnread":"已標記為未讀",
     "settingSuccess": "設定成功！",
     "success": "成功",
     "deleteSuccess": "刪除成功",

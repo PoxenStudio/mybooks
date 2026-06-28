@@ -1975,7 +1975,7 @@ export default {
                 } else if (this.book.state.read_state === this.READING_STATE.FINISHED) {
                     // 读完 -> 设为未读
                     newReadState = this.READING_STATE.UNREAD;
-                    successMessage = this.$t('message.setUnread');
+                    successMessage = this.$t('message.markedAsUnread');
                 }
 
                 const response = await this.$backend(`/book/${this.book.id}/readstate`, {

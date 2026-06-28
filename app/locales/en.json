@@ -968,6 +968,7 @@
     "removedFromWants": "Removed from want-to-read list",
     "setToReading": "Set to reading status",
     "markedAsRead": "Marked as read",
+    "markedAsUnread":"Marked as unread",
     "settingSuccess": "Setting successful!",
     "success": "Success",
     "deleteSuccess": "Delete successful!",
