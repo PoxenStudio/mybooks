@@ -970,6 +970,7 @@
     "removedFromWants": "已从待读清单中移除",
     "setToReading": "已设置为在读状态",
     "markedAsRead": "已标记为读完",
+    "markedAsUnread":"已标记为未读",
     "settingSuccess": "设置成功！",
     "success": "成功",
     "deleteSuccess": "删除成功",
