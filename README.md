@@ -10,7 +10,7 @@ An enhanced personal books management webserver built on Calibre + Vue, beautifu
 本项目专注于个人及家庭私有电子书、实体书管理，以及多账号的阅读管理，不适用于站点搭建。后续目标是结合AI提供更多的扩展阅读内容，形成个人的知识库。
 ![Example](document/example.jpg)
 
-本系统与电子书阅读器不同，主要功能在于对电子书的管理功能。阅读器可以灵活选择，移动端比较多，在PC端推荐Koodo Reader。
+本系统与电子书阅读器不同，主要功能在于对电子书的管理功能。阅读器可以灵活选择，欢迎使用与MyBooks深度绑定的[MyReader](https://github.com/PoxenStudio/myreader)。
 
 **友情提醒：中国境内网站，个人是不允许进行在线出版的，维护公开的书籍网站是违法违规的行为！建议仅作为个人使用！**
 
