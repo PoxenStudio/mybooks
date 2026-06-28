@@ -35,7 +35,7 @@ class EpubSplitTool(BaseTool):
     def info() -> dict:
         return {
             "tool_id": "epub_split",
-            "name": "EPUB拆分新书",
+            "name": "EPUB拆分",
             "description": "从指定 EPUB 书籍中选择若干章节，提取为一本独立的新书",
             "revision": "0.1.0",
             "author": "MyBooks",
