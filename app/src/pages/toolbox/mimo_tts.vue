@@ -77,7 +77,6 @@
           <template v-if="selected">
             <v-divider class="mb-4" />
 
-            <!-- API type selector -->
             <v-select
               v-model="apiType"
               :label="$t('mimoTts.apiType')"
@@ -92,7 +91,6 @@
               @update:model-value="onApiTypeChange"
             />
 
-            <!-- API URL -->
             <v-text-field
               v-model="apiUrl"
               :label="$t('mimoTts.apiUrl')"
@@ -104,7 +102,6 @@
               prepend-inner-icon="mdi-link-variant"
             />
 
-            <!-- Model name -->
             <v-text-field
               v-model="modelName"
               :label="$t('mimoTts.modelName')"
@@ -116,7 +113,6 @@
               prepend-inner-icon="mdi-chip"
             />
 
-            <!-- Auth type -->
             <v-select
               v-model="authType"
               :label="$t('mimoTts.authType')"
@@ -130,7 +126,6 @@
               prepend-inner-icon="mdi-shield-key"
             />
 
-            <!-- API Key -->
             <v-text-field
               v-model="apiKey"
               :label="$t('mimoTts.apiKey')"
@@ -143,7 +138,6 @@
               type="password"
             />
 
-            <!-- Voice: chat_completions mode -->
             <template v-if="apiType === 'chat_completions'">
               <v-select
                 v-model="voiceType"
@@ -171,7 +165,6 @@
               />
             </template>
 
-            <!-- Voice: audio_speech mode -->
             <template v-else-if="apiType === 'audio_speech'">
               <v-select
                 v-model="voiceName"
@@ -187,7 +180,6 @@
               />
             </template>
 
-            <!-- Voice: custom mode (same as chat) -->
             <template v-else>
               <v-select
                 v-model="voiceType"
@@ -226,7 +218,19 @@
               >{{ resultMsg }}</v-alert>
             </transition>
 
-            <div class="d-flex justify-center">
+            <div class="d-flex justify-center flex-wrap ga-3">
+              <v-btn
+                color="secondary"
+                variant="outlined"
+                class="mt-test-btn"
+                :loading="testing"
+                :disabled="!apiKey.trim() || !apiUrl.trim() || !modelName.trim()"
+                @click="testConnection"
+              >
+                <v-icon left>mdi-connection</v-icon>
+                {{ testing ? $t('mimoTts.testTesting') : $t('mimoTts.testBtn') }}
+              </v-btn>
+
               <v-btn
                 color="primary"
                 class="mt-start-btn"
@@ -291,7 +295,9 @@ export default {
     voiceType: 'default',
     customVoice: '',
     voiceName: 'alloy',
+
     processing: false,
+    testing: false,
     resultMsg: '',
     resultType: 'success',
     completed: false,
@@ -314,8 +320,7 @@ export default {
     },
     speechVoiceOptions() {
       const t = this.$t.bind(this);
-      const voices = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
-      return voices.map((v) => ({
+      return ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'].map((v) => ({
         value: v,
         label: t(`mimoTts.voiceSpeech_${v}`),
       }));
@@ -352,8 +357,9 @@ export default {
       );
     },
   },
-  created() {
+  async created() {
     this.$store.commit('navbar', true);
+    await this.loadSavedConfig();
   },
   methods: {
     onApiTypeChange(type) {
@@ -362,6 +368,71 @@ export default {
         this.apiUrl = preset.url;
         this.modelName = preset.model;
         this.authType = preset.auth;
+      }
+    },
+    async loadSavedConfig() {
+      try {
+        const rsp = await this.$backend('/toolbox/mimo_tts/config');
+        if (rsp.err === 'ok' && rsp.config) {
+          const c = rsp.config;
+          this.apiKey = c.api_key || '';
+          this.apiUrl = c.api_url || this.apiUrl;
+          this.modelName = c.model_name || this.modelName;
+          this.apiType = c.api_type || this.apiType;
+          this.voiceName = c.voice_name || 'alloy';
+          this.authType = c.auth_type || this.authType;
+          if (c.voice_desc) {
+            const presetMatch = {
+              '自然平和的语调，语速适中，咬字清晰': 'default',
+              '温柔细腻的语调，语速偏慢，咬字清晰，富有亲和力': 'gentle',
+              '沉稳厚重的语调，语速适中偏低，字正腔圆，富有磁性': 'calm',
+              '活泼轻快的语调，语速偏快，情绪饱满，句尾音调上扬': 'lively',
+            };
+            this.voiceType = presetMatch[c.voice_desc] || 'custom';
+            if (this.voiceType === 'custom' &&
+                !['自然平和的语调，语速适中，咬字清晰',
+                  '温柔细腻的语调，语速偏慢，咬字清晰，富有亲和力',
+                  '沉稳厚重的语调，语速适中偏低，字正腔圆，富有磁性',
+                  '活泼轻快的语调，语速偏快，情绪饱满，句尾音调上扬'].includes(c.voice_desc)) {
+              this.customVoice = c.voice_desc;
+            }
+          }
+          this.resultMsg = this.$t('mimoTts.configLoaded');
+          this.resultType = 'info';
+        }
+      } catch (_e) {
+      }
+    },
+    async testConnection() {
+      this.testing = true;
+      this.resultMsg = '';
+      this.completed = false;
+      try {
+        const rsp = await this.$backend('/toolbox/mimo_tts/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_key: this.apiKey.trim(),
+            voice_desc: this.voiceDesc,
+            api_url: this.apiUrl.trim(),
+            model_name: this.modelName.trim(),
+            api_type: this.apiType,
+            voice_name: this.apiType === 'audio_speech' ? this.voiceName : '',
+            auth_type: this.authType,
+          }),
+        });
+        if (rsp.err === 'ok') {
+          this.resultMsg = rsp.msg || this.$t('mimoTts.testSuccess');
+          this.resultType = 'success';
+        } else {
+          this.resultMsg = rsp.msg || rsp.err;
+          this.resultType = 'error';
+        }
+      } catch (e) {
+        this.resultMsg = String(e);
+        this.resultType = 'error';
+      } finally {
+        this.testing = false;
       }
     },
     async search() {
@@ -472,8 +543,11 @@ export default {
 }
 
 .mt-start-btn {
-  width: 60%;
   min-width: 180px;
+}
+
+.mt-test-btn {
+  min-width: 140px;
 }
 
 .mt-fade-enter-active,
