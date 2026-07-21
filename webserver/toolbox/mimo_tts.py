@@ -53,7 +53,7 @@ class MimoTTSTool(BaseTool):
         return {
             "tool_id": "mimo_tts",
             "name": "TTS有声书",
-            "description": "通过 TTS API（支持 MiMo Chat / OpenAI TTS 格式）将 EPUB 书籍合成为有声书（WAV格式），生成后可在线播放",
+            "description": "通过 TTS API（支持 MiMo Chat / OpenAI TTS 格式）将 EPUB 书籍合成为有声书（WAV格式），目前仅支持 EPUB 格式，生成后可在线播放",
             "revision": "0.3.0",
             "author": "MyBooks",
             "publish_date": "2026-07-21",
