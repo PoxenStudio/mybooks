@@ -1344,7 +1344,7 @@
   "mimoTts": {
     "title": "TTS Audiobook",
     "close": "Close",
-    "hint": "Convert EPUB books to audiobooks via TTS API (supports MiMo Chat / OpenAI TTS compatible endpoints). Generated audio files will appear in the book detail page.",
+    "hint": "Convert books to audiobooks via TTS API (supports MiMo Chat / OpenAI TTS compatible endpoints). Currently only EPUB format is supported. Generated audio files will appear in the book detail page.",
     "selectBook": "Select Book",
     "apiType": "API Type",
     "apiTypeChat": "MiMo Chat",
