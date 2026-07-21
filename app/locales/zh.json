@@ -1346,7 +1346,7 @@
   "mimoTts": {
     "title": "TTS 有声书",
     "close": "关闭",
-    "hint": "通过 TTS API 将 EPUB 书籍合成为有声书（WAV格式），支持 MiMo Chat / OpenAI TTS 等兼容接口。生成后可在书籍详情页在线播放。",
+    "hint": "通过 TTS API 将书籍合成为有声书（WAV格式），支持 MiMo Chat / OpenAI TTS 等兼容接口。目前仅支持 EPUB 格式，生成后可在书籍详情页在线播放。",
     "selectBook": "选择书籍",
     "apiType": "API 类型",
     "apiTypeChat": "MiMo Chat",
