@@ -1373,6 +1373,11 @@
     "voiceSpeech_onyx": "Onyx — deep, assertive",
     "voiceSpeech_nova": "Nova — warm, natural",
     "voiceSpeech_shimmer": "Shimmer — clear, bright",
+    "testBtn": "Test Connection",
+    "testTesting": "Testing...",
+    "testSuccess": "Connection successful, config saved",
+    "testFailed": "Connection failed: {msg}",
+    "configLoaded": "Loaded saved configuration",
     "startBtn": "Start Conversion",
     "convertStarted": "Conversion task started, check progress in the top-right panel",
     "noEpub": "The selected book has no EPUB format"
