@@ -1,0 +1,621 @@
+<template>
+  <v-container fluid class="pa-4">
+    <v-row class="mb-3" align="center">
+      <v-col class="text-center">
+        <span class="text-h5 font-weight-bold">{{ $t('mimoTts.title') }}</span>
+      </v-col>
+      <v-col cols="auto">
+        <v-btn small color="error" @click="$router.go(-1)">
+          <v-icon small left>mdi-close</v-icon>{{ $t('mimoTts.close') }}
+        </v-btn>
+      </v-col>
+    </v-row>
+
+    <v-row justify="center">
+      <v-col cols="12" md="8" lg="6">
+        <v-card rounded="xl" outlined class="mt-card pa-6">
+          <v-alert type="warning" dense text rounded="lg" class="mb-5">
+            {{ $t('mimoTts.hint') }}
+          </v-alert>
+
+          <v-text-field
+            v-model="query"
+            :label="$t('mimoTts.selectBook')"
+            :loading="searching"
+            outlined
+            dense
+            clearable
+            hide-details
+            class="mb-3"
+            prepend-inner-icon="mdi-magnify"
+            @keyup.enter="search"
+            @click:clear="clearSearch"
+          />
+
+          <div class="mt-book-list mb-4">
+            <div v-if="searching" class="text-center py-6">
+              <v-progress-circular indeterminate color="primary" size="32" />
+            </div>
+            <div v-else-if="books.length === 0 && searched" class="text-center py-4 grey--text">
+              {{ $t('mimoTts.noResults') }}
+            </div>
+            <v-list v-else-if="books.length > 0" dense class="mt-list pa-0">
+              <v-list-item
+                v-for="book in books"
+                :key="book.id"
+                :class="['mt-book-item', { 'mt-book-selected': selected && selected.id === book.id }]"
+                @click="selectBook(book)"
+              >
+                <v-list-item-avatar tile size="44" class="mr-3">
+                  <v-img :src="book.thumb" :alt="book.title">
+                    <template #error>
+                      <v-icon color="grey lighten-1">mdi-book-outline</v-icon>
+                    </template>
+                  </v-img>
+                </v-list-item-avatar>
+                <v-list-item-content>
+                  <v-list-item-title class="mt-book-title">{{ book.title }}</v-list-item-title>
+                  <v-list-item-subtitle class="mt-book-author">{{ (book.authors || []).join(', ') }}</v-list-item-subtitle>
+                  <div class="mt-1">
+                    <v-chip
+                      v-for="file in (book.files || [])"
+                      :key="file.format"
+                      x-small
+                      :color="file.format === 'EPUB' ? 'primary' : 'default'"
+                      outlined
+                      class="mr-1"
+                    >{{ file.format }}</v-chip>
+                  </div>
+                </v-list-item-content>
+                <v-list-item-action v-if="selected && selected.id === book.id">
+                  <v-icon color="primary">mdi-check-circle</v-icon>
+                </v-list-item-action>
+              </v-list-item>
+            </v-list>
+          </div>
+
+          <template v-if="selected">
+            <v-divider class="mb-4" />
+
+            <v-select
+              v-model="apiType"
+              :label="$t('mimoTts.apiType')"
+              :items="apiTypeOptions"
+              item-title="label"
+              item-value="value"
+              outlined
+              dense
+              hide-details
+              class="mb-3"
+              prepend-inner-icon="mdi-api"
+              @update:model-value="onApiTypeChange"
+            />
+
+            <v-text-field
+              v-model="apiUrl"
+              :label="$t('mimoTts.apiUrl')"
+              :placeholder="$t('mimoTts.apiUrlPlaceholder')"
+              outlined
+              dense
+              hide-details
+              class="mb-3"
+              prepend-inner-icon="mdi-link-variant"
+            />
+
+            <v-text-field
+              v-model="modelName"
+              :label="$t('mimoTts.modelName')"
+              :placeholder="$t('mimoTts.modelNamePlaceholder')"
+              outlined
+              dense
+              hide-details
+              class="mb-3"
+              prepend-inner-icon="mdi-chip"
+            />
+
+            <v-select
+              v-model="authType"
+              :label="$t('mimoTts.authType')"
+              :items="authTypeOptions"
+              item-title="label"
+              item-value="value"
+              outlined
+              dense
+              hide-details
+              class="mb-3"
+              prepend-inner-icon="mdi-shield-key"
+            />
+
+            <v-text-field
+              v-model="apiKey"
+              :label="$t('mimoTts.apiKey')"
+              :placeholder="$t('mimoTts.apiKeyPlaceholder')"
+              outlined
+              dense
+              hide-details
+              class="mb-4"
+              prepend-inner-icon="mdi-key-variant"
+              type="password"
+            />
+
+            <template v-if="apiType === 'chat_completions'">
+              <v-select
+                v-model="voiceType"
+                :label="$t('mimoTts.voiceLabel')"
+                :items="voiceOptions"
+                item-title="label"
+                item-value="value"
+                outlined
+                dense
+                hide-details
+                class="mb-3"
+                prepend-inner-icon="mdi-account-voice"
+              />
+              <v-textarea
+                v-if="voiceType === 'custom'"
+                v-model="customVoice"
+                :label="$t('mimoTts.voiceCustom')"
+                :placeholder="$t('mimoTts.voiceCustomPlaceholder')"
+                outlined
+                dense
+                hide-details
+                auto-grow
+                rows="2"
+                class="mb-4"
+              />
+            </template>
+
+            <template v-else-if="apiType === 'audio_speech'">
+              <v-select
+                v-model="voiceName"
+                :label="$t('mimoTts.voiceName')"
+                :items="speechVoiceOptions"
+                item-title="label"
+                item-value="value"
+                outlined
+                dense
+                hide-details
+                class="mb-4"
+                prepend-inner-icon="mdi-account-voice"
+              />
+            </template>
+
+            <template v-else>
+              <v-select
+                v-model="voiceType"
+                :label="$t('mimoTts.voiceLabel')"
+                :items="voiceOptions"
+                item-title="label"
+                item-value="value"
+                outlined
+                dense
+                hide-details
+                class="mb-3"
+                prepend-inner-icon="mdi-account-voice"
+              />
+              <v-textarea
+                v-if="voiceType === 'custom'"
+                v-model="customVoice"
+                :label="$t('mimoTts.voiceCustom')"
+                :placeholder="$t('mimoTts.voiceCustomPlaceholder')"
+                outlined
+                dense
+                hide-details
+                auto-grow
+                rows="2"
+                class="mb-4"
+              />
+            </template>
+
+            <transition name="mt-fade">
+              <v-alert
+                v-if="resultMsg"
+                :type="resultType"
+                dense
+                text
+                rounded="lg"
+                class="mb-4"
+              >{{ resultMsg }}</v-alert>
+            </transition>
+
+            <div class="d-flex justify-center flex-wrap ga-3">
+              <v-btn
+                color="secondary"
+                variant="outlined"
+                class="mt-test-btn"
+                :loading="testing"
+                :disabled="!apiKey.trim() || !apiUrl.trim() || !modelName.trim()"
+                @click="testConnection"
+              >
+                <v-icon left>mdi-connection</v-icon>
+                {{ testing ? $t('mimoTts.testTesting') : $t('mimoTts.testBtn') }}
+              </v-btn>
+
+              <v-btn
+                color="primary"
+                class="mt-start-btn"
+                :loading="processing"
+                :disabled="processing || !canConvert"
+                @click="startConvert"
+              >
+                <v-icon left>mdi-voice</v-icon>
+                {{ $t('mimoTts.startBtn') }}
+              </v-btn>
+            </div>
+
+            <div v-if="processing || completed" class="mt-4">
+              <div class="mb-1 d-flex justify-space-between text-caption">
+                <span>{{ status === 'completed' ? $t('mimoTts.statusCompleted') : $t('mimoTts.statusProcessing') }}</span>
+                <span>{{ progress }}%</span>
+              </div>
+              <v-progress-linear v-model="progress" height="10" rounded color="primary" />
+            </div>
+
+            <div v-if="completed" class="d-flex justify-center mt-4">
+              <v-btn
+                color="success"
+                outlined
+                @click="$router.push('/audio/' + selected.id)"
+              >
+                <v-icon left>mdi-headphones</v-icon>
+                {{ $t('reader.audio_open') }}
+              </v-btn>
+            </div>
+          </template>
+        </v-card>
+      </v-col>
+    </v-row>
+  </v-container>
+</template>
+
+<script>
+const API_PRESETS = {
+  chat_completions: {
+    url: 'https://api.xiaomimimo.com/v1/chat/completions',
+    model: 'mimo-v2.5-tts',
+    auth: 'api-key',
+  },
+  audio_speech: {
+    url: 'https://api.openai.com/v1/audio/speech',
+    model: 'tts-1',
+    auth: 'bearer',
+  },
+  custom: {
+    url: '',
+    model: '',
+    auth: 'bearer',
+  },
+};
+
+export default {
+  data: () => ({
+    query: '',
+    books: [],
+    searching: false,
+    searched: false,
+    selected: null,
+
+    apiType: 'chat_completions',
+    apiUrl: API_PRESETS.chat_completions.url,
+    modelName: API_PRESETS.chat_completions.model,
+    authType: API_PRESETS.chat_completions.auth,
+    apiKey: '',
+    voiceType: 'default',
+    customVoice: '',
+    voiceName: 'alloy',
+
+    processing: false,
+    testing: false,
+    resultMsg: '',
+    resultType: 'success',
+    completed: false,
+    progress: 0,
+    status: '',
+    pollInterval: null,
+  }),
+  computed: {
+    apiTypeOptions() {
+      const t = this.$t.bind(this);
+      return [
+        { value: 'chat_completions', label: t('mimoTts.apiTypeChat') },
+        { value: 'audio_speech', label: t('mimoTts.apiTypeSpeech') },
+        { value: 'custom', label: t('mimoTts.apiTypeCustom') },
+      ];
+    },
+    authTypeOptions() {
+      const t = this.$t.bind(this);
+      return [
+        { value: 'api-key', label: t('mimoTts.authTypeApiKey') },
+        { value: 'bearer', label: t('mimoTts.authTypeBearer') },
+      ];
+    },
+    speechVoiceOptions() {
+      const t = this.$t.bind(this);
+      return ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'].map((v) => ({
+        value: v,
+        label: t(`mimoTts.voiceSpeech_${v}`),
+      }));
+    },
+    voiceOptions() {
+      const t = this.$t.bind(this);
+      return [
+        { value: 'default', label: t('mimoTts.voiceDefault') },
+        { value: 'gentle', label: t('mimoTts.voiceGentle') },
+        { value: 'calm', label: t('mimoTts.voiceCalm') },
+        { value: 'lively', label: t('mimoTts.voiceLively') },
+        { value: 'custom', label: t('mimoTts.voiceCustom') },
+      ];
+    },
+    voiceDesc() {
+      if (this.voiceType === 'custom') {
+        return this.customVoice.trim() || '';
+      }
+      const descs = {
+        default: '自然平和的语调，语速适中，咬字清晰',
+        gentle: '温柔细腻的语调，语速偏慢，咬字清晰，富有亲和力',
+        calm: '沉稳厚重的语调，语速适中偏低，字正腔圆，富有磁性',
+        lively: '活泼轻快的语调，语速偏快，情绪饱满，句尾音调上扬',
+      };
+      return descs[this.voiceType] || descs.default;
+    },
+    canConvert() {
+      return (
+        this.selected &&
+        (this.selected.files || []).some((f) => f.format === 'EPUB') &&
+        this.apiKey.trim() &&
+        this.apiUrl.trim() &&
+        this.modelName.trim()
+      );
+    },
+  },
+  async created() {
+    this.$store.commit('navbar', true);
+    await this.loadSavedConfig();
+  },
+  beforeDestroy() {
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = null;
+    }
+  },
+  methods: {
+    onApiTypeChange(type) {
+      const preset = API_PRESETS[type];
+      if (preset) {
+        this.apiUrl = preset.url;
+        this.modelName = preset.model;
+        this.authType = preset.auth;
+      }
+    },
+    async loadSavedConfig() {
+      try {
+        const rsp = await this.$backend('/toolbox/mimo_tts/config');
+        if (rsp.err === 'ok' && rsp.config) {
+          const c = rsp.config;
+          this.apiKey = c.api_key || '';
+          this.apiUrl = c.api_url || this.apiUrl;
+          this.modelName = c.model_name || this.modelName;
+          this.apiType = c.api_type || this.apiType;
+          this.voiceName = c.voice_name || 'alloy';
+          this.authType = c.auth_type || this.authType;
+          if (c.voice_desc) {
+            const presetMatch = {
+              '自然平和的语调，语速适中，咬字清晰': 'default',
+              '温柔细腻的语调，语速偏慢，咬字清晰，富有亲和力': 'gentle',
+              '沉稳厚重的语调，语速适中偏低，字正腔圆，富有磁性': 'calm',
+              '活泼轻快的语调，语速偏快，情绪饱满，句尾音调上扬': 'lively',
+            };
+            this.voiceType = presetMatch[c.voice_desc] || 'custom';
+            if (this.voiceType === 'custom' &&
+                !['自然平和的语调，语速适中，咬字清晰',
+                  '温柔细腻的语调，语速偏慢，咬字清晰，富有亲和力',
+                  '沉稳厚重的语调，语速适中偏低，字正腔圆，富有磁性',
+                  '活泼轻快的语调，语速偏快，情绪饱满，句尾音调上扬'].includes(c.voice_desc)) {
+              this.customVoice = c.voice_desc;
+            }
+          }
+          this.resultMsg = this.$t('mimoTts.configLoaded');
+          this.resultType = 'info';
+        }
+      } catch (_e) {
+      }
+    },
+    async testConnection() {
+      this.testing = true;
+      this.resultMsg = '';
+      this.completed = false;
+      try {
+        const rsp = await this.$backend('/toolbox/mimo_tts/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_key: this.apiKey.trim(),
+            voice_desc: this.voiceDesc,
+            api_url: this.apiUrl.trim(),
+            model_name: this.modelName.trim(),
+            api_type: this.apiType,
+            voice_name: this.apiType === 'audio_speech' ? this.voiceName : '',
+            auth_type: this.authType,
+          }),
+        });
+        if (rsp.err === 'ok') {
+          this.resultMsg = rsp.msg || this.$t('mimoTts.testSuccess');
+          this.resultType = 'success';
+        } else {
+          this.resultMsg = rsp.msg || rsp.err;
+          this.resultType = 'error';
+        }
+      } catch (e) {
+        this.resultMsg = String(e);
+        this.resultType = 'error';
+      } finally {
+        this.testing = false;
+      }
+    },
+    async search() {
+      const q = (this.query || '').trim();
+      if (!q) return;
+      this.searching = true;
+      this.searched = false;
+      this.selected = null;
+      try {
+        const rsp = await this.$backend(`/search?title=title:${encodeURIComponent(q)}`);
+        this.books = rsp.err === 'ok' ? (rsp.books || []) : [];
+      } catch (_e) {
+        this.books = [];
+      } finally {
+        this.searching = false;
+        this.searched = true;
+      }
+    },
+    clearSearch() {
+      this.books = [];
+      this.selected = null;
+      this.searched = false;
+      this.resultMsg = '';
+      this.completed = false;
+    },
+    selectBook(book) {
+      this.selected = this.selected && this.selected.id === book.id ? null : book;
+      this.resultMsg = '';
+      this.completed = false;
+    },
+    async startConvert() {
+      if (!this.canConvert) return;
+      this.resultMsg = '';
+      this.completed = false;
+      this.processing = true;
+      this.progress = 0;
+      this.status = '';
+      try {
+        const rsp = await this.$backend('/toolbox/mimo_tts/convert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            book_id: this.selected.id,
+            api_key: this.apiKey.trim(),
+            voice_desc: this.voiceDesc,
+            api_url: this.apiUrl.trim(),
+            model_name: this.modelName.trim(),
+            api_type: this.apiType,
+            voice_name: this.apiType === 'audio_speech' ? this.voiceName : '',
+            auth_type: this.authType,
+          }),
+        });
+        if (rsp.err === 'ok') {
+          this.resultMsg = rsp.msg || this.$t('mimoTts.convertStarted');
+          this.resultType = 'success';
+          this.pollProgress();
+        } else {
+          this.resultMsg = rsp.msg || rsp.err;
+          this.resultType = 'error';
+          this.processing = false;
+        }
+      } catch (e) {
+        this.resultMsg = String(e);
+        this.resultType = 'error';
+        this.processing = false;
+      }
+    },
+    pollProgress() {
+      if (this.pollInterval) {
+        clearInterval(this.pollInterval);
+      }
+      this.pollInterval = setInterval(async () => {
+        try {
+          const rsp = await this.$backend('/toolbox/mimo_tts/progress');
+          if (rsp.err === 'ok' && rsp.data) {
+            this.progress = rsp.data.progress || 0;
+            this.status = rsp.data.status || '';
+            if (rsp.data.status === 'completed') {
+              clearInterval(this.pollInterval);
+              this.pollInterval = null;
+              this.processing = false;
+              this.completed = true;
+              this.resultMsg = rsp.msg || this.$t('mimoTts.convertCompleted');
+              this.resultType = 'success';
+            } else if (rsp.data.status === 'failed') {
+              clearInterval(this.pollInterval);
+              this.pollInterval = null;
+              this.processing = false;
+              this.resultMsg = rsp.msg || this.$t('mimoTts.convertFailed');
+              this.resultType = 'error';
+            }
+          } else {
+            clearInterval(this.pollInterval);
+            this.pollInterval = null;
+            this.processing = false;
+            this.resultMsg = rsp.msg || rsp.err;
+            this.resultType = 'error';
+          }
+        } catch (e) {
+          clearInterval(this.pollInterval);
+          this.pollInterval = null;
+          this.processing = false;
+          this.resultMsg = String(e);
+          this.resultType = 'error';
+        }
+      }, 2000);
+    },
+  },
+};
+</script>
+
+<style scoped>
+.mt-card {
+  border: 2px solid #90CAF9;
+}
+
+.mt-book-list {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.mt-list {
+  background: transparent !important;
+}
+
+.mt-book-item {
+  border-radius: 8px !important;
+  margin-bottom: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.mt-book-item:hover {
+  background: rgba(144, 202, 249, 0.15) !important;
+}
+
+.mt-book-selected {
+  background: rgba(144, 202, 249, 0.25) !important;
+  border: 1px solid #90CAF9;
+}
+
+.mt-book-title {
+  font-size: 13px !important;
+  white-space: normal !important;
+  line-height: 1.3;
+}
+
+.mt-book-author {
+  font-size: 11px !important;
+}
+
+.mt-start-btn {
+  min-width: 180px;
+}
+
+.mt-test-btn {
+  min-width: 140px;
+}
+
+.mt-fade-enter-active,
+.mt-fade-leave-active {
+  transition: opacity 0.3s, transform 0.25s;
+}
+.mt-fade-enter,
+.mt-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+</style>
