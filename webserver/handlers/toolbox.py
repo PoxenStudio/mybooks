@@ -15,6 +15,7 @@ from webserver.toolbox.minify_pdf import MinifyPdfTool
 from webserver.toolbox.formats_pruning import FormatsPruningTool
 from webserver.toolbox.epub_fixer import EpubFixerTool
 from webserver.toolbox.epub_split import EpubSplitTool
+from webserver.toolbox.mimo_tts import MimoTTSTool
 from webserver.services.background_service import BackgroundTask
 from pathlib import Path
 
@@ -334,6 +335,126 @@ class AdminEpubSplitGenerate(BaseHandler):
         return {"err": "ok", "msg": _("新书生成成功"), "data": result}
 
 
+class AdminMimoTTSConvert(BaseHandler):
+    @js
+    @is_admin
+    def post(self):
+        data = tornado.escape.json_decode(self.request.body)
+        book_id = data.get("book_id")
+        api_key = (data.get("api_key") or "").strip()
+        voice_desc = (data.get("voice_desc") or "").strip()
+        api_url = (data.get("api_url") or "").strip()
+        model_name = (data.get("model_name") or "").strip()
+        api_type = (data.get("api_type") or "chat_completions").strip()
+        voice_name = (data.get("voice_name") or "").strip()
+        auth_type = (data.get("auth_type") or "api-key").strip()
+
+        if not book_id:
+            return {"err": "params.missing", "msg": _("请提供书籍ID")}
+        if not api_key:
+            return {"err": "params.missing", "msg": _("请提供 API Key")}
+        if not api_url:
+            if api_type == "custom":
+                return {"err": "params.missing", "msg": _("自定义类型请填写 API URL")}
+            api_url = "https://api.openai.com/v1/audio/speech" if api_type == "audio_speech" else "https://api.xiaomimimo.com/v1/chat/completions"
+        if not model_name:
+            if api_type == "custom":
+                return {"err": "params.missing", "msg": _("自定义类型请填写模型名称")}
+            if api_type == "audio_speech":
+                model_name = "tts-1"
+            else:
+                model_name = "mimo-v2.5-tts"
+        if api_type == "chat_completions" and not voice_desc:
+            voice_desc = "自然平和的语调，语速适中，咬字清晰"
+        if api_type == "audio_speech" and not voice_name:
+            voice_name = "alloy"
+
+        tool = MimoTTSTool()
+        if tool.is_running():
+            return {"err": "task.running", "msg": _("已有 TTS 转换任务正在运行，请稍后再试")}
+
+        # audio_speech 模式下 voice_desc 无意义，传空字符串避免混淆
+        effective_voice_desc = voice_desc if api_type == "chat_completions" else ""
+        tool.convert(int(book_id), api_key, effective_voice_desc, self.user_id(),
+                     api_url, model_name, api_type, voice_name, auth_type)
+        return {"err": "ok", "msg": _("TTS 转换任务已启动，右上角可以查看进度")}
+
+
+class AdminMimoTTSConfig(BaseHandler):
+    @js
+    @is_admin
+    def get(self):
+        config = MimoTTSTool().load_api_config()
+        if config:
+            return {"err": "ok", "config": config}
+        return {"err": "ok", "config": None}
+
+    @js
+    @is_admin
+    def delete(self):
+        MimoTTSTool().clear_api_config()
+        return {"err": "ok", "msg": _("已清除已保存的配置")}
+
+
+class AdminMimoTTSProgress(BaseHandler):
+    @js
+    @is_admin
+    def get(self):
+        task = MimoTTSTool.get_last_task()
+        if not task:
+            return {"err": "task.not_found", "msg": _("尚未启动 TTS 转换任务")}
+
+        progress_data = task.get("progress_data") or {}
+        result = {
+            "status": task.get("status"),
+            "progress": task.get("progress", 0),
+            "book_id": progress_data.get("book_id", 0),
+            "stage": progress_data.get("stage", ""),
+            "chapter": progress_data.get("chapter", 0),
+            "total": progress_data.get("total", 0),
+            "chapter_title": progress_data.get("chapter_title", ""),
+        }
+
+        if task.get("status") == BackgroundTask.STATUS_FAILED:
+            return {"err": "task.failed", "msg": task.get("error_message") or _("处理失败"), "data": result}
+
+        if task.get("status") == BackgroundTask.STATUS_COMPLETED:
+            return {"err": "ok", "msg": _("TTS 转换任务已完成"), "data": result}
+
+        return {"err": "ok", "data": result}
+
+
+class AdminMimoTTSTest(BaseHandler):
+    @js
+    @is_admin
+    def post(self):
+        data = tornado.escape.json_decode(self.request.body)
+        api_key = (data.get("api_key") or "").strip()
+        voice_desc = (data.get("voice_desc") or "").strip()
+        api_url = (data.get("api_url") or "").strip()
+        model_name = (data.get("model_name") or "").strip()
+        api_type = (data.get("api_type") or "chat_completions").strip()
+        voice_name = (data.get("voice_name") or "").strip()
+        auth_type = (data.get("auth_type") or "api-key").strip()
+
+        if not api_key:
+            return {"err": "params.missing", "msg": _("请提供 API Key")}
+        if not api_url:
+            return {"err": "params.missing", "msg": _("请填写 API URL")}
+        if not model_name:
+            return {"err": "params.missing", "msg": _("请填写模型名称")}
+        if api_type == "chat_completions" and not voice_desc:
+            voice_desc = "自然平和的语调，语速适中，咬字清晰"
+        if api_type == "audio_speech" and not voice_name:
+            voice_name = "alloy"
+
+        ok, err_msg = MimoTTSTool().test_connection(
+            api_key, voice_desc, api_url, model_name, api_type, voice_name, auth_type)
+        if ok:
+            return {"err": "ok", "msg": _("连接成功，配置已保存")}
+        return {"err": "test.failed", "msg": _("连接失败：%s") % err_msg}
+
+
 def routes():
     return [
         (r"/api/toolbox/list", AdminToolList),
@@ -349,4 +470,8 @@ def routes():
         (r"/api/toolbox/epub_fixer/fix", AdminEpubFixerFix),
         (r"/api/toolbox/epub_split/chapters", AdminEpubSplitChapters),
         (r"/api/toolbox/epub_split/generate", AdminEpubSplitGenerate),
+        (r"/api/toolbox/mimo_tts/convert", AdminMimoTTSConvert),
+        (r"/api/toolbox/mimo_tts/progress", AdminMimoTTSProgress),
+        (r"/api/toolbox/mimo_tts/config", AdminMimoTTSConfig),
+        (r"/api/toolbox/mimo_tts/test", AdminMimoTTSTest),
     ]
