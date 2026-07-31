@@ -1,0 +1,119 @@
+[
+  {
+    "bookSourceName": "得奇小说",
+    "bookSourceUrl": "https://www.deqixs.com",
+    "bookSourceGroup": "小说",
+    "bookSourceType": 0,
+    "enabled": true,
+    "header": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+      "Referer": "https://www.deqixs.com/"
+    },
+    "searchUrl": "https://www.deqixs.com/search.html,{\"method\":\"POST\",\"body\":\"searchtype=all&searchkey={{key}}\",\"charset\":\"utf-8\"}",
+    "jsLib": "function cover(url) { return url ? 'https://www.deqixs.com' + url : ''; }\nfunction words(str) { var m = str.match(/\\d+/); return m ? m[0] : str; }",
+    "ruleSearch": {
+      "bookList": "class.bookcase@li",
+      "name": "class.bookname@a@text",
+      "author": "class.author@text",
+      "lastChapter": "class.updata@a@text",
+      "coverUrl": "class.bookcover@img@src",
+      "bookUrl": "class.bookname@a@href"
+    },
+    "ruleBookInfo": {
+      "name": "class.bookname@text",
+      "author": "class.author@a@text",
+      "lastChapter": "class.chapter@a@text",
+      "coverUrl": "class.bookcover@img@src##src=(.*?)##$1",
+      "wordCount": "id.status@span@text##字数：||@js:words(result)",
+      "intro": "class.intro@text"
+    },
+    "ruleToc": {
+      "chapterList": "id.list-chapterAll@dd@a",
+      "chapterName": "@text",
+      "chapterUrl": "@href",
+      "isVolume": ""
+    },
+    "ruleContent": {
+      "content": "id.txt@html##<script[^>]*>[\\s\\S]*?</script>||@js:result",
+      "replaceRegex": []
+    }
+  },
+  {
+    "bookSourceName": "笔趣阁",
+    "bookSourceUrl": "https://www.biquge.com",
+    "bookSourceGroup": "小说",
+    "bookSourceType": 0,
+    "enabled": true,
+    "header": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    },
+    "searchUrl": "",
+    "jsLib": "",
+    "ruleSearch": {
+      "bookList": "",
+      "name": "",
+      "author": "",
+      "lastChapter": "",
+      "coverUrl": "",
+      "bookUrl": ""
+    },
+    "ruleBookInfo": {
+      "name": "#info h1",
+      "author": "#info p:first-of-type##作\\s*者[：:](.*)##$1",
+      "lastChapter": "#info p:last-of-type a@text",
+      "coverUrl": "#fmimg img@src",
+      "wordCount": "",
+      "intro": "#intro@text"
+    },
+    "ruleToc": {
+      "chapterList": "#list dd a",
+      "chapterName": "@text",
+      "chapterUrl": "@href",
+      "isVolume": ""
+    },
+    "ruleContent": {
+      "content": "#content@html",
+      "replaceRegex": []
+    }
+  },
+  {
+    "bookSourceName": "知轩藏书",
+    "bookSourceUrl": "https://www.zxcs.me",
+    "bookSourceGroup": "小说",
+    "bookSourceType": 0,
+    "enabled": true,
+    "header": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    },
+    "searchUrl": "https://www.zxcs.me/search.php?keyword={{key}}",
+    "jsLib": "",
+    "ruleSearch": {
+      "bookList": "class.grid@li",
+      "name": "class.grid-des@h3@text##(.*?)\\s+作者.*##$1",
+      "author": "class.grid-des@text##作者[：:](.*?)更新##$1",
+      "lastChapter": "",
+      "coverUrl": "class.grid-img@img@src",
+      "bookUrl": "class.grid-des@a@href"
+    },
+    "ruleBookInfo": {
+      "name": "class.book-title@text",
+      "author": "class.book-meta@text##作者[：:](.*?)分类##$1",
+      "lastChapter": "",
+      "coverUrl": "class.book-cover@img@src",
+      "wordCount": "",
+      "intro": "class.book-desc@text"
+    },
+    "ruleToc": {
+      "chapterList": "class.book-list@li@a",
+      "chapterName": "@text",
+      "chapterUrl": "@href",
+      "isVolume": ""
+    },
+    "ruleContent": {
+      "content": "id.book-content@html",
+      "replaceRegex": []
+    }
+  }
+]

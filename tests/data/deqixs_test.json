@@ -1,0 +1,41 @@
+{
+  "bookSourceName": "得奇小说",
+  "bookSourceUrl": "https://www.deqixs.com",
+  "bookSourceGroup": "小说",
+  "bookSourceType": 0,
+  "enabled": true,
+  "header": {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    "Referer": "https://www.deqixs.com/"
+  },
+  "searchUrl": "https://www.deqixs.com/search.html,{\"method\":\"POST\",\"body\":\"searchtype=all&searchkey={{key}}\",\"charset\":\"utf-8\"}",
+  "jsLib": "function cover(url) { return url ? 'https://www.deqixs.com' + url : ''; }\nfunction words(str) { var m = str.match(/\\d+/); return m ? m[0] : str; }",
+  "ruleSearch": {
+    "bookList": "class.bookcase@li",
+    "name": "class.bookname@a@text",
+    "author": "class.author@text",
+    "lastChapter": "class.updata@a@text",
+    "coverUrl": "class.bookcover@img@src",
+    "bookUrl": "class.bookname@a@href"
+  },
+  "ruleBookInfo": {
+    "name": "class.bookname@text",
+    "author": "class.author@a@text",
+    "lastChapter": "class.chapter@a@text",
+    "coverUrl": "class.bookcover@img@src##src=(.*?)##$1",
+    "wordCount": "id.status@span@text##字数：||@js:words(result)",
+    "intro": "class.intro@text"
+  },
+  "ruleToc": {
+    "chapterList": "id.list-chapterAll@dd@a",
+    "chapterName": "@text",
+    "chapterUrl": "@href",
+    "isVolume": ""
+  },
+  "ruleContent": {
+    "content": "id.txt@html##<script[^>]*>[\\s\\S]*?</script>||@js:result",
+    "replaceRegex": []
+  }
+}

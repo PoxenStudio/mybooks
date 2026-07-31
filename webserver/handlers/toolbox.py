@@ -20,6 +20,7 @@ from webserver.toolbox.mimo_tts import MimoTTSTool
 from webserver.toolbox.bookbarn_acceptor_tool import BookBarnAcceptorTool
 from webserver.toolbox.mimo_tts import MimoTTSTool
 from webserver.services.background_service import BackgroundTask
+from webserver.handlers.book_source_api import BOOK_SOURCE_ROUTES
 from pathlib import Path
 
 
@@ -566,4 +567,4 @@ def routes():
         (r"/api/toolbox/mimo_tts/progress", AdminMimoTTSProgress),
         (r"/api/toolbox/mimo_tts/config", AdminMimoTTSConfig),
         (r"/api/toolbox/mimo_tts/test", AdminMimoTTSTest),
-    ]
+    ] + BOOK_SOURCE_ROUTES

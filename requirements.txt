@@ -34,3 +34,6 @@ jieba
 inotify_simple
 reportlab
 PyMuPDF
+
+# JS runtime for book source engine (duktape binding, prebuilt wheels)
+dukpy==0.6.0
