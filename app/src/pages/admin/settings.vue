@@ -1,5 +1,16 @@
 <template>
   <div>
+    <div class="d-flex justify-end mb-2">
+      <v-btn
+        class="settings-hint-btn"
+        href="https://www.mybooks.top/wiki.html"
+        target="_blank"
+        rel="noopener"
+      >
+        <v-icon left>mdi-lightbulb-question-outline</v-icon>
+        {{ $t('settings.hint') }}
+      </v-btn>
+    </div>
     <v-card class="my-2 elevation-4" v-for="card in cards" :key="card.title">
       <v-card-title @click="card.show = !card.show">
         <v-btn @click.once="card.show = !card.show" icon>
@@ -1298,7 +1309,6 @@ export default {
         tips: [
           {
             text: "settings.douban_plugin_description",
-            link: "https://github.com/PoxenStudio/mybooks/blob/master/document/README.zh_CN.md#%E5%A6%82%E6%9E%9C%E9%85%8D%E7%BD%AE%E8%B1%86%E7%93%A3%E6%8F%92%E4%BB%B6",
           },
         ],
       },
@@ -2008,6 +2018,61 @@ export default {
 <style>
 .cursor-pointer {
   cursor: pointer;
+}
+
+/* 设置页提示按钮 - 自定义背景色 + 大圆角，覆盖 Vuetify 默认样式 */
+.settings-hint-btn,
+.settings-hint-btn.v-btn--flat,
+.settings-hint-btn.v-btn--is-elevated,
+.settings-hint-btn:not(.v-btn--text):not(.v-btn--outlined) {
+  background-color: #003153 !important;
+  background: #003153 !important;
+  border-radius: 9999px !important;
+  -webkit-border-radius: 9999px !important;
+  border-color: #003153 !important;
+  color: #ffffff !important;
+  padding-left: 24px !important;
+  padding-right: 24px !important;
+  box-shadow: none !important;
+  min-height: 36px !important;
+  height: 36px !important;
+  overflow: hidden !important;
+}
+
+/* 覆盖 Vuetify v-btn 内部伪元素背景层（其默认会生成渐变/着色层叠加在按钮上） */
+.settings-hint-btn::before,
+.settings-hint-btn::after,
+.settings-hint-btn .v-btn__content::before,
+.settings-hint-btn .v-btn__content::after {
+  background-color: transparent !important;
+  background: transparent !important;
+  border-radius: 9999px !important;
+}
+
+/* 覆盖 Vuetify 按钮背景层（部分版本使用 .v-btn__background / .v-btn__overlay） */
+.settings-hint-btn > .v-btn__background,
+.settings-hint-btn .v-btn__overlay {
+  background-color: transparent !important;
+  border-radius: 9999px !important;
+}
+
+/* 交互状态也强制使用同样的背景和圆角 */
+.settings-hint-btn:hover,
+.settings-hint-btn:focus,
+.settings-hint-btn:active,
+.settings-hint-btn:focus-within,
+.settings-hint-btn.is-active {
+  background-color: #001e34 !important;
+  background: #001e34 !important;
+  border-radius: 9999px !important;
+  border-color: #001e34 !important;
+  color: #ffffff !important;
+}
+
+/* 内部图标和文字颜色保持白色 */
+.settings-hint-btn .v-btn__content,
+.settings-hint-btn .v-btn__content * {
+  color: #ffffff !important;
 }
 
 .book-nav-card .book-nav-name-field {

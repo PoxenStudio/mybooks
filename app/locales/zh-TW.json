@@ -654,6 +654,7 @@
     "backToHome": "返回首頁"
   },
   "settings": {
+    "hint": "系統使用",
     "trash_management": "檔案清理",
     "trash_description": "Calibre 回收站 ( library/.caltrash ) 用於存放已刪除的書籍檔案，預設刪除後 7 天自動清理。上傳目錄 ( upload ) 下是上傳時建立的檔案，在入庫完成後仍然存在。少於 10M 不需要清理。",
     "trash_calibre_size": "Calibre 回收站：",

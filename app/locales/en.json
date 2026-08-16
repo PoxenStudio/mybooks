@@ -440,6 +440,7 @@
     "progressAudioImporting": "Importing audiobooks"
   },
   "settings": {
+    "hint": "User Manual",
     "trash_management": "Space cleanup",
     "trash_description": "The Calibre Recycle Bin (<b>library/.caltrash</b>) stores deleted book files and automatically purges them 7 days after deletion by default. Files created in the (<b>upload</b>) directory during book upload persist even after the books have been successfully imported into the library.",
     "trash_calibre_size": "Calibre trash bin: ",
