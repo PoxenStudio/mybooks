@@ -81,6 +81,10 @@ Name: "{app}\data"; Flags: uninsneveruninstall
 
 
 [Run]
+; 关闭当前 WSL2 虚拟机（如果有其他发行版在运行也会一并停止），确保随后导入的 MyBooksService
+; 是在应用了 EnsureWslMirroredNetworking 写入的新 .wslconfig 设置之后才第一次启动
+Filename: "wsl.exe"; Parameters: "--shutdown"; Flags: runhidden waituntilterminated; StatusMsg: "正在应用 WSL 网络配置..."
+
 ; 安装完成后，自动导入 WSL 实例
 ; 参数说明: --import <发行版名称> <安装目录> <tar文件路径> --version 2
 Filename: "wsl.exe"; Parameters: "--import MyBooksService ""{app}\wsl_data"" ""{app}\{#TarFileName}"" --version 2"; Flags: runhidden waituntilterminated; StatusMsg: "正在初始化 MyBooks 运行环境..."
@@ -100,6 +104,38 @@ begin
   Rest := Copy(WinPath, 3, MaxInt);
   StringChangeEx(Rest, '\', '/', True);
   Result := '/mnt/' + Drive + Rest;
+end;
+
+// 确保 %USERPROFILE%\.wslconfig 中启用了让局域网 IP 可以访问 WSL 内服务所需的设置。
+// .wslconfig 是标准 ini 格式，用 SetIniString 只增改这几个 key，不影响用户已有的其他设置/发行版配置。
+// 三项设置缺一不可（均已在实测环境中验证过）：
+//   [wsl2] networkingMode=mirrored   -- WSL 与主机共享网络接口，取代默认的 NAT 私有网络，
+//                                       否则 Windows 的 localhost 转发只代理 127.0.0.1，不代理主机的局域网 IP
+//   [wsl2] firewall=false            -- 镜像网络模式会额外启用一层 Hyper-V 防火墙，
+//                                       默认只放行 ICMP/mDNS 等少量协议，会挡住 HTTP 等入站连接
+//   [experimental] hostAddressLoopback=true -- 允许"主机自己"通过镜像 IP 回环访问 WSL 内的服务，
+//                                       默认这个场景是不通的（局域网内其他设备访问则不受影响）
+// 注意：这是按用户（USERPROFILE）级别的全局设置，会影响这台机器上所有 WSL 发行版，不仅仅是 MyBooksService。
+// 另外，如果用户开启了经典 Windows 防火墙，还需要放行对应端口的入站连接（New-NetFirewallRule），
+// 这一步涉及管理员权限，未包含在此安装程序中，遇到局域网仍无法访问时需要用户手动添加。
+procedure EnsureWslMirroredNetworking();
+var
+  WslConfigPath: String;
+begin
+  WslConfigPath := ExpandConstant('{%USERPROFILE}\.wslconfig');
+  SetIniString('wsl2', 'networkingMode', 'mirrored', WslConfigPath);
+  SetIniString('wsl2', 'firewall', 'false', WslConfigPath);
+  SetIniString('experimental', 'hostAddressLoopback', 'true', WslConfigPath);
+end;
+
+// 安装步骤完成后（文件已复制，尚未执行 [Run] 里的 wsl --shutdown / --import），
+// 先写好 .wslconfig，确保 MyBooksService 首次启动时就已经是镜像网络模式
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+  begin
+    EnsureWslMirroredNetworking();
+  end;
 end;
 
 // 动态生成启动批处理文件，避免额外携带文件
