@@ -706,7 +706,7 @@ export default {
                 { text: this.$t('admin.books.header.cover'), sortable: false, value: "img", width: "80px" },
                 { text: this.$t('admin.books.header.id'), sortable: true, value: "id", width: "80px" },
                 ...(this.allowPhysicalBooks ? [{ text: this.$t('admin.books.header.type'), sortable: false, value: "book_type", width: "80px" }] : []),
-                { text: this.$t('admin.books.header.count'), sortable: false, value: "book_count", width: "70px" },
+                ...(this.allowPhysicalBooks ? [{ text: this.$t('admin.books.header.count'), sortable: false, value: "book_count", width: "70px" }] : []),
                 { text: this.$t('admin.books.header.title'), sortable: true, value: "title" },
                 { text: this.$t('admin.books.header.author'), sortable: true, value: "author", width: "100px" },
                 { text: this.$t('admin.books.header.category'), sortable: false, value: "category", width: "80px" },

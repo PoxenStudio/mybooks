@@ -15,6 +15,49 @@ from webserver import loader
 CONF = loader.get_settings()
 
 
+class _UserSyncFilesystemProvider(FilesystemProvider):
+    """每用户一个的FilesystemProvider，root目录固定在/data/reader/<uid>/。
+
+    resource.path统一保持带"/reader"前缀的完整webdav路径（而不是相对于
+    自己root目录的相对路径），resource.provider也固定指向自己，不依赖
+    environ["wsgidav.provider"]。详见 document/WebDAV_Reader_Sync_Provider.md。
+    """
+
+    def __init__(self, root_folder, *, mount_prefix, **kwargs):
+        super().__init__(root_folder, **kwargs)
+        self.mount_prefix = mount_prefix  # 例如"/reader"，不带结尾斜杠
+
+    def _strip_prefix(self, path):
+        if path == self.mount_prefix:
+            return "/"
+        if path.startswith(self.mount_prefix + "/"):
+            return path[len(self.mount_prefix):]
+        return path
+
+    def get_resource_inst(self, path, environ):
+        # 原样传入完整路径，不要在这里剥离前缀——_loc_to_file_path()会剥
+        # 离，剥两次会出错，原因见文档。
+        resource = super().get_resource_inst(path, environ)
+        if resource is not None:
+            resource.provider = self
+            if resource.is_collection:
+                self._filter_dotfiles(resource)
+        return resource
+
+    def _filter_dotfiles(self, folder_resource):
+        """列目录时跳过.开头的文件/目录（如.DS_Store），不在WebDAV里暴露。"""
+        orig_get_member_names = folder_resource.get_member_names
+
+        def get_member_names():
+            return [n for n in orig_get_member_names() if not n.startswith(".")]
+
+        folder_resource.get_member_names = get_member_names
+
+    def _loc_to_file_path(self, path, environ=None):
+        # MKCOL/PUT等写操作会绕过get_resource_inst()直接调用这个方法。
+        return super()._loc_to_file_path(self._strip_prefix(path), environ)
+
+
 # WebDAV sync folder configuration
 SYNC_FOLDER_NAME = "reader"  # WebDAV显示的目录名
 
@@ -209,25 +252,6 @@ class VirtualCollection(DAVCollection):
         return time.time()
 
 
-class SyncFolderResourceWrapper:
-    """包装FilesystemProvider的资源，确保路径正确映射到WebDAV路径空间"""
-    def __init__(self, fs_resource, webdav_path, sync_folder_name):
-        self._fs_resource = fs_resource
-        self._webdav_path = webdav_path
-        self._sync_folder_name = sync_folder_name
-        # 修正wrapped resource的path
-        if fs_resource:
-            fs_resource.path = webdav_path
-
-    def __getattr__(self, name):
-        """代理所有未定义的属性到底层资源"""
-        return getattr(self._fs_resource, name)
-
-    def __bool__(self):
-        """确保布尔值检查正确"""
-        return self._fs_resource is not None
-
-
 class BooksCollection(VirtualCollection):
     def __init__(self, path, environ, title, provider, book_ids):
         super(BooksCollection, self).__init__(path, environ, title, provider)
@@ -376,7 +400,14 @@ class MyBooksDavProvider(DAVProvider):
         if user_id not in self._user_fs_providers:
             path = self._get_user_sync_path(user_id)
             self._ensure_sync_folder(path)
-            self._user_fs_providers[user_id] = FilesystemProvider(path)
+            # 用_UserSyncFilesystemProvider（见文件顶部）而不是原生
+            # FilesystemProvider。手动同步顶层provider的mount_path/
+            # share_path，因为这个provider不会经过wsgidav app挂载share时
+            # 的初始化流程。详见 document/WebDAV_Reader_Sync_Provider.md。
+            fs_provider = _UserSyncFilesystemProvider(path, mount_prefix=f"/{self.sync_folder_name}")
+            fs_provider.set_mount_path(self.mount_path)
+            fs_provider.set_share_path(self.share_path)
+            self._user_fs_providers[user_id] = fs_provider
             logging.info(f"Created FilesystemProvider for user {user_id}: {path}")
         return self._user_fs_providers[user_id]
 
@@ -443,9 +474,11 @@ class MyBooksDavProvider(DAVProvider):
                 if user_id:
                     try:
                         fs_provider = self._get_or_create_fs_provider(user_id)
-                        sync_resource = fs_provider.get_resource_inst("/", environ)
+                        sync_resource = fs_provider.get_resource_inst(f"/{self.sync_folder_name}", environ)
                         if sync_resource:
-                            sync_resource.path = f"/{self.sync_folder_name}"
+                            # FolderResource.name取自真实目录basename（用户id），
+                            # 需要单独改成sync_folder_name才能正确显示为"reader"。
+                            sync_resource.name = self.sync_folder_name
                             children.append(sync_resource)
                     except Exception as e:
                         logging.error(f"Error getting sync folder for user {user_id}: {e}")
@@ -466,17 +499,12 @@ class MyBooksDavProvider(DAVProvider):
             except Exception as e:
                 logging.error(f"Error getting sync folder provider for user {user_id}: {e}")
                 return None
-            # 将 /reader/... 映射到用户目录内的相对路径
-            prefix_len = len(self.sync_folder_name) + 1  # +1 for leading /
-            fs_path = path[prefix_len:] if len(path) > prefix_len else "/"
-            if not fs_path:
-                fs_path = "/"
-            logging.debug(f"Mapping WebDAV path {path} -> user {user_id} fs path: {fs_path}")
-            resource = fs_provider.get_resource_inst(fs_path, environ)
-            if resource:
-                wrapped = SyncFolderResourceWrapper(resource, path, self.sync_folder_name)
-                return wrapped._fs_resource if wrapped else None
-            return None
+            # path原样交给fs_provider，由它自己剥离"/reader"前缀。
+            logging.debug(f"Mapping WebDAV path {path} to user {user_id}'s sync folder")
+            resource = fs_provider.get_resource_inst(path, environ)
+            if resource and path == f"/{self.sync_folder_name}":
+                resource.name = self.sync_folder_name  # 同上，纠正displayname
+            return resource
 
         if section == "分类":
             return self.handle_category(path, environ, parts)
@@ -508,7 +536,8 @@ class MyBooksDavProvider(DAVProvider):
                         fs_path = "/"
                     try:
                         fs_provider = self._get_or_create_fs_provider(user_id)
-                        return fs_provider.get_resource_inst(fs_path, environ)
+                        reader_path = f"/{self.sync_folder_name}" + ("" if fs_path == "/" else fs_path)
+                        return fs_provider.get_resource_inst(reader_path, environ)
                     except Exception as e:
                         logging.error(f"Failed to handle as filesystem path: {e}")
             return None
