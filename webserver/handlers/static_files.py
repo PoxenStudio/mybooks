@@ -145,7 +145,8 @@ class ImageHandler(BaseHandler):
 class ProxyImageHandler(BaseHandler):
     def is_whitelist(self, host):
         whitelist = ["bcebos.com", "doubanio.com", "bdstatic.com", "amazon.com", "qpic.cn",
-                     "youshu.me", "zongheng.com", "byteimg.com", "fanqienovel.com", "neodb.social"]
+                     "youshu.me", "zongheng.com", "byteimg.com", "fanqienovel.com", "neodb.social",
+                     "www.ujxsw.org"]
         for w in whitelist:
             if host.endswith(w):
                 return True

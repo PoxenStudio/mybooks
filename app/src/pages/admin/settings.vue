@@ -1304,7 +1304,7 @@ export default {
             icon: "info",
             key: "douban_max_count",
             label: "settings.douban_max_count",
-          },
+          }
         ],
         tips: [
           {
@@ -1543,7 +1543,8 @@ export default {
               "google",
               "amazon",
               "xinhua",
-              "youshu"
+              "youshu",
+              "ujxsw"
             ]
           ).slice();
         }
@@ -1638,7 +1639,8 @@ export default {
         "amazon",
         "xinhua",
         "youshu",
-        "douban_v2"
+        "douban_v2",
+        "ujxsw"
       ];
       return allSources.map((source) => ({
         text: this.$t("settings.meta_source_" + source),

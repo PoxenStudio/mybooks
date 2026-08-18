@@ -449,6 +449,7 @@ class AdminSettings(BaseHandler):
             "douban_apikey",
             "douban_baseurl",
             "douban_max_count",
+            "ujxsw_max_count",
             "auto_fill_meta",
             "push_title",
             "push_content",

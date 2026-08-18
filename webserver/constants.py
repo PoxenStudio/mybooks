@@ -71,6 +71,7 @@ META_SOURCE_DOUBAN_V2 = "douban_v2"
 META_SOURCE_BAIDU = "baidu"
 META_SOURCE_YOUSHU = "youshu"
 META_SOURCE_NEODB = "neodb"
+META_SOURCE_UJXSW = "ujxsw"
 
 # User reading range setting
 ALLOW_READ_RANGE_SETTING = "ALLOW_READ_RANGE_SETTING"
