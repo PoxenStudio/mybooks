@@ -1082,30 +1082,15 @@ class AdminDeleteBooks(BaseHandler):
         if not idlist:
             return {"err": "params.error", "msg": _("参数错误")}
 
+        # self.delete_book() 统一处理 calibre 侧删除，以及 Item/ReadingState/BookReview/
+        # ReadingRecord（收藏/在读状态、评价、共读同步记录）的级联清理，见其实现。
         for book_id in idlist:
             try:
                 AudioUtils.clear_audio(book_id)
                 book = self.get_book(book_id)
-                book_id = book["id"]
-                self.calibre_db.delete_book(book_id)
+                self.delete_book(book["id"], book.get("title", ""))
             except Exception as err:
                 logging.error(_("执行异常: %s"), err)
-
-        # Delete all Items whose id in idList
-        try:
-            items = self.sqlite_session.query(Item).filter(Item.book_id.in_(idlist)).all()
-            for item in items:
-                self.sqlite_session.delete(item)
-            self.sqlite_session.commit()
-        except Exception as e:
-            logging.error(f"删除书籍的Item记录失败: {e}")
-
-        # 级联清理评价与阅读器同步记录（评论/收藏/在读状态的"共读"数据），见 plan/Social_Reading_Plan.md §6
-        for book_id in idlist:
-            try:
-                BookReviewService.cascade_delete_book(self.sqlite_session, book_id)
-            except Exception as e:
-                logging.error(f"删除书籍 {book_id} 的评价/同步记录失败: {e}")
 
         return {"err": "ok", "msg": _("删除成功")}
 

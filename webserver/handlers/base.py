@@ -19,6 +19,7 @@ from webserver.i18n import _, choose_language, set_language
 from webserver import loader, utils
 from webserver.base.formatter import BookFormatter
 from webserver.services.resource_service import ResourceService
+from webserver.services.book_review_service import BookReviewService
 from webserver.models import Item, Message, Reader
 from webserver import constants
 from webserver.version import VERSION
@@ -772,12 +773,14 @@ class BaseHandler(web.RequestHandler):
     def delete_book(self, book_id, book_title):
         result = True
         try:
-            item = self.sqlite_session.query(Item).filter(Item.book_id == book_id).first()
-            if item:
-                self.sqlite_session.delete(item)
-                self.sqlite_session.commit()
+            # Item 与 ReadingState/BookReview/ReadingRecord（收藏/在读状态、评价、共读同步记录）
+            # 放在同一个 session 里一起删、一次性 commit，避免出现只删了部分表的中间状态。
+            self.sqlite_session.query(Item).filter(Item.book_id == book_id).delete(synchronize_session=False)
+            BookReviewService.cascade_delete_book(self.sqlite_session, book_id, commit=False)
+            self.sqlite_session.commit()
         except Exception as e:
-            logging.error(f"删除ID为{book_id},名为《{book_title}》的书籍Item记录失败: {e}")
+            self.sqlite_session.rollback()
+            logging.error(f"删除ID为{book_id},名为《{book_title}》的书籍关联记录失败: {e}")
         try:
             self.calibre_db.delete_book(book_id)
             user_name = self.current_user.name if self.current_user else ""

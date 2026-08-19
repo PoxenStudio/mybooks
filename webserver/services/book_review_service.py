@@ -195,9 +195,15 @@ class BookReviewService:
         return result
 
     @classmethod
-    def cascade_delete_book(cls, db, book_id: int) -> None:
-        """书籍被删除/下架时级联清理，见 plan §6。"""
+    def cascade_delete_book(cls, db, book_id: int, commit: bool = True) -> None:
+        """书籍被删除/下架时级联清理评价、共读同步记录与阅读状态（收藏/在读/待读），见 plan §6。
+
+        commit=False 供调用方把这次级联清理并入自己的事务（例如与 Item 的删除放进同一次
+        commit），此时清理是否落盘由调用方负责。
+        """
         db.query(BookReview).filter(BookReview.book_id == book_id).delete(synchronize_session=False)
         db.query(ReadingRecord).filter(ReadingRecord.book_id == book_id).delete(synchronize_session=False)
-        db.commit()
+        db.query(ReadingState).filter(ReadingState.book_id == book_id).delete(synchronize_session=False)
+        if commit:
+            db.commit()
         _stats_cache.invalidate(_stats_key(book_id))
