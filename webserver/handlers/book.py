@@ -1275,19 +1275,19 @@ class PrintBooks(BaseHandler):
     def get(self):
         title = _("实体书")
 
-        # 查询所有实体书，按添加时间倒序排列
-        db_items = self.sqlite_session.query(Item).filter(
-            Item.book_type == BOOK_TYPE_PHYSICAL
-        ).order_by(Item.create_time.desc())
-        total_cnt = db_items.count()
-
         try:
+            # 查询所有实体书（通过Calibre自定义字段CALIBRE_COLUMN_BOOK_TYPE），按添加时间倒序排列
+            self.calibre_db.sort(field="timestamp", ascending=False)
+            all_ids = list(self.calibre_db_cache.search(
+                f"{CALIBRE_COLUMN_BOOK_TYPE}:={BOOK_TYPE_PHYSICAL}"
+            ))
+            total_cnt = len(all_ids)
+
             start = self.get_argument_start()
             delta = CONF.get("DEFAULT_PAGE_SIZE", 60)
-            items = db_items.limit(delta).offset(start).all()
-            ids = [item.book_id for item in items]
+            ids = all_ids[start:start + delta]
             books = self.get_books(ids=ids)
-            books.sort(key=lambda x: x["id"], reverse=True)
+            books.sort(key=lambda x: ids.index(x["id"]))
 
             books_result = []
             for book in books:
