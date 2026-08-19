@@ -2297,7 +2297,7 @@ class BookUpload(BaseHandler):
         except ValueError:
             return {"err": "params.filename", "msg": _("文件名不合法")}
 
-        logging.info("save upload file into [%s]", fpath)
+        logging.info("save upload file into [%s], fmt:%s", fpath, fmt)
         try:
             with open(fpath, "wb") as f:
                 f.write(data)
@@ -2359,6 +2359,7 @@ class BookUpload(BaseHandler):
                 if book_id is None:
                     book_id = b.get("id")
                 if b.get("authors", "") != mi.authors:
+                    book_id = None
                     continue
                 if fmt.upper() in b.formats:
                     return {
