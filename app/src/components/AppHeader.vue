@@ -1120,8 +1120,6 @@ export default {
     box-shadow: 2px 0 12px rgba(0, 0, 0, 0.08) !important;
     transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
     border-bottom-right-radius: 12px !important;
-    top: 56px !important;
-    height: calc(100vh - 56px) !important;
     opacity: 1 !important;
 }
 
@@ -1132,8 +1130,8 @@ export default {
 
 @media (max-width: 1024px) {
     .app-navigation-drawer {
-        top: 56px !important;
-        height: calc(100vh - 56px) !important;
+        top: 48px !important;
+        height: calc(100vh - 48px) !important;
         opacity: 1 !important;
     }
 }
