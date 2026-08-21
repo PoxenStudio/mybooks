@@ -310,6 +310,57 @@ class MyBooksAPI:
         }
         return self._call_with_auto_relogin("POST", "/api/sync/import", json=body)
 
+    def get_notes(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Query a book's reading annotations (bookmarks/highlights/notes) via
+        GET /api/sync.
+
+        Args:
+            book_id (int, optional): MyBooks book ID. Provide this OR `title`.
+            title (str, optional): Book title; if `book_id` is omitted, this
+                is resolved via search_books. Must match exactly one book —
+                if the search returns more than one hit, the response comes
+                back as an error with a `candidates` list instead of guessing.
+            own (int, optional): 1 (default) = only the current user's own
+                notes; 0 = also include other users' shared notes on this
+                book (subject to the server's ENABLE_SHARED_NOTES setting).
+        """
+        book_id = args.get("book_id")
+        title = args.get("title")
+        own = args.get("own", 1)
+        if own not in (0, 1):
+            return {"status": "error", "message": "own must be 0 or 1"}
+
+        if not book_id:
+            if not title:
+                return {"status": "error", "message": "book_id or title is required"}
+            found = self.search_books({"name": title, "num": 5, "page": 1})
+            if found.get("err") != "ok":
+                return found
+            books = found.get("books") or []
+            if not books:
+                return {"status": "error", "message": f"No book found matching title: {title}"}
+            if len(books) > 1:
+                candidates = [{"id": b.get("id"), "title": b.get("title"), "authors": b.get("authors")} for b in books]
+                return {
+                    "status": "error",
+                    "message": "Multiple books matched this title; specify book_id",
+                    "candidates": candidates,
+                }
+            book_id = books[0].get("id")
+            if not book_id:
+                return {"status": "error", "message": "Search result missing book id"}
+
+        # cloud 书籍的 book_hash 固定为 "cloud-<book_id>-epub"，与 push_notes/
+        # sync_import_service.book_hash_for() 保持一致
+        book_hash = f"cloud-{book_id}-epub"
+        query = urllib.parse.urlencode({"since": 0, "type": "notes", "book": book_hash, "own": own})
+        result = self._call_with_auto_relogin("GET", f"/api/sync?{query}")
+        if isinstance(result, dict):
+            result["book_id"] = book_id
+            result["book_hash"] = book_hash
+        return result
+
     def clear_imported_notes(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """
         Remove all annotations `push_notes` previously imported for one book
@@ -850,7 +901,7 @@ class MyBooksAPI:
             available_tools = [
                 "get_user_info", "library_stats", "reading_stats",
                 "search_books", "search_by_category", "get_book", "edit_book",
-                "push_notes", "clear_imported_notes",
+                "get_notes", "push_notes", "clear_imported_notes",
                 "book_fill", "save_meta_to_file", "mailto", "send_to_device", "categories",
                 "list_authors", "get_author_books", "book_upload",
                 "book_add_by_isbn", "wants", "list_wants", "favorite",

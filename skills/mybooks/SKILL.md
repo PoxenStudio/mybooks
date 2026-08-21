@@ -375,6 +375,83 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 
 ---
 
+### `get_notes` — 查询书籍批注
+
+**使用场景**：查看某本书已有的划线/批注/书签（通过 `GET /api/sync` 实现，`type=notes`）。
+
+- "这本书我都划了哪些线？" / "看看《活着》的批注"
+- 确认 `push_notes` 导入结果，或在 `clear_imported_notes` 前先看一眼现有批注
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `book_id` | int | ❌ | — | 书籍 ID；与 `title` 二选一，优先生效 |
+| `title` | string | ❌ | — | 书名；不传 `book_id` 时用于搜索定位书籍，仅精确匹配到唯一一本书才会继续查询——命中多本时返回 `candidates` 列表，需要调用方明确选择后改传 `book_id` |
+| `own` | int | ❌ | `1` | `1`=只返回当前用户自己的批注；`0`=额外并入其他用户在这本书上共享的批注（受服务端 `ENABLE_SHARED_NOTES` 开关约束） |
+
+**执行脚本**：
+```bash
+# 按 book_id 查询自己的批注
+<skill-installation-path>/scripts/mybooks_api.py get_notes '{"book_id":42}'
+
+# 按书名查询，并包含其他用户共享的批注
+<skill-installation-path>/scripts/mybooks_api.py get_notes '{"title":"活着","own":0}'
+```
+
+**响应示例**：
+```json
+{
+  "err": "ok",
+  "book_id": 42,
+  "book_hash": "cloud-42-epub",
+  "books": null,
+  "configs": null,
+  "notes": [
+    {
+      "id": "wxread-wx-bm-1001",
+      "book_hash": "cloud-42-epub",
+      "type": "annotation",
+      "cfi": "epubcfi(/6/10!/4/4/2,/19:17,/21:4)",
+      "text": "他手里拿着两大块磁铁",
+      "note": "开篇的魔幻现实主义笔法",
+      "style": "highlight",
+      "color": "yellow",
+      "updated_at": 1755600000000,
+      "deleted_at": null
+    }
+  ]
+}
+```
+**`notes[]` 每条记录的字段**：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | string | 记录唯一 ID；`push_notes` 导入的批注固定带 `wxread-` 前缀 |
+| `book_hash` | string | 所属书籍的 hash（云端书籍固定为 `cloud-<book_id>-epub`） |
+| `type` | string | `"bookmark"`（书签）/ `"annotation"`（划线+想法）/ `"excerpt"`（摘录） |
+| `cfi` | string | 该批注在 EPUB 正文里的定位（canonical CFI） |
+| `text` | string | 划线/摘录的原文，书签类可能为空 |
+| `note` | string | 用户写的想法/点评正文 |
+| `style` | string | `"highlight"` / `"underline"` / `"squiggly"` |
+| `color` | string | 高亮颜色，如 `"yellow"`，也可能是十六进制色值 |
+| `global` | bool | 可选；为 `true` 表示对本章节内该 `text` 的所有出现位置生效 |
+| `page` | number | 可选；分页/固定排版格式下的页码 |
+| `updated_at` | number | 最近一次更新的毫秒时间戳，用于判断是否新增/变更 |
+| `deleted_at` | number/null | 墓碑时间戳；非 `null` 表示该批注已被删除，仍会出现在结果里但应视为已删除 |
+
+按书名查询时命中多本书会返回：
+```json
+{ "status": "error", "message": "Multiple books matched this title; specify book_id", "candidates": [ {"id": 42, "title": "活着", "authors": ["余华"]}, ... ] }
+```
+
+**常见错误**：
+| `err` 值 | 含义 |
+|----------|------|
+| `"sync.disabled"` | 服务端数据同步功能未启用 |
+
+---
+
 ### `clear_imported_notes` — 清空某本书已导入的批注（重置用，非日常操作）
 
 **使用场景**：撤销/重置某本书通过 `push_notes` 导入的全部批注——比如导入用错了数据、或者 `on_ambiguous:"first_match"` 选错了位置，用户明确要求"重新导入一遍"。**不要**把这个当成处理"再次同步"的常规手段——`push_notes` 本身已经会自动判重（见上），日常重复同步应该直接再调一次 `push_notes`，不需要先清空。
@@ -1175,6 +1252,9 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 │
 ├─ "查看书籍详情"
 │   → get_book
+│
+├─ "这本书我都划了哪些线？" / "看看《XX》的批注/书签"
+│   → get_notes（传 book_id 或 title；own:0 可连他人共享的批注一起看）
 │
 ├─ "更新/补全《XX》的封面、简介、标签信息"（自动从网上获取）
 │   → book_fill（需要管理员权限，传入 book_id 数组）
