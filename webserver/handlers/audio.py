@@ -584,6 +584,7 @@ class AudioConversion(BaseHandler):
                     f"EPUB path: {epub_path}, Output dir: {output_dir}, Voice: {voice_name}, Language: {language}"
                 )
                 proxy = CONF.get("BOOK2AUDIO_PROXY", None)
+                output_srt = CONF.get("ENABLE_AUDIO_SUBTITLE", True)
                 try:
                     result = worker.convert_epub_to_audio(
                         epub_path=epub_path,
@@ -595,6 +596,7 @@ class AudioConversion(BaseHandler):
                         no_prompt=True,
                         show_output=False,
                         proxy=proxy,
+                        output_srt=output_srt,
                     )
                     if result["success"]:
                         worker.progress_data["status"] = (

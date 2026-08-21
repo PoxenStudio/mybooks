@@ -836,6 +836,7 @@
     "enable_debug_logging": "启用调试日志记录（默认关闭，开启后记录详细的调试信息）",
     "enable_audio_conversion_log": "启用有声书转换日志记录（默认关闭，开启后记录转换的详细日志)",
     "auto_checking_new_version": "自动检测更新（默认开启，关闭后将不再检查新版本）",
+    "enable_audio_subtitle": "转换有声书时生成同名字幕文件",
     "use_dynamic_cover": "启用动态封面（根据书籍信息自动生成封面图片）",
     "enable_opds_service": "启用OPDS目录服务（用于阅读器通过OPDS协议访问书库）",
     "enable_opds_auth": "启用OPDS目录服务认证（开启后访问OPDS需要输入用户名和密码）",

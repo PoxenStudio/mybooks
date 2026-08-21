@@ -517,6 +517,7 @@ class AdminSettings(BaseHandler):
             "REVIEW_REQUIRES_APPROVAL",
             "ENABLE_BOOK_RECOMMEND_TO_OTHERS",
             "ENABLE_SHARED_NOTES",
+            "ENABLE_AUDIO_SUBTITLE",
         ]
 
         current_icon = CONF.get(

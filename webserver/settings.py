@@ -80,6 +80,7 @@ settings = {
     "MAIN_PAGE_RECENT_COUNT": 12,
     "DEFAULT_PAGE_SIZE": 60,
     "ENABLE_AUDIO_CONVERSION_LOG": False,
+    "ENABLE_AUDIO_SUBTITLE": True,
     "LOG_LEVEL_DEBUG": False,
     "USE_DYNAMIC_COVER": True,
     "DEFAULT_LANGUAGE": "zho",

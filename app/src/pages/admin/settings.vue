@@ -1477,6 +1477,12 @@ export default {
             type: "checkbox",
           },
           {
+            icon: "mdi-closed-caption-outline",
+            key: "ENABLE_AUDIO_SUBTITLE",
+            label: "settings.enable_audio_subtitle",
+            type: "checkbox",
+          },
+          {
             icon: "mdi-update",
             key: "AUTO_CHECKING_NEW_VERSION",
             label: "settings.auto_checking_new_version",
