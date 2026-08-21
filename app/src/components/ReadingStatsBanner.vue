@@ -155,7 +155,7 @@ export default {
                 plugins: { legend: { display: false } },
                 scales: {
                     x: { ticks: { color: '#eee', font: { size: 10 } }, grid: { display: false } },
-                    y: { beginAtZero: true, ticks: { color: '#eee', font: { size: 10 }, precision: 0 }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                    y: { beginAtZero: true, ticks: { color: '#eee', font: { size: 10 }, precision: 0, stepSize: 1 }, grid: { color: 'rgba(255,255,255,0.1)' } },
                 },
             };
         },
@@ -177,7 +177,7 @@ export default {
                 plugins: { legend: { display: true, position: 'left', labels: { color: '#eee', boxWidth: 10, font: { size: 10 } } } },
                 scales: {
                     x: { ticks: { color: '#eee', font: { size: 10 } }, grid: { display: false } },
-                    y: { beginAtZero: true, ticks: { color: '#eee', font: { size: 10 }, precision: 0 }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                    y: { beginAtZero: true, ticks: { color: '#eee', font: { size: 10 }, precision: 0, stepSize: 1 }, grid: { color: 'rgba(255,255,255,0.1)' } },
                 },
             };
         },
