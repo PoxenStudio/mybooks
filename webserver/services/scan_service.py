@@ -206,6 +206,10 @@ class ScanService(AsyncService):
 
         filelist = []
         for p in dirs:
+            if os.path.basename(p).startswith("."):
+                logging.info(f"[SCAN]Ignore {p}")
+                continue
+            logging.info(f"[SCAN]scan {p}")
             if os.path.isfile(p):
                 fmt = p.split(".")[-1].lower()
                 if fmt not in SCAN_EXT:
@@ -219,7 +223,7 @@ class ScanService(AsyncService):
                     real_dirpath = os.path.realpath(dirpath)
                     dirnames[:] = [
                         d for d in dirnames
-                        if os.path.realpath(os.path.join(dirpath, d)) not in imported_dir_set
+                        if not d.startswith(".") and os.path.realpath(os.path.join(dirpath, d)) not in imported_dir_set
                     ]
                     # Skip files in this directory if it's already fully imported
                     if real_dirpath in imported_dir_set:
