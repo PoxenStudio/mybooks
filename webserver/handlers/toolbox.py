@@ -827,7 +827,6 @@ class AdminTextReplaceProgress(BaseHandler):
 
 class AdminEpubBeautifyPreview(BaseHandler):
     @js
-    @js
     @is_admin
     def post(self):
         data = tornado.escape.json_decode(self.request.body)
