@@ -127,6 +127,10 @@ export default {
     margin-bottom: 8px;
 }
 
+.theme--dark .version-info {
+    color: #fff;
+}
+
 .cursor-pointer {
     cursor: pointer;
     transition: color 0.2s ease;
@@ -134,6 +138,10 @@ export default {
 
 .cursor-pointer:hover {
     color: #333;
+}
+
+.theme--dark .cursor-pointer:hover {
+    color: #ccc;
 }
 
 /* Release Notes Dialog card font size */
