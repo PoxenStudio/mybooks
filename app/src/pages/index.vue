@@ -39,119 +39,175 @@
         <reading-stats-banner :show-title="false" @has-stats="onReadingStatsHasData"></reading-stats-banner>
     </div>
 
-    <home-section-card
-        v-if="reading_books.length > 0"
-        icon="mdi-book-open-page-variant-outline"
-        :title="$t('index.myReading')"
-        storage-key="index.myReading"
-    >
-        <v-row>
-            <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="(book,idx) in get_reading_books" :key="'reading'+idx+book.id" class="book-card">
-                <v-card :to="book.href" class="ma-1">
-                    <div class="book-img-container reading-book-cover" :title="book.title">
-                        <v-img
-                            :src="book.thumb"
-                            class="cover-fill-img"
-                        ></v-img>
-                        <!-- hover时居中显示圆形遮罩，点击图标直接进入阅读；点击封面其他区域仍进入书籍详情 -->
-                        <a
-                            class="reading-hover-overlay"
-                            :href="book.readHref"
-                            target="_blank"
-                            :title="$t('index.continueReading')"
-                            @click.stop
-                        >
-                            <v-icon class="reading-hover-icon">mdi-book-open-page-variant-outline</v-icon>
-                        </a>
-                    </div>
-                </v-card>
-            </v-col>
-        </v-row>
-    </home-section-card>
+    <div class="home-sections-container">
+        <div
+            class="home-section-slot"
+            :style="{ order: sectionOrder.indexOf('index.myReading') }"
+            @dragover.prevent="onSectionDragOver('index.myReading')"
+            @dragleave="onSectionDragLeave('index.myReading')"
+            @drop.prevent="onSectionDrop('index.myReading')"
+        >
+            <home-section-card
+                v-if="reading_books.length > 0"
+                icon="mdi-book-open-page-variant-outline"
+                :title="$t('index.myReading')"
+                storage-key="index.myReading"
+                :drag-over="dragOverKey === 'index.myReading'"
+                @drag-start="onSectionDragStart('index.myReading', $event)"
+                @drag-end="onSectionDragEnd"
+            >
+                <v-row>
+                    <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="(book,idx) in get_reading_books" :key="'reading'+idx+book.id" class="book-card">
+                        <v-card :to="book.href" class="ma-1">
+                            <div class="book-img-container reading-book-cover" :title="book.title">
+                                <v-img
+                                    :src="book.thumb"
+                                    class="cover-fill-img"
+                                ></v-img>
+                                <a
+                                    class="reading-hover-overlay"
+                                    :href="book.readHref"
+                                    target="_blank"
+                                    :title="$t('index.continueReading')"
+                                    @click.stop
+                                >
+                                    <v-icon class="reading-hover-icon">mdi-book-open-page-variant-outline</v-icon>
+                                </a>
+                            </div>
+                        </v-card>
+                    </v-col>
+                </v-row>
+            </home-section-card>
+        </div>
 
-    <home-section-card
-        v-if="social_recommend_books.length > 0"
-        icon="mdi-star-check"
-        :title="$t('index.socialRecommendation')"
-        storage-key="index.socialRecommendation"
-    >
-        <v-row>
-            <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="(book,idx) in get_social_recommend_books" :key="'social-rec'+idx+book.id" class="book-card">
-                <v-card :to="book.href" class="ma-1">
-                    <div class="book-img-container" :title="book.title">
-                        <v-img
-                            :src="book.thumb"
-                            class="cover-fill-img book-img-hover"
-                        ></v-img>
-                        <div v-if="book.book_type === 1" class="physical-book-badge">
-                            <v-icon small color="white">mdi-bookshelf</v-icon>
-                        </div>
-                        <div
-                            v-if="book.recommender && book.recommender.avatar"
-                            class="recommender-badge"
-                            :title="book.recommender.nickname"
-                        >
-                            <v-avatar size="22">
-                                <v-img :src="book.recommender.avatar"></v-img>
-                            </v-avatar>
-                        </div>
-                    </div>
-                </v-card>
-            </v-col>
-        </v-row>
-    </home-section-card>
+        <div
+            class="home-section-slot"
+            :style="{ order: sectionOrder.indexOf('index.socialRecommendation') }"
+            @dragover.prevent="onSectionDragOver('index.socialRecommendation')"
+            @dragleave="onSectionDragLeave('index.socialRecommendation')"
+            @drop.prevent="onSectionDrop('index.socialRecommendation')"
+        >
+            <home-section-card
+                v-if="social_recommend_books.length > 0"
+                icon="mdi-star-check"
+                :title="$t('index.socialRecommendation')"
+                storage-key="index.socialRecommendation"
+                :drag-over="dragOverKey === 'index.socialRecommendation'"
+                @drag-start="onSectionDragStart('index.socialRecommendation', $event)"
+                @drag-end="onSectionDragEnd"
+            >
+                <v-row>
+                    <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="(book,idx) in get_social_recommend_books" :key="'social-rec'+idx+book.id" class="book-card">
+                        <v-card :to="book.href" class="ma-1">
+                            <div class="book-img-container" :title="book.title">
+                                <v-img
+                                    :src="book.thumb"
+                                    class="cover-fill-img book-img-hover"
+                                ></v-img>
+                                <div v-if="book.book_type === 1" class="physical-book-badge">
+                                    <v-icon small color="white">mdi-bookshelf</v-icon>
+                                </div>
+                                <div
+                                    v-if="book.recommender && book.recommender.avatar"
+                                    class="recommender-badge"
+                                    :title="book.recommender.nickname"
+                                >
+                                    <v-avatar size="22">
+                                        <v-img :src="book.recommender.avatar"></v-img>
+                                    </v-avatar>
+                                </div>
+                            </div>
+                        </v-card>
+                    </v-col>
+                </v-row>
+            </home-section-card>
+        </div>
 
-    <home-section-card
-        v-if="homepage_booklists.length > 0"
-        icon="mdi-format-list-bulleted-square"
-        :title="$t('index.booklistRecommendation')"
-        storage-key="index.booklistRecommendation"
-    >
-        <v-row>
-            <v-col cols="12" md="6" v-for="b in homepage_booklists" :key="'home-booklist-' + b.id">
-                <BookListCard :booklist="b" :show-recommend-badge="true" @toggle-like="toggleBooklistLike" />
-            </v-col>
-        </v-row>
-    </home-section-card>
+        <div
+            class="home-section-slot"
+            :style="{ order: sectionOrder.indexOf('index.booklistRecommendation') }"
+            @dragover.prevent="onSectionDragOver('index.booklistRecommendation')"
+            @dragleave="onSectionDragLeave('index.booklistRecommendation')"
+            @drop.prevent="onSectionDrop('index.booklistRecommendation')"
+        >
+            <home-section-card
+                v-if="homepage_booklists.length > 0"
+                icon="mdi-format-list-bulleted-square"
+                :title="$t('index.booklistRecommendation')"
+                storage-key="index.booklistRecommendation"
+                :drag-over="dragOverKey === 'index.booklistRecommendation'"
+                @drag-start="onSectionDragStart('index.booklistRecommendation', $event)"
+                @drag-end="onSectionDragEnd"
+            >
+                <v-row>
+                    <v-col cols="12" md="6" v-for="b in homepage_booklists" :key="'home-booklist-' + b.id">
+                        <BookListCard :booklist="b" :show-recommend-badge="true" @toggle-like="toggleBooklistLike" />
+                    </v-col>
+                </v-row>
+            </home-section-card>
+        </div>
 
-    <home-section-card
-        v-if="random_books.length > 0"
-        icon="mdi-apple-keyboard-command"
-        :title="$t('index.randomRecommendation')"
-        storage-key="index.randomRecommendation"
-    >
-        <template #header-extra>
-            <v-icon color="primary" class="ml-1 refresh-icon" @click="refreshBooks('all')">mdi-refresh</v-icon>
-        </template>
-        <v-row>
-            <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="(book,idx) in get_random_books" :key="'rec'+idx+book.id" class="book-card">
-                <v-card :to="book.href" class="ma-1">
-                    <div class="book-img-container" :title="book.title">
-                        <v-img
-                            :src="book.thumb"
-                            class="cover-fill-img book-img-hover"
-                        ></v-img>
-                        <!-- 实体书角标 -->
-                        <div v-if="book.book_type === 1" class="physical-book-badge">
-                            <v-icon small color="white">mdi-bookshelf</v-icon>
-                        </div>
-                    </div>
-                </v-card>
-            </v-col>
-        </v-row>
-    </home-section-card>
+        <div
+            class="home-section-slot"
+            :style="{ order: sectionOrder.indexOf('index.randomRecommendation') }"
+            @dragover.prevent="onSectionDragOver('index.randomRecommendation')"
+            @dragleave="onSectionDragLeave('index.randomRecommendation')"
+            @drop.prevent="onSectionDrop('index.randomRecommendation')"
+        >
+            <home-section-card
+                v-if="random_books.length > 0"
+                icon="mdi-apple-keyboard-command"
+                :title="$t('index.randomRecommendation')"
+                storage-key="index.randomRecommendation"
+                :drag-over="dragOverKey === 'index.randomRecommendation'"
+                @drag-start="onSectionDragStart('index.randomRecommendation', $event)"
+                @drag-end="onSectionDragEnd"
+            >
+                <template #header-extra>
+                    <v-icon color="primary" class="ml-1 refresh-icon" @click="refreshBooks('all')">mdi-refresh</v-icon>
+                </template>
+                <v-row>
+                    <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="(book,idx) in get_random_books" :key="'rec'+idx+book.id" class="book-card">
+                        <v-card :to="book.href" class="ma-1">
+                            <div class="book-img-container" :title="book.title">
+                                <v-img
+                                    :src="book.thumb"
+                                    class="cover-fill-img book-img-hover"
+                                ></v-img>
+                                <!-- 实体书角标 -->
+                                <div v-if="book.book_type === 1" class="physical-book-badge">
+                                    <v-icon small color="white">mdi-bookshelf</v-icon>
+                                </div>
+                            </div>
+                        </v-card>
+                    </v-col>
+                </v-row>
+            </home-section-card>
+        </div>
 
-    <home-section-card
-        icon="mdi-apps"
-        :title="$t('index.newRecommendation')"
-        storage-key="index.newRecommendation"
-    >
-        <v-row>
-            <v-col cols="12">
-                <book-cards :books="get_recent_books"></book-cards>
-            </v-col>
-        </v-row>
-    </home-section-card>
+        <div
+            class="home-section-slot"
+            :style="{ order: sectionOrder.indexOf('index.newRecommendation') }"
+            @dragover.prevent="onSectionDragOver('index.newRecommendation')"
+            @dragleave="onSectionDragLeave('index.newRecommendation')"
+            @drop.prevent="onSectionDrop('index.newRecommendation')"
+        >
+            <home-section-card
+                icon="mdi-hexagram-outline"
+                :title="$t('index.newRecommendation')"
+                storage-key="index.newRecommendation"
+                :drag-over="dragOverKey === 'index.newRecommendation'"
+                @drag-start="onSectionDragStart('index.newRecommendation', $event)"
+                @drag-end="onSectionDragEnd"
+            >
+                <v-row>
+                    <v-col cols="12">
+                        <book-cards :books="get_recent_books"></book-cards>
+                    </v-col>
+                </v-row>
+            </home-section-card>
+        </div>
+    </div>
 
     <!-- Release Notes Dialog -->
     <v-dialog v-model="releaseNotesDialog" max-width="480" persistent transition="dialog-bottom-transition">
@@ -338,6 +394,62 @@ export default {
                 // ignore
             }
         },
+        loadSectionOrder() {
+            try {
+                const raw = window.localStorage.getItem('home-section-order');
+                const saved = raw ? JSON.parse(raw) : null;
+                if (Array.isArray(saved)) {
+                    const known = saved.filter(k => this.sectionKeys.includes(k));
+                    const missing = this.sectionKeys.filter(k => !known.includes(k));
+                    return [...known, ...missing];
+                }
+            } catch (e) {
+                // ignore
+            }
+            return [...this.sectionKeys];
+        },
+        saveSectionOrder() {
+            try {
+                window.localStorage.setItem('home-section-order', JSON.stringify(this.sectionOrder));
+            } catch (e) {
+                // ignore (privacy mode / storage disabled)
+            }
+        },
+        onSectionDragStart(key, event) {
+            this.dragKey = key;
+            if (event && event.dataTransfer) {
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', key);
+            }
+        },
+        onSectionDragOver(key) {
+            if (this.dragKey && this.dragKey !== key) {
+                this.dragOverKey = key;
+            }
+        },
+        onSectionDragLeave(key) {
+            if (this.dragOverKey === key) {
+                this.dragOverKey = null;
+            }
+        },
+        onSectionDrop(key) {
+            const from = this.sectionOrder.indexOf(this.dragKey);
+            const to = this.sectionOrder.indexOf(key);
+            if (from === -1 || to === -1 || from === to) {
+                this.onSectionDragEnd();
+                return;
+            }
+            const order = this.sectionOrder.slice();
+            order.splice(from, 1);
+            order.splice(to, 0, this.dragKey);
+            this.sectionOrder = order;
+            this.saveSectionOrder();
+            this.onSectionDragEnd();
+        },
+        onSectionDragEnd() {
+            this.dragKey = null;
+            this.dragOverKey = null;
+        },
     },
     mounted() {
         this.loadLibraryStats();
@@ -362,6 +474,7 @@ export default {
     },
     created() {
         this.$store.commit('navbar', true);
+        this.sectionOrder = this.loadSectionOrder();
     },
     async asyncData({ app, res }) {
         if ( res !== undefined ) {
@@ -381,6 +494,17 @@ export default {
         releaseNotesContent: '',
         countdown: 10,
         countdownTimer: null,
+        // 首页各模块的默认顺序，拖动排序后持久化到 localStorage
+        sectionKeys: [
+            'index.myReading',
+            'index.socialRecommendation',
+            'index.booklistRecommendation',
+            'index.randomRecommendation',
+            'index.newRecommendation',
+        ],
+        sectionOrder: [],
+        dragKey: null,
+        dragOverKey: null,
     }),
     head: () => ({
         titleTemplate: "%s",
@@ -484,6 +608,16 @@ export default {
 .new-legend {
     margin-top: 30px;
     margin-bottom: 20px;
+}
+
+.home-sections-container {
+    display: flex;
+    flex-direction: column;
+}
+
+.home-section-slot {
+    display: flex;
+    flex-direction: column;
 }
 
 .refresh-icon {

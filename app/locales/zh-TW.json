@@ -679,7 +679,8 @@
     "delete": "刪除",
     "backToHome": "返回首頁",
     "collapse": "收起",
-    "expand": "展開"
+    "expand": "展開",
+    "dragToReorder": "拖曳排序"
   },
   "settings": {
     "hint": "系統使用",

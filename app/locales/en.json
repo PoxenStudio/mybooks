@@ -911,7 +911,8 @@
     "save": "Save",
     "loadMore": "Load more",
     "collapse": "Collapse",
-    "expand": "Expand"
+    "expand": "Expand",
+    "dragToReorder": "Drag to reorder"
   },
   "user": {
     "avatar": "Avatar",

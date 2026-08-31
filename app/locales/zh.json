@@ -685,7 +685,8 @@
     "save": "保存",
     "loadMore": "加载更多",
     "collapse": "收起",
-    "expand": "展开"
+    "expand": "展开",
+    "dragToReorder": "拖动排序"
   },
   "settings": {
     "hint": "系统使用手册",
