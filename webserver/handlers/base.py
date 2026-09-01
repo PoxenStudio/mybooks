@@ -302,7 +302,19 @@ class BaseHandler(web.RequestHandler):
 
     def set_hosts(self):
         # site_url为完整路径，用于发邮件等 — 无条件信任反代透传的 Host / Proto（见 plan 域A）
+        # 兼容多层 Nginx：优先取 X-Forwarded-Host（若含端口则直接使用），否则按 X-Forwarded-Port 补齐端口
         host = self.request.headers.get("X-Forwarded-Host", self.request.host).split(",")[0].strip()
+        # 若 Host 未带端口但上游通过 X-Forwarded-Port 单独透传端口（如 NPM 的 $server_port），则补齐
+        # 需兼容 IPv6： "[::1]" 无端口但含 ":"，"[::1]:50006" 含 "]:"
+        if host.startswith("["):
+            has_port = "]:" in host
+        else:
+            has_port = ":" in host
+        if not has_port:
+            x_port = self.request.headers.get("X-Forwarded-Port", "").split(",")[0].strip()
+            if x_port and x_port not in ("80", "443"):
+                # 仅当非标准端口时追加，避免 https://host:443 这类冗余
+                host = f"{host}:{x_port}"
         proto = self.request.headers.get("X-Forwarded-Proto", self.request.headers.get("X-Scheme", self.request.protocol)).split(",")[0].strip()
         self.site_url = proto + "://" + host
 
