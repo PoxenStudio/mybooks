@@ -15,6 +15,7 @@ def routes():
     from . import mcp
     from . import barcode
     from . import toolbox
+    from . import tts
 
     routes = []
     routes += assistant.routes()
@@ -28,5 +29,6 @@ def routes():
     routes += meta.routes()
     routes += audio.routes()
     routes += toolbox.routes()
+    routes += tts.routes()
     routes += static_files.routes()
     return routes

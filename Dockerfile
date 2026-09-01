@@ -15,10 +15,7 @@ RUN npm install
 
 # spa build mode will clear ssr build data, run it first
 COPY app/ /build/
-RUN mkdir -p /app-ssr/ /app-static/ && \
-    npm run build && \
-    ls -al && \
-    cp -r .nuxt node_modules package* /app-ssr/ && \
+RUN mkdir -p /app-static/ && \
     npm run build-spa && \
     cp -r dist nuxt.config.js package* /app-static/
 
@@ -115,10 +112,3 @@ EXPOSE 80 443
 VOLUME ["/data"]
 
 CMD ["/var/www/mybooks/docker/start.sh"]
-
-# ----------------------------------------
-# 生产环境（server side render版)
-FROM production AS production-ssr
-COPY conf/nginx/server-side-render.conf /etc/nginx/conf.d/mybooks.conf
-COPY conf/supervisor/server-side-render.conf /etc/supervisor/conf.d/mybooks.conf
-COPY --from=builder /app-ssr/ /var/www/mybooks/app/
