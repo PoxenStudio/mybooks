@@ -10,8 +10,15 @@ body {
   margin-right: auto !important;
 }
 
-/* Calibre 汤兼容：高特异性覆盖 p.calibre1 等 */
-p.calibre1, p.calibre, p.calibre2, div.calibre1, .calibre1, .calibre {
+/* Calibre 汤兼容：高特异性覆盖 p.calibre1 等。
+   :not(.mb-ch):not(.mb-vol) 把章节/卷标题从类汤规则排除——标题的缩进、边距、
+   对齐由预设 .mb-ch 接管（此前 0-1-1 !important 会把标题 margin 压成 0、居中
+   压成 justify）。:not() 参数计入特异性（本规则实际 0-3-1），
+   styles/__init__.py 的 _CALIBRE_*_SELECTORS 覆写块必须保持同选择器列表
+   （同特异性靠源序在后取胜），TestCssCascade 有奇偶校验。 */
+p.calibre1:not(.mb-ch):not(.mb-vol), p.calibre:not(.mb-ch):not(.mb-vol),
+p.calibre2:not(.mb-ch):not(.mb-vol), div.calibre1:not(.mb-ch):not(.mb-vol),
+.calibre1:not(.mb-ch):not(.mb-vol), .calibre:not(.mb-ch):not(.mb-vol) {
   text-indent: 2em !important;
   duokan-text-indent: 2em !important;
   margin: 0 !important;
@@ -19,7 +26,8 @@ p.calibre1, p.calibre, p.calibre2, div.calibre1, .calibre1, .calibre {
   text-align: justify !important;
   text-justify: inter-ideograph !important;
 }
-p.calibre1[data-mb-first], p.calibre[data-mb-first] {
+p.calibre1[data-mb-first]:not(.mb-ch):not(.mb-vol),
+p.calibre[data-mb-first]:not(.mb-ch):not(.mb-vol) {
   text-indent: 0 !important;
   duokan-text-indent: 0 !important;
 }
@@ -397,8 +405,13 @@ blockquote, pre, table, figure, img {
   figcaption {
     color: #aaa !important;
   }
-  .mb-ch {
+  /* 章节卡夜间深底（A1）：classic/classical/children/navy/refined/vertclassical
+     的 .mb-ch 自带 background:{{ACCENT_LIGHT}} !important，而本文件前置注入、
+     同特异性按源序必输，故提升为 body 前缀（0-1-1）压过预设裸 .mb-ch（0-1-0），
+     否则夜间浅底浅字（ACCENT_DARK on ACCENT_LIGHT ≈ 1.5:1）不可读 */
+  body .mb-ch {
     color: {{ACCENT_DARK}} !important;
+    background: #1e1e1e !important;
   }
   .mb-vol {
     color: {{ACCENT_DARK}} !important;
@@ -406,7 +419,8 @@ blockquote, pre, table, figure, img {
   .mb-ch .mb-ch-num {
     color: #8a8a8a !important;
   }
-  .mb-ch-sep {
+  /* 长线同理：预设 .mb-ch-sep 的 background 带 !important，需提特异性才能转灰 */
+  body .mb-ch-sep {
     background: #444 !important;
   }
   /* 目录深色适配 */

@@ -7,6 +7,7 @@
 运行：python tests/test_epub_beautify_core.py
 """
 import os
+import re
 import sys
 import tempfile
 import types
@@ -93,6 +94,8 @@ _stub_webserver()
 from webserver.toolbox.utils import chapter_patterns  # noqa: E402
 from webserver.toolbox.utils import epub_beautify_lib as lib  # noqa: E402
 from webserver.toolbox.utils.styles import (  # noqa: E402
+    _CALIBRE_INDENT_SELECTORS,
+    _CALIBRE_MARGIN_SELECTORS,
     _apply_palette_overrides,
     get_preset_css, list_presets, list_toc_styles,
 )
@@ -334,6 +337,97 @@ class TestPresets(unittest.TestCase):
     def test_unknown_toc_style(self):
         with self.assertRaises(ValueError):
             get_preset_css("classic", toc_style="neon")
+
+
+class TestCssCascade(unittest.TestCase):
+    """A1/A2 回归：类汤选择器排除标题、夜间章节卡深底最终胜者、色板对比度。
+
+    静态层叠断言说明：responsive.css 前置注入、预设规则在后，同特异性按源序
+    预设胜出——因此夜间/标题修复全部依赖「更高特异性」取胜，此处对生成后的
+    CSS 断言选择器形态（body 前缀 0-1-1 > 预设裸 .mb-ch 0-1-0），即最终胜者。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(TOOLBOX_DIR, "utils", "styles", "responsive.css"),
+                  encoding="utf-8") as f:
+            cls.responsive_src = f.read()
+
+    @staticmethod
+    def _luminance(color):
+        c = color.lstrip("#")
+        if len(c) == 3:
+            c = "".join(ch * 2 for ch in c)
+
+        def lin(hex_pair):
+            v = int(hex_pair, 16) / 255.0
+            return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+
+        r, g, b = (lin(c[i:i + 2]) for i in (0, 2, 4))
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+    @classmethod
+    def _contrast(cls, fg, bg):
+        hi, lo = sorted((cls._luminance(fg), cls._luminance(bg)), reverse=True)
+        return (hi + 0.05) / (lo + 0.05)
+
+    # ── A2：类汤选择器排除标题 ──
+
+    def test_calibre_soup_excludes_titles(self):
+        """A2：.calibre* 正文规则带 :not(.mb-ch):not(.mb-vol)，旧裸选择器清零。"""
+        for pid in list_presets():
+            css = get_preset_css(pid, use_system_fonts=True)
+            self.assertIn("p.calibre1:not(.mb-ch):not(.mb-vol)", css, pid)
+            # 章首顶格规则同样排除标题，且特异性（0-4-1）须压过类汤缩进（0-3-1）
+            self.assertIn("p.calibre1[data-mb-first]:not(.mb-ch):not(.mb-vol)", css, pid)
+            self.assertNotRegex(css, r"(?m)^p\.calibre1\s*,", pid)
+            self.assertNotRegex(css, r"(?m)^p\.calibre1\s*\{", pid)
+            self.assertNotRegex(css, r"(?m)^\.calibre1\s*,", pid)
+
+    def test_para_style_override_parity(self):
+        """A2 联动：段落排版覆写与 responsive 类汤选择器集合逐字一致。
+
+        responsive 的类汤规则经 :not 提升到 0-3-1，末尾覆写若不同列表会因
+        特异性落后而失效（顶格/段距开关在类汤书上失灵）。
+        """
+        m = re.search(r"(?m)^(p\.calibre1[^{]*?)\{", self.responsive_src)
+        self.assertIsNotNone(m, "responsive.css 类汤选择器行缺失")
+        responsive_set = {s.strip() for s in m.group(1).split(",")}
+        self.assertEqual(responsive_set, set(_CALIBRE_INDENT_SELECTORS.split(", ")))
+        self.assertLessEqual(
+            set(_CALIBRE_MARGIN_SELECTORS.split(", ")), responsive_set)
+        css = get_preset_css("classic", para_indent=False, para_gap=1.2)
+        self.assertIn(_CALIBRE_INDENT_SELECTORS, css)
+        self.assertIn(_CALIBRE_MARGIN_SELECTORS, css)
+
+    # ── A1：夜间章节卡深底最终胜者 ──
+
+    def test_night_title_dark_bg_wins(self):
+        """A1：dark 块内 body .mb-ch（0-1-1）带深底，预设侧无同形选择器可反压。"""
+        for pid, meta in list_presets().items():
+            css = get_preset_css(pid, use_system_fonts=True)
+            dark_at = css.index("@media (prefers-color-scheme: dark)")
+            rule_at = css.index("body .mb-ch {", dark_at)
+            block = css[rule_at:css.index("}", rule_at)]
+            self.assertIn("background: #1e1e1e !important", block, pid)
+            self.assertIn("color: %s !important" % meta["accent_dark"], block, pid)
+            # 胜者前提：预设章节卡为裸 .mb-ch（0-1-0），无 body 前缀同特异性竞争
+            preset_part = css[:css.index("/* ── responsive injected (front) ── */")]
+            self.assertNotRegex(preset_part, r"(?m)^body \.mb-ch\b", pid)
+
+    def test_night_palette_contrast(self):
+        """A1：夜间章节卡 ACCENT_DARK on #1e1e1e ≥4.5；日间标题 ≥3（大字号）。"""
+        for pid, meta in list_presets().items():
+            self.assertGreaterEqual(
+                self._contrast(meta["accent_dark"], "#1E1E1E"), 4.5, pid)
+            self.assertGreaterEqual(
+                self._contrast(meta["accent"], meta["accent_light"]), 3.0, pid)
+
+    def test_night_fixed_palette_contrast(self):
+        """夜间固定色对比度（WCAG）：正文/夜链/章号在深底上可读。"""
+        self.assertGreaterEqual(self._contrast("#E0E0E0", "#121212"), 7.0)
+        self.assertGreaterEqual(self._contrast("#A8C0FF", "#121212"), 10.0)
+        self.assertGreaterEqual(self._contrast("#8A8A8A", "#1E1E1E"), 4.5)
 
 
 NAV_XHTML = (
@@ -1370,7 +1464,8 @@ class TestParaStyleAndTocColumns(unittest.TestCase):
         """类汤书顶格：responsive 的 .calibre* 2em 强制在前，末尾同选择器覆写归零。"""
         css = get_preset_css("classic", para_indent=False)
         resp = css.index("text-indent: 2em !important")
-        over = css.index("div.calibre1, .calibre1, .calibre {\n    text-indent: 0 !important")
+        over = css.index(
+            "%s {\n    text-indent: 0 !important" % _CALIBRE_INDENT_SELECTORS)
         self.assertGreater(over, resp)
         # duokan 私有属性同样需要 !important 才能压过 responsive 的强制值
         self.assertIn("duokan-text-indent: 0 !important", css)
@@ -1379,21 +1474,21 @@ class TestParaStyleAndTocColumns(unittest.TestCase):
         """类汤书段距：p.calibre* 段落级选择器覆写 responsive 的 margin: 0。"""
         css = get_preset_css("classic", para_gap=1.5)
         self.assertIn(
-            "p.calibre, p.calibre1, p.calibre2, div.calibre1 {\n"
-            "    margin: 0 0 1.5em 0 !important;\n"
-            "}",
+            "%s {\n    margin: 0 0 1.5em 0 !important;\n}" % _CALIBRE_MARGIN_SELECTORS,
             css,
         )
 
     def test_para_indent_off_and_gap_calibre_combined(self):
         css = get_preset_css("classic", para_indent=False, para_gap=0.5)
-        self.assertIn("div.calibre1, .calibre1, .calibre {\n    text-indent: 0 !important", css)
         self.assertIn(
-            "p.calibre, p.calibre1, p.calibre2, div.calibre1 {\n    margin: 0 0 0.5em 0 !important",
+            "%s {\n    text-indent: 0 !important" % _CALIBRE_INDENT_SELECTORS, css)
+        self.assertIn(
+            "%s {\n    margin: 0 0 0.5em 0 !important" % _CALIBRE_MARGIN_SELECTORS,
             css,
         )
         # 裸 .calibre / .calibre1（可能是 body/容器）不参与段距
-        self.assertNotIn(".calibre1, .calibre {\n    margin", css)
+        self.assertFalse(
+            any(s.startswith(".") for s in _CALIBRE_MARGIN_SELECTORS.split(", ")))
 
 
 # ── 弹注 fixture：ch1=A 型（EPUB3 标准），ch2=B 型（掌书系简化）──

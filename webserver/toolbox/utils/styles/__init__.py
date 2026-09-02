@@ -168,12 +168,22 @@ def _apply_page_tint(css: str, page_tint, params: dict) -> str:
 
 _PARA_BLOCK_HEAD = '\n\n/* ── 段落排版（用户自定义：缩进/段距）── */\n'
 
-# responsive.css 对 Calibre 类汤书用 .calibre* 选择器（特异性 0-1-1，带 !important）
-# 强制 text-indent/margin，通用 `p` 规则（0-0-1）会被压制——responsive 已前置注入，
-# 末尾以同选择器列表覆写即可（同特异性按源序取胜）。段距覆写仅限段落级选择器：
+# responsive.css 对 Calibre 类汤书用 .calibre* 选择器（:not(.mb-ch):not(.mb-vol)
+# 排除标题后实际特异性 0-3-1，带 !important）强制 text-indent/margin，通用 `p`
+# 规则（0-0-1）会被压制——responsive 已前置注入，末尾以同选择器列表覆写即可
+# （同特异性按源序取胜；列表须与 responsive.css 逐字一致，TestCssCascade 校验，
+# 漂移会让顶格/段距开关在类汤书上失效）。:not 同时把标题排除在覆写外，
+# 用户段距/顶格不再覆盖预设 .mb-ch 的大顶距。段距覆写仅限段落级选择器：
 # 裸 .calibre / .calibre1 常是 body/容器元素，参与段距会造成整页漂移。
-_CALIBRE_INDENT_SELECTORS = 'p.calibre, p.calibre1, p.calibre2, div.calibre1, .calibre1, .calibre'
-_CALIBRE_MARGIN_SELECTORS = 'p.calibre, p.calibre1, p.calibre2, div.calibre1'
+_CALIBRE_INDENT_SELECTORS = (
+    'p.calibre1:not(.mb-ch):not(.mb-vol), p.calibre:not(.mb-ch):not(.mb-vol), '
+    'p.calibre2:not(.mb-ch):not(.mb-vol), div.calibre1:not(.mb-ch):not(.mb-vol), '
+    '.calibre1:not(.mb-ch):not(.mb-vol), .calibre:not(.mb-ch):not(.mb-vol)'
+)
+_CALIBRE_MARGIN_SELECTORS = (
+    'p.calibre1:not(.mb-ch):not(.mb-vol), p.calibre:not(.mb-ch):not(.mb-vol), '
+    'p.calibre2:not(.mb-ch):not(.mb-vol), div.calibre1:not(.mb-ch):not(.mb-vol)'
+)
 
 
 def _clamp_gap(value) -> float:
