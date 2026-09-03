@@ -722,6 +722,110 @@ class TestPhase2Integrity(unittest.TestCase):
             EpubBeautifyTool._last_task_id = None
 
 
+LINK_TOC_HTML = (
+    '<html><head><title>t</title></head><body>'
+    '<p>Table of Contents</p>'
+    + ''.join('<p><a href="s%02d.html">第%d章</a></p>' % (i, i)
+              for i in range(1, 6))
+    + '</body></html>'
+)
+DAMAGED_TOC_HTML = (
+    '<html><head><title>t</title></head><body>'
+    '<p>Table of Contents</p>'
+    + ''.join('<p class="calibre_2 mb-ch"><a href="s%02d.html">第%d章</a></p>'
+              '<div class="mb-ch-sep"></div>' % (i, i) for i in range(1, 6))
+    + '</body></html>'
+)
+PROSE_CHAPTER_HTML = (
+    '<html><head><title>c</title></head><body>'
+    '<p>第一章 开端</p><p>正文段落，平静无事。</p>'
+    '<p>参见<a href="#n1">1</a>与<a href="#n2">2</a>两处注脚，正文继续。</p>'
+    '</body></html>'
+)
+
+
+class TestTocPageDetection(unittest.TestCase):
+    """目录页检测修复：纯链接目录页（calibre Table of Contents）不再被
+    章节标记炸成多个「第x章」独立页；已损坏输出重跑可复原。"""
+
+    def _build_link_toc_epub(self, path, toc_html):
+        manifest = (
+            '<item id="toc0" href="index_split_000.html" '
+            'media-type="application/xhtml+xml"/>'
+            '<item id="c1" href="c01.xhtml" media-type="application/xhtml+xml"/>'
+            '<item id="c2" href="c02.xhtml" media-type="application/xhtml+xml"/>'
+            '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>'
+        )
+        spine = '<itemref idref="toc0"/><itemref idref="c1"/><itemref idref="c2"/>'
+        opf = (
+            '<?xml version="1.0"?>'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+            '<metadata><dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">'
+            '目录页书</dc:title></metadata>'
+            '<manifest>%s</manifest><spine>%s</spine></package>'
+        ) % (manifest, spine)
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.writestr("mimetype", "application/epub+zip",
+                        compress_type=zipfile.ZIP_STORED)
+            zf.writestr("META-INF/container.xml", CONTAINER)
+            zf.writestr("OEBPS/content.opf", opf)
+            zf.writestr("OEBPS/index_split_000.html", toc_html)
+            zf.writestr("OEBPS/c01.xhtml",
+                        '<html><body><p>第一章 开端</p><p>正文。</p></body></html>')
+            zf.writestr("OEBPS/c02.xhtml",
+                        '<html><body><p>第二章 转折</p><p>正文。</p></body></html>')
+            zf.writestr("OEBPS/toc.ncx", NCX)
+
+    def test_is_toc_doc_link_list(self):
+        self.assertTrue(lib._is_toc_doc('index_split_000.html', LINK_TOC_HTML))
+        self.assertFalse(lib._is_toc_doc('ch01.xhtml', PROSE_CHAPTER_HTML))
+        self.assertTrue(lib._is_toc_doc('toc.xhtml', ''))
+        self.assertTrue(lib._is_toc_doc(
+            'ch00.xhtml',
+            '<nav epub:type="toc"><ol><li><a href="c1">一</a></li></ol></nav>'))
+
+    def test_link_toc_page_not_chapter_marked(self):
+        tmp = os.path.join(TESTS_DIR, "_tmp_linktoc.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_linktoc_out.epub")
+        self._build_link_toc_epub(tmp, LINK_TOC_HTML)
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            stats = lib.beautify(tmp, out, css)
+            # 书内已有目录页 → 不另生成 mb-toc
+            self.assertFalse(stats["toc_generated"])
+            with zipfile.ZipFile(out) as zf:
+                toc_page = zf.read("OEBPS/index_split_000.html").decode("utf-8")
+                ch1 = zf.read("OEBPS/c01.xhtml").decode("utf-8")
+            self.assertNotIn("mb-ch", toc_page)
+            self.assertIn("mb-toc-page", toc_page)
+            # 真章节文件的标题照常标记
+            self.assertIn('class="mb-ch"', ch1)
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_damaged_toc_page_repaired(self):
+        """旧缺陷输出（目录行误打 mb-ch + 长线）重跑即剥离复原。"""
+        tmp = os.path.join(TESTS_DIR, "_tmp_dmg_toc.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_dmg_toc_out.epub")
+        self._build_link_toc_epub(tmp, DAMAGED_TOC_HTML)
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            lib.beautify(tmp, out, css)
+            with zipfile.ZipFile(out) as zf:
+                toc_page = zf.read("OEBPS/index_split_000.html").decode("utf-8")
+            self.assertNotIn("mb-ch", toc_page)
+            self.assertNotIn("mb-ch-sep", toc_page)
+            self.assertIn("mb-toc-page", toc_page)
+            # 链接本身无损保留
+            self.assertEqual(toc_page.count("<a "), 5)
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)
+
+
 NAV_XHTML = (
     '<?xml version="1.0" encoding="utf-8"?>\n'
     '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">'

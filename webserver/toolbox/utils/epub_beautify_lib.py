@@ -681,13 +681,55 @@ def _has_nav_toc_semantics(html_str: str) -> bool:
     return bool(_NAV_TOC_RE.search(html_str or ''))
 
 
+def _looks_like_link_toc(html_str: str) -> bool:
+    """链接列表型目录页检测：calibre「Table of Contents」等无 nav 语义的
+    纯链接目录（<p><a>第x章</a></p> 列表）。≥3 个链接且多数行文本呈
+    章节标题形态即判定。真章节页的链接是脚注/引用（文本非标题形态），
+    占比远低于阈值，不会误判。"""
+    anchors = re.findall(r'<a\b[^>]*href=[^>]*>(.*?)</a>', html_str, re.I | re.S)
+    if len(anchors) < 3:
+        return False
+    texts = [t for t in (_block_text(a) for a in anchors) if t]
+    if len(texts) < 3:
+        return False
+    like = sum(
+        1 for t in texts
+        if len(t) <= 60 and chapter_patterns.paragraph_is_heading(t)
+    )
+    return like >= 3 and like * 2 >= len(texts)
+
+
 def _is_toc_doc(zip_path: str, html_str: str = '') -> bool:
-    """判断条目是否为书内目录页：文件名（mulu/toc/nav/contents）或
-    ``<nav epub:type="toc">`` 结构。"""
+    """判断条目是否为书内目录页：文件名（mulu/toc/nav/contents）、
+    ``<nav epub:type="toc">`` 结构、或链接列表形态（P：纯链接目录页此前
+    检测不到，会落入章节标记，mb-ch 的 page-break-before 把目录页炸成
+    多个「第x章」独立页）。"""
     base = zip_path.rsplit('/', 1)[-1]
     if _TOC_FILE_RE.search(base):
         return True
-    return _has_nav_toc_semantics(html_str)
+    if html_str and _has_nav_toc_semantics(html_str):
+        return True
+    return bool(html_str) and _looks_like_link_toc(html_str)
+
+
+# 误打在目录页上的章节标记清理（修复旧版缺陷输出，见 _is_toc_doc）
+_MB_SEP_DIV_RE = re.compile(
+    r'<div class="[^"]*mb-ch-sep[^"]*"[^>]*>\s*</div>\s*', re.IGNORECASE)
+_CH_MARK_TOKENS = ('mb-ch', 'mb-vol', 'mb-ch-split')
+
+
+def _strip_chapter_marks(html_str: str) -> str:
+    """移除误打在目录页上的章节标记（mb-ch/mb-vol/mb-ch-split 类 + 长线 div）。
+
+    正常流程不给目录页打标，页面上的标记只能来自旧版检测缺陷，剥离即修复。
+    幂等：无标记时原样返回。"""
+    out = _MB_SEP_DIV_RE.sub('', html_str)
+
+    def _fix_class(m):
+        tokens = [t for t in m.group(1).split() if t not in _CH_MARK_TOKENS]
+        return ' class="%s"' % ' '.join(tokens)
+
+    return re.sub(r'class="([^"]*)"', _fix_class, out)
 
 
 def _mark_toc_page_body(html_str: str) -> str:
@@ -1573,6 +1615,12 @@ def beautify(
                     html = new_html
         # 目录页：body 打 mb-toc-page 标记 + 注入真实装饰元素，不做章节标记
         if _is_toc_doc(t, html):
+            # 修复旧版缺陷输出：目录行曾被误当章节标题打标，mb-ch 的
+            # page-break-before 会把目录页炸成多个「第x章」独立页
+            fixed = _strip_chapter_marks(html)
+            if fixed != html:
+                changed = True
+                html = fixed
             new_html = _mark_toc_page_body(html)
             if new_html != html:
                 changed = True
