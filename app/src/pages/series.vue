@@ -266,10 +266,8 @@ export default {
         }
         this.isFetching = true;
         const start = (this.page - 1) * this.page_size;
-        // Search by series
-        const query = `series:"=${this.currentSeries}"`;
         try {
-            const rsp = await this.$backend(`/search?name=${encodeURIComponent(query)}&start=${start}&size=${this.page_size}`);
+            const rsp = await this.$backend(`/series/${encodeURIComponent(this.currentSeries)}?start=${start}&size=${this.page_size}`);
             if (rsp.err === 'ok') {
                 this.books = rsp.books;
                 this.total = rsp.total;
