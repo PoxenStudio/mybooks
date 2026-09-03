@@ -125,6 +125,20 @@ _HEADING_MAX_LEN = 60
 _SENTENCE_END = ("。", "！", "？", "；", ".", "!", "?", ";")
 # 纯数字/符号行（时间戳、页码、公式）不可能是标题
 _BARE_SYMBOL_RE = re.compile(r"[0-9.:：'\- /]+")
+# 结构化前缀（章头词）匹配——用于「剩余文本」护栏。分隔集刻意不含
+# 全角逗号/句读：章头词后以 ，。 等续句是正文句（「第十章，他走进…」），
+# 而结构化正则的 separator 前瞻把 ，当合法分隔符，会整行放行
+_STRUCT_PREFIX_RE = re.compile(
+    r"^\s*(?:[【\[]\s*)?(?:"
+    r"第\s*[0-9零〇一二三四五六七八九十百千万兩两]+\s*[章节回篇卷部集季]"
+    r"|0*\d{1,4}\s*卷|卷\s*[0-9零〇一二三四五六七八九十百千万兩两]+|[上中下]\s*卷"
+    r"|(?:chapter|chap\.?|volume|book|part)\s*(?:\d+|[ivxlcdm]+)"
+    r"|序章|楔子|引子|前言|终章|尾声|结语|后记|跋|附录|番外"
+    r")[ \t、【\]：.\-—·~～]*",
+    re.IGNORECASE,
+)
+# 章头词之后的剩余标题文本上限（以章头词开头的正文句往往更长）
+_STRUCT_REST_MAX = 30
 
 
 def paragraph_is_heading(text: str) -> bool:
@@ -134,6 +148,8 @@ def paragraph_is_heading(text: str) -> bool:
     故在原文基础上附加：长度上限、不以句末标点结尾、非纯数字符号。
     段落开头（含全角空格、【】包裹）命中任一标题模式即视为标题。
     对裸数字分支额外收紧：弱形态（如 “2023 年”、“3 天后”）及纯年份/时间不视为标题。
+    结构化前缀护栏：剩余文本须短且不以句读续句（此前「第十章，他走进…」
+    这类 34 字正文句会被判为标题）。
     """
     t = (text or "").strip()
     if not t or len(t) > _HEADING_MAX_LEN:
@@ -142,6 +158,13 @@ def paragraph_is_heading(text: str) -> bool:
         return False
     if t.endswith(_SENTENCE_END):
         return False
+    m = _STRUCT_PREFIX_RE.match(t)
+    if m and m.end() < len(t):
+        rest = t[m.end():].strip()
+        if rest[:1] in ("，", "。", "！", "？", "；", "…"):
+            return False
+        if len(rest) > _STRUCT_REST_MAX:
+            return False
     kind = heading_kind(t)
     if kind is None:
         return False

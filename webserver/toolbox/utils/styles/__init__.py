@@ -364,9 +364,9 @@ def get_preset_css(preset_id: str, use_system_fonts: bool = True,
 #   tex_linen.jpg     ← transparenttextures.com "Low Contrast Linen"（反色染米白）
 _TEXTURES_DIR = os.path.join(_PRESETS_DIR, 'textures')
 BUILTIN_TEXTURES = {
-    'xuanzhi':   {'name': '宣纸纹', 'name_en': 'Rice Paper', 'file': 'tex_xuanzhi.jpg'},
-    'parchment': {'name': '羊皮纸', 'name_en': 'Parchment',  'file': 'tex_parchment.jpg'},
-    'linen':     {'name': '素麻布', 'name_en': 'Linen',      'file': 'tex_linen.jpg'},
+    'xuanzhi': {'name': '宣纸纹', 'name_en': 'Rice Paper', 'file': 'tex_xuanzhi.jpg'},
+    'parchment': {'name': '羊皮纸', 'name_en': 'Parchment', 'file': 'tex_parchment.jpg'},
+    'linen': {'name': '素麻布', 'name_en': 'Linen', 'file': 'tex_linen.jpg'},
 }
 
 

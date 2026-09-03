@@ -41,10 +41,12 @@ _FRONT_TYPE_RE = re.compile(
     r'epub:type\s*=\s*["\'][^"\']*\b(cover|title-page|titlepage|copyright|colophon|frontmatter|toc|imprint)\b',
     re.IGNORECASE,
 )
-# 已知章节标题类名关键词（配合 h/p 块文本规则）
+# 已知章节标题类名关键词（配合 h/p 块文本规则）。
+# 前后断言限定 class token 边界：此前裸子串匹配会把 subtitle/header/heading
+# 这类词也当成标题类（"title"/"head" 是其子串）
 _TITLE_CLASS_RE = re.compile(
-    r'(chapter-title|chaptertitle|contenttitle|pretxttitle|head|title-line|'
-    r'title|caption-title|chapter)',
+    r'(?<![A-Za-z0-9_])(chapter-title|chaptertitle|contenttitle|pretxttitle|'
+    r'title-line|caption-title|head|title|chapter)(?![A-Za-z0-9])',
     re.IGNORECASE,
 )
 # 块级元素扫描（h1-6 / p / blockquote / li；div 单独处理无嵌套形式）
@@ -165,9 +167,20 @@ def _read_zip_entries(path: str) -> dict:
                 declared += info.file_size
                 if declared > _ZIP_MAX_TOTAL or len(entries) > _ZIP_MAX_ENTRIES:
                     raise RuntimeError("EPUB 文件过大或条目过多，疑似 Zip Bomb")
-                data = zf.read(info.filename)
+                # 流式读取（P2）：分块累计、越限瞬间中止——此前 read 全量落内存
+                # 后才判，伪造头部的大解压流先把 500MB 吃进内存
+                buf = bytearray()
+                with zf.open(info.filename) as fh:
+                    while True:
+                        chunk = fh.read(1 << 20)
+                        if not chunk:
+                            break
+                        buf += chunk
+                        if len(buf) > _ZIP_MAX_TOTAL:
+                            raise RuntimeError("EPUB 解压后体积异常，疑似 Zip Bomb")
+                data = bytes(buf)
                 actual += len(data)
-                if len(data) > _ZIP_MAX_TOTAL or actual > _ZIP_MAX_TOTAL:
+                if actual > _ZIP_MAX_TOTAL:
                     raise RuntimeError("EPUB 解压后体积异常，疑似 Zip Bomb")
                 entries[info.filename] = data
     except zipfile.BadZipFile as e:
@@ -833,7 +846,7 @@ def mark_chapters_in_html(html_str: str, split_title: bool = False) -> tuple:
             pass
 
     def _handle_block(tag, attrs, inner, is_div=False):
-        nonlocal stats, heading_seen, first_done
+        nonlocal heading_seen, first_done
         # 弹注条目豁免（mb-note-item 由 mark_notes_in_html 打标）：注释内容
         # 不是章节标题，且 ◎《…》/短条目可能撞上弱正则
         if 'mb-note-item' in (attrs or ''):
@@ -847,7 +860,12 @@ def mark_chapters_in_html(html_str: str, split_title: bool = False) -> tuple:
         if not text.strip():
             return None
         is_heading = False
-        if _TITLE_CLASS_RE.search(cls_attr) and _looks_like_title(text):
+        if tag and tag[0] in 'hH' and len(text) <= 100 \
+                and not text.rstrip().endswith(('。', '！', '？', '；')):
+            # h1-h6 语义即标题（此前依赖文本/类名启发，纯短语式章题如
+            # 「雪夜」不命中任何正则而漏标）；句读收尾的超长 h 块按滥用排除
+            is_heading = True
+        elif _TITLE_CLASS_RE.search(cls_attr) and _looks_like_title(text):
             is_heading = True
         elif chapter_patterns.paragraph_is_heading(text):
             is_heading = True
@@ -1241,10 +1259,11 @@ def analyze_epub(epub_path: str, sample_limit: int = 20) -> dict:
             if chapter_patterns.paragraph_is_heading(_block_text(inner)):
                 text_headings += 1
 
-    # 弹注统计（全量正文文件，健康报告与推荐徽章用）
+    # 弹注统计（采样正文文件，防大书全量解码；健康报告与推荐徽章用，
+    # 语义为「采样内计数」）
     notes_refs = 0
     notes_items = 0
-    for t in text_entries:
+    for t in text_entries[:sample_limit]:
         if t not in entries:
             continue
         h = _decode(entries[t])

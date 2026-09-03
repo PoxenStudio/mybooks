@@ -628,7 +628,7 @@ export default {
     titleSplit: false,
     // 段落排版：首行缩进独立开关 + 段间距数值（em，0=跟随预设）
     paraIndent: true,
-    paraGap: 0,
+    paraGap: 0.5,
     // 目录双栏（默认关，仅生成的目录页）
     tocColumns: false,
     // 批量队列（勾选入队的书籍 ID）

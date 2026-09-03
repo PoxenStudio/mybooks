@@ -6,6 +6,7 @@
 
 运行：python tests/test_epub_beautify_core.py
 """
+import io
 import os
 import re
 import sys
@@ -450,15 +451,16 @@ class TestPhase1Safety(unittest.TestCase):
             os.remove(tmp)
 
     def test_zipbomb_uncompressed_second_check(self):
-        """P2：中央目录 file_size 伪造偏小、解压实际超大 → len(data) 二次拦截。"""
+        """P2：中央目录 file_size 伪造偏小、解压实际超大 → 流式累计越限即中止
+        （不再先整读进内存再判）。"""
         tmp = os.path.join(TESTS_DIR, "_tmp_bomb2.epub")
         with zipfile.ZipFile(tmp, "w") as zf:
             zf.writestr("mimetype", "application/epub+zip")
             zf.writestr("META-INF/container.xml", CONTAINER)
         try:
             with mock.patch.object(lib, "_ZIP_MAX_TOTAL", 10 * 1024 * 1024), \
-                 mock.patch.object(zipfile.ZipFile, "read",
-                                   return_value=b"A" * (11 * 1024 * 1024)):
+                 mock.patch.object(zipfile.ZipFile, "open",
+                                   return_value=io.BytesIO(b"A" * (11 * 1024 * 1024))):
                 with self.assertRaises(RuntimeError) as cm:
                     lib._read_zip_entries(tmp)
             self.assertIn("解压后", str(cm.exception))
@@ -871,6 +873,87 @@ class TestTocPageDetection(unittest.TestCase):
             for p in (tmp, out):
                 if os.path.exists(p):
                     os.remove(p)
+
+
+class TestTitleMarkingPrecision(unittest.TestCase):
+    """标题误标修复：类名 token 精确匹配、h 标签独立分支、结构化 rest 护栏。"""
+
+    def test_title_class_token_boundary(self):
+        """_TITLE_CLASS_RE 按 token 边界匹配：subtitle/header/heading 不再误命中。"""
+        s = lib._TITLE_CLASS_RE.search
+        self.assertIsNone(s('class="subtitle"'))
+        self.assertIsNone(s('class="heading"'))
+        self.assertIsNone(s('class="header"'))
+        self.assertIsNotNone(s('class="section-title"'))
+        self.assertIsNotNone(s('class="chapter-title"'))
+        self.assertIsNotNone(s('class="chaptertitle"'))
+        self.assertIsNotNone(s('class="chapter-head"'))
+
+    def test_h_tag_is_heading(self):
+        """h1-h6 语义即标题：纯短语式章题（无章头词/类名提示）也打标。"""
+        html = '<html><body><h2>雪夜</h2><p>正文。</p></body></html>'
+        new, mk = lib.mark_chapters_in_html(html)
+        self.assertEqual(mk['chapters'], 1)
+        self.assertIn('class="mb-ch"', new)
+
+    def test_h_tag_sentence_abuse_skipped(self):
+        """句读收尾的滥用 h 块（整段塞进 h2）不打标。"""
+        html = ('<html><body><h2>他走进了屋子，屋里很冷，炉子早灭了，'
+                '他坐了很久。</h2></body></html>')
+        new, mk = lib.mark_chapters_in_html(html)
+        self.assertEqual(mk['chapters'], 0)
+
+    def test_structured_rest_guard(self):
+        """chapter_patterns rest 护栏：章头词后以句读续句 / rest 超长 = 正文句。"""
+        f = chapter_patterns.paragraph_is_heading
+        self.assertFalse(f('第十章，他走进房间，看到桌上有一封信，这是她写的。'))
+        self.assertFalse(f('第十章，他走了。'))
+        self.assertFalse(f('序章，他回想起来。'))
+        self.assertFalse(f('第一章' + '他' * 40))
+        self.assertTrue(f('第十章 雪夜'))
+        self.assertTrue(f('第三章'))
+        self.assertTrue(f('第十二章 血尸（上）'))
+        self.assertTrue(f('Chapter 1: The Beginning'))
+
+
+class TestPresetCssFixes(unittest.TestCase):
+    """预设 CSS 复核修复：目录标题/二级条目夜色、youth 补齐、inkstone 夜间豁免、段距归一。"""
+
+    def test_night_toc_heading_and_l2(self):
+        """目录页 h1/h2（ACCENT 深色字）与二级条目（MUTED）夜间转亮。"""
+        css = get_preset_css('classic', use_system_fonts=True)
+        dark = css[css.index('@media (prefers-color-scheme: dark)'):]
+        self.assertIn('body.mb-toc-page h1', dark)
+        self.assertIn('td.mb-toc-l2 a', dark)
+        accent_dark = list_presets()['classic']['accent_dark']
+        self.assertIn('color: %s !important' % accent_dark, dark)
+
+    def test_youth_night_em_and_sep(self):
+        """youth 补 .mb-ch-sep 主题长线；em 红点缀夜间转亮。"""
+        css = get_preset_css('youth', use_system_fonts=True)
+        self.assertIn('.mb-ch-sep', css)
+        dark = css[css.rindex('@media (prefers-color-scheme: dark)'):]
+        self.assertIn('em {', dark)
+        self.assertIn('color: %s !important' % list_presets()['youth']['accent_dark'], dark)
+
+    def test_inkstone_night_exempt(self):
+        """inkstone 夜间豁免：碑刻原貌（玄墨卡+白字）不被一刀切深底覆盖。"""
+        css = get_preset_css('inkstone', use_system_fonts=True)
+        dark = css[css.rindex('@media (prefers-color-scheme: dark)'):]
+        self.assertIn('html body .mb-ch', dark)
+        self.assertIn('background-color: #2B343C !important', dark)
+        self.assertIn('color: #FFFFFF !important', dark)
+
+    def test_voyage_children_para_margin_zero(self):
+        """voyage/children 段距归一为 0（间距统一由用户段距设置驱动）。"""
+        for pid in ('voyage', 'children'):
+            css = get_preset_css(pid, use_system_fonts=True)
+            # 锚定预设自身 p 规则（注释与 margin-orphans 相邻序列），
+            # 避免误伤 responsive 手机块的 body p 段距
+            self.assertIn('段距归零', css, pid)
+            self.assertIn('margin: 0 !important;\n    orphans: 2;', css, pid)
+            self.assertNotIn('margin: 0.6em 0 !important;\n    orphans: 2;', css, pid)
+            self.assertNotIn('margin: 0.2em 0 !important;\n    orphans: 2;', css, pid)
 
 
 NAV_XHTML = (

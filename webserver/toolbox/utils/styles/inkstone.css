@@ -148,3 +148,14 @@ a { color: inherit; text-decoration: none; }
 }
 
 {{TOC_STYLE}}
+
+/* 夜间豁免：保持碑刻原貌（玄墨卡+白字+石灰金 span）——
+   responsive 夜间块的 html body .mb-ch（0-1-2）会一刀切转 #1e1e1e 深底，
+   此处以同特异性 + 本规则在 responsive 之后按源序取胜（预设描述声明
+   「夜间模式保持碑刻原貌」） */
+@media (prefers-color-scheme: dark) {
+  html body .mb-ch {
+    color: #FFFFFF !important;
+    background-color: {{ACCENT}} !important;
+  }
+}

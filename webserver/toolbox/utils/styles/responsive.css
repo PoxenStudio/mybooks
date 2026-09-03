@@ -460,6 +460,18 @@ blockquote, pre, table, figure, img {
     background: #121212 !important;
     border-color: #333 !important;
   }
+  /* 目录页标题（toc_* 的 h1/h2 用 ACCENT 深色字）夜间转亮，深棕字沉入
+     #121212 不可读；顶部装饰线同步转暗 */
+  body.mb-toc-page h1,
+  body.mb-toc-page h2 {
+    color: {{ACCENT_DARK}} !important;
+    border-color: #444 !important;
+  }
+  /* 二级条目链接（seal 的 MUTED 字）夜间转灰亮 */
+  html body.mb-toc-page td.mb-toc-l2 a,
+  html body.mb-toc-page .mb-toc-l2 a {
+    color: #999 !important;
+  }
 }
 
 /* ── 打印优化 ── */
