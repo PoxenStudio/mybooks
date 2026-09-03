@@ -139,6 +139,10 @@ _STRUCT_PREFIX_RE = re.compile(
 )
 # 章头词之后的剩余标题文本上限（以章头词开头的正文句往往更长）
 _STRUCT_REST_MAX = 30
+# 特殊章头词（序章/前言/…）冒号后的剩余文本上限：冒号引出的真标题都很短
+# （“前言”“番外三”），“前言：<二十余字叙述>”多为简介句；第X章/Chapter 系
+# 冒号双段标题可放行到 _STRUCT_REST_MAX
+_SPECIAL_COLON_REST_MAX = 15
 
 
 def paragraph_is_heading(text: str) -> bool:
@@ -161,9 +165,19 @@ def paragraph_is_heading(text: str) -> bool:
     m = _STRUCT_PREFIX_RE.match(t)
     if m and m.end() < len(t):
         rest = t[m.end():].strip()
-        if rest[:1] in ("，", "。", "！", "？", "；", "…"):
+        # ASCII 冒号不在此列：“Chapter 1: The Boy Who Lived”是真标题，
+        # 冒号由下面的 SPECIAL 分支按 15 字收紧（ENGLISH 系不受限）
+        if rest[:1] in ("，", "。", "！", "？", "；", "…", ",", ".", "!", "?", ";"):
             return False
-        if len(rest) > _STRUCT_REST_MAX:
+        # 剩余文本含句读（标题内不应断句）→ 正文句
+        if any(p in rest for p in ("。", "！", "？", "；", "…")):
+            return False
+        limit = _STRUCT_REST_MAX
+        if SPECIAL_HEADING_PATTERN.match(t):
+            tail = m.group(0).rstrip()[-1:]
+            if tail in ("：", ":") or rest[:1] in ("：", ":"):
+                limit = _SPECIAL_COLON_REST_MAX
+        if len(rest) > limit:
             return False
     kind = heading_kind(t)
     if kind is None:

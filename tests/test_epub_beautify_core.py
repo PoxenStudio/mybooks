@@ -2144,5 +2144,145 @@ class TestNotes(unittest.TestCase):
                     os.remove(p)
 
 
+class TestHBranchScope(unittest.TestCase):
+    """h 分支收敛到 h1/h2：章内小节头（h3+）不再被顶成独页。"""
+
+    H = ('<html xmlns="http://www.w3.org/1999/xhtml"><head><title>x</title></head>'
+         '<body>%s</body></html>')
+
+    def test_h3_section_untouched(self):
+        html = self.H % '<h3>人物小传</h3><p>正文正文。</p>'
+        new, mk = lib.mark_chapters_in_html(html)
+        self.assertFalse(any(mk.values()))
+        self.assertNotIn('mb-ch', new)
+
+    def test_h4_illustration_untouched(self):
+        html = self.H % '<h4>插图列表</h4><p>正文。</p>'
+        new, mk = lib.mark_chapters_in_html(html)
+        self.assertFalse(any(mk.values()))
+
+    def test_h2_short_phrase_still_marked(self):
+        html = self.H % '<h2>雪夜</h2><p>正文。</p>'
+        _, mk = lib.mark_chapters_in_html(html)
+        self.assertEqual(mk['chapters'], 1)
+
+    def test_h2_ascii_period_excluded(self):
+        html = self.H % '<h2>See appendix for details.</h2><p>正文。</p>'
+        new, mk = lib.mark_chapters_in_html(html)
+        self.assertFalse(any(mk.values()))
+        self.assertNotIn('mb-ch', new)
+
+
+class TestRestGuardRound2(unittest.TestCase):
+    """rest 护栏第二轮：ASCII 续句、句中句读、前言冒号长叙述。"""
+
+    def test_ascii_comma_rejected(self):
+        self.assertFalse(chapter_patterns.paragraph_is_heading(
+            '第十章,他走进房间看见桌上有一封信'))
+
+    def test_mid_sentence_punct_rejected(self):
+        self.assertFalse(chapter_patterns.paragraph_is_heading(
+            '第十章风起云涌。血战开始'))
+
+    def test_special_colon_long_narrative_rejected(self):
+        self.assertFalse(chapter_patterns.paragraph_is_heading(
+            '前言：本书讲述了一个关于江湖与庙堂之间恩怨情仇的长篇故事'))
+
+    def test_special_colon_short_ok(self):
+        self.assertTrue(chapter_patterns.paragraph_is_heading('番外三：年夜'))
+
+    def test_structured_colon_long_ok(self):
+        self.assertTrue(chapter_patterns.paragraph_is_heading('第三章：血尸'))
+        self.assertTrue(chapter_patterns.paragraph_is_heading(
+            'Chapter 1: The Boy Who Lived'))
+
+    def test_title_underscore_class(self):
+        html = ('<html><body><p class="title_x">编辑推荐语短句</p>'
+                '<p>正文。</p></body></html>')
+        new, mk = lib.mark_chapters_in_html(html)
+        self.assertFalse(any(mk.values()))
+        self.assertNotIn('mb-ch', new)
+
+
+class TestHeadDecodeAndTocConsistency(unittest.TestCase):
+    """头部解码不断字 + preview/run 目录口径一致。"""
+
+    def test_decode_head_split_multibyte(self):
+        raw = b'a' * 8190 + '中'.encode('utf-8')
+        # 8192 字节处恰劈开“中”：旧写法 _decode(切片) 直接抛 UnicodeDecodeError
+        with self.assertRaises(UnicodeDecodeError):
+            raw[:8192].decode('utf-8')
+        self.assertEqual(lib._decode_head(raw), 'a' * 4000)
+
+    def test_decode_head_matches_full(self):
+        data = ('<?xml version="1.0"?><html><body>' + '<p>第一章 序章内容</p>' * 200
+                + '</body></html>').encode('utf-8')
+        self.assertEqual(lib._decode_head(data), lib._decode(data)[:4000])
+        self.assertIn('第一章', lib._decode_head(data))
+
+    def test_link_toc_beyond_head_slice(self):
+        """链接列表被长头部挤到 8KB 切片外：preview 须与 run 一致判为目录。"""
+        tmp = os.path.join(TESTS_DIR, '_tmp_trunc_src.epub')
+        try:
+            prefix = ('<?xml version="1.0" encoding="utf-8"?>\n'
+                      '<html xmlns="http://www.w3.org/1999/xhtml"><head>'
+                      '<title>Table of Contents</title><style>')
+            link_items = [
+                '<p><a href="ch%d.xhtml">第%d章 章节标题</a></p>' % (i, i)
+                for i in range(1, 5)]
+            links = ''.join(link_items)
+            tail = '</style></head><body>%s</body></html>' % links
+            pad_len = (8192 - len(prefix.encode('utf-8'))
+                       - len(''.join(link_items[:2]).encode('utf-8')) - 30)
+            body = (prefix + 'x' * pad_len + tail).encode('utf-8')
+            opf = (
+                '<?xml version="1.0"?>'
+                '<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+                '<metadata><dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">t</dc:title></metadata>'
+                '<manifest><item id="c0" href="c0.xhtml" media-type="application/xhtml+xml"/>'
+                '<item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/>'
+                '</manifest><spine><itemref idref="c0"/><itemref idref="c1"/></spine></package>')
+            ch1 = ('<html xmlns="http://www.w3.org/1999/xhtml"><head><title>c</title></head>'
+                   '<body><p>第一章 起点</p><p>正文。</p></body></html>')
+            with zipfile.ZipFile(tmp, 'w') as zf:
+                zf.writestr('mimetype', 'application/epub+zip',
+                            compress_type=zipfile.ZIP_STORED)
+                zf.writestr('META-INF/container.xml', CONTAINER)
+                zf.writestr('OEBPS/content.opf', opf)
+                zf.writestr('OEBPS/c0.xhtml', body)
+                zf.writestr('OEBPS/ch1.xhtml', ch1)
+            # 头片内不足 3 链接（旧逻辑必漏），analyze 全量复核后须命中
+            raw = body
+            self.assertFalse(lib._looks_like_link_toc(lib._decode_head(raw)))
+            a = lib.analyze_epub(tmp)
+            self.assertTrue(a['has_inbook_toc'])
+        finally:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+
+
+class TestStripHardening(unittest.TestCase):
+    """strip 打磨：单引号 + 空 class 属性移除。"""
+
+    def test_single_quote_marks(self):
+        html = ("<html><body><p class='mb-ch'>第一章 起点</p>"
+                "<div class='mb-ch-sep'></div></body></html>")
+        out = lib._strip_chapter_marks(html)
+        self.assertNotIn('mb-ch', out)
+        self.assertNotIn('mb-ch-sep', out)
+        self.assertIn('第一章', out)
+
+    def test_empty_class_removed(self):
+        out = lib._strip_chapter_marks('<p class="mb-ch">第一章 起点</p>')
+        self.assertNotIn('class=""', out)
+        self.assertNotIn('mb-ch', out)
+
+    def test_other_classes_kept(self):
+        out = lib._strip_chapter_marks(
+            '<p class="calibre1 mb-ch">第一章 起点</p>')
+        self.assertIn('class="calibre1"', out)
+        self.assertNotIn('mb-ch"', out)
+
+
 if __name__ == "__main__":
     unittest.main()

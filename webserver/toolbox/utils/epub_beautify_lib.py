@@ -46,7 +46,7 @@ _FRONT_TYPE_RE = re.compile(
 # 这类词也当成标题类（"title"/"head" 是其子串）
 _TITLE_CLASS_RE = re.compile(
     r'(?<![A-Za-z0-9_])(chapter-title|chaptertitle|contenttitle|pretxttitle|'
-    r'title-line|caption-title|head|title|chapter)(?![A-Za-z0-9])',
+    r'title-line|caption-title|head|title|chapter)(?![A-Za-z0-9_])',
     re.IGNORECASE,
 )
 # 块级元素扫描（h1-6 / p / blockquote / li；div 单独处理无嵌套形式）
@@ -233,6 +233,24 @@ def _decode(data: bytes) -> str:
         if text.lstrip().startswith('<?xml'):
             text = re.sub(r"""(<\?xml[^>]*encoding\s*=\s*)["'][^"']*["']""", r'\1"utf-8"', text, count=1, flags=re.IGNORECASE)
         return text
+
+
+def _decode_head(data: bytes, raw_n: int = 8192, out_n: int = 4000) -> str:
+    """目录嗅探用头部解码：按字节切片可能恰劈开 UTF-8 多字节字符，
+    先对切片 strict 解码；失败（劈开字符）则片尾逐字节前移找合法边界；
+    仍失败（非 UTF-8 书）才回落全量 _decode（编码检测虽慢但对，
+    CJK 链接文本不乱码，_looks_like_link_toc 判定才准）。"""
+    raw = data[:raw_n]
+    try:
+        return raw.decode('utf-8')[:out_n]
+    except UnicodeDecodeError:
+        pass
+    for cut in (1, 2, 3):
+        try:
+            return raw[:-cut].decode('utf-8')[:out_n]
+        except UnicodeDecodeError:
+            continue
+    return _decode(data)[:out_n]
 
 
 # ── OPF 解析 ──────────────────────────────────────────────────────────────────
@@ -727,7 +745,8 @@ def _is_toc_doc(zip_path: str, html_str: str = '') -> bool:
 
 # 误打在目录页上的章节标记清理（修复旧版缺陷输出，见 _is_toc_doc）
 _MB_SEP_DIV_RE = re.compile(
-    r'<div class="[^"]*mb-ch-sep[^"]*"[^>]*>\s*</div>\s*', re.IGNORECASE)
+    r'''<div\s+class\s*=\s*(?:"[^"]*mb-ch-sep[^"]*"|'[^']*mb-ch-sep[^']*')[^>]*>\s*</div>\s*''',
+    re.IGNORECASE)
 _CH_MARK_TOKENS = ('mb-ch', 'mb-vol', 'mb-ch-split')
 
 
@@ -735,14 +754,19 @@ def _strip_chapter_marks(html_str: str) -> str:
     """移除误打在目录页上的章节标记（mb-ch/mb-vol/mb-ch-split 类 + 长线 div）。
 
     正常流程不给目录页打标，页面上的标记只能来自旧版检测缺陷，剥离即修复。
-    幂等：无标记时原样返回。"""
+    幂等：无标记时原样返回；类名剥空时整个 class 属性移除，不留 class=""。
+    单双引号两种写法均处理（自家注入为双引号，手写单引号书亦兼容）。"""
     out = _MB_SEP_DIV_RE.sub('', html_str)
 
     def _fix_class(m):
-        tokens = [t for t in m.group(1).split() if t not in _CH_MARK_TOKENS]
-        return ' class="%s"' % ' '.join(tokens)
+        quote = '"' if '"' in m.group(0) else "'"
+        val = m.group(1) if m.group(1) is not None else m.group(2)
+        tokens = [t for t in val.split() if t not in _CH_MARK_TOKENS]
+        if not tokens:
+            return ''
+        return ' class=%s%s%s' % (quote, ' '.join(tokens), quote)
 
-    return re.sub(r'class="([^"]*)"', _fix_class, out)
+    return re.sub(r'''class\s*=\s*(?:"([^"]*)"|'([^']*)')''', _fix_class, out)
 
 
 def _mark_toc_page_body(html_str: str) -> str:
@@ -860,10 +884,12 @@ def mark_chapters_in_html(html_str: str, split_title: bool = False) -> tuple:
         if not text.strip():
             return None
         is_heading = False
-        if tag and tag[0] in 'hH' and len(text) <= 100 \
-                and not text.rstrip().endswith(('。', '！', '？', '；')):
-            # h1-h6 语义即标题（此前依赖文本/类名启发，纯短语式章题如
-            # 「雪夜」不命中任何正则而漏标）；句读收尾的超长 h 块按滥用排除
+        if tag and tag.lower() in ('h1', 'h2') and len(text) <= 100 \
+                and not text.rstrip().endswith(('。', '！', '？', '；', '.', '!', '?', ';')):
+            # h1/h2 语义即标题（此前依赖文本/类名启发，纯短语式章题如
+            # 「雪夜」不命中任何正则而漏标）；h3 以下维持旧启发式——章内
+            # 小节头（人物小传/插图列表）若同标 mb-ch，会被各预设的
+            # page-break-before 顶成独页；句读收尾的 h 块按滥用排除
             is_heading = True
         elif _TITLE_CLASS_RE.search(cls_attr) and _looks_like_title(text):
             is_heading = True
@@ -1207,11 +1233,20 @@ def analyze_epub(epub_path: str, sample_limit: int = 20) -> dict:
     for t in text_entries:
         if t not in entries:
             continue
-        # 切片后解码（P1）：先解全量再截 4000 字，大文件白白多解码数 MB
-        head = _decode(entries[t][:8192])[:4000]
+        # 切片后解码（P1）：先解全量再截 4000 字，大文件白白多解码数 MB；
+        # _decode_head 保证字节切片不断开多字节字符
+        head = _decode_head(entries[t])
         if _is_toc_doc(t, head) and not _has_nav_toc_semantics(head):
             has_inbook_toc = True
             break
+        # 口径对齐 beautify（全量 html 检测）：8KB 原始片里已有 ≥2 个链接
+        # 但头片（4000 字）不足链接目录阈值时，可能是长头部把链接列表
+        # 截断，全量复核该文件，否则 preview 报“将生成目录”而 run 时
+        # 命中既有目录不生成；字节层计数，不额外解码
+        if len(re.findall(rb'<a\b', entries[t][:8192], re.IGNORECASE)) >= 2:
+            if _looks_like_link_toc(_decode(entries[t])):
+                has_inbook_toc = True
+                break
 
     h_stats = {'h1': 0, 'h2': 0, 'h3': 0, 'h4': 0, 'h5': 0, 'h6': 0}
     text_headings = 0
