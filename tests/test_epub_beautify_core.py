@@ -825,6 +825,53 @@ class TestTocPageDetection(unittest.TestCase):
                 if os.path.exists(p):
                     os.remove(p)
 
+    def test_guide_toc_reference_retargeted(self):
+        """生成 mb-toc 时 <guide> 的 type="toc" 引用同步指向新目录，其余不动。"""
+        tmp = os.path.join(TESTS_DIR, "_tmp_guide.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_guide_out.epub")
+        manifest = (
+            '<item id="c1" href="c01.xhtml" media-type="application/xhtml+xml"/>'
+            '<item id="c2" href="c02.xhtml" media-type="application/xhtml+xml"/>'
+            '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>'
+        )
+        spine = '<itemref idref="c1"/><itemref idref="c2"/>'
+        opf = (
+            '<?xml version="1.0"?>'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+            '<metadata><dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">'
+            'guide书</dc:title></metadata>'
+            '<manifest>%s</manifest><spine>%s</spine>'
+            '<guide><reference href="cover.xhtml" title="Cover" type="cover"/>'
+            '<reference href="c01.xhtml" title="Table of Contents" type="toc"/></guide>'
+            '</package>'
+        ) % (manifest, spine)
+        with zipfile.ZipFile(tmp, "w") as zf:
+            zf.writestr("mimetype", "application/epub+zip",
+                        compress_type=zipfile.ZIP_STORED)
+            zf.writestr("META-INF/container.xml", CONTAINER)
+            zf.writestr("OEBPS/content.opf", opf)
+            zf.writestr("OEBPS/c01.xhtml",
+                        '<html><body><p>第一章 开端</p><p>正文。</p></body></html>')
+            zf.writestr("OEBPS/c02.xhtml",
+                        '<html><body><p>第二章 转折</p><p>正文。</p></body></html>')
+            zf.writestr("OEBPS/toc.ncx", NCX)
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            stats = lib.beautify(tmp, out, css)
+            self.assertTrue(stats["toc_generated"])
+            with zipfile.ZipFile(out) as zf:
+                opf_out = zf.read("OEBPS/content.opf").decode("utf-8")
+            m = re.search(r'<reference\b[^>]*type="toc"[^>]*/>', opf_out)
+            self.assertIsNotNone(m)
+            self.assertIn('href="mb-toc.xhtml"', m.group(0))
+            # 其余 guide 引用不动
+            self.assertIn('type="cover"', opf_out)
+            self.assertIn('href="cover.xhtml"', opf_out)
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)
+
 
 NAV_XHTML = (
     '<?xml version="1.0" encoding="utf-8"?>\n'

@@ -1531,6 +1531,17 @@ def beautify(
                         + '\n<itemref idref="%s" linear="yes"/>' % mb_id
                         + opf_str[insert_at:]
                     )
+            # EPUB2 <guide> 的 type="toc" 引用同步指向新目录（存在才改）：
+            # 否则部分阅读器「目录」键跳回旧位置/失效（实测情书test 遗留过期引用）
+            if re.search(r'<guide\b', opf_str, re.I):
+                def _retarget_toc_ref(m):
+                    tag = m.group(0)
+                    if not re.search(r'type=["\']toc["\']', tag, re.I):
+                        return tag
+                    return re.sub(r'href=["\'][^"\']*["\']',
+                                  'href="%s"' % MB_TOC_NAME, tag, count=1)
+                opf_str = re.sub(r'<reference\b[^>]*>', _retarget_toc_ref,
+                                 opf_str, flags=re.I)
             entries[ctx.opf_path] = opf_str.encode('utf-8')
             toc_generated = True
 
