@@ -283,7 +283,11 @@ blockquote, pre, table, figure, img {
   break-inside: avoid;
 }
 
-/* ── 手机窄屏适配（≤600px）── */
+/* ── 手机窄屏适配（≤600px）──
+   选择器一律 body 前缀提特异性（0-0-2 / 0-1-1，A4）：本文件前置注入，
+   裸 p / .mb-ch 同特异性会按源序输给后方预设规则而全部失效；
+   用户段排覆写（body p，末尾）与 vertclassical 竖排块（body 前缀，后方）
+   以同特异性+源序再压过此处，保持各自优先级。 */
 @media (max-width: 600px) {
   @page {
     margin: 3% 4% !important;
@@ -293,20 +297,20 @@ blockquote, pre, table, figure, img {
     margin-left: 0 !important;
     margin-right: 0 !important;
   }
-  p {
+  body p {
     margin: 0.6em 0 !important;
     line-height: 1.65 !important;
   }
   /* 修复 modern 外扩 -1em 在窄屏溢出 */
-  blockquote {
+  body blockquote {
     margin: 1em 0.6em !important;
     padding: 0.5em 0.8em !important;
   }
-  .mb-ch {
+  body .mb-ch {
     margin: 2.2em 0 0.6em 0 !important;
     font-size: 1.25em !important;
   }
-  .mb-ch-sep {
+  body .mb-ch-sep {
     width: 84% !important;
     margin: 0 auto 1.8em auto !important;
   }
@@ -407,9 +411,10 @@ blockquote, pre, table, figure, img {
   }
   /* 章节卡夜间深底（A1）：classic/classical/children/navy/refined/vertclassical
      的 .mb-ch 自带 background:{{ACCENT_LIGHT}} !important，而本文件前置注入、
-     同特异性按源序必输，故提升为 body 前缀（0-1-1）压过预设裸 .mb-ch（0-1-0），
-     否则夜间浅底浅字（ACCENT_DARK on ACCENT_LIGHT ≈ 1.5:1）不可读 */
-  body .mb-ch {
+     同特异性按源序必输——html body 前缀（0-1-2）压过预设裸 .mb-ch（0-1-0）
+     与 vertclassical 竖排块的 body .mb-ch（0-1-1），否则夜间浅底浅字
+     （ACCENT_DARK on ACCENT_LIGHT ≈ 1.5:1）不可读 */
+  html body .mb-ch {
     color: {{ACCENT_DARK}} !important;
     background: #1e1e1e !important;
   }
@@ -446,6 +451,14 @@ blockquote, pre, table, figure, img {
   body.mb-toc-page .mb-toc-sub,
   body.mb-toc-page .mb-toc-truncated {
     color: #999 !important;
+  }
+  /* 目录卡片夜间深底（A3）：elegant/cool/seal 的 body.mb-toc-page .mb-toc
+     自带 background:{{ACCENT_LIGHT}} !important 且 TOC_STYLE 注入在本文件
+     之后，同特异性按源序必输——html 前缀（0-2-2）压过（0-2-1），
+     否则白卡嵌深块（三明治）；border-color 同步转暗 */
+  html body.mb-toc-page .mb-toc {
+    background: #121212 !important;
+    border-color: #333 !important;
   }
 }
 

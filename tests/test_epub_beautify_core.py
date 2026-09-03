@@ -14,6 +14,7 @@ import types
 import unittest
 import zipfile
 import xml.etree.ElementTree as ET
+from unittest import mock
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 TOOLBOX_DIR = os.path.join(TESTS_DIR, "..", "webserver", "toolbox")
@@ -403,17 +404,18 @@ class TestCssCascade(unittest.TestCase):
     # ── A1：夜间章节卡深底最终胜者 ──
 
     def test_night_title_dark_bg_wins(self):
-        """A1：dark 块内 body .mb-ch（0-1-1）带深底，预设侧无同形选择器可反压。"""
+        """A1：dark 块内 html body .mb-ch（0-1-2）带深底，压预设裸 .mb-ch（0-1-0）
+        与 vertclassical 竖排块的 body .mb-ch（0-1-1）。"""
         for pid, meta in list_presets().items():
             css = get_preset_css(pid, use_system_fonts=True)
             dark_at = css.index("@media (prefers-color-scheme: dark)")
-            rule_at = css.index("body .mb-ch {", dark_at)
+            rule_at = css.index("html body .mb-ch {", dark_at)
             block = css[rule_at:css.index("}", rule_at)]
             self.assertIn("background: #1e1e1e !important", block, pid)
             self.assertIn("color: %s !important" % meta["accent_dark"], block, pid)
-            # 胜者前提：预设章节卡为裸 .mb-ch（0-1-0），无 body 前缀同特异性竞争
+            # 胜者前提：预设侧章节卡无 body / html 前缀同形选择器
             preset_part = css[:css.index("/* ── responsive injected (front) ── */")]
-            self.assertNotRegex(preset_part, r"(?m)^body \.mb-ch\b", pid)
+            self.assertNotRegex(preset_part, r"(?m)^(html )?body \.mb-ch\b", pid)
 
     def test_night_palette_contrast(self):
         """A1：夜间章节卡 ACCENT_DARK on #1e1e1e ≥4.5；日间标题 ≥3（大字号）。"""
@@ -428,6 +430,160 @@ class TestCssCascade(unittest.TestCase):
         self.assertGreaterEqual(self._contrast("#E0E0E0", "#121212"), 7.0)
         self.assertGreaterEqual(self._contrast("#A8C0FF", "#121212"), 10.0)
         self.assertGreaterEqual(self._contrast("#8A8A8A", "#1E1E1E"), 4.5)
+
+
+class TestPhase1Safety(unittest.TestCase):
+    """P1/P2 回归：ZipBomb 解压后二次校验 + analyze 采样化。"""
+
+    def test_zipbomb_declared_precheck(self):
+        """P2：中央目录声明总量超限 → 预判拦截（原有行为，常量化后回归）。"""
+        tmp = os.path.join(TESTS_DIR, "_tmp_bomb1.epub")
+        with zipfile.ZipFile(tmp, "w") as zf:
+            zf.writestr("mimetype", "application/epub+zip")
+            zf.writestr("META-INF/container.xml", CONTAINER)
+        try:
+            with mock.patch.object(lib, "_ZIP_MAX_TOTAL", 1):
+                with self.assertRaises(RuntimeError) as cm:
+                    lib._read_zip_entries(tmp)
+            self.assertIn("Zip Bomb", str(cm.exception))
+        finally:
+            os.remove(tmp)
+
+    def test_zipbomb_uncompressed_second_check(self):
+        """P2：中央目录 file_size 伪造偏小、解压实际超大 → len(data) 二次拦截。"""
+        tmp = os.path.join(TESTS_DIR, "_tmp_bomb2.epub")
+        with zipfile.ZipFile(tmp, "w") as zf:
+            zf.writestr("mimetype", "application/epub+zip")
+            zf.writestr("META-INF/container.xml", CONTAINER)
+        try:
+            with mock.patch.object(lib, "_ZIP_MAX_TOTAL", 10 * 1024 * 1024), \
+                 mock.patch.object(zipfile.ZipFile, "read",
+                                   return_value=b"A" * (11 * 1024 * 1024)):
+                with self.assertRaises(RuntimeError) as cm:
+                    lib._read_zip_entries(tmp)
+            self.assertIn("解压后", str(cm.exception))
+        finally:
+            os.remove(tmp)
+
+    def test_analyze_p_mismatch_sampled(self):
+        """P1：p 开闭预警只扫前 sample_limit 个正文文件（大书不卡 IOLoop）。"""
+        n = 25
+        tmp = os.path.join(TESTS_DIR, "_tmp_sampling.epub")
+        items = "".join(
+            '<item id="c%d" href="c%02d.xhtml" media-type="application/xhtml+xml"/>'
+            % (i, i) for i in range(1, n + 1))
+        spine = "".join('<itemref idref="c%d"/>' % i for i in range(1, n + 1))
+        opf = (
+            '<?xml version="1.0"?>'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+            '<metadata><dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">'
+            '采样书</dc:title></metadata>'
+            '<manifest>%s</manifest><spine>%s</spine></package>' % (items, spine)
+        )
+        with zipfile.ZipFile(tmp, "w") as zf:
+            zf.writestr("mimetype", "application/epub+zip",
+                        compress_type=zipfile.ZIP_STORED)
+            zf.writestr("META-INF/container.xml", CONTAINER)
+            zf.writestr("OEBPS/content.opf", opf)
+            for i in range(1, n + 1):
+                # 末章少一个 </p>（开闭不齐），前 24 章健康
+                body = ('<p>第%d章<p>正文内容。' % i if i == n
+                        else '<p>第%d章</p><p>正文内容。</p>' % i)
+                zf.writestr(
+                    "OEBPS/c%02d.xhtml" % i,
+                    '<html xmlns="http://www.w3.org/1999/xhtml">'
+                    '<head><title>c%d</title></head><body>%s</body></html>' % (i, body))
+        try:
+            a = lib.analyze_epub(tmp)
+            self.assertEqual(a["p_close_mismatch_files"], 0)
+            a_all = lib.analyze_epub(tmp, sample_limit=30)
+            self.assertEqual(a_all["p_close_mismatch_files"], 1)
+        finally:
+            os.remove(tmp)
+
+
+class TestCssAdaptivity(unittest.TestCase):
+    """A3/A4/顶空 回归：手机块 body 前缀生效、目录夜卡深底、split 关闭章扉顶距。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._styles_dir = os.path.join(TOOLBOX_DIR, "utils", "styles")
+        with open(os.path.join(cls._styles_dir, "responsive.css"),
+                  encoding="utf-8") as f:
+            cls.responsive_src = f.read()
+
+    # ── A4：手机块提特异性 ──
+
+    def test_mobile_block_body_prefix(self):
+        """A4：手机块 p/blockquote/.mb-ch/.mb-ch-sep 一律 body 前缀
+        （0-0-2 / 0-1-1），压过预设同规则裸选择器，2.2em 手机顶距生效。"""
+        at = self.responsive_src.index("手机窄屏适配")
+        at = self.responsive_src.index("@media (max-width: 600px)", at)
+        block = self.responsive_src[at:self.responsive_src.index("\n}", at)]
+        for sel in ("body p {", "body blockquote {",
+                    "body .mb-ch {", "body .mb-ch-sep {"):
+            self.assertIn(sel, block)
+        self.assertIn("margin: 2.2em 0 0.6em 0 !important", block)
+        # 媒体块内不再有会被预设同特异性压掉的裸选择器
+        self.assertNotRegex(block, r"(?m)^  p \{")
+        self.assertNotRegex(block, r"(?m)^  \.mb-ch \{")
+
+    def test_vert_block_parity(self):
+        """A4：vertclassical 竖排块 body 前缀 + 源序在后，窄屏竖排压过手机块。"""
+        css = get_preset_css("vertclassical", use_system_fonts=True)
+        mobile_at = css.index("@media (max-width: 600px)")
+        supports_at = css.index("@supports (writing-mode: vertical-rl)")
+        self.assertLess(mobile_at, supports_at)
+        vblock = css[supports_at:]
+        for sel in ("body p {", "body blockquote {",
+                    "body .mb-ch {", "body .mb-ch-sep {"):
+            self.assertIn(sel, vblock)
+
+    def test_para_block_body_p_parity(self):
+        """A4：段排覆写 body p / body p[data-mb-first]，与手机块同特异性源序胜出。"""
+        css = get_preset_css("classic", para_gap=1.2)
+        block = css[css.index("段落排版"):]
+        self.assertIn("body p {", block)
+        self.assertIn("body p[data-mb-first] {", block)
+
+    # ── A3：目录卡片夜间深底 ──
+
+    def test_night_toc_card_dark_bg_wins(self):
+        """A3：目录卡片夜间 html 前缀深底（0-2-2）压 toc 文件卡片（0-2-1）。"""
+        for ts in ("elegant", "cool", "seal", "minimal"):
+            css = get_preset_css("classic", use_system_fonts=True, toc_style=ts)
+            dark_at = css.index("@media (prefers-color-scheme: dark)")
+            rule_at = css.index("html body.mb-toc-page .mb-toc {", dark_at)
+            block = css[rule_at:css.index("}", rule_at)]
+            self.assertIn("background: #121212 !important", block, ts)
+        for ts in ("elegant", "cool", "seal"):
+            with open(os.path.join(self._styles_dir, "toc_%s.css" % ts),
+                      encoding="utf-8") as f:
+                src = f.read()
+            self.assertIn("body.mb-toc-page .mb-toc {", src, ts)
+            self.assertNotIn("html body.mb-toc-page", src, ts)
+
+    # ── 顶空 ──
+
+    def test_split_marks_mb_ch_split_class(self):
+        html = '<html><body><p>第三章 血尸</p><p>正文。</p></body></html>'
+        new, st = lib.mark_chapters_in_html(html, split_title=True)
+        self.assertEqual(st["splits"], 1)
+        self.assertIn('class="mb-ch mb-ch-split"', new)
+        self.assertIn('<span class="mb-ch-num">第三章</span>', new)
+
+    def test_no_split_keeps_plain_class(self):
+        html = '<html><body><p>风雪夜归人</p><p>正文。</p></body></html>'
+        new, st = lib.mark_chapters_in_html(html, split_title=True)
+        self.assertEqual(st["splits"], 0)
+        self.assertNotIn("mb-ch-split", new)
+
+    def test_xuanzhi_split_disables_grand_top_margin(self):
+        """顶空：xuanzhi 双行标题 4em 顶距（源序压过 34%），无拆分保留章扉。"""
+        css = get_preset_css("xuanzhi", use_system_fonts=True)
+        self.assertIn("margin: 34% 0 0.8em 0 !important", css)
+        self.assertGreater(css.index(".mb-ch-split {"), css.index(".mb-ch {"))
+        self.assertIn("margin: 4em 0 0.8em 0 !important", css)
 
 
 NAV_XHTML = (

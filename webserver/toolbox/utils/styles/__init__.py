@@ -208,6 +208,8 @@ def _apply_para_style(css: str, para_indent: bool = True, para_gap=None) -> str:
       ``.calibre*`` 高特异性强制缩进由同选择器末尾覆写归零）；
     - para_gap>0 → 段落下边距取该值（em），并恢复引文内紧凑无段距
       （类汤书的 ``p.calibre*`` 段落同步覆写 margin）。
+    通用 p 规则一律 body 前缀（0-0-2）：responsive 手机块同为 body p（A4），
+    同特异性靠本块在末尾的源序取胜，用户设置不被手机默认值覆盖。
     均为默认时原样返回，保证存量输出零变化。
     """
     gap = _clamp_gap(para_gap)
@@ -223,7 +225,7 @@ def _apply_para_style(css: str, para_indent: bool = True, para_gap=None) -> str:
         ]
     if gap > 0:
         p_rules.append('    margin: 0 0 %sem 0 !important;' % ('%g' % gap))
-    block = _PARA_BLOCK_HEAD + 'p {\n' + '\n'.join(p_rules) + '\n}'
+    block = _PARA_BLOCK_HEAD + 'body p {\n' + '\n'.join(p_rules) + '\n}'
 
     # Calibre 类汤书兜底：responsive.css 的 .calibre* 规则（0-1-1）会压制上文
     # 通用 p 规则（0-0-1），导致顶格/段距开关在该类书上失效——同选择器覆写
@@ -244,7 +246,7 @@ def _apply_para_style(css: str, para_indent: bool = True, para_gap=None) -> str:
     # 缩进仍开启且调整了段距时，章首段顶格需重申（否则被上面的通用规则覆盖）
     if not indent_off:
         block += (
-            '\np[data-mb-first] {\n'
+            '\nbody p[data-mb-first] {\n'
             '    text-indent: 0 !important;\n'
             '    duokan-text-indent: 0;\n'
             '}'

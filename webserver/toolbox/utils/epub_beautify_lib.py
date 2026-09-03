@@ -130,12 +130,22 @@ def _toc_entry_allowed(title: str) -> bool:
 
 # ── EPUB 容器基础（沿用 text_replace 模式）────────────────────────────────────
 
+# ZipBomb 阈值（500MB 总量 / 5000 文件；单文件与解压后实际总量同限）
+_ZIP_MAX_TOTAL = 500 * 1024 * 1024
+_ZIP_MAX_ENTRIES = 5000
+
+
 def _read_zip_entries(path: str) -> dict:
-    """读取 zip 全部文件条目 {name: bytes}（跳过目录项，校验路径与大小）。"""
+    """读取 zip 全部文件条目 {name: bytes}（跳过目录项，校验路径与大小）。
+
+    双重校验（P2）：解压前按中央目录 info.file_size 预判，但头部可伪造；
+    解压后按实际 len(data) 累计再拦一次，伪造小尺寸的超大解压流在此截停。
+    """
     entries = {}
     try:
         with zipfile.ZipFile(path, 'r') as zf:
-            total = 0
+            declared = 0
+            actual = 0
             for info in zf.infolist():
                 if info.is_dir():
                     continue
@@ -143,11 +153,14 @@ def _read_zip_entries(path: str) -> dict:
                 if info.filename.startswith('/') or '..' in info.filename.split('/'):
                     logging.warning("[epub_beautify] Skip traversal entry: %s", info.filename)
                     continue
-                # ZipBomb 阈值（500MB 总量 / 5000 文件）
-                total += info.file_size
-                if total > 500 * 1024 * 1024 or len(entries) > 5000:
+                declared += info.file_size
+                if declared > _ZIP_MAX_TOTAL or len(entries) > _ZIP_MAX_ENTRIES:
                     raise RuntimeError("EPUB 文件过大或条目过多，疑似 Zip Bomb")
-                entries[info.filename] = zf.read(info.filename)
+                data = zf.read(info.filename)
+                actual += len(data)
+                if len(data) > _ZIP_MAX_TOTAL or actual > _ZIP_MAX_TOTAL:
+                    raise RuntimeError("EPUB 解压后体积异常，疑似 Zip Bomb")
+                entries[info.filename] = data
     except zipfile.BadZipFile as e:
         raise RuntimeError("EPUB 解析失败，文件可能已损坏：%s" % e) from e
     except zipfile.LargeZipFile as e:
@@ -744,7 +757,8 @@ def mark_chapters_in_html(html_str: str, split_title: bool = False) -> tuple:
 
     幂等：已含 mb-ch 的条目直接返回原样。
     :param split_title: True 时把纯文本章题拆为 mb-ch-num + mb-ch-title 两行
-        span（双行排版，仅章级；块内含子标签则跳过不动）。
+        span（双行排版，仅章级；块内含子标签则跳过不动）。拆分时标题元素追加
+        mb-ch-split 类，供预设关闭章扉式大顶距（双 span 已增高，见 xuanzhi.css）。
     :return: (new_html, stats)，stats = {'chapters','volumes','splits'}
     """
     empty = {'chapters': 0, 'volumes': 0, 'splits': 0}
@@ -803,6 +817,8 @@ def mark_chapters_in_html(html_str: str, split_title: bool = False) -> tuple:
                         '<span class="mb-ch-title">%s</span>'
                     ) % (_esc(parts[0]), _esc(parts[1]))
                     stats['splits'] += 1
+                    # 拆分标记类：预设据此关闭章扉式大顶距（双 span 已增高）
+                    new_attrs = _add_class(new_attrs, 'mb-ch-split')
             heading_seen = True
             return '<%s%s>%s</%s>%s' % (tag, new_attrs, inner, tag,
                                         '' if is_volume else _MB_SEP)
@@ -1090,7 +1106,7 @@ def _sample_preview_chapter(html_str: str) -> dict:
 def analyze_epub(epub_path: str, sample_limit: int = 20) -> dict:
     """扫描 EPUB，返回美化方案分析（不写文件）。
 
-    :param sample_limit: 标题统计采样的正文文件数上限（防超大书卡死）。
+    :param sample_limit: 标题统计与 p 开闭预警的采样正文文件数上限（防超大书卡死）。
     """
     entries = _read_zip_entries(epub_path)
     ctx = _parse_opf(entries)
@@ -1122,7 +1138,8 @@ def analyze_epub(epub_path: str, sample_limit: int = 20) -> dict:
     for t in text_entries:
         if t not in entries:
             continue
-        head = _decode(entries[t])[:4000]
+        # 切片后解码（P1）：先解全量再截 4000 字，大文件白白多解码数 MB
+        head = _decode(entries[t][:8192])[:4000]
         if _is_toc_doc(t, head) and not _has_nav_toc_semantics(head):
             has_inbook_toc = True
             break
@@ -1137,9 +1154,10 @@ def analyze_epub(epub_path: str, sample_limit: int = 20) -> dict:
     total_paras = 0
     empty_para_est = 0
     dialogue_paras = 0
-    # p 开闭不齐（烂书预警）：全量计数，开销为两次正则扫描
+    # p 开闭不齐（烂书预警）：限采样计数（P1：全量两次正则扫描大书会卡死 IOLoop，
+    # 与标题统计共用 sample_limit 上限，统计语义为「采样内不齐文件数」）
     p_close_mismatch_files = sum(
-        1 for t in text_entries
+        1 for t in text_entries[:sample_limit]
         if t in entries
         and len(re.findall(rb'<p\b', entries[t], re.IGNORECASE))
         != len(re.findall(rb'</p>', entries[t], re.IGNORECASE))
