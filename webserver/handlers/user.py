@@ -15,7 +15,15 @@ from webserver import loader
 from webserver.services.mail import MailService
 from webserver.services.sync_service import MyReaderSyncService
 from webserver.handlers.base import BaseHandler, auth, js
-from webserver.models import Device, ExpectedItem, Memo, Message, Reader, Reading, StickyItem
+from webserver.models import (
+    Device,
+    ExpectedItem,
+    Memo,
+    Message,
+    Reader,
+    Reading,
+    StickyItem,
+)
 
 CONF = loader.get_settings()
 
@@ -111,7 +119,9 @@ class UserUpdate(BaseHandler):
 
         if "show_other_annotations" in data:
             # 是否在阅读时显示其他用户的批注/划线，见 plan/Social_Reading_Plan.md §2.2
-            user.extra["show_other_annotations"] = bool(data.get("show_other_annotations"))
+            user.extra["show_other_annotations"] = bool(
+                data.get("show_other_annotations")
+            )
 
         if "share_annotations" in data:
             # 是否允许自己的笔记/批注被合并给其他用户看到，默认 True；
@@ -120,7 +130,9 @@ class UserUpdate(BaseHandler):
             user.extra["share_annotations"] = share_annotations
             MyReaderSyncService.set_share_annotations(user.id, share_annotations)
 
-        if "allow_statistic" in data and CONF.get("ALLOW_USER_DISABLE_STATISTIC", False):
+        if "allow_statistic" in data and CONF.get(
+            "ALLOW_USER_DISABLE_STATISTIC", False
+        ):
             # 服务端二次校验总开关，避免绕过前端隐藏直接改这个字段
             user.allow_statistic = bool(data.get("allow_statistic"))
 
@@ -498,36 +510,47 @@ class UserInfo(BaseHandler):
 
         enable_review = CONF.get("ENABLE_BOOK_REVIEW", True)
 
-        d.update({
-            "is_login": True,
-            "is_guest": False,
-            "is_admin": user.is_admin(),
-            "is_active": user.is_active(),
-            "nickname": user.name or "",
-            "username": user.username,
-            "email": user.email,
-            "extra": {},
-            "create_time": user.create_time.strftime("%Y-%m-%d %H:%M:%S"),
-            "podcast_token": user.podcast_token or "",
-            "allow_statistic": user.allow_statistic,
-            "allow_user_disable_statistic": CONF.get("ALLOW_USER_DISABLE_STATISTIC", False),
-            "total_reading_seconds": user.total_reading_seconds or 0,
-            "download_count": user.download_count or 0,
-            "show_home_recommendations": user.show_home_recommendations,
-            "allow_review": user.allow_review and enable_review,  # 是否允许发表评论（管理员可禁止）
-        })
+        d.update(
+            {
+                "is_login": True,
+                "is_guest": False,
+                "is_admin": user.is_admin(),
+                "is_active": user.is_active(),
+                "nickname": user.name or "",
+                "username": user.username,
+                "email": user.email,
+                "extra": {},
+                "create_time": user.create_time.strftime("%Y-%m-%d %H:%M:%S"),
+                "podcast_token": user.podcast_token or "",
+                "allow_statistic": user.allow_statistic,
+                "allow_user_disable_statistic": CONF.get(
+                    "ALLOW_USER_DISABLE_STATISTIC", False
+                ),
+                "total_reading_seconds": user.total_reading_seconds or 0,
+                "download_count": user.download_count or 0,
+                "show_home_recommendations": user.show_home_recommendations,
+                "allow_review": user.allow_review
+                and enable_review,  # 是否允许发表评论（管理员可禁止）
+            }
+        )
         if enable_vip_quota:
             d["vipquota"] = user.vipquota or 0
-            d["vip_expire"] = (user.vipexpire.strftime("%Y-%m-%d") if user.vipexpire else "")
+            d["vip_expire"] = (
+                user.vipexpire.strftime("%Y-%m-%d") if user.vipexpire else ""
+            )
 
         if user.avatar:
             if user.avatar.startswith("http"):
                 gravatar_url = "https://www.gravatar.com"
-                d["avatar"] = user.avatar.replace("http://", "https://").replace(gravatar_url, CONF.get("avatar_service", ""))
+                d["avatar"] = user.avatar.replace("http://", "https://").replace(
+                    gravatar_url, CONF.get("avatar_service", "")
+                )
             else:
                 d["avatar"] = self.site_url + "/avatar/%s" % user.avatar
         # 与 kindle_email 一样，不论 detail 与否都返回，见 plan/Social_Reading_Plan.md §2.2
-        d["show_other_annotations"] = (user.extra or {}).get("show_other_annotations", True)
+        d["show_other_annotations"] = (user.extra or {}).get(
+            "show_other_annotations", True
+        )
         d["share_annotations"] = (user.extra or {}).get("share_annotations", True)
         if user.extra:
             d["kindle_email"] = user.extra.get("kindle_email", "")
@@ -541,9 +564,16 @@ class UserInfo(BaseHandler):
                         for b in v:
                             if b["id"] not in show:
                                 continue
-                            b["img"] = (self.cdn_url + "/get/cover/%(id)s.jpg?t=%(timestamp)s" % b)
+                            b["img"] = (
+                                self.cdn_url
+                                + "/get/cover/%(id)s.jpg?t=%(timestamp)s" % b
+                            )
                             b["href"] = "/book/%(id)s" % b
-                            b["thumb"] = (self.cdn_url + "/get/thumb_240_320/%(id)s.jpg?t=%(timestamp)s&size=240x320" % b)
+                            b["thumb"] = (
+                                self.cdn_url
+                                + "/get/thumb_240_320/%(id)s.jpg?t=%(timestamp)s&size=240x320"
+                                % b
+                            )
                             n.append(b)
                         v = n[:12]
 
@@ -577,7 +607,7 @@ class WhoAmI(BaseHandler):
                     "userId": 999999,
                     "canRead": True,
                     "isActive": True,
-                    "is_guest": True
+                    "is_guest": True,
                 }
             else:
                 return {"err": "user.need_login", "msg": _("请先登录")}
@@ -587,7 +617,7 @@ class WhoAmI(BaseHandler):
             "username": user.username,
             "canRead": user.can_read(),
             "isActive": user.is_active(),
-            "is_guest": False
+            "is_guest": False,
         }
 
 
@@ -760,11 +790,13 @@ class UserDevices(BaseHandler):
             device_type = d.get("type", "duokan")
             # FTP设备将扩展字段序列化为JSON存入mailbox
             if device_type == "ftp":
-                ftp_extra = json.dumps({
-                    "username": d.get("ftp_username", ""),
-                    "password": d.get("ftp_password", ""),
-                    "path": d.get("ftp_path", ""),
-                })
+                ftp_extra = json.dumps(
+                    {
+                        "username": d.get("ftp_username", ""),
+                        "password": d.get("ftp_password", ""),
+                        "path": d.get("ftp_path", ""),
+                    }
+                )
                 if len(ftp_extra) > 2048:
                     return {"err": "params.invalid", "msg": _("FTP配置信息过长")}
                 mailbox = ftp_extra
@@ -875,19 +907,28 @@ class UserReadingHistory(BaseHandler):
             .all()
         )
         ids = [r.book_id for r in rows]
-        books_by_id = {b["id"]: b for b in self.calibre_db.get_data_as_dict(ids=ids)} if ids else {}
+        books_by_id = (
+            {b["id"]: b for b in self.calibre_db.get_data_as_dict(ids=ids)}
+            if ids
+            else {}
+        )
         result = []
         for r in rows:
             b = books_by_id.get(r.book_id)
             if not b:
                 continue
             b = dict(b)
-            b["timestamp"] = int(r.update_time.replace(tzinfo=datetime.timezone.utc).timestamp())
+            b["timestamp"] = int(
+                r.update_time.replace(tzinfo=datetime.timezone.utc).timestamp()
+            )
             b["pubdate"] = None
             b["last_modified"] = None
             b["img"] = self.cdn_url + "/get/cover/%(id)s.jpg?t=%(timestamp)s" % b
             b["href"] = "/book/%(id)s" % b
-            b["thumb"] = self.cdn_url + "/get/thumb_240_320/%(id)s.jpg?t=%(timestamp)s&size=240x320" % b
+            b["thumb"] = (
+                self.cdn_url
+                + "/get/thumb_240_320/%(id)s.jpg?t=%(timestamp)s&size=240x320" % b
+            )
             result.append(b)
             if len(result) >= 12:
                 break
@@ -912,7 +953,9 @@ class UserReadingDashboard(BaseHandler):
             if user is None:
                 return {"err": "failed", "msg": "user not found"}
 
-        stats = reading_dashboard_service.get_stats(self.sqlite_session, user)
+        stats = reading_dashboard_service.get_stats(
+            self.sqlite_session, user, self.calibre_db
+        )
         if stats is None:
             return {"err": "ok", "enabled": False}
         return dict({"err": "ok", "enabled": True}, **stats)
@@ -964,7 +1007,10 @@ class UserExpectedItems(BaseHandler):
                     "reader_name": user_list.get(item.reader_id, "%d" % item.reader_id),
                 }
             )
-        return {"err": "ok", "data": {"items": result, "is_admin": self.is_admin(), "users": user_list}}
+        return {
+            "err": "ok",
+            "data": {"items": result, "is_admin": self.is_admin(), "users": user_list},
+        }
 
     @js
     @auth
@@ -1068,11 +1114,7 @@ class UserMemo(BaseHandler):
         )
 
     def _update_memo(self, data, memo_id, user):
-        existing = (
-            self.sqlite_session.query(Memo)
-            .filter(Memo.id == memo_id)
-            .first()
-        )
+        existing = self.sqlite_session.query(Memo).filter(Memo.id == memo_id).first()
         if not existing:
             return {"err": "not_found", "msg": _("留言不存在")}
 
@@ -1123,11 +1165,20 @@ class UserMemo(BaseHandler):
                 if existing.reader_id > 0:
                     msg = ""
                     if action in (Memo.STAGE_DONE):
-                        msg = _("您的留言已处理，回复内容为：{reply}").format(reply=existing.reply)
+                        msg = _("您的留言已处理，回复内容为：{reply}").format(
+                            reply=existing.reply
+                        )
                     m = Message(existing.reader_id, "info", msg)
                     m.save()
 
-                return {"err": "ok", "msg": _("处理成功") if action in (Memo.STAGE_DONE, Memo.STAGE_SUSPEND) else _("留言更新成功")}
+                return {
+                    "err": "ok",
+                    "msg": (
+                        _("处理成功")
+                        if action in (Memo.STAGE_DONE, Memo.STAGE_SUSPEND)
+                        else _("留言更新成功")
+                    ),
+                }
             except Exception as e:
                 logging.error("Update memo failed: %s", e)
                 self.sqlite_session.rollback()
@@ -1161,7 +1212,11 @@ class UserMemo(BaseHandler):
             query = query.order_by(Memo.stage.desc()).order_by(Memo.create_date.desc())
             user_list = self.get_all_readers()
         else:
-            query = query.filter(Memo.reader_id == user_id).order_by(Memo.stage.desc()).order_by(Memo.create_date.desc())
+            query = (
+                query.filter(Memo.reader_id == user_id)
+                .order_by(Memo.stage.desc())
+                .order_by(Memo.create_date.desc())
+            )
 
         total = query.count()
         items = query.offset((page - 1) * page_size).limit(page_size).all()
@@ -1172,7 +1227,11 @@ class UserMemo(BaseHandler):
                 {
                     "id": item.id,
                     "reader_id": item.reader_id,
-                    "reader_name": user_list.get(item.reader_id, _("访客")) if item.reader_id == 0 else user_list.get(item.reader_id, str(item.reader_id)),
+                    "reader_name": (
+                        user_list.get(item.reader_id, _("访客"))
+                        if item.reader_id == 0
+                        else user_list.get(item.reader_id, str(item.reader_id))
+                    ),
                     "memo": item.memo,
                     "memo_type": item.memo_type,
                     "reply": item.reply,
@@ -1189,7 +1248,10 @@ class UserMemo(BaseHandler):
                     ),
                 }
             )
-        return {"err": "ok", "data": {"items": result, "total": total, "users": user_list}}
+        return {
+            "err": "ok",
+            "data": {"items": result, "total": total, "users": user_list},
+        }
 
     @js
     def post(self):
@@ -1308,5 +1370,5 @@ def routes():
         (r"/api/user/devices", UserDevices),
         (r"/api/user/expected", UserExpectedItems),
         (r"/api/user/history/clear", UserHistoryClear),
-        (r"/api/user/memo", UserMemo)
+        (r"/api/user/memo", UserMemo),
     ]
