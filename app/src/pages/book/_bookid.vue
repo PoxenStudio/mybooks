@@ -582,9 +582,9 @@
                                         </div>
                                     </template>
                                     <template v-for="(translator, index) in book.translators.slice(0, 2)" :key="'translator-' + index">
-                                        <div class="translator-item">
-                                            <nuxt-link v-if="showUserInfo" :to="{ path: '/author', query: { name: author } }" style="text-decoration: none;">
-                                                <v-img :src="authorAvatarUrl(author)" alt="author-avatar"
+                                        <div class="author-item">
+                                            <nuxt-link v-if="showUserInfo" :to="{ path: '/author', query: { name: translator } }" style="text-decoration: none;">
+                                                <v-img :src="authorAvatarUrl(translator)" alt="author-avatar"
                                                         class="author-avatar"></v-img>
                                             </nuxt-link>
                                             <v-tooltip bottom>
