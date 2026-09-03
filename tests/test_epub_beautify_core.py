@@ -586,6 +586,142 @@ class TestCssAdaptivity(unittest.TestCase):
         self.assertIn("margin: 4em 0 0.8em 0 !important", css)
 
 
+class TestPhase2Integrity(unittest.TestCase):
+    """P5/P6/P3/P4 回归：manifest 幂等精确化、id 防撞、异形 OPF 显式报错、
+    抢锁失败路径不覆盖在跑任务句柄/不释放他人锁。"""
+
+    @staticmethod
+    def _opf(manifest, spine, manifest_close="</manifest>"):
+        return (
+            '<?xml version="1.0"?>'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+            '<metadata><dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">'
+            '测试书</dc:title></metadata>'
+            '<manifest>%s%s<spine>%s</spine></package>'
+        ) % (manifest, manifest_close, spine)
+
+    def _build(self, path, opf):
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.writestr("mimetype", "application/epub+zip",
+                        compress_type=zipfile.ZIP_STORED)
+            zf.writestr("META-INF/container.xml", CONTAINER)
+            zf.writestr("OEBPS/content.opf", opf)
+            zf.writestr("OEBPS/ch1.xhtml", CH1)
+            zf.writestr("OEBPS/ch2.xhtml", CH2)
+            zf.writestr("OEBPS/style.css", CSS)
+            zf.writestr("OEBPS/toc.ncx", NCX)
+
+    _BASE_MANIFEST = (
+        '<item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/>'
+        '<item id="c2" href="ch2.xhtml" media-type="application/xhtml+xml"/>'
+        '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>'
+    )
+    _BASE_SPINE = '<itemref idref="c1"/><itemref idref="c2"/>'
+
+    def test_toc_registered_despite_decoy_substring(self):
+        """P5：OPF 出现 old-mb-toc.xhtml 等子串不再误判为已注册而漏注册。"""
+        manifest = self._BASE_MANIFEST.replace(
+            '<item id="ncx"',
+            '<item id="decoy" href="old-mb-toc.xhtml" '
+            'media-type="application/xhtml+xml"/><item id="ncx"')
+        tmp = os.path.join(TESTS_DIR, "_tmp_decoy.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_decoy_out.epub")
+        self._build(tmp, self._opf(manifest, self._BASE_SPINE))
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            stats = lib.beautify(tmp, out, css)
+            self.assertTrue(stats["toc_generated"])
+            with zipfile.ZipFile(out) as zf:
+                opf_out = zf.read("OEBPS/content.opf").decode("utf-8")
+            self.assertIn('<item id="mb-toc" href="mb-toc.xhtml"', opf_out)
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_extra_asset_id_collision_avoided(self):
+        """P5：extra_assets 的 rsplit id 与既有 id 相撞时顺延，不产生重复 id。"""
+        manifest = self._BASE_MANIFEST.replace(
+            '<item id="ncx"',
+            '<item id="bg" href="images/other.jpg" '
+            'media-type="image/jpeg"/><item id="ncx"')
+        tmp = os.path.join(TESTS_DIR, "_tmp_collide.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_collide_out.epub")
+        self._build(tmp, self._opf(manifest, self._BASE_SPINE))
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            lib.beautify(tmp, out, css,
+                         extra_assets={"bg.jpg": (b"\xff\xd8\xff\xe0", "image/jpeg")})
+            with zipfile.ZipFile(out) as zf:
+                opf_out = zf.read("OEBPS/content.opf").decode("utf-8")
+            self.assertEqual(opf_out.count('id="bg"'), 1)
+            self.assertIn('id="bg-x"', opf_out)
+            self.assertIn('href="bg.jpg"', opf_out)
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_extra_asset_idempotent_rerun(self):
+        """P5：重复注册以解析 href 比对，重跑不产生第二条资源条目。"""
+        tmp = os.path.join(TESTS_DIR, "_tmp_idem.epub")
+        out1 = os.path.join(TESTS_DIR, "_tmp_idem_out1.epub")
+        out2 = os.path.join(TESTS_DIR, "_tmp_idem_out2.epub")
+        self._build(tmp, self._opf(self._BASE_MANIFEST, self._BASE_SPINE))
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            lib.beautify(tmp, out1, css,
+                         extra_assets={"mb-bg.jpg": (b"\x89PNG", "image/png")})
+            lib.beautify(out1, out2, css,
+                         extra_assets={"mb-bg.jpg": (b"\x89PNG", "image/png")})
+            with zipfile.ZipFile(out2) as zf:
+                opf_out = zf.read("OEBPS/content.opf").decode("utf-8")
+            self.assertEqual(opf_out.count('href="mb-bg.jpg"'), 1)
+        finally:
+            for p in (tmp, out1, out2):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_malformed_manifest_close_raises(self):
+        """P6：</manifest> 异形（</manifest >，ET 可解析）时显式报错不静默出包。"""
+        tmp = os.path.join(TESTS_DIR, "_tmp_badopf.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_badopf_out.epub")
+        self._build(tmp, self._opf(self._BASE_MANIFEST, self._BASE_SPINE,
+                                   manifest_close="</manifest >"))
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            with self.assertRaises(RuntimeError) as cm:
+                lib.beautify(tmp, out, css)
+            self.assertIn("</manifest>", str(cm.exception))
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_skip_run_preserves_running_task_id_and_lock(self):
+        """P3/P4：抢锁失败不覆盖在跑任务句柄、不释放他人持有的锁。"""
+        from webserver.toolbox import epub_beautify as beautify_tool
+        tool = beautify_tool.EpubBeautifyTool()
+        tool.create_task = lambda **kw: 999
+        tool.complete_task = lambda *a, **kw: None
+        EpubBeautifyTool = beautify_tool.EpubBeautifyTool
+        self.assertTrue(EpubBeautifyTool._run_lock.acquire())
+        try:
+            EpubBeautifyTool._last_task_id = 7
+            with mock.patch.object(beautify_tool.BackgroundService, "get_task",
+                                   lambda self, tid: {"status": "running"},
+                                   create=True):
+                tool.run(book_ids=[1], preset="classic", use_system_fonts=True,
+                         toc_style="elegant", suffix="", user_id=0)
+            # P3：skip 任务 id 不得覆盖在跑任务（前端轮询句柄）
+            self.assertEqual(EpubBeautifyTool._last_task_id, 7)
+            # P4：抢锁失败的调用不得释放他人持有的锁
+            self.assertTrue(EpubBeautifyTool._run_lock.locked())
+        finally:
+            EpubBeautifyTool._run_lock.release()
+            EpubBeautifyTool._last_task_id = None
+
+
 NAV_XHTML = (
     '<?xml version="1.0" encoding="utf-8"?>\n'
     '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">'

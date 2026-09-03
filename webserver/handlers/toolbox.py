@@ -1019,7 +1019,8 @@ class AdminTextReplaceRun(BaseHandler):
         pattern = (data.get("pattern") or "").strip()
         replacement = data.get("replacement") or ""
         use_regex = bool(data.get("use_regex", False))
-        suffix = (data.get("suffix") or "").strip()
+        # P7：防超长串落库（前端 v-model counter 同限 30）
+        suffix = (data.get("suffix") or "").strip()[:30]
         fmt = (data.get("format") or "").strip().upper()
 
         if not book_id:
@@ -1112,7 +1113,8 @@ class AdminEpubBeautifyRun(BaseHandler):
             use_system_fonts = use_system_fonts.lower() not in ("false", "0", "no", "")
         else:
             use_system_fonts = bool(use_system_fonts)
-        suffix = (data.get("suffix") or "").strip()
+        # P7：防超长串落库（前端 v-model counter 同限 30）
+        suffix = (data.get("suffix") or "").strip()[:30]
         font_overrides = data.get("font_overrides")
         # 兼容细粒度单独键
         if font_overrides is None:

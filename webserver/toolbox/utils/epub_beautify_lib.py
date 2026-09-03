@@ -135,6 +135,15 @@ _ZIP_MAX_TOTAL = 500 * 1024 * 1024
 _ZIP_MAX_ENTRIES = 5000
 
 
+def _opf_add_to_manifest(opf_str: str, item_xml: str, what: str) -> str:
+    """把 ``<item/>`` 注册进 OPF manifest（P6：``</manifest>`` 缺失/异形时显式
+    报错，不再静默 no-op 导致目录/样式注册丢失仍出包）。"""
+    new, n = re.subn(r'(</manifest>)', '\n' + item_xml + r'\1', opf_str, count=1)
+    if n == 0:
+        raise RuntimeError('OPF 缺 </manifest>，无法注册%s' % what)
+    return new
+
+
 def _read_zip_entries(path: str) -> dict:
     """读取 zip 全部文件条目 {name: bytes}（跳过目录项，校验路径与大小）。
 
@@ -1433,15 +1442,19 @@ def beautify(
 
         entries[toc_path] = _build_toc_page(toc_items, ctx.opf_dir, truncated, toc_style)
         toc_entries = len(toc_items)
-        # OPF 注册（幂等）
+        # OPF 注册（幂等）。P5：解析 manifest 精确比对 href，不做全文字串匹配——
+        # 'mb-toc.xhtml' 子串会被 href="old-mb-toc.xhtml" 等误判成已注册而漏注册；
+        # id 同步防撞（既有 id="mb-toc" 时顺延 -x）
         opf_str = _decode(entries[ctx.opf_path])
-        if 'mb-toc.xhtml' not in opf_str:
+        if not any(it.get('href') == MB_TOC_NAME for it in ctx.manifest.values()):
             mb_id = 'mb-toc'
-            opf_str = re.sub(
-                r'(</manifest>)',
-                '\n<item id="%s" href="%s" media-type="application/xhtml+xml"/>'
-                % (mb_id, MB_TOC_NAME) + r'\1',
-                opf_str, count=1,
+            while mb_id in ctx.manifest:
+                mb_id += '-x'
+            opf_str = _opf_add_to_manifest(
+                opf_str,
+                '<item id="%s" href="%s" media-type="application/xhtml+xml"/>'
+                % (mb_id, MB_TOC_NAME),
+                '目录页',
             )
             # 找出 spine 中待替换的 idref：有 nav 语义时只替换 nav 页，否则为无目录时的插入
             if nav_semantic_in_spine:
@@ -1452,15 +1465,18 @@ def beautify(
             else:
                 replace_ids = []
             if replace_ids:
-                # 替换第一个 nav 语义目录页条目；其余的直接移除
-                opf_str = re.sub(
-                    r'\s*<itemref\b[^>]*idref="%s"[^>]*/?>' % re.escape(replace_ids[0]),
+                # 替换第一个 nav 语义目录页条目；其余的直接移除。
+                # idref 兼容单引号属性；首替换 miss 会静默丢 spine 条目，显式报错
+                opf_str, n_ref = re.subn(
+                    r'\s*<itemref\b[^>]*idref=["\']%s["\'][^>]*/?>' % re.escape(replace_ids[0]),
                     '\n<itemref idref="%s" linear="yes"/>' % mb_id,
                     opf_str, count=1,
                 )
+                if n_ref == 0:
+                    raise RuntimeError('OPF spine 缺 idref=%s 条目，无法挂载目录页' % replace_ids[0])
                 for extra in replace_ids[1:]:
                     opf_str = re.sub(
-                        r'\s*<itemref\b[^>]*idref="%s"[^>]*/?>' % re.escape(extra),
+                        r'\s*<itemref\b[^>]*idref=["\']%s["\'][^>]*/?>' % re.escape(extra),
                         '', opf_str, count=1,
                     )
             else:
@@ -1480,28 +1496,41 @@ def beautify(
     extra_count = 0
     if extra_assets:
         opf_now = _decode(entries[ctx.opf_path])
+        # P5：href 用解析集合精确比对（替代 href="..." 子串匹配）；
+        # id 由 rsplit 取名而来，会与既有 id / 彼此相撞（bg.jpg vs bg.png），
+        # 顺延 -x 防撞；mb-toc / mb-beauty 为本流程保留 id
+        manifest_hrefs = {it.get('href') for it in ctx.manifest.values()}
+        used_ids = set(ctx.manifest) | {'mb-toc', 'mb-beauty'}
         added = ''
         for name, (blob, mtype) in extra_assets.items():
             entries[ctx.opf_dir + name] = blob
             extra_count += 1
+            if name in manifest_hrefs:
+                continue
             item_id = name.rsplit('.', 1)[0]
-            if ('href="%s"' % name) not in opf_now:
-                added += ('\n<item id="%s" href="%s" media-type="%s"/>'
-                          % (item_id, name, mtype))
+            while item_id in used_ids:
+                item_id += '-x'
+            used_ids.add(item_id)
+            added += ('\n<item id="%s" href="%s" media-type="%s"/>'
+                      % (item_id, name, mtype))
         if added:
-            opf_now = opf_now.replace('</manifest>', added + '\n</manifest>', 1)
+            opf_now = _opf_add_to_manifest(opf_now, added.lstrip('\n'), '附加资源')
             entries[ctx.opf_path] = opf_now.encode('utf-8')
 
     # ── 2. mb-beauty.css 注入 ──
     css_zip_path = ctx.opf_dir + MB_CSS_NAME
     entries[css_zip_path] = preset_css.encode('utf-8')
-    # 注册到 OPF manifest（部分阅读器要求 CSS 在 manifest 中才生效）
+    # 注册到 OPF manifest（部分阅读器要求 CSS 在 manifest 中才生效）。
+    # P5：解析比对 href；P6：缺 </manifest> 显式报错
     opf_raw = _decode(entries[ctx.opf_path])
-    if MB_CSS_NAME not in opf_raw:
-        opf_raw = re.sub(
-            r'(</manifest>)',
-            '\n<item id="mb-beauty" href="%s" media-type="text/css"/>' % MB_CSS_NAME + r'\1',
-            opf_raw, count=1,
+    if not any(it.get('href') == MB_CSS_NAME for it in ctx.manifest.values()):
+        mb_css_id = 'mb-beauty'
+        while mb_css_id in ctx.manifest:
+            mb_css_id += '-x'
+        opf_raw = _opf_add_to_manifest(
+            opf_raw,
+            '<item id="%s" href="%s" media-type="text/css"/>' % (mb_css_id, MB_CSS_NAME),
+            '样式表',
         )
         entries[ctx.opf_path] = opf_raw.encode('utf-8')
 

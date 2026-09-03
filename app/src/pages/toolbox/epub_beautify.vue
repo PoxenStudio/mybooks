@@ -408,7 +408,8 @@
                   :label="$t('epubBeautify.suffix')"
                   outlined
                   dense
-                  :hide-details="true"
+                  maxlength="30"
+                  :counter="30"
                   prepend-inner-icon="mdi-format-title"
                 />
               </div>
