@@ -201,7 +201,7 @@ class EpubBeautifyTool(BaseTool):
         :param preset:           预设 id（classic/modern/webnovel/classical/navy/youth/children/refined/xuanzhi/inkstone/voyage/vertclassical）。
         :param use_system_fonts: 是否统一系统字体栈（False 保留原书字体，兼容旧接口）。
         :param toc_style:        目录形式（elegant 精致 / cool 酷炫 / seal 朱印 / minimal 极简），配色随预设令牌。
-        :param suffix:           新书标题后缀（默认「（精排版）」）。
+        :param suffix:           新书标题后缀（默认「（美化版）」）。
         :param user_id:          操作用户 ID。
         :param font_overrides:   细粒度字体开关 {"body":bool,"head":bool,"kai":bool,"code":bool}，覆盖 use_system_fonts。
         :param toc_depth:        目录收录层级上限（None=全部；1/2/3=只收前 N 级）。
@@ -358,7 +358,7 @@ class EpubBeautifyTool(BaseTool):
                     self.update_task_progress(task_id, _pct(80), dict(prog_common, stage="saving"))
 
                     new_book_id = book_utils.import_as_new_book(
-                        self, bid, out_path, suffix or _("（精排版）"), user_id,
+                        self, bid, out_path, suffix or _("（美化版）"), user_id,
                     )
                     last_new_book_id = new_book_id
                     ok_count += 1

@@ -1789,7 +1789,7 @@
     "fontHead": "Heading: system sans",
     "fontKai": "Blockquote: system kai",
     "fontCode": "Code: system mono",
-    "suffix": "New book title suffix (empty = default)",
+    "suffix": "New book title suffix (empty = （美化版）)",
     "runBtn": "Beautify",
     "runStarted": "Beautify task started",
     "runCompleted": "Beautification complete, new book saved",
