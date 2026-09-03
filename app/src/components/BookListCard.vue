@@ -15,7 +15,7 @@
                         <span class="booklist-name text-truncate">{{ booklist.name }}</span>
                         <v-icon v-if="!booklist.is_public" small class="ml-1" color="grey">mdi-lock-outline</v-icon>
                     </div>
-                    <div class="booklist-description text-truncate-2">{{ booklist.description || $t('booklist.noDescription') }}</div>
+                    <div class="booklist-description text-truncate">{{ booklist.description || $t('booklist.noDescription') }}</div>
                 </div>
 
                 <div class="booklist-owner d-flex align-center ml-2" @click.stop.prevent>
