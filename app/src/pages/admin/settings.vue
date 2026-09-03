@@ -3,7 +3,7 @@
     <div class="d-flex justify-end mb-2">
       <v-btn
         class="settings-hint-btn"
-        href="https://www.mybooks.top/wiki.html"
+        href="https://www.mybooks.top/docs/manual/"
         target="_blank"
         rel="noopener"
       >
