@@ -549,6 +549,9 @@ class AdminSettings(BaseHandler):
             "ENABLE_BOOK_RECOMMEND_TO_OTHERS",
             "ENABLE_SHARED_NOTES",
             "ENABLE_AUDIO_SUBTITLE",
+            "ENABLE_TOOLBOX_DEV_MODE",
+            "ENABLE_TOOLBOX_STORE",
+            "AUTO_CHECKING_NEW_VERSION",
         ]
 
         current_icon = CONF.get(
