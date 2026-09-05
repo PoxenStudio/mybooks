@@ -32,10 +32,10 @@
 
         <v-row>
             <v-col cols="6">
-                <v-text-field v-model="startTime" type="time" lang="en-GB" :label="$t('book.readingTimeStart')" @change="onTimeChange"></v-text-field>
+                <AppTimePicker v-model="startTime" :label="$t('book.readingTimeStart')" @change="onTimeChange"></AppTimePicker>
             </v-col>
             <v-col cols="6">
-                <v-text-field v-model="endTime" type="time" lang="en-GB" :label="$t('book.readingTimeEnd')" @change="onTimeChange"></v-text-field>
+                <AppTimePicker v-model="endTime" :label="$t('book.readingTimeEnd')" @change="onTimeChange"></AppTimePicker>
             </v-col>
         </v-row>
 
@@ -190,9 +190,3 @@ export default {
     },
 };
 </script>
-
-<style scoped>
-.theme--dark :deep(input[type="time"]) {
-    color-scheme: dark;
-}
-</style>
