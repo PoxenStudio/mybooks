@@ -59,7 +59,7 @@
             <template v-slot:item.actions="{ item }">
                 <v-menu offset-y right>
                     <template v-slot:activator="{ on }">
-                        <v-btn color="#1B813E" class="white--text rounded-btn" small v-on="on">{{ $t('admin.users.modify_permissions') }} <v-icon small>more_vert</v-icon></v-btn>
+                        <v-btn color="#1B813E" class="white--text rounded-btn" small v-on="on">{{ $t('admin.users.modify_permissions') }} <v-icon small>mdi-dots-vertical</v-icon></v-btn>
                     </template>
                     <v-list dense>
                         <template v-for="perm in permissions">
@@ -136,7 +136,7 @@
                 </v-menu>
                 <v-menu offset-y right>
                     <template v-slot:activator="{ on }">
-                        <v-btn color="primary" class="rounded-btn" small v-on="on">{{ $t('admin.users.account_management') }} <v-icon small>more_vert</v-icon></v-btn>
+                        <v-btn color="primary" class="rounded-btn" small v-on="on">{{ $t('admin.users.account_management') }} <v-icon small>mdi-dots-vertical</v-icon></v-btn>
                     </template>
                     <v-list dense>
                         <v-list-item
@@ -226,7 +226,7 @@
                     v-model="changePassword.password"
                     :label="$t('admin.users.new_password')"
                     type="password"
-                    prepend-icon="lock"
+                    prepend-icon="mdi-lock"
                     autocomplete="new-password"
                     :rules="[rules.pass]"
                     required
@@ -235,7 +235,7 @@
                     v-model="changePassword.password2"
                     :label="$t('admin.users.confirm_new_password')"
                     type="password"
-                    prepend-icon="lock_outline"
+                    prepend-icon="mdi-lock-outline"
                     autocomplete="new-password2"
                     :rules="[validateChangePassword]"
                     required
@@ -259,7 +259,7 @@
             <v-form ref="addUserForm" @submit.prevent="addUser">
                 <v-text-field
                     required
-                    prepend-icon="person"
+                    prepend-icon="mdi-account"
                     v-model="newUser.username"
                     :label="$t('admin.users.username')"
                     type="text"
@@ -268,7 +268,7 @@
                 ></v-text-field>
                 <v-text-field
                     required
-                    prepend-icon="lock"
+                    prepend-icon="mdi-lock"
                     v-model="newUser.password"
                     :label="$t('admin.users.password')"
                     type="password"
@@ -277,7 +277,7 @@
                 ></v-text-field>
                 <v-text-field
                     required
-                    prepend-icon="lock"
+                    prepend-icon="mdi-lock"
                     v-model="newUser.password2"
                     :label="$t('admin.users.confirm_password')"
                     type="password"
@@ -286,7 +286,7 @@
                 ></v-text-field>
                 <v-text-field
                     required
-                    prepend-icon="face"
+                    prepend-icon="mdi-account-outline"
                     v-model="newUser.nickname"
                     :label="$t('admin.users.nickname')"
                     type="text"
@@ -295,7 +295,7 @@
                 ></v-text-field>
                 <v-text-field
                     required
-                    prepend-icon="email"
+                    prepend-icon="mdi-email"
                     v-model="newUser.email"
                     :label="$t('admin.users.email')"
                     type="text"

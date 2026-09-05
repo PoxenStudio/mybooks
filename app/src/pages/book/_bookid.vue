@@ -53,7 +53,7 @@
                                 @click.stop="playSampleVoice(item)"
                                 :loading="playing_sample === item.voice_name"
                             >
-                                <v-icon>play_arrow</v-icon>
+                                <v-icon>mdi-play</v-icon>
                             </v-btn>
                         </v-list-item-action>
                     </template>
@@ -136,7 +136,7 @@
                 v-model="dialog_download"
                 type="action"
                 :title="$t('book.downloadBook')"
-                icon="get_app"
+                icon="mdi-download"
                 width="300"
                 :dismiss-label="$t('common.close')"
                 hide-footer-button
@@ -145,7 +145,7 @@
                     <v-list-item :key="'file-'+file.format" v-for="file in book.files"
                                  @click="openDownloadLink(file.href)">
                         <v-list-item-avatar color='primary'>
-                            <v-icon dark>get_app</v-icon>
+                            <v-icon dark>mdi-download</v-icon>
                         </v-list-item-avatar>
                         <v-list-item-content>
                             <v-list-item-title>{{ file.format }}</v-list-item-title>
@@ -206,7 +206,7 @@
                                             <v-btn color="primary" small rounded v-on="on"
                                                    :disabled="book.title === 'BLOCKED'"
                                                    :loading="refer_books_setting_btn_loading">
-                                                <v-icon small>done</v-icon>
+                                                <v-icon small>mdi-check</v-icon>
                                                 {{ $t('common.set') }}
                                             </v-btn>
                                         </template>
@@ -240,7 +240,7 @@
                     <!-- download -->
                     <div class="book-action-btns">
                         <v-btn icon small fab @click="downloadBook" :disabled="!hasCompatibleFormats">
-                            <v-icon>get_app</v-icon>
+                            <v-icon>mdi-download</v-icon>
                         </v-btn>
                         <v-btn icon small fab :to="'/book/' + book.id + '/edit'">
                             <v-icon>mdi-pencil-circle-outline</v-icon>
@@ -294,7 +294,7 @@
                                 <v-btn :small="tiny" dark color="primary" min-width="0" class="read-format-btn"
                                        :style="tiny ? { padding: '0px', margin: '0px !important' } : { padding: '0 6px', margin: '0px' }"
                                        v-bind="attrs" v-on="on">
-                                    <v-icon small>more_vert</v-icon>
+                                    <v-icon small>mdi-dots-vertical</v-icon>
                                 </v-btn>
                             </template>
                             <v-list dense>
@@ -309,7 +309,7 @@
                             <template v-slot:activator="{ on }">
                                 <v-btn v-on="on" dark color="primary" class="mx-2 ml-2" :small="tiny" :style="tiny ? { padding: '0px',  margin: '0px 1px !important' } : {}">
                                     {{ $t('book.process') }}
-                                    <v-icon small>more_vert</v-icon>
+                                    <v-icon small>mdi-dots-vertical</v-icon>
                                 </v-btn>
                             </template>
                             <v-list min-width="200">
@@ -342,7 +342,7 @@
                                     {{ $t('book.uploadNewFormat') }}
                                 </v-list-item>
                                 <v-list-item @click="dialog_set_cover = true">
-                                    <v-icon>photo</v-icon>
+                                    <v-icon>mdi-image</v-icon>
                                     {{ $t('book.setCover') }}
                                 </v-list-item>
                                 <v-list-item @click="generateCover">
@@ -361,20 +361,20 @@
                             <template v-slot:activator="{ on }">
                                 <v-btn v-on="on" dark color="primary" class="mx-2 ml-2" :small="tiny" :style="tiny ? { padding: '0px', margin: '0px 1px !important' } : {}">
                                     {{ $t('book.manage') }}
-                                    <v-icon small>more_vert</v-icon>
+                                    <v-icon small>mdi-dots-vertical</v-icon>
                                 </v-btn>
                             </template>
                             <v-list min-width="200">
                                 <v-list-item :to="'/book/' + book.id + '/edit'">
-                                    <v-icon>settings_applications</v-icon>
+                                    <v-icon>mdi-application-cog</v-icon>
                                     {{ $t('book.editBookInfo') }}
                                 </v-list-item>
                                 <v-list-item @click="dialog_send_to_device = true" :disabled="!hasCompatibleFormats">
-                                    <v-icon>devices</v-icon>
+                                    <v-icon>mdi-devices</v-icon>
                                     {{ $t('book.sendToDevice') }}
                                 </v-list-item>
                                 <v-list-item @click="getRefer">
-                                    <v-icon>apps</v-icon>
+                                    <v-icon>mdi-apps</v-icon>
                                     {{ $t('book.updateInfoFromInternet') }}
                                 </v-list-item>
                                 <v-list-item @click="updateTags">
@@ -382,7 +382,7 @@
                                     {{ $t('book.updateTags') }}
                                 </v-list-item>
                                 <v-list-item @click="resetRefer">
-                                    <v-icon>apps</v-icon>
+                                    <v-icon>mdi-apps</v-icon>
                                     {{ $t('book.resetInfo') }}
                                 </v-list-item>
                                 <v-list-item @click="setSole">
@@ -406,7 +406,7 @@
                                     {{ book.book_type==this.BOOK_TYPE.PHYSICAL ? $t('book.exchangeToEbook') : $t('book.exchangeToPhysical') }}
                                 </v-list-item>
                                 <v-list-item @click="dialog_delete_book = true">
-                                    <v-icon>delete_forever</v-icon>
+                                    <v-icon>mdi-delete-forever</v-icon>
                                     {{ $t('book.deleteBook') }}
                                 </v-list-item>
                             </v-list>
@@ -609,7 +609,7 @@
                                     , {{ $t('book.location') }}:
                                     <span v-if="!editing_location">
                                         {{book.location || "*" }}
-                                        <v-icon small @click="startEditLocation">edit</v-icon>
+                                        <v-icon small @click="startEditLocation">mdi-pencil</v-icon>
                                     </span>
                                     <v-text-field
                                         v-else
@@ -664,9 +664,9 @@
                                 <v-menu offset-y :close-on-content-click="false" v-model="categoryMenu" content-class="mt-category-menu">
                                     <template v-slot:activator="{ on, attrs }">
                                         <v-chip rounded smallF color="green" class="white--text" v-bind="attrs" v-on="on" :disabled="categories.length === 0">
-                                            <v-icon>category</v-icon>
+                                            <v-icon>mdi-shape</v-icon>
                                             {{ $t('book.category') }} : {{ book.category || $t('message.unclassified') }}
-                                            <v-icon color="white" class="ml-1">edit</v-icon>
+                                            <v-icon color="white" class="ml-1">mdi-pencil</v-icon>
                                         </v-chip>
                                     </template>
                                     <v-card>
@@ -689,9 +689,9 @@
                                 </v-menu><v-menu offset-y>
                                     <template v-slot:activator="{ on, attrs }">
                                         <v-chip rounded smallF color="#003153" class="white--text" v-bind="attrs" v-on="on" :disabled="categories.length === 0">
-                                            <v-icon>language</v-icon>
+                                            <v-icon>mdi-web</v-icon>
                                             {{ $t('book.languages') }} : {{ languageName(book.languages)}}
-                                            <v-icon color="white" class="ml-1">edit</v-icon>
+                                            <v-icon color="white" class="ml-1">mdi-pencil</v-icon>
                                         </v-chip>
                                     </template>
                                     <v-list dense>
@@ -708,7 +708,7 @@
                                 </v-chip>
                                 <v-chip rounded dark color="indigo"
                                         :to="'/publisher/' + encodeURIComponent(book.publisher)">
-                                    <v-icon>group</v-icon>
+                                    <v-icon>mdi-account-group</v-icon>
                                     {{ $t('book.publisher') }}：{{ book.publisher }}({{ pub_year }})
                                 </v-chip>
                                 <v-chip
@@ -719,11 +719,11 @@
                                     v-if="book.series"
                                     :to="{ path: '/series', query: { name: encodeURIComponent(book.series) } }"
                                 >
-                                    <v-icon>explore</v-icon>
+                                    <v-icon>mdi-compass</v-icon>
                                     {{ $t('book.series') }}: {{ book.series }} {{ book.series_index ? '(#' + book.series_index + ')' : '' }}
                                 </v-chip>
                                 <v-chip rounded small dark color="grey" v-if="book.isbn">
-                                    <v-icon>explore</v-icon>
+                                    <v-icon>mdi-compass</v-icon>
                                     ISBN：{{ book.isbn }}
                                 </v-chip>
                                 <template v-for="tag in book.tags">
@@ -736,7 +736,7 @@
                                         v-if="tag"
                                         :to="{ path: '/tag', query: { name: encodeURIComponent(tag) } }"
                                     >
-                                    <v-icon>loyalty</v-icon>
+                                    <v-icon>mdi-tag</v-icon>
                                     {{ tag }}
                                     </v-chip>
                                 </template>
@@ -758,7 +758,7 @@
                 <v-list>
                     <v-list-item :href="readHref" target="_blank" :disabled="book.book_type == this.BOOK_TYPE.PHYSICAL" @click="onReadClick($event, defaultReadFormat)">
                         <v-list-item-avatar large :color="book.book_type == this.BOOK_TYPE.PHYSICAL ? 'grey' : 'primary'">
-                            <v-icon dark>import_contacts</v-icon>
+                            <v-icon dark>mdi-book-open-page-variant</v-icon>
                         </v-list-item-avatar>
                         <v-list-item-content>
                             <v-list-item-title :class="{ 'grey--text': book.book_type == this.BOOK_TYPE.PHYSICAL }">{{ $t('book.read') }}</v-list-item-title>
@@ -787,7 +787,7 @@
                 <v-list>
                     <v-list-item @click="downloadBook" :disabled="book.book_type == this.BOOK_TYPE.PHYSICAL">
                         <v-list-item-avatar large :color="book.book_type == this.BOOK_TYPE.PHYSICAL ? 'grey' : 'primary'">
-                            <v-icon dark>get_app</v-icon>
+                            <v-icon dark>mdi-download</v-icon>
                         </v-list-item-avatar>
                         <v-list-item-content>
                             <v-list-item-title :class="{ 'grey--text': book.book_type == this.BOOK_TYPE.PHYSICAL }">{{ $t('book.download') }}</v-list-item-title>
@@ -831,7 +831,7 @@
                 <v-list>
                     <v-list-item @click="dialog_send_to_device = true" :disabled="!hasCompatibleFormats">
                         <v-list-item-avatar large :color="!hasCompatibleFormats ? 'grey' : 'primary'">
-                            <v-icon dark>devices</v-icon>
+                            <v-icon dark>mdi-devices</v-icon>
                         </v-list-item-avatar>
                         <v-list-item-content>
                             <v-list-item-title :class="{ 'grey--text': !hasCompatibleFormats }">
@@ -1129,7 +1129,7 @@
         v-model="dialog_send_to_device"
         type="action"
         :title="$t('book.sendToDevice')"
-        icon="devices"
+        icon="mdi-devices"
         max-width="600"
         :confirm-text="$t('common.send')"
         :confirm-loading="sending_to_device"
@@ -1240,7 +1240,7 @@
                 </div>
 
                 <div v-if="devices.length === 0 && selectedDeviceOption !== 'temporary'" class="text-center py-4">
-                    <v-icon size="48" color="grey">device_unknown</v-icon>
+                    <v-icon size="48" color="grey">mdi-help-rhombus-outline</v-icon>
                     <p class="mt-2 grey--text">
                         {{ $t('book.noDevices') }}<br>
                         {{ $t('book.configDeviceDesc') }}

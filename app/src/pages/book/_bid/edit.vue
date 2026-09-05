@@ -41,7 +41,7 @@
                                             <v-chip v-bind="attrs" color="green lighten-3" :input-value="selected" label
                                                     small>
                                                 <span class="pr-2"> {{ item }} </span>
-                                                <v-icon small @click="parent.selectItem(item)">close</v-icon>
+                                                <v-icon small @click="parent.selectItem(item)">mdi-close</v-icon>
                                             </v-chip>
                                         </template>
                                     </v-combobox>
@@ -62,7 +62,7 @@
                                         <template v-slot:selection="{ attrs, item, parent, selected }">
                                             <v-chip v-bind="attrs" color="green lighten-3" :input-value="selected" label small>
                                                 <span class="pr-2"> {{ item }} </span>
-                                                <v-icon small @click="parent.selectItem(item)">close</v-icon>
+                                                <v-icon small @click="parent.selectItem(item)">mdi-close</v-icon>
                                             </v-chip>
                                         </template>
                                     </v-combobox>
@@ -149,7 +149,7 @@
                                             <v-chip v-bind="attrs" color="green lighten-3" :input-value="selected" label
                                                     small>
                                                 <span class="pr-2"> {{ item }} </span>
-                                                <v-icon small @click="parent.selectItem(item)">close</v-icon>
+                                                <v-icon small @click="parent.selectItem(item)">mdi-close</v-icon>
                                             </v-chip>
                                         </template>
                                     </v-combobox>

@@ -15,7 +15,7 @@
       <v-card-title @click="card.show = !card.show">
         <v-btn @click.once="card.show = !card.show" icon>
           <v-icon>{{
-            card.show ? "keyboard_arrow_down" : "keyboard_arrow_up"
+            card.show ? "mdi-chevron-down" : "mdi-chevron-right"
           }}</v-icon>
         </v-btn>
         {{ $t(card.title) }}
@@ -184,7 +184,7 @@
                     ></v-text-field>
                     <v-spacer></v-spacer>
                     <v-btn icon small @click="removeBookNavCategory(idx)">
-                      <v-icon small>delete</v-icon>
+                      <v-icon small>mdi-delete</v-icon>
                     </v-btn>
                     <v-btn icon @click="cat.expanded = !cat.expanded">
                       <v-icon>{{
@@ -213,7 +213,7 @@
                         style="color: #fff; cursor: pointer"
                         @click="startAddBookNavTag(idx)"
                       >
-                        <v-icon small color="white">add</v-icon>
+                        <v-icon small color="white">mdi-plus</v-icon>
                       </v-chip>
                       <v-text-field
                         v-else
@@ -231,7 +231,7 @@
                 <v-row>
                   <v-col align="center">
                     <v-btn color="primary" @click="addBookNavCategory"
-                      ><v-icon>add</v-icon>{{ $t("settings.add") }}</v-btn
+                      ><v-icon>mdi-plus</v-icon>{{ $t("settings.add") }}</v-btn
                     >
                   </v-col>
                 </v-row>
@@ -353,7 +353,7 @@
                     v-model="friend.href"
                     :label="$t('settings.link')"
                     type="text"
-                    append-outer-icon="delete"
+                    append-outer-icon="mdi-delete"
                     @click:append-outer="settings.FRIENDS.splice(idx, 1)"
                   ></v-text-field>
                 </v-col>
@@ -363,7 +363,7 @@
                   <v-btn
                     color="primary"
                     @click="settings.FRIENDS.push({ text: '', href: '' })"
-                    ><v-icon>add</v-icon>{{ $t("settings.add") }}</v-btn
+                    ><v-icon>mdi-plus</v-icon>{{ $t("settings.add") }}</v-btn
                   >
                 </v-col>
               </v-row>
@@ -469,7 +469,7 @@
                     </template>
                     <v-col class="py-1" cols="auto" align-self="center">
                       <v-btn icon small @click="settings.DEVICES.splice(idx, 1)">
-                        <v-icon>delete</v-icon>
+                        <v-icon>mdi-delete</v-icon>
                       </v-btn>
                     </v-col>
                   </v-row>
@@ -526,7 +526,7 @@
                       })
                     "
                   >
-                    <v-icon>add</v-icon>{{ $t("settings.add") }}
+                    <v-icon>mdi-plus</v-icon>{{ $t("settings.add") }}
                   </v-btn>
                 </v-col>
               </v-row>
@@ -557,7 +557,7 @@
                 style="margin-bottom: 24px"
                 @click="applyBookbarnToken"
               >
-                <v-icon>key</v-icon>{{ $t("settings.bookbarn_apply_token") }}
+                <v-icon>mdi-key</v-icon>{{ $t("settings.bookbarn_apply_token") }}
               </v-btn>
               </div>
             </template>
@@ -731,7 +731,7 @@
                     trashSizes.trash + trashSizes.upload <= 10 * 1048576
                   "
                 >
-                  <v-icon>delete</v-icon>{{ $t("settings.trash_clear_button") }}
+                  <v-icon>mdi-delete</v-icon>{{ $t("settings.trash_clear_button") }}
                 </v-btn>
                 <p class="mt-2">
                   <nuxt-link to="/admin/trash">{{
@@ -926,9 +926,9 @@ export default {
         show: false,
         title: "settings.basic_info",
         fields: [
-          { icon: "home", key: "site_title", label: "settings.site_title" },
+          { icon: "mdi-home", key: "site_title", label: "settings.site_title" },
           {
-            icon: "info",
+            icon: "mdi-information",
             key: "site_icon",
             label: "settings.site_icon",
             type: "select_image",
@@ -955,7 +955,7 @@ export default {
             label: "settings.footer_watermark",
           },
           {
-            icon: "language",
+            icon: "mdi-web",
             key: "site_language",
             label: "settings.language_switch",
             type: "select",
@@ -966,7 +966,7 @@ export default {
             ],
           },
           {
-            icon: "home",
+            icon: "mdi-home",
             key: "INDEX_PAGE_TYPE",
             label: "settings.index_page_type",
             type: "select",
@@ -1026,12 +1026,12 @@ export default {
             label: "settings.private_library_mode",
             fields: [
               {
-                icon: "lock",
+                icon: "mdi-lock",
                 key: "INVITE_CODE",
                 label: "settings.access_code",
               },
               {
-                icon: "person",
+                icon: "mdi-account",
                 key: "INVITE_MESSAGE",
                 type: "textarea",
                 label: "settings.invite_message",
@@ -1261,19 +1261,19 @@ export default {
         title: "settings.email_service",
         subtitle: "settings.email_service_description",
         fields: [
-          { icon: "email", key: "smtp_server", label: "settings.smtp_server" },
+          { icon: "mdi-email", key: "smtp_server", label: "settings.smtp_server" },
           {
-            icon: "person",
+            icon: "mdi-account",
             key: "smtp_username",
             label: "settings.smtp_username",
           },
           {
-            icon: "lock",
+            icon: "mdi-lock",
             key: "smtp_password",
             label: "settings.smtp_password",
           },
           {
-            icon: "info",
+            icon: "mdi-information",
             key: "smtp_encryption",
             label: "settings.smtp_encryption",
             type: "select",
@@ -1284,7 +1284,7 @@ export default {
           },
         ],
         buttons: [
-          { icon: "email", label: "settings.test_email", action: "testEmail" },
+          { icon: "mdi-email", label: "settings.test_email", action: "testEmail" },
         ],
       },
       {
@@ -1332,17 +1332,17 @@ export default {
             type: "meta_sources",
           },
           {
-            icon: "info",
+            icon: "mdi-information",
             key: "douban_baseurl",
             label: "settings.douban_baseurl",
           },
           {
-            icon: "info",
+            icon: "mdi-information",
             key: "douban_apikey",
             label: "settings.douban_api_key",
           },
           {
-            icon: "info",
+            icon: "mdi-information",
             key: "douban_max_count",
             label: "settings.douban_max_count",
           }
@@ -1364,13 +1364,13 @@ export default {
             label: "settings.scan_upload_path",
           },
           {
-            icon: "info",
+            icon: "mdi-information",
             color: "red",
             key: "MAX_UPLOAD_SIZE",
             label: "settings.max_upload_size",
           },
           {
-            icon: "info",
+            icon: "mdi-information",
             key: "CHUNK_UPLOAD_SIZE",
             label: "settings.chunk_upload_size",
           },
@@ -1449,9 +1449,9 @@ export default {
         show: false,
         title: "settings.advanced_settings",
         fields: [
-          { icon: "home", color: "red", key: "static_host", label: "settings.cdn_domain" },
+          { icon: "mdi-home", color: "red", key: "static_host", label: "settings.cdn_domain" },
           {
-            icon: "info",
+            icon: "mdi-information",
             color: "red",
             key: "BOOK_NAMES_FORMAT",
             label: "settings.book_names_format",
@@ -1462,15 +1462,15 @@ export default {
             ],
           },
           {
-            icon: "lock",
+            icon: "mdi-lock",
             color: "red",
             key: "cookie_secret",
             label: "settings.cookie_secret",
           },
-          { icon: "info", key: "push_title", label: "settings.push_title" },
-          { icon: "info", key: "push_content", label: "settings.push_content" },
+          { icon: "mdi-information", key: "push_title", label: "settings.push_title" },
+          { icon: "mdi-information", key: "push_content", label: "settings.push_content" },
           {
-            icon: "info",
+            icon: "mdi-information",
             key: "convert_timeout",
             label: "settings.convert_timeout",
           },

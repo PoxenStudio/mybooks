@@ -25,7 +25,7 @@
 
       <v-toolbar-title class="ml-n5 mr-12 align-center">
         <v-app-bar-nav-icon @click.stop="sidebar = !sidebar">
-          <v-icon>menu</v-icon>
+          <v-icon>mdi-menu</v-icon>
         </v-app-bar-nav-icon>
         <span class="cursor-pointer" @click="$router.push('/')">
           {{ name }}

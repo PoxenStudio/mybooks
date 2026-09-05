@@ -9,8 +9,8 @@
                 </v-toolbar>
                 <v-card-text>
                     <v-form @submit.prevent="do_login">
-                        <v-text-field ref="usernameField" prepend-icon="person" v-model="username" :label="$t('login.username')" type="text"></v-text-field>
-                        <v-text-field prepend-icon="lock" v-model="password" :label="$t('login.password')" type="password" id="password"></v-text-field>
+                        <v-text-field ref="usernameField" prepend-icon="mdi-account" v-model="username" :label="$t('login.username')" type="text"></v-text-field>
+                        <v-text-field prepend-icon="mdi-lock" v-model="password" :label="$t('login.password')" type="password" id="password"></v-text-field>
                         <p class="text-right">
                             <a @click="show_login = !show_login"> {{ $t('login.forgot_password') }} </a>
                         </p>
@@ -41,9 +41,9 @@
                 </v-toolbar>
                 <v-card-text v-if="!show_login">
                     <v-form @submit.prevent="do_reset">
-                        <v-text-field prepend-icon="person" v-model="username" :label="$t('login.username')" type="text"></v-text-field>
+                        <v-text-field prepend-icon="mdi-account" v-model="username" :label="$t('login.username')" type="text"></v-text-field>
                         <v-text-field
-                            prepend-icon="email"
+                            prepend-icon="mdi-email"
                             v-model="email"
                             :label="$t('login.email')"
                             type="text"

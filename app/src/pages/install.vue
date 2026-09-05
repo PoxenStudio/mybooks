@@ -7,25 +7,25 @@
                 </v-toolbar>
                 <v-card-text>
                     <v-form dark ref="form" @submit.prevent="do_intall">
-                        <v-text-field required prepend-icon="home" v-model="title" :label="$t('install.siteTitle')"
+                        <v-text-field required prepend-icon="mdi-home" v-model="title" :label="$t('install.siteTitle')"
                             type="text"></v-text-field>
                         <v-select
-                            prepend-icon="language"
+                            prepend-icon="mdi-web"
                             v-model="language"
                             :items="languageOptions"
                             item-text="text"
                             item-value="value"
                             :label="$t('install.defaultLanguage')"
                         ></v-select>
-                        <v-text-field required prepend-icon="person" v-model="username" :label="$t('install.adminUsername')" type="text"
+                        <v-text-field required prepend-icon="mdi-account" v-model="username" :label="$t('install.adminUsername')" type="text"
                             autocomplete="new-username" :rules="[rules.user]"></v-text-field>
-                        <v-text-field required prepend-icon="lock" v-model="password" :label="$t('install.adminPassword')" type="text"
+                        <v-text-field required prepend-icon="mdi-lock" v-model="password" :label="$t('install.adminPassword')" type="text"
                             autocomplete="new-password" :rules="[rules.pass]"></v-text-field>
-                        <v-text-field required prepend-icon="email" v-model="email" :label="$t('install.adminEmail')" type="text"
+                        <v-text-field required prepend-icon="mdi-email" v-model="email" :label="$t('install.adminEmail')" type="text"
                             autocomplete="new-email" :rules="[rules.email]"></v-text-field>
                         <v-checkbox v-model="invite" :label="$t('install.privateLibraryMode')"></v-checkbox>
                         <template v-if="invite">
-                            <v-text-field required prepend-icon="lock" v-model="code" :label="$t('install.accessCode')" type="text"
+                            <v-text-field required prepend-icon="mdi-lock" v-model="code" :label="$t('install.accessCode')" type="text"
                                 autocomplete="new-code" :rules="[rules.code]"></v-text-field>
                         </template>
                     </v-form>

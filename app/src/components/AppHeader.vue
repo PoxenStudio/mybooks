@@ -126,7 +126,7 @@
                     <v-divider></v-divider>
                     <v-list-item dense to="/logout">
                         <v-list-item-action dense>
-                            <v-icon>logout</v-icon>
+                            <v-icon>mdi-logout</v-icon>
                         </v-list-item-action>
                         <v-list-item-content v-if="!miniVariant">
                             <v-list-item-title>{{ $t('appHeader.logout') }}</v-list-item-title>
@@ -213,7 +213,7 @@
                 <v-text-field
                     solo-inverted
                     hide-details
-                    prepend-inner-icon="search"
+                    prepend-inner-icon="mdi-magnify"
                     @keyup.enter="doSearch"
                     @focus="isFocused = true"
                     @blur="isFocused = false"
@@ -264,7 +264,7 @@
                 <v-spacer></v-spacer>
             </template>
 
-            <v-btn v-else icon class="d-flex d-sm-none" @click="btn_search = !btn_search"> <v-icon>search</v-icon> </v-btn>
+            <v-btn v-else icon class="d-flex d-sm-none" @click="btn_search = !btn_search"> <v-icon>mdi-magnify</v-icon> </v-btn>
 
             <appearance-menu />
 
@@ -307,7 +307,7 @@
                     <template v-slot:activator="{ on }">
                         <v-btn v-on="on" icon color="yellow">
                             <v-badge color="red" class="blink" :content="messages.length > 99 ? '...' : String(messages.length)" overlap>
-                                <v-icon>notifications</v-icon>
+                                <v-icon>mdi-bell</v-icon>
                             </v-badge>
                         </v-btn>
                     </template>
@@ -344,7 +344,7 @@
                 </v-menu>
 
                 <v-btn icon v-if="user.is_login" :to="'/logout'" :title="$t('appHeader.logout')">
-                    <v-icon>logout</v-icon>
+                    <v-icon>mdi-logout</v-icon>
                 </v-btn>
 
             </template>
@@ -600,7 +600,7 @@ export default {
             return false;
         },
         items: function () {
-            const loginLink = { icon: "account_circle", href: "/login", text: "appHeader.please_login", color:"white" };
+            const loginLink = { icon: "mdi-account-circle", href: "/login", text: "appHeader.please_login", color:"white" };
             const homeLinks = [
                 { icon: "mdi-view-dashboard-outline", href: "/", text: "appHeader.home", color:"blue darken-1" },
             ];
@@ -635,7 +635,7 @@ export default {
                         { icon: "mdi-toolbox-outline", href: "/admin/toolbox", text: "appHeader.toolbox", color: "deep-orange"},
                         { icon: "mdi-rhombus-split", href: "/admin/resources", text: "appHeader.resources", color: "teal"},
                         { icon: "mdi-delete-restore", href: "/admin/trash", text: "appHeader.trashManagement", color: "deep-orange"},
-                        { icon: "sms_failed", action: "openFeedback", text: "appHeader.feedback", color: "teal"},
+                        { icon: "mdi-message-alert-outline", action: "openFeedback", text: "appHeader.feedback", color: "teal"},
                     ],
                 },
             ];
@@ -683,7 +683,7 @@ export default {
 
             const friendLinks = [
                 {
-                    icon: "link",
+                    icon: "mdi-link",
                     text: "appHeader.friendLinks",
                     color: "primary",
                     groups: this.sys.friends.map((friend) => ({

@@ -353,7 +353,7 @@
                 </template>
                 <v-col class="py-1" cols="auto" align-self="center">
                   <v-btn icon small @click="userDevices.splice(idx, 1)">
-                    <v-icon>delete</v-icon>
+                    <v-icon>mdi-delete</v-icon>
                   </v-btn>
                 </v-col>
               </v-row>
@@ -412,7 +412,7 @@
                   })
                 "
               >
-                <v-icon>add</v-icon>{{ $t("settings.add") }}
+                <v-icon>mdi-plus</v-icon>{{ $t("settings.add") }}
               </v-btn>
             </v-col>
           </v-row>

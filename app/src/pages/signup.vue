@@ -7,11 +7,11 @@
             </v-toolbar>
             <v-card-text>
                 <v-form ref="form" @submit.prevent="signup">
-                    <v-text-field required prepend-icon="person" v-model="username"  :label="$t('signup.username')"   type="text"     autocomplete="new-username"  :rules="[rules.user]"         ></v-text-field>
-                    <v-text-field required prepend-icon="lock"   v-model="password"  :label="$t('signup.password')"   type="password" autocomplete="new-password"  :rules="[rules.pass]" ></v-text-field>
-                    <v-text-field required prepend-icon="lock"   v-model="password2" :label="$t('signup.confirmPassword')" type="password" autocomplete="new-password2" :rules="[valid]"                  ></v-text-field>
-                    <v-text-field required prepend-icon="face"   v-model="nickname"  :label="$t('signup.nickname')"   type="text"     autocomplete="new-nickname"  :rules="[rules.nick]"         ></v-text-field>
-                    <v-text-field required prepend-icon="email"  v-model="email"     :label="$t('signup.email')"      type="text"     autocomplete="new-email"     :rules="[rules.email]"            ></v-text-field>
+                    <v-text-field required prepend-icon="mdi-account" v-model="username"  :label="$t('signup.username')"   type="text"     autocomplete="new-username"  :rules="[rules.user]"         ></v-text-field>
+                    <v-text-field required prepend-icon="mdi-lock"   v-model="password"  :label="$t('signup.password')"   type="password" autocomplete="new-password"  :rules="[rules.pass]" ></v-text-field>
+                    <v-text-field required prepend-icon="mdi-lock"   v-model="password2" :label="$t('signup.confirmPassword')" type="password" autocomplete="new-password2" :rules="[valid]"                  ></v-text-field>
+                    <v-text-field required prepend-icon="mdi-account-outline"   v-model="nickname"  :label="$t('signup.nickname')"   type="text"     autocomplete="new-nickname"  :rules="[rules.nick]"         ></v-text-field>
+                    <v-text-field required prepend-icon="mdi-email"  v-model="email"     :label="$t('signup.email')"      type="text"     autocomplete="new-email"     :rules="[rules.email]"            ></v-text-field>
                 </v-form>
                 <div align="center">
                     <v-btn dark large rounded color="red" @click="signup">{{ $t('signup.registerButton') }}</v-btn>

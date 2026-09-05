@@ -244,6 +244,8 @@ class BaseHandler(web.RequestHandler):
         return False
 
     def process_auth_header(self):
+        raise web.HTTPError(502, "Not started yet")
+
         auth_header = self.request.headers.get("Authorization", "")
         if not auth_header.startswith("Basic "):
             return False

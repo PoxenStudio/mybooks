@@ -289,7 +289,7 @@
                             <template v-slot:selection="{ attrs, item, parent, selected }">
                                 <v-chip v-bind="attrs" color="green lighten-3" :input-value="selected" label small>
                                     <span class="pr-2"> {{ item }} </span>
-                                    <v-icon small @click="parent.selectItem(item)">close</v-icon>
+                                    <v-icon small @click="parent.selectItem(item)">mdi-close</v-icon>
                                 </v-chip>
                             </template>
                         </v-combobox>
@@ -394,7 +394,7 @@
                             <template v-slot:selection="{ attrs, item, parent, selected }">
                                 <v-chip v-bind="attrs" color="green lighten-3" :input-value="selected" label small>
                                     <span class="pr-2"> {{ item }} </span>
-                                    <v-icon small @click="parent.selectItem(item)">close</v-icon>
+                                    <v-icon small @click="parent.selectItem(item)">mdi-close</v-icon>
                                 </v-chip>
                             </template>
                         </v-combobox>
@@ -418,7 +418,7 @@
                     :small="!$vuetify.breakpoint.xs"
                     @click="showDeleteBookDialog(item)"
                 >
-                    <v-icon :small="!$vuetify.breakpoint.xs">delete</v-icon>
+                    <v-icon :small="!$vuetify.breakpoint.xs">mdi-delete</v-icon>
                     <span >{{ $t('admin.books.deleteBook') }}</span>
                 </v-btn>
             </template>

@@ -8,7 +8,7 @@
             <v-card-text>
                 <p class="py-6 body-3 text-center" >{{ $t('welcome.description') }}</p>
                 <v-form @submit.prevent="access_login" >
-                    <v-text-field prepend-icon="lock" v-model="invite_code" required
+                    <v-text-field prepend-icon="mdi-lock" v-model="invite_code" required
                         :label="$t('welcome.passwordLabel')" type="password" :error="is_err" :error-messages="msg" :loading="loading"></v-text-field>
                 </v-form>
             </v-card-text>

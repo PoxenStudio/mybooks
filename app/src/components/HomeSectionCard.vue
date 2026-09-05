@@ -22,7 +22,7 @@
                     <p class="ma-0">{{ title }}</p>
                     <span @click.stop><slot name="header-extra"></slot></span>
                     <v-spacer></v-spacer>
-                    <v-icon class="home-section-card-toggle">{{ expanded ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
+                    <v-icon class="home-section-card-toggle">{{ expanded ? 'mdi-chevron-down' : 'mdi-chevron-right' }}</v-icon>
                 </div>
             </v-col>
         </v-row>

@@ -31,7 +31,6 @@ export default {
 
   // Global CSS: https://go.nuxtjs.dev/config-css
   css: [
-    'material-design-icons-iconfont/dist/material-design-icons.css',
     '@mdi/font/css/materialdesignicons.css',
     '~/assets/css/fonts.css',
     '~/assets/css/background.css',
@@ -115,5 +114,8 @@ export default {
       // 'chart.js/auto' provides both a default export and auto-registers everything.
       config.resolve.alias['chart.js'] = 'chart.js/auto';
     },
+    // CSS(Vuetify 基础样式、mdi 图标字体等)从 JS bundle 里抽成独立 .css 文件，
+    // 不再随最大的 vendor chunk 一起下载/解析执行，见 document 里的构建体积优化记录。
+    extractCSS: true,
   }
 }
