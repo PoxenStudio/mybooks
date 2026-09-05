@@ -690,6 +690,10 @@ class BaseHandler(web.RequestHandler):
                 return None
         return books[0]
 
+    def get_book_files(self, book_id):
+        formats = self.calibre_db_cache.formats(book_id)
+        return formats
+
     def is_book_owner(self, book_id, user_id):
         auto = int(CONF.get("auto_login", 0))
         if auto:

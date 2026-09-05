@@ -148,6 +148,22 @@ def _reconcile(db, reader_id: int, cache: Dict, today: datetime.date) -> Dict:
     return cache
 
 
+def patch_cached_day(reader_id: int, date: datetime.date, delta_seconds: int) -> None:
+    """_reconcile 只会向前推进、不会回填已缓存的历史日，手工补录改的是过去某天时需要
+    直接把 delta 写进缓存，否则周图表会一直显示旧值。"""
+    if not delta_seconds:
+        return
+    cache = _load_cache(reader_id)
+    cached_through = cache.get("cached_through")
+    date_str = _date_str(date)
+    if not cached_through or date_str > cached_through:
+        return
+    days = cache.setdefault("days", {})
+    bucket = days.setdefault(date_str, {"reading_seconds": 0, "download_count": 0, "push_count": 0})
+    bucket["reading_seconds"] = max(0, bucket.get("reading_seconds", 0) + delta_seconds)
+    _save_cache(reader_id, cache)
+
+
 def _week_start(d: datetime.date) -> datetime.date:
     return d - datetime.timedelta(days=d.weekday())  # Monday
 

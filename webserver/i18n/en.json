@@ -518,5 +518,10 @@
   "已开始导入": "Import started",
   "无权限查看该导入任务": "No permission to view this import task",
   "无权限操作该导入任务": "No permission to manage this import task",
-  "单次最多支持 100 本书籍批量处理": "Too many books to process"
+  "单次最多支持 100 本书籍批量处理": "Too many books to process",
+  "日期格式错误": "Invalid date format",
+  "这本书没有可阅读的电子书格式": "This book has no readable ebook format",
+  "不能补录未来的阅读时间": "Cannot backfill reading time for a future date",
+  "缺少必填参数：duration_seconds": "Missing required parameter: duration_seconds",
+  "单次阅读时长需在 0~18 小时之间": "Duration must be between 0 and 18 hours"
 }

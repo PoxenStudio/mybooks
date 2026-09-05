@@ -41,7 +41,7 @@ from webserver.services.extract import ExtractService
 from webserver.services.mail import MailService
 from webserver.handlers.base import BaseHandler, ListHandler, auth, js
 from webserver.models import BookReadingStats as BookFormatReadingStatsModel, Item, Reading, ReadingState, Reader, ScanFile
-from webserver.services.reading_stats_service import ReadingStatsService
+from webserver.services.reading_stats_service import ManualReadingService, ReadingStatsService
 from webserver.services.scan_service import ScanService, SCAN_EXT
 from webserver.services.download_quota_service import DownloadQuotaService
 from webserver.services.book_review_service import BookReviewService
@@ -1624,6 +1624,77 @@ class BookFormatReadingStats(BaseHandler):
             state=state,
         )
         return {"err": "ok", "stats": result}
+
+
+class BookReadingTimeCorrection(BaseHandler):
+    """管理菜单"阅读时间补录"：按日期新增/编辑/删除一条手工阅读记录，差值同步到
+    Reading 分桶、BookReadingStats、Reader.total_reading_seconds。"""
+
+    MAX_DURATION_SECONDS = 18 * 3600
+
+    @staticmethod
+    def _parse_date(value):
+        try:
+            return datetime.datetime.strptime(value, "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            return None
+
+    @js
+    @auth
+    def get(self, id):
+        book_id = int(id)
+        date = self._parse_date(self.get_query_argument("date", None))
+        if date is None:
+            return {"err": "params.invalid", "msg": _("日期格式错误")}
+        return {"err": "ok", **ManualReadingService.get_reference(self.user_id(), book_id, date)}
+
+    @js
+    @auth
+    def post(self, id):
+        book_id = int(id)
+        if not self.calibre_db_cache.has_id(book_id):
+            return {"err": "params.book.invalid", "msg": _("书籍已不存在")}
+        book_formats = self.get_book_files(book_id)
+        if not book_formats:
+            return {"err": "params.invalid", "msg": _("这本书没有可阅读的电子书格式")}
+
+        book_formats = tuple(fmt.lower() for fmt in book_formats)
+        logging.info(f"Fomats: {book_formats}")
+
+        data = tornado.escape.json_decode(self.request.body)
+        date = self._parse_date(data.get("date"))
+        if date is None:
+            return {"err": "params.invalid", "msg": _("日期格式错误")}
+        if date > datetime.datetime.utcnow().date():
+            return {"err": "params.invalid", "msg": _("不能补录未来的阅读时间")}
+
+        try:
+            duration_seconds = int(data.get("duration_seconds"))
+        except (TypeError, ValueError):
+            return {"err": "params.invalid", "msg": _("缺少必填参数：duration_seconds")}
+        if duration_seconds < 0 or duration_seconds > self.MAX_DURATION_SECONDS:
+            return {"err": "params.invalid", "msg": _("单次阅读时长需在 0~18 小时之间")}
+
+        result = ManualReadingService.upsert_entry(
+            self.user_id(),
+            book_id,
+            date,
+            duration_seconds,
+            start_time=(data.get("start_time") or "").strip() or None,
+            end_time=(data.get("end_time") or "").strip() or None,
+            available_formats=book_formats,
+        )
+        return {"err": "ok", **result}
+
+    @js
+    @auth
+    def delete(self, id):
+        book_id = int(id)
+        date = self._parse_date(self.get_query_argument("date", None))
+        if date is None:
+            return {"err": "params.invalid", "msg": _("日期格式错误")}
+        result = ManualReadingService.delete_entry(self.user_id(), book_id, date)
+        return {"err": "ok", **result}
 
 
 class BookStateBatch(BaseHandler):
@@ -3993,6 +4064,7 @@ def routes():
         (r"/api/book/([0-9]+)/wants", BookWantToRead),
         (r"/api/book/([0-9]+)/readstate", BookReadingState),
         (r"/api/book/([0-9]+)/reading_stats", BookFormatReadingStats),
+        (r"/api/book/([0-9]+)/reading_time", BookReadingTimeCorrection),
         (r"/api/favorites", BookFavorite),
         (r"/api/wants", BookWantToRead),
         (r"/api/reading", BookReading),

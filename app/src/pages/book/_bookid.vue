@@ -405,12 +405,18 @@
                                     <v-icon>mdi-swap-horizontal-bold</v-icon>
                                     {{ book.book_type==this.BOOK_TYPE.PHYSICAL ? $t('book.exchangeToEbook') : $t('book.exchangeToPhysical') }}
                                 </v-list-item>
+                                <v-list-item @click="openReadingTimeBackfill" :disabled="!hasEBooks">
+                                    <v-icon>mdi-timer-plus-outline</v-icon>
+                                    {{ $t('book.readingTimeBackfill') }}
+                                </v-list-item>
                                 <v-list-item @click="dialog_delete_book = true">
                                     <v-icon>mdi-delete-forever</v-icon>
                                     {{ $t('book.deleteBook') }}
                                 </v-list-item>
                             </v-list>
                         </v-menu>
+
+                        <ReadingTimeBackfillDialog ref="reading_time_backfill" @saved="onReadingTimeSaved" />
                     </template>
                 </v-toolbar>
                 <v-row>
@@ -2374,6 +2380,12 @@ export default {
                     this.$alert("error", rsp.msg);
                 }
             });
+        },
+        openReadingTimeBackfill() {
+            this.$refs.reading_time_backfill.open(this.book.id);
+        },
+        onReadingTimeSaved() {
+            location.reload();
         },
         updateTags() {
             this.$backend("/book/" + this.book.id + "/tags", {

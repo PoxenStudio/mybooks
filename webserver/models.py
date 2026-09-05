@@ -643,6 +643,41 @@ class BookReadingStats(Base, SQLAlchemyMixin):
         }
 
 
+# 管理菜单"阅读时间补录"：每 (reader_id, book_id, date) 一行，记录当前生效的补录时长。
+# 再次编辑同一天是更新这一行而不是追加流水，保留 duration_seconds 是为了编辑/删除时能
+# 算出与上一次的差值，增量同步到 Reading.duration / BookReadingStats.total_seconds /
+# Reader.total_reading_seconds，避免统计翻倍或对不上。
+class ManualReadingLog(Base, SQLAlchemyMixin):
+    __tablename__ = "manual_reading_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    reader_id = Column(Integer, ForeignKey("readers.id"), nullable=False)
+    book_id = Column(Integer, nullable=False)
+    format = Column(String(16), nullable=False)
+    date = Column(Date, nullable=False)
+    start_time = Column(String(5))
+    end_time = Column(String(5))
+    duration_seconds = Column(Integer, default=0, nullable=False)
+    create_time = Column(DateTime, nullable=False)
+    update_time = Column(DateTime, nullable=False)
+
+    reader = relationship(Reader)
+
+    __table_args__ = (
+        UniqueConstraint("reader_id", "book_id", "date", name="ux_manual_reading_logs"),
+        Index("ix_manual_reading_logs_reader_book", "reader_id", "book_id"),
+    )
+
+    def format_dict(self):
+        return {
+            "date": self.date.strftime("%Y-%m-%d"),
+            "format": self.format,
+            "start_time": self.start_time,
+            "end_time": self.end_time,
+            "duration_seconds": self.duration_seconds or 0,
+        }
+
+
 # MyBooks 云端书籍的 book_hash 形如 "cloud-8502-epub"，8502 是 Calibre book_id；
 # 与 webserver/services/reading_stats_service.py::_CLOUD_BOOK_HASH_RE 保持一致（含义相同，
 # 避免相互 import 造成循环依赖，两处各自维护一份同样的正则）。
@@ -1051,7 +1086,7 @@ def user_syncdb(engine):
 # 表结构随功能迭代新增的表，不希望依赖运维方手动重新执行 `--syncdb` 才能用上
 # （`docker/start.sh` 每次启动都会跑 --syncdb，但手工部署/测试环境不一定会），
 # 在正常的 make_app() 启动路径里也顺带补建一次，checkfirst=True 天然幂等。
-_NEW_TABLES_AUTO_ENSURE = (ReadingRecord, BookReview, InstalledTool, BookReadingStats, BookList, BookListBook, BookListLike)
+_NEW_TABLES_AUTO_ENSURE = (ReadingRecord, BookReview, InstalledTool, BookReadingStats, BookList, BookListBook, BookListLike, ManualReadingLog)
 
 
 def ensure_new_tables(engine):

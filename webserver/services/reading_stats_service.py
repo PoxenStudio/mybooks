@@ -16,15 +16,19 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 import tornado.ioloop
-from sqlalchemy import text, update
+from sqlalchemy import func, text, update
 
 from webserver import loader
-from webserver.models import BookReadingStats, Item, Reader, Reading
+from webserver.models import BookReadingStats, Item, ManualReadingLog, Reader, Reading
+from webserver.services import reading_dashboard_service
 from webserver.services.reader_cache import ReaderStatsCache
 
 CONF = loader.get_settings()
 
 HEARTBEAT_MAX_GAP = datetime.timedelta(seconds=60)
+
+MANUAL_READING_MAX_SECONDS = 18 * 3600
+FORMAT_PREFERENCE_ORDER = ("epub", "azw3", "mobi", "azw", "docx", "pdf", "txt")
 
 # 阅读进度达到该百分比即视为"读完"，自动把 BookReadingStats.state 置为 FINISHED
 # （epub 分页误差下很多书读到最后一页也算不满 100%）
@@ -316,6 +320,137 @@ def apply_book_format_update(
             row.finish_time = None
 
     return row
+
+
+def _resolve_manual_format(db, reader_id: int, book_id: int, available_formats: Optional[List[str]]) -> Optional[str]:
+    row = (
+        db.query(BookReadingStats)
+        .filter(BookReadingStats.reader_id == reader_id, BookReadingStats.book_id == book_id)
+        .order_by(BookReadingStats.total_seconds.desc())
+        .first()
+    )
+    if row is not None:
+        return row.format
+    formats = {f.lower() for f in (available_formats or [])}
+    for fmt in FORMAT_PREFERENCE_ORDER:
+        if fmt in formats:
+            return fmt
+    return next(iter(formats), None)
+
+
+def _adjust_reading_bucket(db, reader_id: int, book_id: int, date: datetime.date, delta: int, now_utc: datetime.datetime) -> None:
+    if not delta:
+        return
+    row = db.query(Reading).filter_by(reader_id=reader_id, book_id=book_id, date=date, action=Reading.ACTION_READ).one_or_none()
+    if row is None:
+        if delta > 0:
+            db.add(
+                Reading(
+                    reader_id, book_id, Reading.ACTION_READ, Reading.PROTOCOL_WEB,
+                    start_time=datetime.datetime.combine(date, datetime.time.min), duration=delta, update_time=now_utc, date=date
+                )
+            )
+        return
+    row.duration = max(0, (row.duration or 0) + delta)
+    row.update_time = now_utc
+
+
+def _adjust_book_format_total(db, reader_id: int, book_id: int, fmt: str, delta: int, now_utc: datetime.datetime) -> None:
+    if not delta:
+        return
+    row = db.query(BookReadingStats).filter_by(reader_id=reader_id, book_id=book_id, format=fmt).one_or_none()
+    if row is None:
+        if delta <= 0:
+            return
+        row = BookReadingStats(
+            reader_id=reader_id, book_id=book_id, format=fmt, state=BookReadingStats.STATE_READING,
+            start_time=now_utc, start_count=1, create_time=now_utc, update_time=now_utc
+        )
+        db.add(row)
+    row.total_seconds = max(0, (row.total_seconds or 0) + delta)
+    row.update_time = now_utc
+
+
+def _adjust_reader_total(db, reader_id: int, delta: int) -> None:
+    if not delta:
+        return
+    reader = db.query(Reader).get(reader_id)
+    if reader is not None:
+        reader.total_reading_seconds = max(0, (reader.total_reading_seconds or 0) + delta)
+
+
+class ManualReadingService:
+    """管理菜单"阅读时间补录"：新增/编辑/删除都以 ManualReadingLog 这一行为准，按差值
+    同步到 Reading 分桶、BookReadingStats、Reader.total_reading_seconds 三处聚合。
+    """
+
+    @classmethod
+    def get_reference(cls, reader_id: int, book_id: int, date: datetime.date) -> dict:
+        db = Reading._session()
+        entry = db.query(ManualReadingLog).filter_by(reader_id=reader_id, book_id=book_id, date=date).one_or_none()
+        reading_row = db.query(Reading).filter_by(reader_id=reader_id, book_id=book_id, date=date, action=Reading.ACTION_READ).one_or_none()
+        book_total = db.query(func.sum(BookReadingStats.total_seconds)).filter_by(reader_id=reader_id, book_id=book_id).scalar()
+        return {
+            "entry": entry.format_dict() if entry else None,
+            "date_recorded_seconds": reading_row.duration if reading_row else 0,
+            "book_total_seconds": int(book_total or 0),
+        }
+
+    @classmethod
+    def upsert_entry(
+        cls,
+        reader_id: int,
+        book_id: int,
+        date: datetime.date,
+        duration_seconds: int,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        available_formats: Optional[List[str]] = None,
+    ) -> dict:
+        duration_seconds = max(0, min(int(duration_seconds), MANUAL_READING_MAX_SECONDS))
+        db = Reading._session()
+        now_utc = datetime.datetime.utcnow()
+        row = db.query(ManualReadingLog).filter_by(reader_id=reader_id, book_id=book_id, date=date).one_or_none()
+        old_duration = row.duration_seconds if row else 0
+        fmt = row.format if row else _resolve_manual_format(db, reader_id, book_id, available_formats)
+        if not fmt:
+            raise ValueError("no ebook format available for manual reading log")
+
+        if row is None:
+            row = ManualReadingLog(reader_id=reader_id, book_id=book_id, format=fmt, date=date, create_time=now_utc)
+            db.add(row)
+        row.start_time = start_time
+        row.end_time = end_time
+        row.duration_seconds = duration_seconds
+        row.update_time = now_utc
+
+        delta = duration_seconds - old_duration
+        _adjust_reading_bucket(db, reader_id, book_id, date, delta, now_utc)
+        _adjust_book_format_total(db, reader_id, book_id, fmt, delta, now_utc)
+        _adjust_reader_total(db, reader_id, delta)
+        db.commit()
+
+        reading_dashboard_service.patch_cached_day(reader_id, date, delta)
+        return {"entry": row.format_dict()}
+
+    @classmethod
+    def delete_entry(cls, reader_id: int, book_id: int, date: datetime.date) -> dict:
+        db = Reading._session()
+        now_utc = datetime.datetime.utcnow()
+        row = db.query(ManualReadingLog).filter_by(reader_id=reader_id, book_id=book_id, date=date).one_or_none()
+        if row is None:
+            return {"deleted": False}
+
+        delta = -row.duration_seconds
+        fmt = row.format
+        db.delete(row)
+        _adjust_reading_bucket(db, reader_id, book_id, date, delta, now_utc)
+        _adjust_book_format_total(db, reader_id, book_id, fmt, delta, now_utc)
+        _adjust_reader_total(db, reader_id, delta)
+        db.commit()
+
+        reading_dashboard_service.patch_cached_day(reader_id, date, delta)
+        return {"deleted": True}
 
 
 class BookFormatStatsBuffer:
