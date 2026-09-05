@@ -3957,7 +3957,9 @@ class BookExchangeType(BaseHandler):
                     item.collector_id = self.user_id()
                     self.sqlite_session.add(item)
 
-                current_type = book.get(CALIBRE_COLUMN_BOOK_TYPE, item.book_type)
+                current_type = book.get(CALIBRE_COLUMN_BOOK_TYPE)
+                if current_type is None:
+                    current_type = item.book_type
 
                 # 如果是电子书，转为实体书
                 if current_type == BOOK_TYPE_EBOOK:
@@ -3999,7 +4001,7 @@ class BookExchangeType(BaseHandler):
                     self.calibre_db_cache.set_field(CALIBRE_COLUMN_BOOK_TYPE, {book_id: BOOK_TYPE_EBOOK})
 
                 else:
-                    results.append({"book_id": book_id, "status": "skip", "msg": _("未知类型")})
+                    results.append({"book_id": book_id, "status": "skip", "msg": _(f"未知类型:{current_type}, item.type:{item.book_type}")})
                     skip_count += 1
 
             except Exception as e:
