@@ -658,7 +658,7 @@
                   >
                     <span class="pr-2"> {{ item.text }} </span>
                     <v-icon small @click="parent.selectItem(item)"
-                      >close</v-icon
+                      >mdi-close</v-icon
                     >
                   </v-chip>
                 </template>
@@ -813,7 +813,7 @@
       <v-card-title @click="thanksToShow = !thanksToShow">
         <v-btn @click.once="thanksToShow = !thanksToShow" icon>
           <v-icon>{{
-            thanksToShow ? "keyboard_arrow_down" : "keyboard_arrow_up"
+            thanksToShow ? "mdi-chevron-down" : "mdi-chevron-up"
           }}</v-icon>
         </v-btn>
         <v-icon color="red" small class="thanks-heart-icon mr-1">mdi-heart</v-icon>

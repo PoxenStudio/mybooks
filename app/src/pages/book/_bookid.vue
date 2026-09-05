@@ -99,7 +99,7 @@
                                         :loading="playing_audio_index === idx && audio_loading"
                                         :color="playing_audio_index === idx ? 'primary' : 'default'"
                                     >
-                                        <v-icon>{{ playing_audio_index === idx && !audio_paused ? 'pause' : 'play_arrow' }}</v-icon>
+                                        <v-icon>{{ playing_audio_index === idx && !audio_paused ? 'mdi-pause' : 'mdi-play' }}</v-icon>
                                     </v-btn>
                                     <span class="ml-2">{{ audio_item.filename }}</span>
                                 </v-col>
@@ -256,8 +256,8 @@
                         @click="handleReadingStateChange"
                         :loading="readingStateLoading"
                     >
-                        <v-icon v-if="tiny">mdi-rotate-orbit</v-icon>
-                        <span v-else>{{ readingStateButtonText }}</span>
+                        <v-icon>mdi-rotate-orbit</v-icon>
+                        <span v-if="!tiny">{{ readingStateButtonText }}</span>
                     </v-btn>
                     <v-btn
                         :small="tiny"
@@ -270,7 +270,7 @@
                     >
                         <v-icon v-if="tiny">mdi-music-note</v-icon>
                         <template v-else>
-                            <v-icon dark>{{ audios.status === AUDIO_STATUS.FAILED ? 'error' : 'audiotrack' }}</v-icon>
+                            <v-icon dark>{{ audios.status === AUDIO_STATUS.FAILED ? 'mdi-alert-circle' : 'mdi-playlist-music' }}</v-icon>
                             {{ $t('book.convertToAudio') }}
                             <span v-if="audios.status === AUDIO_STATUS.PROCESSING && audios.progress && audios.progress.converted_chapters !== undefined"
                                   class="ml-1">
@@ -286,8 +286,8 @@
                         <v-btn :small="tiny" dark color="primary" class="d-flex d-sm-flex" :class="{ 'read-btn-grouped': needsReadFormatChoice }"
                                :style="tiny ? { padding: '0px', margin: '0px !important' } : { margin: '0px' }"
                                :href="readHref" target="_blank" @click="onReadClick($event, defaultReadFormat)">
-                            <v-icon v-if="tiny">mdi-book-open-blank-variant</v-icon>
-                            <span v-else>{{ $t('book.read') }}</span>
+                            <v-icon>mdi-book-open-blank-variant</v-icon>
+                            <span v-if="!tiny">{{ $t('book.read') }}</span>
                         </v-btn>
                         <v-menu v-if="needsReadFormatChoice" offset-y left>
                             <template v-slot:activator="{ on, attrs }">
@@ -386,7 +386,7 @@
                                     {{ $t('book.resetInfo') }}
                                 </v-list-item>
                                 <v-list-item @click="setSole">
-                                    <v-icon>{{ book.sole ? 'public_off' : 'public' }}</v-icon>
+                                    <v-icon>{{ book.sole ? 'mdi-earth-off' : 'mdi-earth' }}</v-icon>
                                     {{ book.sole ? $t('book.setPublic') : $t('book.setSole') }}
                                 </v-list-item>
                                 <v-list-item @click="aiFillBook">
@@ -555,7 +555,7 @@
                                         <template v-slot:activator="{ on, attrs }">
                                             <v-btn icon small class="ml-1" v-bind="attrs" v-on="on">
                                                 <v-icon :color="book.sole ? 'red' : 'green'" class="mr-2">
-                                                    {{ book.sole ? 'public_off' : 'public' }}
+                                                    {{ book.sole ? 'mdi-earth-off' : 'mdi-earth' }}
                                                 </v-icon>
                                             </v-btn>
                                         </template>
@@ -804,7 +804,7 @@
                 <v-list>
                     <v-list-item @click="switchAudioDialog" :disabled="book.book_type == this.BOOK_TYPE.PHYSICAL">
                         <v-list-item-avatar large :color="book.book_type == this.BOOK_TYPE.PHYSICAL ? 'grey' : (audios.status === AUDIO_STATUS.FAILED ? 'red' : 'primary')">
-                            <v-icon dark>{{ audios.status === AUDIO_STATUS.FAILED ? 'error' : 'audiotrack' }}</v-icon>
+                            <v-icon dark>{{ audios.status === AUDIO_STATUS.FAILED ? 'mdi-alert-circle' : 'mdi-playlist-music' }}</v-icon>
                         </v-list-item-avatar>
                         <v-list-item-content>
                             <v-list-item-title :class="{ 'grey--text': book.book_type == this.BOOK_TYPE.PHYSICAL }">

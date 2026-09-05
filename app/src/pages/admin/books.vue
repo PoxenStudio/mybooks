@@ -415,6 +415,7 @@
             <template v-slot:item.actions="{ item }">
                 <v-btn
                     color="warning"
+                    class="black--text"
                     :small="!$vuetify.breakpoint.xs"
                     @click="showDeleteBookDialog(item)"
                 >
