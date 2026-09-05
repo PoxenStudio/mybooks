@@ -266,7 +266,7 @@
                         class="mx-2 d-flex d-sm-flex"
                         :style="tiny ? { padding: '0px', margin: '0px 1px !important' } : {}"
                         @click="switchToAudioPlayer"
-                        v-if="book.book_type != this.BOOK_TYPE.PHYSICAL"
+                        v-if="hasEBooks"
                     >
                         <v-icon v-if="tiny">mdi-music-note</v-icon>
                         <template v-else>
@@ -337,7 +337,7 @@
                                     <v-icon>mdi-file-document-remove-outline</v-icon>
                                     {{ $t('book.deleteFormat') }}
                                 </v-list-item>
-                                <v-list-item @click="showUploadFormatDialog" :disabled="book.book_type==this.BOOK_TYPE.PHYSICAL">
+                                <v-list-item @click="showUploadFormatDialog" :disabled="!hasEBooks">
                                     <v-icon>mdi-file-upload-outline</v-icon>
                                     {{ $t('book.uploadNewFormat') }}
                                 </v-list-item>
@@ -397,7 +397,7 @@
                                     <v-icon>mdi-email-send</v-icon>
                                     {{ $t('book.shareToEmail') }}
                                 </v-list-item>
-                                <v-list-item @click="generateShareCard" :disabled="book.book_type==this.BOOK_TYPE.PHYSICAL">
+                                <v-list-item @click="generateShareCard" :disabled="hasEBooks">
                                     <v-icon>mdi-card-bulleted-outline</v-icon>
                                     {{ $t('book.generateShareCard') }}
                                 </v-list-item>
@@ -756,12 +756,12 @@
         <v-col cols="12" sm="6" class="book-action-col">
             <v-card outlined>
                 <v-list>
-                    <v-list-item :href="readHref" target="_blank" :disabled="book.book_type == this.BOOK_TYPE.PHYSICAL" @click="onReadClick($event, defaultReadFormat)">
-                        <v-list-item-avatar large :color="book.book_type == this.BOOK_TYPE.PHYSICAL ? 'grey' : 'primary'">
+                    <v-list-item :href="readHref" target="_blank" :disabled="!hasEBooks" @click="onReadClick($event, defaultReadFormat)">
+                        <v-list-item-avatar large :color="!hasEBooks ? 'grey' : 'primary'">
                             <v-icon dark>mdi-book-open-page-variant</v-icon>
                         </v-list-item-avatar>
                         <v-list-item-content>
-                            <v-list-item-title :class="{ 'grey--text': book.book_type == this.BOOK_TYPE.PHYSICAL }">{{ $t('book.read') }}</v-list-item-title>
+                            <v-list-item-title :class="{ 'grey--text': !hasEBooks }">{{ $t('book.read') }}</v-list-item-title>
                         </v-list-item-content>
                         <v-list-item-action>
                             <v-menu v-if="needsReadFormatChoice" offset-y left>
@@ -785,12 +785,12 @@
         <v-col cols="12" sm="6" class="book-action-col">
             <v-card outlined>
                 <v-list>
-                    <v-list-item @click="downloadBook" :disabled="book.book_type == this.BOOK_TYPE.PHYSICAL">
-                        <v-list-item-avatar large :color="book.book_type == this.BOOK_TYPE.PHYSICAL ? 'grey' : 'primary'">
+                    <v-list-item @click="downloadBook" :disabled="!hasEBooks">
+                        <v-list-item-avatar large :color="hasEBooks ? 'primary' : 'grey'">
                             <v-icon dark>mdi-download</v-icon>
                         </v-list-item-avatar>
                         <v-list-item-content>
-                            <v-list-item-title :class="{ 'grey--text': book.book_type == this.BOOK_TYPE.PHYSICAL }">{{ $t('book.download') }}</v-list-item-title>
+                            <v-list-item-title :class="{ 'grey--text': !hasEBooks }">{{ $t('book.download') }}</v-list-item-title>
                         </v-list-item-content>
                         <v-list-item-action>
                             <v-icon>mdi-arrow-right</v-icon>
@@ -802,12 +802,12 @@
         <v-col cols="12" sm="6" class="book-action-col">
             <v-card outlined>
                 <v-list>
-                    <v-list-item @click="switchAudioDialog" :disabled="book.book_type == this.BOOK_TYPE.PHYSICAL">
-                        <v-list-item-avatar large :color="book.book_type == this.BOOK_TYPE.PHYSICAL ? 'grey' : (audios.status === AUDIO_STATUS.FAILED ? 'red' : 'primary')">
+                    <v-list-item @click="switchAudioDialog" :disabled="!hasEBooks">
+                        <v-list-item-avatar large :color="!hasEBooks ? 'grey' : (audios.status === AUDIO_STATUS.FAILED ? 'red' : 'primary')">
                             <v-icon dark>{{ audios.status === AUDIO_STATUS.FAILED ? 'mdi-alert-circle' : 'mdi-playlist-music' }}</v-icon>
                         </v-list-item-avatar>
                         <v-list-item-content>
-                            <v-list-item-title :class="{ 'grey--text': book.book_type == this.BOOK_TYPE.PHYSICAL }">
+                            <v-list-item-title :class="{ 'grey--text': !hasEBooks }">
                                 {{ $t('book.convertToAudio') }}
                                 <span v-if="audios.status === AUDIO_STATUS.PROCESSING && audios.progress && audios.progress.converted_chapters !== undefined"
                                       class="ml-1 text-caption">
@@ -2210,8 +2210,8 @@ export default {
             }
         },
         switchAudioDialog() {
-            // 如果是实体书，则不允许转换音频
-            if (this.book.book_type == this.BOOK_TYPE.PHYSICAL) {
+            // 如果没有电子书，则不允许转换音频
+            if (!this.hasEBooks) {
                 return;
             }
 
@@ -2445,20 +2445,6 @@ export default {
             });
         },
         exchangeBookType() {
-            // 图书类型互转：电子书 <-> 实体书
-            if (this.book.book_type != this.BOOK_TYPE.PHYSICAL) {
-                // 电子书转实体书：需先检查是否已有格式文件、是否有ISBN
-                const hasFormats = this.book.files && this.book.files.length > 0;
-                if (hasFormats) {
-                    this.$alert("error", this.$t('book.exchangeTypeHasFormats'));
-                    return;
-                }
-                if (!this.book.isbn) {
-                    this.$alert("error", this.$t('book.exchangeTypeNoIsbn'));
-                    return;
-                }
-            }
-
             this.$backend("/book/exchange_type", {
                 method: "POST",
                 body: JSON.stringify({"idlist": [this.book.id]}),

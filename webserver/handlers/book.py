@@ -3868,6 +3868,8 @@ class BookExchangeType(BaseHandler):
         skip_count = 0
         results = []
 
+        skip_checking = CONF.get("ENABLE_BOOKS_TYPE_CONVERT_DIRECT", False)
+
         for book_id in idlist:
             try:
                 book = self.get_book(book_id, raise_exception=False)
@@ -3888,24 +3890,25 @@ class BookExchangeType(BaseHandler):
 
                 # 如果是电子书，转为实体书
                 if current_type == BOOK_TYPE_EBOOK:
-                    # 检查是否有ISBN
-                    isbn = book.get("isbn", "")
-                    if not isbn:
-                        results.append({"book_id": book_id, "status": "skip", "msg": _("无ISBN，跳过")})
-                        skip_count += 1
-                        continue
+                    if not skip_checking:
+                        # 检查是否有ISBN
+                        isbn = book.get("isbn", "")
+                        if not isbn:
+                            results.append({"book_id": book_id, "status": "skip", "msg": _("无ISBN，跳过")})
+                            skip_count += 1
+                            continue
 
-                    # 检查是否有任何电子书格式
-                    has_formats = False
-                    for fmt in ["epub", "mobi", "azw", "azw3", "txt", "pdf"]:
-                        if book.get("fmt_%s" % fmt):
-                            has_formats = True
-                            break
+                        # 检查是否有任何电子书格式
+                        has_formats = False
+                        for fmt in ["epub", "mobi", "azw", "azw3", "txt", "pdf"]:
+                            if book.get("fmt_%s" % fmt):
+                                has_formats = True
+                                break
 
-                    if has_formats:
-                        results.append({"book_id": book_id, "status": "skip", "msg": _("已有电子书格式，跳过")})
-                        skip_count += 1
-                        continue
+                        if has_formats:
+                            results.append({"book_id": book_id, "status": "skip", "msg": _("已有电子书格式，跳过")})
+                            skip_count += 1
+                            continue
 
                     # 转换为实体书
                     item.book_type = BOOK_TYPE_PHYSICAL

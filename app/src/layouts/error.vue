@@ -1,11 +1,10 @@
 <template>
-  <v-app dark>
-    <v-main>
-      <div class="error-page">
+  <v-app>
+      <div class="error-page" :style="{ backgroundColor: pageBackground }">
+        <img src="/static/images/error_page.svg" class="error-image" alt="">
         <div class="error-code">
           {{ statusCode }}
         </div>
-        <v-divider class="error-divider" />
         <h1 class="error-title">
           {{ message }}
         </h1>
@@ -13,7 +12,6 @@
           {{ backHome }}
         </v-btn>
       </div>
-    </v-main>
   </v-app>
 </template>
 
@@ -30,6 +28,9 @@ export default {
   },
   created() {
     //this.$store.commit("puremode", true);
+    if (process.client) {
+      this.$vuetify.theme.dark = localStorage.getItem("site_theme") === "dark";
+    }
   },
 
   computed: {
@@ -48,6 +49,9 @@ export default {
     backHome() {
       return this.$t ? this.$t("common.backToHome") : "返回首页";
     },
+    pageBackground() {
+      return this.$vuetify.theme.dark ? "#363636" : "#E7EAE7";
+    },
   },
   head() {
     return {
@@ -59,20 +63,27 @@ export default {
 
 <style scoped>
 .error-page {
-  min-height: 100vh;
+  min-height: 30vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 24px;
-  padding-top: 15vh;
+  padding-top: 5vh;
   text-align: center;
+  border-radius: 16px !important;
+}
+
+.error-image {
+  width: 32px;
+  max-width: 60%;
+  margin-bottom: 10px;
 }
 
 .error-code {
-  font-size: 64px;
+  font-size: 80px;
   font-weight: 700;
   line-height: 1;
-  background: linear-gradient(135deg, #4a90d9 0%, #003153 100%);
+  background: linear-gradient(135deg, #f6ea0f 0%, #f00404 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;

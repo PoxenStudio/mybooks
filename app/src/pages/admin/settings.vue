@@ -1055,12 +1055,6 @@ export default {
             ],
           },
           {
-            icon: "mdi-bookshelf",
-            key: "ENABLE_PHYSICAL_BOOKS",
-            label: "settings.enable_physical_books",
-            type: "checkbox",
-          },
-          {
             icon: "mdi-sync",
             key: "ENABLE_DATA_SYNC",
             label: "settings.enable_data_sync",
@@ -1125,6 +1119,22 @@ export default {
             key: "ENABLE_SHARED_NOTES",
             label: "settings.enable_shared_notes",
             type: "checkbox",
+          },
+        ],
+        groups: [
+          {
+            icon: "mdi-bookshelf",
+            key: "ENABLE_PHYSICAL_BOOKS",
+            label: "settings.enable_physical_books",
+            type: "checkbox",
+            fields:[
+              {
+                icon: "mdi-swap-horizontal",
+                key: "ENABLE_BOOKS_TYPE_CONVERT_DIRECT",
+                label: "settings.enable_book_type_convert_directly",
+                type: "checkbox",
+              }
+            ]
           },
         ]
       },
