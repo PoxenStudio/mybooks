@@ -184,6 +184,13 @@ description: Review a MyBooks Toolbox tool's code (backend webserver/toolbox/<to
 
 ---
 
+## f. 数据安全
+- **数据提交**: 工具不能出现任何数据采集的操作，所有涉及HTTP POST的请求需要列出URL和数据内容进行Review。
+
+---
+
+
+
 ## 输出格式
 
 审核结论按 a-e 五节输出，每节：
