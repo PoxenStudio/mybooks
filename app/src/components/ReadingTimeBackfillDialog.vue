@@ -32,10 +32,10 @@
 
         <v-row>
             <v-col cols="6">
-                <v-text-field v-model="startTime" type="time" :label="$t('book.readingTimeStart')" @change="onTimeChange"></v-text-field>
+                <v-text-field v-model="startTime" type="time" lang="en-GB" :label="$t('book.readingTimeStart')" @change="onTimeChange"></v-text-field>
             </v-col>
             <v-col cols="6">
-                <v-text-field v-model="endTime" type="time" :label="$t('book.readingTimeEnd')" @change="onTimeChange"></v-text-field>
+                <v-text-field v-model="endTime" type="time" lang="en-GB" :label="$t('book.readingTimeEnd')" @change="onTimeChange"></v-text-field>
             </v-col>
         </v-row>
 
