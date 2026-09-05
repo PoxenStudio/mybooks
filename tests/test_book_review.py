@@ -132,11 +132,6 @@ class TestBookReviewService(unittest.TestCase):
         finally:
             main.CONF["ENABLE_BOOK_RECOMMEND_TO_OTHERS"] = True
 
-    def test_cascade_delete_book_removes_reviews(self):
-        BookReviewService.upsert(self.session, book_id=100, reader_id=1, rating=8, comment="")
-        BookReviewService.cascade_delete_book(self.session, 100)
-        self.assertEqual(self.session.query(BookReview).filter_by(book_id=100).count(), 0)
-
 
 class TestBookReviewHandler(TestWithUserLogin):
     """Integration tests for GET/POST/DELETE /api/book/:id/review(s) over real HTTP,

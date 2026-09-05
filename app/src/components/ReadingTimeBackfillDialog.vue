@@ -111,8 +111,8 @@ export default {
         },
         resetToDefaults() {
             this.existingEntry = null;
-            this.startTime = "20:00";
-            this.endTime = "20:30";
+            this.startTime = "08:00";
+            this.endTime = "08:30";
             this.durationMinutes = 30;
         },
         fetchEntry() {
@@ -125,7 +125,7 @@ export default {
                     if (rsp.entry) {
                         this.existingEntry = rsp.entry;
                         this.durationMinutes = Math.round(rsp.entry.duration_seconds / 60);
-                        this.startTime = rsp.entry.start_time || "20:00";
+                        this.startTime = rsp.entry.start_time || "08:00";
                         this.endTime = rsp.entry.end_time || toHHMM(toMinutes(this.startTime) + this.durationMinutes);
                     } else {
                         this.resetToDefaults();
@@ -190,3 +190,9 @@ export default {
     },
 };
 </script>
+
+<style scoped>
+.theme--dark :deep(input[type="time"]) {
+    color-scheme: dark;
+}
+</style>

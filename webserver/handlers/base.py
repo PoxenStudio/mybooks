@@ -20,7 +20,7 @@ from webserver import loader, utils
 from webserver.base.formatter import BookFormatter
 from webserver.services.resource_service import ResourceService
 from webserver.services.book_review_service import BookReviewService
-from webserver.models import Item, Message, Reader
+from webserver.models import BookReadingStats, BookReview, Item, ManualReadingLog, Message, Reader, Reading, ReadingRecord, ReadingState
 from webserver import constants
 from webserver.version import VERSION
 from webserver.constants import UPGRABLE_REVISION
@@ -695,10 +695,6 @@ class BaseHandler(web.RequestHandler):
         return formats
 
     def is_book_owner(self, book_id, user_id):
-        auto = int(CONF.get("auto_login", 0))
-        if auto:
-            return True
-
         query = self.sqlite_session.query(Item)
         query = query.filter(Item.book_id == book_id)
         query = query.filter(Item.collector_id == user_id)
@@ -836,13 +832,29 @@ class BaseHandler(web.RequestHandler):
                 fmts.append(fmt)
         return fmts
 
+    @staticmethod
+    def cascade_delete_book_data(db, book_id: int, commit: bool = True) -> None:
+        """书籍被删除/下架时级联清理所有关联数据：Item（收藏/待读等标记）、评价、共读同步
+        记录、阅读状态（收藏/在读/待读）、手工补录的阅读时长记录，以及阅读时长统计
+        （Reading 按天分桶 / BookReadingStats 按格式累计）。
+
+        commit=False 供调用方把这次级联清理并入自己的事务，此时清理是否落盘由调用方负责。
+        """
+        db.query(Item).filter(Item.book_id == book_id).delete(synchronize_session=False)
+        db.query(BookReview).filter(BookReview.book_id == book_id).delete(synchronize_session=False)
+        db.query(ReadingRecord).filter(ReadingRecord.book_id == book_id).delete(synchronize_session=False)
+        db.query(ReadingState).filter(ReadingState.book_id == book_id).delete(synchronize_session=False)
+        db.query(ManualReadingLog).filter(ManualReadingLog.book_id == book_id).delete(synchronize_session=False)
+        db.query(Reading).filter(Reading.book_id == book_id).delete(synchronize_session=False)
+        db.query(BookReadingStats).filter(BookReadingStats.book_id == book_id).delete(synchronize_session=False)
+        if commit:
+            db.commit()
+        BookReviewService.invalidate_stats(book_id)
+
     def delete_book(self, book_id, book_title):
         result = True
         try:
-            # Item 与 ReadingState/BookReview/ReadingRecord（收藏/在读状态、评价、共读同步记录）
-            # 放在同一个 session 里一起删、一次性 commit，避免出现只删了部分表的中间状态。
-            self.sqlite_session.query(Item).filter(Item.book_id == book_id).delete(synchronize_session=False)
-            BookReviewService.cascade_delete_book(self.sqlite_session, book_id, commit=False)
+            self.cascade_delete_book_data(self.sqlite_session, book_id, commit=False)
             self.sqlite_session.commit()
         except Exception as e:
             self.sqlite_session.rollback()

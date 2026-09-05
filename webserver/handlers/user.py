@@ -45,9 +45,6 @@ _user_devices_cache = {}
 
 class Done(BaseHandler):
     def update_userinfo(self):
-        if int(CONF.get("auto_login", 0)):
-            return
-
         user_id = self.get_secure_cookie("user_id")
         user = self.sqlite_session.query(Reader).get(int(user_id)) if user_id else None
         if not user:
