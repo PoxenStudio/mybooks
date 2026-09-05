@@ -390,9 +390,14 @@ class ManualReadingService:
         entry = db.query(ManualReadingLog).filter_by(reader_id=reader_id, book_id=book_id, date=date).one_or_none()
         reading_row = db.query(Reading).filter_by(reader_id=reader_id, book_id=book_id, date=date, action=Reading.ACTION_READ).one_or_none()
         book_total = db.query(func.sum(BookReadingStats.total_seconds)).filter_by(reader_id=reader_id, book_id=book_id).scalar()
+        total_seconds = reading_row.duration if reading_row else 0
+        manual_seconds = entry.duration_seconds if entry else 0
+        natural_seconds = max(0, total_seconds - manual_seconds)
+        logging.info(f"For book id:{book_id}, date:{date}, reading duration:{reading_row.duration if reading_row else 0}, manual:{manual_seconds}")
         return {
             "entry": entry.format_dict() if entry else None,
-            "date_recorded_seconds": reading_row.duration if reading_row else 0,
+            "date_recorded_seconds": natural_seconds,
+            "manual_recorded_seconds": manual_seconds,
             "book_total_seconds": int(book_total or 0),
         }
 

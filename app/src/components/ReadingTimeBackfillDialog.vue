@@ -27,6 +27,8 @@
         <div class="grey--text text-body-2 mb-2">
             {{ $t('book.readingTimeDateRecorded', { minutes: dateRecordedMinutes }) }}
             &nbsp;·&nbsp;
+            {{ $t('book.readingTimeManualRecorded', { minutes: manualRecordedMinutes }) }}
+            &nbsp;·&nbsp;
             {{ $t('book.readingTimeBookRecorded', { minutes: bookTotalMinutes }) }}
         </div>
 
@@ -79,6 +81,7 @@ export default {
             durationMinutes: 30,
             existingEntry: null,
             dateRecordedSeconds: 0,
+            manualRecordedSeconds: 0,
             bookTotalSeconds: 0,
             loadingEntry: false,
             saving: false,
@@ -90,6 +93,9 @@ export default {
         },
         dateRecordedMinutes() {
             return Math.round(this.dateRecordedSeconds / 60);
+        },
+        manualRecordedMinutes() {
+            return Math.round(this.manualRecordedSeconds / 60);
         },
         bookTotalMinutes() {
             return Math.round(this.bookTotalSeconds / 60);
@@ -121,6 +127,7 @@ export default {
                 .then((rsp) => {
                     if (rsp.err !== "ok") return;
                     this.dateRecordedSeconds = rsp.date_recorded_seconds || 0;
+                    this.manualRecordedSeconds = rsp.manual_recorded_seconds || 0;
                     this.bookTotalSeconds = rsp.book_total_seconds || 0;
                     if (rsp.entry) {
                         this.existingEntry = rsp.entry;
