@@ -1,6 +1,6 @@
 {
   "name": "mybooks",
-  "version": "4.1.2",
+  "version": "4.2.2",
   "private": true,
   "scripts": {
     "dev": "nuxt",
