@@ -119,7 +119,7 @@ class EpubBeautifyTool(BaseTool):
             "tool_id": "epub_beautify",
             "name": "EPUB美化",
             "description": "美化 EPUB 的目录、章节名与字体排版（12 套风格预设 × 4 种目录形式，含竖排右翻古籍；卷章分级、双行排版、对话行点缀；支持批量队列与全书底色/自定义配色），生成新书",
-            "revision": "0.1.0",
+            "revision": "0.2.0",
             "author": "黏菌",
             "publish_date": "2026-08-22",
         }
