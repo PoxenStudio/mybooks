@@ -2484,6 +2484,25 @@ class TestHBranchScope(unittest.TestCase):
         self.assertFalse(any(mk.values()))
         self.assertNotIn('mb-ch', new)
 
+    def test_h2_midfile_section_heads_untouched(self):
+        """文件中部 h2 小节头不打标：h2 语义打标仅限文件首块——中部小节头
+        无链接，安全阀判别式对它失效，无条件打标会被 page-break 逐个顶成
+        独页（review P3 回归）"""
+        html = ('<html><body><p>第一章 开端</p><p>正文段落。</p>'
+                + ''.join('<h2>人物小传之%d</h2><p>小传内容。</p>' % i
+                          for i in range(1, 13))
+                + '</body></html>')
+        new, mk = lib.mark_chapters_in_html(html)
+        self.assertEqual(mk['chapters'], 1)      # 仅「第一章 开端」文本命中
+        self.assertEqual(new.count('<h2'), 12)   # h2 原样未动
+
+    def test_h2_first_block_still_marked_after_body(self):
+        """首块 h2 打标资格不被空白块消耗；其后正文块 data-mb-first 正常"""
+        html = self.H % '<p>  </p><h2>雪夜</h2><p>正文。</p>'
+        new, mk = lib.mark_chapters_in_html(html)
+        self.assertEqual(mk['chapters'], 1)
+        self.assertIn('mb-ch', new)
+
 
 class TestRestGuardRound2(unittest.TestCase):
     """rest 护栏第二轮：ASCII 续句、句中句读、前言冒号长叙述。"""

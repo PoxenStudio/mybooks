@@ -1801,7 +1801,7 @@
     "tocDepth": "目錄收錄層級",
     "anaLeading": "段首空格段落：{count} 處",
     "anaEmpty": "空白段落（約）：{count} 個",
-    "anaMismatch": "疑似未閉合標籤檔案：{count} 個",
+    "anaMismatch": "疑似未閉合標籤檔案（抽樣內）：{count} 個",
     "anaConflict": "原書 CSS 含 !important ×{count}，覆蓋可能不完全",
     "anaImages": "圖片：{count} 張（超大 {big}）",
     "tocPreviewTitle": "目錄預覽（已過濾製作資訊，前 12 條）",

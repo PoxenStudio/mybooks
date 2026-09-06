@@ -1041,6 +1041,8 @@ def mark_chapters_in_html(html_str: str, split_title: bool = False) -> tuple:
     # 被标块自身含链接的计数（安全阀判别式：目录行是 <p><a>第X章</a></p>，
     # 聚合正文的章题块无链接——见函数末尾安全阀）
     marked_with_links = 0
+    # 文件首个含文本块标记：h2 语义打标仅限首块（见 _handle_block 内注释）
+    first_text_block_seen = False
     # 性能护栏：开闭不齐的大文件跳过块级正则（避免 _BLOCK_RE O(n²) 退化）
     if len(html_str) > 80000:
         # 粗略统计 p 标签开闭数，不匹配且文件较大则跳过标记（与 analyze 的 p_close_mismatch 思路一致）
@@ -1053,7 +1055,7 @@ def mark_chapters_in_html(html_str: str, split_title: bool = False) -> tuple:
             pass
 
     def _handle_block(tag, attrs, inner, is_div=False):
-        nonlocal heading_seen, first_done, marked_with_links
+        nonlocal heading_seen, first_done, marked_with_links, first_text_block_seen
         # 弹注条目豁免（mb-note-item 由 mark_notes_in_html 打标）：注释内容
         # 不是章节标题，且 ◎《…》/短条目可能撞上弱正则
         if 'mb-note-item' in (attrs or ''):
@@ -1066,13 +1068,20 @@ def mark_chapters_in_html(html_str: str, split_title: bool = False) -> tuple:
         text = _block_text(inner)
         if not text.strip():
             return None
+        # 空白块不消耗"首块"资格，只有首个含文本块才算
+        is_first_text_block = not first_text_block_seen
+        first_text_block_seen = True
         is_heading = False
-        if tag and tag.lower() in ('h1', 'h2') and len(text) <= 100 \
+        tag_l = (tag or '').lower()
+        if tag_l in ('h1', 'h2') and (tag_l == 'h1' or is_first_text_block) \
+                and len(text) <= 100 \
                 and not text.rstrip().endswith(('。', '！', '？', '；', '.', '!', '?', ';')):
-            # h1/h2 语义即标题（此前依赖文本/类名启发，纯短语式章题如
-            # 「雪夜」不命中任何正则而漏标）；h3 以下维持旧启发式——章内
-            # 小节头（人物小传/插图列表）若同标 mb-ch，会被各预设的
-            # page-break-before 顶成独页；句读收尾的 h 块按滥用排除
+            # h1 语义无条件打标；h2 打标仅限文件首个含文本的块（拆分书章题
+            # 总在页首，纯短语式章题如「雪夜」此前漏标）——中部 h2 维持旧
+            # 启发式：技术书/文集合编常用 h2 当小节头且全无链接，无条件打标
+            # 会被 page-break 逐个顶成独页，且安全阀判别式（含链接占比）
+            # 对其失效（review P3）；h3 以下同理维持旧启发式；句读收尾的
+            # h 块按滥用排除
             is_heading = True
         elif _TITLE_CLASS_RE.search(cls_attr) and _looks_like_title(text):
             is_heading = True

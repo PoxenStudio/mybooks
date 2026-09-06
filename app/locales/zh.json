@@ -1808,7 +1808,7 @@
     "tocDepth": "目录收录层级",
     "anaLeading": "段首空格段落：{count} 处",
     "anaEmpty": "空段落（约）：{count} 个",
-    "anaMismatch": "疑似未闭合标签文件：{count} 个",
+    "anaMismatch": "疑似未闭合标签文件（采样内）：{count} 个",
     "anaConflict": "原书 CSS 含 !important ×{count}，覆盖可能不完全",
     "anaImages": "图片：{count} 张（超大 {big}）",
     "tocPreviewTitle": "目录预览（已过滤制作信息，前 12 条）",

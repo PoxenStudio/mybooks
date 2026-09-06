@@ -1807,7 +1807,7 @@
     "tocDepth": "TOC depth",
     "anaLeading": "Full-width indent paras: {count}",
     "anaEmpty": "Empty paragraphs (est): {count}",
-    "anaMismatch": "Unclosed-tag suspect files: {count}",
+    "anaMismatch": "Unclosed-tag suspect files (sampled): {count}",
     "anaConflict": "Original CSS uses !important ×{count}, override may be partial",
     "anaImages": "Images: {count} (oversized {big})",
     "tocPreviewTitle": "TOC preview (after noise filtering, first 12)",
