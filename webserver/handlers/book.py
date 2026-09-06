@@ -3649,6 +3649,14 @@ class BookSendToMail(BaseHandler):
             _("已开始推送《%(title)s》到%(email)s") % {"title": book["title"], "email": mail_to},
         )
 
+        # 记住本次分享邮箱（Reader.extra 按用户区分；游客推送无 current_user
+        # 不记忆；发送成功才写入，失败邮箱不留痕）。extra 兼容历史 NULL 行
+        if self.current_user:
+            extra = self.current_user.extra or {}
+            extra["last_share_email"] = mail_to
+            self.current_user.extra = extra
+            self.sqlite_session.commit()
+
         return {"err": "ok", "msg": _("后台正在推送，稍后可以刷新页面，在通知消息中查看结果。")}
 
 

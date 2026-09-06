@@ -1343,6 +1343,22 @@
             </v-radio-group>
         </template>
         <p class="mb-4">{{ $t('book.shareToEmailDesc') }}</p>
+        <!-- 选择邮箱来源：默认手动输入；有分享记录时可一键填入上次邮箱 -->
+        <p v-if="lastShareEmail" class="mb-2 body-2">{{ $t('book.emailSourceLabel') }}</p>
+        <v-radio-group
+            v-if="lastShareEmail"
+            v-model="emailSource"
+            class="mt-0"
+            dense
+            hide-details
+            @change="fillEmailFromLast"
+        >
+            <v-radio value="manual" :label="$t('book.emailManualEntry')"></v-radio>
+            <v-radio
+                value="last"
+                :label="$t('book.emailSendToLast') + ' (' + lastShareEmail + ')'"
+            ></v-radio>
+        </v-radio-group>
         <v-text-field
             v-model="email_address"
             :label="$t('book.emailAddress') + ' *'"
@@ -1836,6 +1852,9 @@ export default {
         email_error: '',
         email_size_warning: '',
         selected_email_format: '',
+        // 邮箱来源：manual 手动输入（默认）/ last 上次分享的邮箱
+        emailSource: 'manual',
+        lastShareEmail: '',
         // 图章位置选择对话框
         dialog_stamp_position: false,
         stamp_selected_position: '',
@@ -3715,7 +3734,23 @@ export default {
         // 打开邮箱对话框
         openEmailDialog() {
             this.selected_email_format = this.defaultEmailFormat;
+            // 上次分享的邮箱（发送成功时后端写入 Reader.extra，前端发送后本地同步）
+            this.lastShareEmail = this.$store.state.user?.last_share_email || '';
+            this.emailSource = 'manual';
+            this.email_address = '';
             this.dialog_send_to_email = true;
+        },
+
+        // 切换邮箱来源：上次邮箱一键填入（明文）；切回手动时若输入框仍是
+        // 上次邮箱则清空重填，用户已自输的内容不覆盖
+        fillEmailFromLast() {
+            if (this.emailSource === 'last' && this.lastShareEmail) {
+                this.email_address = this.lastShareEmail;
+                this.email_error = '';
+            } else if (this.emailSource === 'manual'
+                       && this.email_address === this.lastShareEmail) {
+                this.email_address = '';
+            }
         },
 
         // 关闭邮箱对话框
@@ -3753,6 +3788,8 @@ export default {
                 });
 
                 if (response.err === 'ok') {
+                    // 后端已写入 Reader.extra，本地同步供本会话内下次打开即显
+                    this.lastShareEmail = this.email_address.trim();
                     this.$alert('success', this.$t('book.sendToEmailSuccess', { email: this.email_address }));
                     this.closeEmailDialog();
                 } else {
