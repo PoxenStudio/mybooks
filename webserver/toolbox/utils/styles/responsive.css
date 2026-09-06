@@ -179,6 +179,25 @@ a.mb-notemark[data-mb-mark^="svg"] {
   vertical-align: super;
 }
 
+/* 「注」字圆章（note_mark=zhu）：中文 EPUB 标注符惯例的向量化——
+   圆形描边 + 居中单字，currentColor 跟随预设主题色；
+   位图版两例（到灯塔去 描边橙圈 / 地疤 实心褐圆）的统一形态 */
+a.mb-notemark .mb-markzhu {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 1.5em;
+  height: 1.5em;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  color: {{ACCENT}} !important;
+  font-size: 0.62em;
+  font-weight: 400;
+  line-height: 1.35;
+  text-align: center;
+  text-decoration: none;
+  vertical-align: 0.32em;
+}
+
 /* 注释容器卡片（章末可见形态；弹出形态由阅读器接管内容元素样式） */
 .mb-notes {
   margin: 2em 4% 0.8em !important;

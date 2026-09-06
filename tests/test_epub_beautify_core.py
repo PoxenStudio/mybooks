@@ -2345,8 +2345,14 @@ class TestNotes(unittest.TestCase):
         new2, _ = lib.mark_notes_in_html(NOTES_CH_A, note_mark='svg:inkdrop')
         self.assertIn('class="mb-marksvg"', new2)
         self.assertIn('viewBox="0 0 24 24"', new2)
+        # zhu 圆章：span 徽章，样式由 responsive.css 的 .mb-markzhu 绘制
+        new3, _ = lib.mark_notes_in_html(NOTES_CH_B, note_mark='zhu')
+        self.assertIn('<span class="mb-markzhu">注</span>', new3)
+        self.assertIn('data-mb-mark="zhu"', new3)
+        self.assertNotIn('<img', new3)
         # 替换后链接属性仍在
         self.assertIn('href="#note_1"', new2)
+        self.assertIn('href="#df-1"', new3)
         for bad in ('svg:nope', 'weird'):
             with self.assertRaises(ValueError):
                 lib.mark_notes_in_html(NOTES_CH_A, note_mark=bad)

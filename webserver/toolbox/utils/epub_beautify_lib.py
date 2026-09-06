@@ -1297,7 +1297,7 @@ NOTE_MARK_SVGS = {
     ),
 }
 
-NOTE_MARK_MODES = ('orig', 'sym', 'num')
+NOTE_MARK_MODES = ('orig', 'sym', 'num', 'zhu')
 
 
 def _validate_note_mark(note_mark: str) -> None:
@@ -1317,6 +1317,10 @@ def _make_mark_inner(note_mark: str, seq: int) -> str:
         return '<sup class="mb-marktxt">※</sup>'
     if note_mark == 'num':
         return '<sup class="mb-marktxt">[%d]</sup>' % seq
+    if note_mark == 'zhu':
+        # 「注」字圆章（中文 EPUB 标注符惯例的向量化）：圆形描边由
+        # responsive.css 的 .mb-markzhu 规则绘制，currentColor 跟随预设主题色
+        return '<span class="mb-markzhu">注</span>'
     if note_mark.startswith('svg:'):
         return ('<svg class="mb-marksvg" viewBox="0 0 24 24" aria-hidden="true">%s</svg>'
                 % NOTE_MARK_SVGS[note_mark[4:]])

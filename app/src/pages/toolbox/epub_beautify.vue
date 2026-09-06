@@ -746,11 +746,12 @@ export default {
         { value: 'svg:inkdrop', label: this.$t('epubBeautify.markSvgInkdrop') },
         { value: 'svg:spark', label: this.$t('epubBeautify.markSvgSpark') },
         { value: 'svg:sealdot', label: this.$t('epubBeautify.markSvgSealdot') },
+        { value: 'zhu', label: this.$t('epubBeautify.markZhu') },
       ];
     },
     markGlyph() {
       // 选择器旁的即时预览字符（SVG 模板用近似字形示意）
-      const map = { orig: '●', sym: '※', num: '[1]', 'svg:dot': '◉', 'svg:fold': '❏', 'svg:inkdrop': '❍', 'svg:spark': '✦', 'svg:sealdot': '▣' };
+      const map = { orig: '●', sym: '※', num: '[1]', 'svg:dot': '◉', 'svg:fold': '❏', 'svg:inkdrop': '❍', 'svg:spark': '✦', 'svg:sealdot': '▣', zhu: '注' };
       return map[this.noteMark] || '●';
     },
     tocSampleRows() {
