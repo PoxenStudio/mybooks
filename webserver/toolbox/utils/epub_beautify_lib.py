@@ -856,10 +856,18 @@ def _mark_toc_page_body(html_str: str) -> str:
     return html_str[:m.start()] + '<body%s>' % new_attrs + html_str[m.end():]
 
 
+# 平铺目录页标题文本（_decorate_toc_page 兜底用）：全等匹配，防类汤正文误标
+_TOC_TITLE_TEXT_RE = re.compile(
+    r'^(?:目\s*录|目\s*錄|目\s*次|(?:table\s*of\s*)?contents)$', re.IGNORECASE)
+
+
 def _decorate_toc_page(html_str: str) -> str:
     """给书内普通目录页注入真实装饰元素（幂等）：标题英文副题 + 收尾 ◆。
 
     使用真实元素而非 ::before/::after content（移动阅读器兼容性差）。
+    标题判定：h1/h2 优先；无 h1/h2 的平铺目录页（类汤书标题常是
+    ``<p>目录</p>``）在前几个块里找文本恰为「目录/Contents」的 p/div，
+    打 ``mb-toc-title`` 类（与 h1/h2 同组样式）后注入副题。
     """
     if 'mb-toc-sub' in html_str and 'mb-toc-end' in html_str:
         return html_str
@@ -868,6 +876,30 @@ def _decorate_toc_page(html_str: str) -> str:
     if m and 'mb-toc-sub' not in m.group(2):
         sub = '<span class="mb-toc-sub">C O N T E N T S</span>'
         html_str = html_str[:m.end(2)] + sub + html_str[m.start(3):]
+    # 平铺目录页标题兜底：只在首个链接之前的块里找（标题必在条目前），
+    # 文本全等关键词才命中，不做模糊猜测——类汤首块可能是任何内容
+    if 'mb-toc-sub' not in html_str:
+        _first_link = html_str.lower().find('<a ')
+        _scan = html_str if _first_link < 0 else html_str[:_first_link]
+        for m in _BLOCK_RE.finditer(_scan):
+            if m.group(1).lower() != 'p':
+                continue
+            if not _TOC_TITLE_TEXT_RE.match(_block_text(m.group(3)).strip()):
+                continue
+            html_str = (html_str[:m.start()] + '<p%s>' % _add_class(m.group(2), 'mb-toc-title')
+                        + m.group(3)
+                        + '<span class="mb-toc-sub">C O N T E N T S</span></p>'
+                        + html_str[m.end():])
+            break
+        else:
+            for m in _SIMPLE_DIV_RE.finditer(_scan):
+                if not _TOC_TITLE_TEXT_RE.match(_block_text(m.group(2)).strip()):
+                    continue
+                html_str = (html_str[:m.start()] + '<div%s>' % _add_class(m.group(1), 'mb-toc-title')
+                            + m.group(2)
+                            + '<span class="mb-toc-sub">C O N T E N T S</span></div>'
+                            + html_str[m.end():])
+                break
     # body 末尾注入收尾装饰符
     if 'mb-toc-end' not in html_str:
         m2 = re.search(r'</body>', html_str, re.IGNORECASE)
@@ -1063,16 +1095,25 @@ def mark_dialogue_in_html(html_str: str) -> tuple:
 
 # ── 弹注/标注（mb-notemark / mb-notes）───────────────────────────────────────
 
-# 文内标注符：<a class="duokan-footnote" ...>…</a>（A 型带 epub:type/id，B 型仅 class+href）
+# 弹注类名词元：多看系 `duokan-footnote*` 与通用系 `footnote*`（多制作器同构惯例，
+# 如 `a.footnote` + `ol.footnote-content` + `li.footnote-item`）。词元边界断言防误吞：
+# `footnote-content/-item/-text` 不得命中裸 `footnote`，`duokan-footnote-link`（注释体
+# 反向链接）不得命中 `duokan-footnote`——此前无边界时反链会被误计为标注符（地疤实书
+# 36 refs 实为 18 真 + 18 反链），`my-footnote` 复合词同理不命中。
+_MB_NOTE_PREFIX = r'(?<![\w-])(?:duokan-)?footnote'
+
+# 文内标注符：<a class="duokan-footnote|footnote" ...>…</a>（A 型带 epub:type/id，B 型仅 class+href）
 _NOTE_REF_RE = re.compile(
-    r'<a\b([^>]*?class\s*=\s*["\'][^"\']*duokan-footnote[^"\']*["\'][^>]*?)>(.*?)</a>',
+    r'<a\b([^>]*?class\s*=\s*["\'][^"\']*%s(?![\w-])[^"\']*["\'][^>]*?)>(.*?)</a>'
+    % _MB_NOTE_PREFIX,
     re.I | re.S,
 )
-# 注释容器：aside[epub:type~=footnote]（A 型）或裸 ol.duokan-footnote-content（B 型）
+# 注释容器：aside[epub:type~=footnote]（A 型）或裸 ol.{duokan-}footnote-content（B 型）
 _FOOTNOTE_ASIDE_RE = re.compile(r'<aside\b[^>]*epub:type\s*=\s*["\'][^"\']*footnote', re.I)
 _NOTES_OL_BLOCK_RE = re.compile(
-    r'<ol\b[^>]*duokan-footnote-content[^>]*>.*?</ol>', re.I | re.S)
-_NOTE_ITEM_CNT_RE = re.compile(r'class\s*=\s*["\'][^"\']*duokan-footnote-item', re.I)
+    r'<ol\b[^>]*%s-content(?![\w-])[^>]*>.*?</ol>' % _MB_NOTE_PREFIX, re.I | re.S)
+_NOTE_ITEM_CNT_RE = re.compile(
+    r'class\s*=\s*["\'][^"\']*%s-item(?![\w-])' % _MB_NOTE_PREFIX, re.I)
 
 # 自绘 SVG 标注模板（viewBox 24×24，fill=currentColor 随预设主题染色；
 # 全部为本插件原创 path，可随插件分发）
@@ -1134,13 +1175,17 @@ def _add_epub_type_noteref(attrs: str) -> str:
 
 def mark_notes_in_html(html_str: str, normalize: bool = True,
                        note_mark: str = 'orig') -> tuple:
-    """美化书内多看系弹注：标注符与注释容器打标，可选语义归一化/换标记元素。
+    """美化书内弹注：标注符与注释容器打标，可选语义归一化/换标记元素。
 
-    - 所有 `a.duokan-footnote` 追加 ``mb-notemark`` 类与 ``data-mb-mark``；
-      note_mark != 'orig' 时把内部 `<img>` 替换为文本/SVG 标记（序号按文件内顺序）；
-      normalize 时为缺 `epub:type` 的 ref 补 `noteref`；
+    识别两类同构类名惯例：多看系 ``duokan-footnote*`` 与通用系 ``footnote*``
+    （词元边界见 _MB_NOTE_PREFIX 注释，`duokan-footnote-link` 反链/`footnote-text`
+    注文体等衍生词元不误命中）。
+
+    - 所有 `a.duokan-footnote` / `a.footnote` 标注符追加 ``mb-notemark`` 类与
+      ``data-mb-mark``；note_mark != 'orig' 时把内部 `<img>` 替换为文本/SVG 标记
+      （序号按文件内顺序）；normalize 时为缺 `epub:type` 的 ref 补 `noteref`；
     - 容器：已有 `aside[epub:type~=footnote]` 打 ``mb-notes`` 类；
-      裸 `ol.duokan-footnote-content` 且无 aside 时包进
+      裸 `ol.duokan-footnote-content` / `ol.footnote-content` 且无 aside 时包进
       `<aside epub:type="footnote" class="mb-notes">`（提升 EPUB3 引擎弹出兼容）；
     - 条目 li 追加 ``mb-note-item`` 豁免类——章末注释不会被章节标题扫描误标。
 
@@ -1175,11 +1220,13 @@ def mark_notes_in_html(html_str: str, normalize: bool = True,
 
     html_str = _NOTE_REF_RE.sub(_ref_repl, html_str)
 
-    # 条目豁免类（防章节标题扫描误标）
+    # 条目豁免类（防章节标题扫描误标）；词元级追加，兼容 duokan- 前缀两种写法
     def _item_repl(m):
-        return m.group(0).replace('duokan-footnote-item', 'duokan-footnote-item mb-note-item', 1)
+        return re.sub(r'(?<![\w-])((?:duokan-)?footnote-item)(?![\w-])',
+                      r'\1 mb-note-item', m.group(0), count=1)
     html_str = re.sub(
-        r'<li\b[^>]*class\s*=\s*["\'][^"\']*duokan-footnote-item[^"\']*["\'][^>]*>',
+        r'<li\b[^>]*class\s*=\s*["\'][^"\']*(?<![\w-])(?:duokan-)?footnote-item'
+        r'(?![\w-])[^"\']*["\'][^>]*>',
         _item_repl, html_str, flags=re.I)
 
     has_aside = bool(_FOOTNOTE_ASIDE_RE.search(html_str))

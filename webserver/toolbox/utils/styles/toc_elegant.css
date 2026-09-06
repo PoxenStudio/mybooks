@@ -18,9 +18,11 @@ body.mb-toc-page div.mulu,
 body.mb-toc-page table.mulu {
     margin: 3em 1.5em;
 }
-/* 标题：标题字体 + 主题色 + 字距 + 顶部装饰线 */
+/* 标题：标题字体 + 主题色 + 字距 + 顶部装饰线（.mb-toc-title = 书内平铺目录页
+   的 p/div 标题兜底类，由 _decorate_toc_page 打标） */
 body.mb-toc-page h1,
-body.mb-toc-page h2 {
+body.mb-toc-page h2,
+body.mb-toc-page .mb-toc-title {
     {{FONT_HEAD}}
     text-align: center !important;
     font-weight: bold;
@@ -58,7 +60,9 @@ body.mb-toc-page li {
     orphans: 2;
     widows: 2;
 }
-body.mb-toc-page li a {
+body.mb-toc-page li a,
+body.mb-toc-page p a,
+body.mb-toc-page div a {
     text-decoration: none !important;
     color: inherit;
     border-bottom: 1px solid {{ACCENT}};
@@ -85,12 +89,12 @@ body.mb-toc-page li li {
     border-bottom: 1px dotted {{BORDER}};
     padding-bottom: 0.2em;
 }
-/* 平铺式目录（p/div 条目）兜底 */
+/* 平铺式目录（p/div 条目）兜底；标题块走 .mb-toc-title 的标题样式不在此列 */
 body.mb-toc-page p,
 body.mb-toc-page div {
     text-indent: 0 !important;
 }
-body.mb-toc-page p {
+body.mb-toc-page p:not(.mb-toc-title) {
     margin: 0.7em 0 !important;
     line-height: 1.9 !important;
 }
@@ -134,7 +138,8 @@ body.mb-toc-page .mb-toc-truncated {
     margin: 1.5em 0.8em !important;
   }
   body.mb-toc-page h1,
-  body.mb-toc-page h2 {
+  body.mb-toc-page h2,
+  body.mb-toc-page .mb-toc-title {
     font-size: 1.3em !important;
     margin: 0.8em auto 1.5em auto !important;
   }

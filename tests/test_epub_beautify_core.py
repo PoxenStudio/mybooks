@@ -738,6 +738,15 @@ DAMAGED_TOC_HTML = (
               '<div class="mb-ch-sep"></div>' % (i, i) for i in range(1, 6))
     + '</body></html>'
 )
+# 平铺目录页（calibre 类汤常见形态）：<p>目录</p> 标题 + <p><a> 条目
+# （≥3 个标题形态链接才会命中 _looks_like_link_toc 的目录页判定）
+FLAT_TOC_CN_HTML = (
+    '<html><head><title>t</title></head><body>'
+    '<p>目录</p>'
+    + ''.join('<p><a href="s%02d.html">第%d章</a></p>' % (i, i)
+              for i in range(1, 6))
+    + '</body></html>'
+)
 PROSE_CHAPTER_HTML = (
     '<html><head><title>c</title></head><body>'
     '<p>第一章 开端</p><p>正文段落，平静无事。</p>'
@@ -873,6 +882,50 @@ class TestTocPageDetection(unittest.TestCase):
             for p in (tmp, out):
                 if os.path.exists(p):
                     os.remove(p)
+
+
+    def test_flat_toc_cn_title_decorated(self):
+        """平铺目录页兜底：<p>目录</p> 标题打 mb-toc-title + 注入副题；
+        条目链接不误标章节、链接数无损。"""
+        tmp = os.path.join(TESTS_DIR, "_tmp_flat_toc.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_flat_toc_out.epub")
+        self._build_link_toc_epub(tmp, FLAT_TOC_CN_HTML)
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            stats = lib.beautify(tmp, out, css)
+            self.assertFalse(stats["toc_generated"])
+            with zipfile.ZipFile(out) as zf:
+                toc_page = zf.read("OEBPS/index_split_000.html").decode("utf-8")
+            self.assertIn("mb-toc-page", toc_page)
+            self.assertIn('class="mb-toc-title"', toc_page)
+            self.assertIn('mb-toc-sub', toc_page)
+            self.assertIn('mb-toc-end', toc_page)
+            self.assertNotIn("mb-ch", toc_page)
+            self.assertEqual(toc_page.count("<a "), 5)
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_flat_toc_english_title_decorated(self):
+        """Table of Contents 标题同样命中兜底（calibre 英文惯例）。"""
+        once = lib._decorate_toc_page(LINK_TOC_HTML)
+        self.assertIn('mb-toc-title', once)
+        self.assertIn('C O N T E N T S', once)
+
+    def test_decorate_toc_page_idempotent(self):
+        once = lib._decorate_toc_page(FLAT_TOC_CN_HTML)
+        twice = lib._decorate_toc_page(once)
+        self.assertEqual(twice, once)
+
+    def test_flat_toc_css_rules_all_styles(self):
+        """四种目录风格均含平铺页链接/标题规则，且无残留占位符。"""
+        for ts in ("elegant", "cool", "seal", "minimal"):
+            css = get_preset_css("classic", toc_style=ts)
+            self.assertIn("body.mb-toc-page p a", css, ts)
+            self.assertIn("body.mb-toc-page .mb-toc-title", css, ts)
+            self.assertIn("p:not(.mb-toc-title)", css, ts)
+            self.assertNotIn("{{", css, ts)
 
 
 class TestTitleMarkingPrecision(unittest.TestCase):
@@ -2201,6 +2254,18 @@ NOTES_CH_B = (
     '<li class="duokan-footnote-item" id="df-1">◎《唐律疏议》相关条文注释。</li>'
     '</ol></body></html>'
 )
+# 通用系（非多看）类名惯例：a.footnote / ol.footnote-content / li.footnote-item，
+# 注文体 p 用衍生词元 footnote-text（不得被当标注符）
+NOTES_CH_G = (
+    '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>g</title></head>'
+    '<body><p>第一章 引子</p>'
+    '<p>正文提到某个词<a class="footnote" href="#gn-1">'
+    '<img src="note.png"/></a>随后继续叙述。</p>'
+    '<ol class="footnote-content">'
+    '<li class="footnote-item" id="gn-1"><p class="footnote-text">'
+    '注文：通用系类名惯例的解释文本。</p></li>'
+    '</ol></body></html>'
+)
 
 
 def build_notes_epub(path):
@@ -2221,6 +2286,24 @@ def build_notes_epub(path):
         zf.writestr("OEBPS/content.opf", opf)
         zf.writestr("OEBPS/c1.xhtml", NOTES_CH_A)
         zf.writestr("OEBPS/c2.xhtml", NOTES_CH_B)
+
+
+def build_notes_epub_generic(path):
+    """构建含通用系弹注（NOTES_CH_G）的迷你 EPUB。"""
+    opf = (
+        '<?xml version="1.0"?>'
+        '<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+        '<metadata><dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">通用弹注书</dc:title></metadata>'
+        '<manifest>'
+        '<item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/>'
+        '</manifest>'
+        '<spine><itemref idref="c1"/></spine></package>'
+    )
+    with zipfile.ZipFile(path, "w") as zf:
+        zf.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
+        zf.writestr("META-INF/container.xml", CONTAINER)
+        zf.writestr("OEBPS/content.opf", opf)
+        zf.writestr("OEBPS/c1.xhtml", NOTES_CH_G)
 
 
 class TestNotes(unittest.TestCase):
@@ -2300,6 +2383,64 @@ class TestNotes(unittest.TestCase):
                 self.assertIn('mb-notemark', c2)
                 self.assertIn('[1]', c2)
                 self.assertIn('<aside epub:type="footnote"', c2)
+                self.assertIn('.mb-notes', zf.read("OEBPS/mb-beauty.css").decode("utf-8"))
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)
+
+
+    def test_generic_footnote_classes_marked(self):
+        """通用系类名（a.footnote / ol.footnote-content / li.footnote-item）
+        与多看系同构识别；注文体 p.footnote-text 不误标。"""
+        new, st = lib.mark_notes_in_html(NOTES_CH_G)
+        self.assertEqual(st, {'refs': 1, 'items': 1, 'normalized': 1, 'wrapped': 1})
+        self.assertEqual(new.count('mb-notemark'), 1)
+        self.assertIn('data-mb-mark="orig"', new)
+        self.assertIn('mb-notes', new)
+        self.assertIn('mb-note-item', new)
+        # 红线：原属性逐字保留
+        self.assertIn('href="#gn-1"', new)
+        self.assertIn('<img src="note.png"/>', new)
+        self.assertIn('id="gn-1"', new)
+
+    def test_generic_footnote_num_mark(self):
+        new, _ = lib.mark_notes_in_html(NOTES_CH_G, note_mark='num')
+        self.assertIn('[1]', new)
+        self.assertIn('class="mb-marktxt"', new)
+        self.assertNotIn('<img', new)
+        self.assertIn('href="#gn-1"', new)
+
+    def test_footnote_variant_tokens_not_refs(self):
+        """衍生词元/复合词不命中：footnote-text、duokan-footnote-link（反链）、
+        footnote-link、my-footnote、footnote-contents。"""
+        html = ('<p class="footnote-text">注释体段落。</p>'
+                '<a class="duokan-footnote-link" href="#r1">返回</a>'
+                '<a class="footnote-link" href="#r2">back</a>'
+                '<a class="my-footnote" href="#r3">x</a>'
+                '<ol class="footnote-contents"><li>x</li></ol>')
+        new, st = lib.mark_notes_in_html(html)
+        self.assertEqual(st, {'refs': 0, 'items': 0, 'normalized': 0, 'wrapped': 0})
+        self.assertNotIn('mb-notemark', new)
+        self.assertNotIn('mb-notes', new)
+
+    def test_analyze_and_beautify_generic_notes(self):
+        """通用系弹注书：analyze 计数与 beautify 落包全链路。"""
+        tmp = os.path.join(TESTS_DIR, "_tmp_gnt.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_gnt_out.epub")
+        build_notes_epub_generic(tmp)
+        try:
+            a = lib.analyze_epub(tmp)
+            self.assertEqual(a["notes_refs"], 1)
+            self.assertEqual(a["notes_items"], 1)
+            css = get_preset_css("classic", use_system_fonts=True)
+            stats = lib.beautify(tmp, out, css, notes=True, note_mark='num')
+            self.assertEqual(stats["notes_refs"], 1)
+            with zipfile.ZipFile(out) as zf:
+                c1 = zf.read("OEBPS/c1.xhtml").decode("utf-8")
+                self.assertIn('mb-notemark', c1)
+                self.assertIn('[1]', c1)
+                self.assertIn('<aside epub:type="footnote"', c1)
                 self.assertIn('.mb-notes', zf.read("OEBPS/mb-beauty.css").decode("utf-8"))
         finally:
             for p in (tmp, out):

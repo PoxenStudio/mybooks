@@ -460,10 +460,11 @@ blockquote, pre, table, figure, img {
     background: #121212 !important;
     border-color: #333 !important;
   }
-  /* 目录页标题（toc_* 的 h1/h2 用 ACCENT 深色字）夜间转亮，深棕字沉入
-     #121212 不可读；顶部装饰线同步转暗 */
+  /* 目录页标题（toc_* 的 h1/h2 与平铺页兜底 .mb-toc-title 用 ACCENT 深色字）
+     夜间转亮，深棕字沉入 #121212 不可读；顶部装饰线同步转暗 */
   body.mb-toc-page h1,
-  body.mb-toc-page h2 {
+  body.mb-toc-page h2,
+  body.mb-toc-page .mb-toc-title {
     color: {{ACCENT_DARK}} !important;
     border-color: #444 !important;
   }
