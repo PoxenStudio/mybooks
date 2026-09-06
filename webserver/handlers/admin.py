@@ -30,7 +30,10 @@ from webserver.services.resource_service import ResourceService
 from webserver.services.save_meta_to_files import SaveMetaToFilesService
 from webserver.services.mail import MailService
 from webserver.services.book_barn import BookBarnClient, BookBarnService
-from webserver.services.download_quota_service import DownloadQuotaService, DOWNLOAD_QUOTA_FOLLOW_GLOBAL
+from webserver.services.download_quota_service import (
+    DownloadQuotaService,
+    DOWNLOAD_QUOTA_FOLLOW_GLOBAL,
+)
 from webserver.services.background_service import BackgroundService, BackgroundTask
 from webserver.services.book_search import BookSearch
 from webserver.handlers.base import BaseHandler, auth, js, is_admin
@@ -75,7 +78,10 @@ class AdminUsers(BaseHandler):
         push_count_subq = None
         if sort == "push_count":
             push_count_subq = (
-                self.sqlite_session.query(Reading.reader_id.label("reader_id"), func.count(Reading.id).label("push_cnt"))
+                self.sqlite_session.query(
+                    Reading.reader_id.label("reader_id"),
+                    func.count(Reading.id).label("push_cnt"),
+                )
                 .filter(Reading.action == Reading.ACTION_PUSH)
                 .group_by(Reading.reader_id)
                 .subquery()
@@ -89,7 +95,11 @@ class AdminUsers(BaseHandler):
             "username": Reader.username,
             "total_reading_seconds": Reader.total_reading_seconds,
             "download_count": Reader.download_count,
-            "push_count": func.coalesce(push_count_subq.c.push_cnt, 0) if push_count_subq is not None else None,
+            "push_count": (
+                func.coalesce(push_count_subq.c.push_cnt, 0)
+                if push_count_subq is not None
+                else None
+            ),
         }.get(sort, Reader.id)
         if desc == "false":
             f = f.asc()
@@ -100,7 +110,9 @@ class AdminUsers(BaseHandler):
         enable_download_quota = CONF.get("ENABLE_DOWNLOAD_QUOTA", False)
         query = self.sqlite_session.query(Reader)
         if push_count_subq is not None:
-            query = query.outerjoin(push_count_subq, Reader.id == push_count_subq.c.reader_id)
+            query = query.outerjoin(
+                push_count_subq, Reader.id == push_count_subq.c.reader_id
+            )
         query = query.order_by(f)
         total = query.count()
         start = page * num
@@ -109,12 +121,19 @@ class AdminUsers(BaseHandler):
         reading_counts = {}
         if user_ids:
             rows = (
-                self.sqlite_session.query(Reading.reader_id, Reading.action, func.count(Reading.id))
-                .filter(Reading.reader_id.in_(user_ids), Reading.action.in_([Reading.ACTION_READ, Reading.ACTION_PUSH]))
+                self.sqlite_session.query(
+                    Reading.reader_id, Reading.action, func.count(Reading.id)
+                )
+                .filter(
+                    Reading.reader_id.in_(user_ids),
+                    Reading.action.in_([Reading.ACTION_READ, Reading.ACTION_PUSH]),
+                )
                 .group_by(Reading.reader_id, Reading.action)
                 .all()
             )
-            reading_counts = {(reader_id, action): cnt for reader_id, action, cnt in rows}
+            reading_counts = {
+                (reader_id, action): cnt for reader_id, action, cnt in rows
+            }
         items = []
         user_config = {
             "allow_read_range_setting": CONF.get("ALLOW_READ_RANGE_SETTING", False),
@@ -292,7 +311,11 @@ class AdminBookReviews(BaseHandler):
     @is_admin
     def get(self):
         status = self.get_argument("status", "") or None
-        if status is not None and status not in (BookReview.STATUS_PENDING, BookReview.STATUS_APPROVED, BookReview.STATUS_HIDDEN):
+        if status is not None and status not in (
+            BookReview.STATUS_PENDING,
+            BookReview.STATUS_APPROVED,
+            BookReview.STATUS_HIDDEN,
+        ):
             return {"err": "params.invalid", "msg": _("非法的 status 参数")}
         try:
             page = max(1, int(self.get_argument("page", 1)))
@@ -300,30 +323,49 @@ class AdminBookReviews(BaseHandler):
         except (TypeError, ValueError):
             return {"err": "params.invalid", "msg": _("分页参数错误")}
 
-        rows, total = BookReviewService.list_for_admin(self.sqlite_session, status=status, page=page, page_size=page_size)
+        rows, total = BookReviewService.list_for_admin(
+            self.sqlite_session, status=status, page=page, page_size=page_size
+        )
         reader_ids = {r.reader_id for r in rows}
         book_ids = list({r.book_id for r in rows})
         readers = {}
         if reader_ids:
-            readers = {u.id: u for u in self.sqlite_session.query(Reader).filter(Reader.id.in_(reader_ids)).all()}
+            readers = {
+                u.id: u
+                for u in self.sqlite_session.query(Reader)
+                .filter(Reader.id.in_(reader_ids))
+                .all()
+            }
         books = {b["id"]: b for b in self.get_books(ids=book_ids)} if book_ids else {}
 
         items = []
         for row in rows:
             reader = readers.get(row.reader_id)
             book = books.get(row.book_id)
-            items.append({
-                "id": row.id,
-                "book_id": row.book_id,
-                "book_title": book.get("title", "") if book else "",
-                "reader_id": row.reader_id,
-                "username": reader.username if reader else "",
-                "rating": row.rating,
-                "comment": row.comment or "",
-                "status": row.status,
-                "update_time": row.update_time.strftime("%Y-%m-%d %H:%M:%S") if row.update_time else "",
-            })
-        return {"err": "ok", "total": total, "page": page, "page_size": page_size, "reviews": items}
+            items.append(
+                {
+                    "id": row.id,
+                    "book_id": row.book_id,
+                    "book_title": book.get("title", "") if book else "",
+                    "reader_id": row.reader_id,
+                    "username": reader.username if reader else "",
+                    "rating": row.rating,
+                    "comment": row.comment or "",
+                    "status": row.status,
+                    "update_time": (
+                        row.update_time.strftime("%Y-%m-%d %H:%M:%S")
+                        if row.update_time
+                        else ""
+                    ),
+                }
+            )
+        return {
+            "err": "ok",
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "reviews": items,
+        }
 
     @js
     @is_admin
@@ -447,6 +489,7 @@ class AdminSettings(BaseHandler):
         KEYS = [
             "ALLOW_GUEST_DOWNLOAD",
             "ALLOW_GUEST_PUSH",
+            "AUTO_CHECKING_NEW_VERSION",
             "ENABLE_DOWNLOAD_QUOTA",
             "GLOBAL_DOWNLOAD_QUOTA",
             "ALLOW_GUEST_READ",
@@ -458,7 +501,7 @@ class AdminSettings(BaseHandler):
             "FRIENDS",
             "FOOTER",
             "FOOTER_WATERMARK",
-            'HIDE_PROJECT_LINKS',
+            "HIDE_PROJECT_LINKS",
             "HEADER",
             "INVITE_CODE",
             "INVITE_MESSAGE",
@@ -562,7 +605,7 @@ class AdminSettings(BaseHandler):
         for key, val in data.items():
             if key.startswith("SOCIAL_AUTH"):
                 if key.endswith("_KEY") or key.endswith("_SECRET"):
-                    if not re.match(r'^[A-Za-z0-9_]+$', key):
+                    if not re.match(r"^[A-Za-z0-9_]+$", key):
                         continue
                     args[key] = val
             elif key in KEYS:
@@ -604,7 +647,9 @@ class AdminSettings(BaseHandler):
                         "豆瓣API密钥无效, 只能包含数字、字母、下划线或短横线，且长度不能超过48个字符"
                     ),
                 }
-        need_sync_authors = args.get("ENABLE_AUTHOR_INFO", False) and not CONF.get("ENABLE_AUTHOR_INFO", False)
+        need_sync_authors = args.get("ENABLE_AUTHOR_INFO", False) and not CONF.get(
+            "ENABLE_AUTHOR_INFO", False
+        )
         result = SettingsSaver().save_extra_settings(args)
         if need_sync_authors:
             BookBarnService().sync_author_list()
@@ -935,6 +980,7 @@ class AdminBookAIFill(BaseHandler):
 
 class AdminUpdateAllMeta(BaseHandler):
     """Admin API: 批量更新所有书籍的元信息"""
+
     @js
     @is_admin
     def post(self):
@@ -944,7 +990,10 @@ class AdminUpdateAllMeta(BaseHandler):
 
         idlist = list(self.calibre_db_cache.all_book_ids())
         MetaDataUpdateService().update_metadata(self.current_user.id, idlist)
-        return {"err": "ok", "msg": _("批量更新书籍元信息任务已启动，右上角可以查看进度")}
+        return {
+            "err": "ok",
+            "msg": _("批量更新书籍元信息任务已启动，右上角可以查看进度"),
+        }
 
 
 class AdminUpdateDynamicCover(BaseHandler):
@@ -969,8 +1018,13 @@ class AdminUpdateDynamicCover(BaseHandler):
                 if not isinstance(bid, int):
                     return {"err": "params.error.idlist", "msg": _("idlist参数错误")}
 
-        DynamicCoverUpdateService().update_cover(self.current_user.id, idlist, dynamic_cover=True)
-        return {"err": "ok", "msg": _("批量更新书籍动态封面任务已启动，右上角可以查看进度")}
+        DynamicCoverUpdateService().update_cover(
+            self.current_user.id, idlist, dynamic_cover=True
+        )
+        return {
+            "err": "ok",
+            "msg": _("批量更新书籍动态封面任务已启动，右上角可以查看进度"),
+        }
 
 
 class AdminResetCover(BaseHandler):
@@ -995,8 +1049,13 @@ class AdminResetCover(BaseHandler):
                 if not isinstance(bid, int):
                     return {"err": "params.error.idlist", "msg": _("idlist参数错误")}
 
-        DynamicCoverUpdateService().update_cover(self.current_user.id, idlist, dynamic_cover=False)
-        return {"err": "ok", "msg": _("批量更新书籍动态封面任务已启动，右上角可以查看进度")}
+        DynamicCoverUpdateService().update_cover(
+            self.current_user.id, idlist, dynamic_cover=False
+        )
+        return {
+            "err": "ok",
+            "msg": _("批量更新书籍动态封面任务已启动，右上角可以查看进度"),
+        }
 
 
 class AdminBookConvertEpub(BaseHandler):
@@ -1143,7 +1202,10 @@ class AdminSaveMeta(BaseHandler):
                 return {"err": "params.error.idlist", "msg": _("idlist参数错误")}
 
         SaveMetaToFilesService().save_metadata(self.current_user.id, idlist)
-        return {"err": "ok", "msg": _("同步元数据到文件的任务已经开始执行，在右上角可以查看进度")}
+        return {
+            "err": "ok",
+            "msg": _("同步元数据到文件的任务已经开始执行，在右上角可以查看进度"),
+        }
 
 
 class ClearInvalidItems(BaseHandler):
@@ -1155,13 +1217,19 @@ class ClearInvalidItems(BaseHandler):
         try:
             all_calibre_ids = set(self.calibre_db_cache.all_book_ids())
             items = self.sqlite_session.query(Item).all()
-            invalid_items = [item for item in items if item.book_id not in all_calibre_ids]
+            invalid_items = [
+                item for item in items if item.book_id not in all_calibre_ids
+            ]
             count = len(invalid_items)
             for item in invalid_items:
                 logging.info("[CLEAR]Invalid item with book_id=%s", item.book_id)
                 self.sqlite_session.delete(item)
             self.sqlite_session.commit()
-            return {"err": "ok", "msg": _("已清理 %d 条无效图书记录") % count, "count": count}
+            return {
+                "err": "ok",
+                "msg": _("已清理 %d 条无效图书记录") % count,
+                "count": count,
+            }
         except Exception as e:
             logging.error("[CLEAR]Failed to clear invalid items: %s", e)
             return {"err": "error", "msg": _("清理失败: %s") % str(e)}
@@ -1291,10 +1359,13 @@ class AdminRunningTasks(BaseHandler):
 
 class AdminRestartServer(BaseHandler):
     """Admin API: 重启服务，进程退出后由 supervisor 自动拉起"""
+
     @js
     @is_admin
     def post(self):
-        logging.warning("[ADMIN] Server restart requested by user %s", self.current_user.username)
+        logging.warning(
+            "[ADMIN] Server restart requested by user %s", self.current_user.username
+        )
         tornado.ioloop.IOLoop.current().call_later(1, lambda: sys.exit(0))
         return {"err": "ok", "msg": _("服务正在重启，请稍后刷新页面")}
 
@@ -1329,7 +1400,10 @@ class AdminTrashBooks(BaseHandler):
     @auth
     def get(self):
         if not self.admin_user:
-            return {"err": "permission.not_admin", "msg": _("当前用户非管理员, 无权操作")}
+            return {
+                "err": "permission.not_admin",
+                "msg": _("当前用户非管理员, 无权操作"),
+            }
         with self.db_lock:
             books = TrashManager.list_trash_books(self.calibre_db_cache)
         return {"err": "ok", "books": books}
@@ -1340,13 +1414,18 @@ class AdminTrashBooksRestore(BaseHandler):
     @auth
     def post(self):
         if not self.admin_user:
-            return {"err": "permission.not_admin", "msg": _("当前用户非管理员, 无权操作")}
+            return {
+                "err": "permission.not_admin",
+                "msg": _("当前用户非管理员, 无权操作"),
+            }
         req = tornado.escape.json_decode(self.request.body)
         book_ids = req.get("book_ids", [])
         if not book_ids:
             return {"err": "params.error", "msg": _("参数错误")}
         with self.db_lock:
-            ok, failed = TrashManager.restore_trash_books(self.calibre_db_cache, book_ids)
+            ok, failed = TrashManager.restore_trash_books(
+                self.calibre_db_cache, book_ids
+            )
             if ok:
                 self.calibre_db.data.books_added(tuple(ok))
         for book_id in ok:
@@ -1363,7 +1442,9 @@ class AdminTrashBooksRestore(BaseHandler):
     def _recreate_item_for_restored_book(self, book_id):
         """从回收站恢复书籍后，参照 BookUpload 补建 Item 记录并触发元数据刮削（不发送邮件提醒）"""
         try:
-            existing_item = self.sqlite_session.query(Item).filter(Item.book_id == book_id).first()
+            existing_item = (
+                self.sqlite_session.query(Item).filter(Item.book_id == book_id).first()
+            )
             if not existing_item:
                 item = Item()
                 item.book_id = book_id
@@ -1381,7 +1462,10 @@ class AdminTrashBooksPurge(BaseHandler):
     @auth
     def post(self):
         if not self.admin_user:
-            return {"err": "permission.not_admin", "msg": _("当前用户非管理员, 无权操作")}
+            return {
+                "err": "permission.not_admin",
+                "msg": _("当前用户非管理员, 无权操作"),
+            }
         req = tornado.escape.json_decode(self.request.body)
         book_ids = req.get("book_ids", [])
         if not book_ids:
@@ -1404,7 +1488,10 @@ class AdminStamp(BaseHandler):
     def get(self):
         """获取图章图片"""
         if not self.admin_user:
-            return {"err": "permission.not_admin", "msg": _("当前用户非管理员, 无权操作")}
+            return {
+                "err": "permission.not_admin",
+                "msg": _("当前用户非管理员, 无权操作"),
+            }
 
         if not CONF.get("ENABLE_STAMP_FEATURE", False):
             return {"err": "feature.disabled", "msg": _("图章功能未启用")}
@@ -1419,35 +1506,47 @@ class AdminStamp(BaseHandler):
         """上传图章图片"""
         if not self.admin_user:
             self.set_status(403)
-            return self.write({"err": "permission.not_admin", "msg": _("当前用户非管理员, 无权操作")})
+            return self.write(
+                {"err": "permission.not_admin", "msg": _("当前用户非管理员, 无权操作")}
+            )
 
-        if 'file' not in self.request.files:
+        if "file" not in self.request.files:
             self.set_status(400)
             return self.write({"err": "params.missing", "msg": _("未找到上传的文件")})
 
-        file_info = self.request.files['file'][0]
-        filename = file_info['filename']
-        content = file_info['body']
+        file_info = self.request.files["file"][0]
+        filename = file_info["filename"]
+        content = file_info["body"]
 
         # 验证文件格式
-        if not filename.lower().endswith('.png'):
+        if not filename.lower().endswith(".png"):
             self.set_status(400)
-            return self.write({"err": "file.invalid_format", "msg": _("只支持PNG格式的图片")})
+            return self.write(
+                {"err": "file.invalid_format", "msg": _("只支持PNG格式的图片")}
+            )
 
         # 验证文件大小
         max_size = 128 * 1024  # 128KB
         if len(content) > max_size:
             self.set_status(400)
-            return self.write({"err": "file.too_large", "msg": _("图片文件大小不能超过128KB")})
+            return self.write(
+                {"err": "file.too_large", "msg": _("图片文件大小不能超过128KB")}
+            )
 
         # 验证图片尺寸
         try:
             from PIL import Image
             import io
+
             img = Image.open(io.BytesIO(content))
             if img.width > 480 or img.height > 480:
                 self.set_status(400)
-                return self.write({"err": "file.dimension_too_large", "msg": _("图片尺寸不能超过480x480像素")})
+                return self.write(
+                    {
+                        "err": "file.dimension_too_large",
+                        "msg": _("图片尺寸不能超过480x480像素"),
+                    }
+                )
         except Exception as e:
             logging.error(f"Failed to validate image: {e}")
             self.set_status(400)
@@ -1459,13 +1558,21 @@ class AdminStamp(BaseHandler):
             os.makedirs(logo_dir, exist_ok=True)
             stamp_path = os.path.join(logo_dir, "stamp.png")
             stamp_path_abs = os.path.abspath(stamp_path)
-            with open(stamp_path_abs, 'wb+') as f:
+            with open(stamp_path_abs, "wb+") as f:
                 f.write(content)
-            self.write({"err": "ok", "msg": _("图章图片上传成功"), "data": {"url": self.cdn_url + "/static/logo/stamp.png"}})
+            self.write(
+                {
+                    "err": "ok",
+                    "msg": _("图章图片上传成功"),
+                    "data": {"url": self.cdn_url + "/static/logo/stamp.png"},
+                }
+            )
         except Exception as e:
             logging.error(f"Failed to save stamp image: {e}")
             self.set_status(500)
-            self.write({"err": "file.save_failed", "msg": _("保存图片失败: %s") % str(e)})
+            self.write(
+                {"err": "file.save_failed", "msg": _("保存图片失败: %s") % str(e)}
+            )
 
 
 class LibraryStats(BaseHandler):
@@ -1567,7 +1674,7 @@ class AdminSyslog(BaseHandler):
                 lines = f.readlines()
             return {
                 "err": "ok",
-                "lines": [line.rstrip("\n") for line in lines[-self.MAX_LINES:]],
+                "lines": [line.rstrip("\n") for line in lines[-self.MAX_LINES :]],
                 "href": self.cdn_url + "/api/admin/syslog/download",
             }
         except Exception as e:
@@ -1613,18 +1720,23 @@ class AdminResources(BaseHandler):
             "icon": "https://www.huaijiushuku.com/favicon.ico",
             "title": "怀旧书库",
             "link": "https://www.huaijiushuku.com/",
-        }
+        },
     ]
 
     @js
     @is_admin
     def get(self):
-        if time.time() - AdminResources._cache_time < AdminResources.CACHED_TIME and AdminResources._cache_data:
+        if (
+            time.time() - AdminResources._cache_time < AdminResources.CACHED_TIME
+            and AdminResources._cache_data
+        ):
             logging.info("[Resources]Use cached data")
             resources = AdminResources._cache_data
         else:
             resources = BookBarnClient().getResourceList(CONF.get("BOOKBARN_TOKEN", ""))
-            resources = resources if resources else AdminResources.CONF_DEFAULT_RESOURCES
+            resources = (
+                resources if resources else AdminResources.CONF_DEFAULT_RESOURCES
+            )
             AdminResources._cache_data = resources
             AdminResources._cache_time = time.time()
 
@@ -1648,7 +1760,10 @@ class AdminAITestConnection(BaseHandler):
         api_key = data.get("api_key", None)
         api_model = data.get("api_model", None)
         if not api_url or not api_key or not api_model:
-            return {"err": "params.error", "msg": _("缺少必要的参数，请确认API信息填写完整")}
+            return {
+                "err": "params.error",
+                "msg": _("缺少必要的参数，请确认API信息填写完整"),
+            }
 
         try:
             result, msg = BookAIClient(api_url, api_key, api_model).test_connection()
@@ -1724,10 +1839,7 @@ class AdminSysInfo(BaseHandler):
         if CONF.get("installed", None) is False:
             return {"err": "not_installed"}
 
-        return {
-            "err": "ok",
-            "data": self.get_sys_info()
-        }
+        return {"err": "ok", "data": self.get_sys_info()}
 
 
 def routes():
