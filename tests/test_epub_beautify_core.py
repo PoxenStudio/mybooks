@@ -2012,6 +2012,169 @@ class TestParaStyleAndTocColumns(unittest.TestCase):
             "%s {\n    margin: 0 0 0.5em 0 !important" % _CALIBRE_MARGIN_SELECTORS,
             css,
         )
+
+
+class TestReviewFixes20260905(unittest.TestCase):
+    """2026-09-05 review 修复回归：preview 轻量读取 / 判定口径对齐 / 背景图解析。"""
+
+    CONTAINER = (
+        '<?xml version="1.0"?><container version="1.0" '
+        'xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+        '<rootfiles><rootfile full-path="OEBPS/content.opf" '
+        'media-type="application/oebps-package+xml"/></rootfiles></container>'
+    )
+    PARA = '这是一段很长的正文内容，讲述一段长长的故事，用来填充章节正文。'
+
+    def _opf(self, manifest, spine):
+        return (
+            '<?xml version="1.0"?>'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="2.0">'
+            '<metadata><dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">测试书'
+            '</dc:title></metadata>'
+            '<manifest>%s</manifest>'
+            '<spine>%s</spine></package>' % (manifest, spine)
+        )
+
+    def _build(self, path, files):
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.writestr("mimetype", "application/epub+zip",
+                        compress_type=zipfile.ZIP_STORED)
+            zf.writestr("META-INF/container.xml", self.CONTAINER)
+            for name, data in files.items():
+                zf.writestr(name, data, compress_type=zipfile.ZIP_DEFLATED)
+
+    def test_analyze_never_decompresses_images(self):
+        """B1：preview 轻量路径不得解压图片条目；超大图走中央目录 file_size。"""
+        big_img = b"\x00" * (3 * 1024 * 1024)  # 高压缩数据：解压流小、声明体积 3MB
+        files = {
+            "OEBPS/content.opf": self._opf(
+                '<item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/>'
+                '<item id="css" href="style.css" media-type="text/css"/>'
+                '<item id="img" href="img.jpg" media-type="image/jpeg"/>',
+                '<itemref idref="c1"/>').encode("utf-8"),
+            "OEBPS/ch1.xhtml": (
+                '<html xmlns="http://www.w3.org/1999/xhtml"><head>'
+                '<link href="style.css" rel="stylesheet" type="text/css"/></head>'
+                '<body><p>%s</p></body></html>' % self.PARA).encode("utf-8"),
+            "OEBPS/style.css": b"p { margin: 0; }",
+            "OEBPS/img.jpg": big_img,
+        }
+        tmp = os.path.join(TESTS_DIR, "_tmp_lite.epub")
+        self._build(tmp, files)
+        try:
+            real_read = zipfile.ZipFile.read
+
+            def _guarded_read(self, name, *args, **kwargs):
+                if isinstance(name, str) and name.endswith(".jpg"):
+                    raise AssertionError("preview 解压了图片条目：%s" % name)
+                return real_read(self, name, *args, **kwargs)
+
+            with mock.patch.object(zipfile.ZipFile, "read", _guarded_read):
+                info = lib.analyze_epub(tmp)
+            self.assertEqual(info["image_count"], 1)
+            self.assertEqual(info["image_oversize"], 1)  # 体积来自 file_size
+            self.assertEqual(info["text_entries"], 1)
+        finally:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+
+    def test_long_head_toc_aligned_between_preview_and_run(self):
+        """B2：长 <head>（链接列表落在 2KB~8KB 之间）的目录页，analyze 与
+        beautify 必须同判为书内目录页——旧 run 侧只看头 2000 字会漏判，
+        把目录页误打 mb-ch 并额外生成 mb-toc。"""
+        pad = "x" * 5000  # 头部垫片：> 旧 run 窗口 2000 字，< 8KB 复核门槛
+        toc_html = (
+            '<html xmlns="http://www.w3.org/1999/xhtml"><head>'
+            '<style>/*%s*/</style></head><body>' % pad
+            + "".join('<p><a href="ch%d.xhtml">第%d章 标题%d</a></p>' % (i, i, i)
+                      for i in range(1, 11))
+            + "</body></html>"
+        )
+        chapter = (
+            '<html xmlns="http://www.w3.org/1999/xhtml"><head>'
+            '<link href="style.css" rel="stylesheet" type="text/css"/></head>'
+            '<body><p>%s</p></body></html>' % self.PARA
+        )
+        files = {
+            "OEBPS/content.opf": self._opf(
+                '<item id="list" href="list.xhtml" media-type="application/xhtml+xml"/>'
+                '<item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/>'
+                '<item id="c2" href="ch2.xhtml" media-type="application/xhtml+xml"/>'
+                '<item id="css" href="style.css" media-type="text/css"/>'
+                '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>',
+                '<itemref idref="list"/><itemref idref="c1"/><itemref idref="c2"/>'
+            ).encode("utf-8"),
+            "OEBPS/list.xhtml": toc_html.encode("utf-8"),
+            "OEBPS/ch1.xhtml": chapter.encode("utf-8"),
+            "OEBPS/ch2.xhtml": chapter.encode("utf-8"),
+            "OEBPS/style.css": b"p { margin: 0; }",
+            "OEBPS/toc.ncx": (
+                '<?xml version="1.0"?><ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" '
+                'version="2005-1"><navMap>'
+                '<navPoint id="n1"><navLabel><text>第一章 标题1</text></navLabel>'
+                '<content src="ch1.xhtml"/></navPoint>'
+                '<navPoint id="n2"><navLabel><text>第二章 标题2</text></navLabel>'
+                '<content src="ch2.xhtml"/></navPoint>'
+                '</navMap></ncx>'
+            ).encode("utf-8"),
+        }
+        tmp = os.path.join(TESTS_DIR, "_tmp_align.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_align_out.epub")
+        self._build(tmp, files)
+        try:
+            info = lib.analyze_epub(tmp)
+            self.assertTrue(info["has_inbook_toc"])
+            css = get_preset_css("classic", use_system_fonts=True)
+            stats = lib.beautify(tmp, out, css)
+            self.assertFalse(stats["toc_generated"])  # 书内已有目录页，不再生成
+            with zipfile.ZipFile(out) as zf:
+                list_out = zf.read("OEBPS/list.xhtml").decode("utf-8")
+            self.assertNotIn("mb-ch", list_out)  # 不误打章节标记
+            self.assertIn("mb-toc-page", list_out)  # 正常按目录页处理
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_short_chapter_file_toc_flags_reusable(self):
+        """B2：主循环以预计算 flags 判定，正文页与目录页各归其位（幂等重跑）。"""
+        chapter = (
+            '<html xmlns="http://www.w3.org/1999/xhtml"><head>'
+            '<link href="style.css" rel="stylesheet" type="text/css"/></head>'
+            '<body><h1>第一章 序章</h1><p>%s</p></body></html>' % self.PARA
+        )
+        files = {
+            "OEBPS/content.opf": self._opf(
+                '<item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/>'
+                '<item id="css" href="style.css" media-type="text/css"/>',
+                '<itemref idref="c1"/>').encode("utf-8"),
+            "OEBPS/ch1.xhtml": chapter.encode("utf-8"),
+            "OEBPS/style.css": b"p { margin: 0; }",
+        }
+        tmp = os.path.join(TESTS_DIR, "_tmp_flags.epub")
+        out1 = os.path.join(TESTS_DIR, "_tmp_flags_out1.epub")
+        out2 = os.path.join(TESTS_DIR, "_tmp_flags_out2.epub")
+        self._build(tmp, files)
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            lib.beautify(tmp, out1, css)
+            lib.beautify(out1, out2, css)  # 幂等重跑
+            with zipfile.ZipFile(out2) as zf:
+                ch = zf.read("OEBPS/ch1.xhtml").decode("utf-8")
+            self.assertEqual(ch.count('class="mb-ch"'), 1)  # 精确匹配，排除 mb-ch-sep
+            self.assertNotIn("mb-toc-page", ch)
+        finally:
+            for p in (tmp, out1, out2):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_save_bg_image_garbage_raises_valueerror(self):
+        """B3：PIL 无法解析的图片统一转 ValueError（handler 捕获后转友好提示）。"""
+        from webserver.toolbox.epub_beautify import EpubBeautifyTool
+        with self.assertRaises(ValueError):
+            EpubBeautifyTool().save_bg_image(b"this is not an image", "bg.jpg")
+        with self.assertRaises(ValueError):
+            EpubBeautifyTool().save_bg_image(b"\x89PNG broken", "bg.png")
         # 裸 .calibre / .calibre1（可能是 body/容器）不参与段距
         self.assertFalse(
             any(s.startswith(".") for s in _CALIBRE_MARGIN_SELECTORS.split(", ")))
@@ -2286,3 +2449,102 @@ class TestStripHardening(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+# ncx/nav 在包根目录、OPF 在 OEBPS/ 的书（weread 导出布局）：
+# manifest href 带 ../ 前缀，此前裸拼接 OEBPS/../x 查不中 zip 条目，
+# 目录数据源（NCX→nav）两个分支全静默跳过，目录不生成。
+ROOT_NCX = (
+    '<?xml version="1.0"?>'
+    '<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">'
+    '<navMap>'
+    '<navPoint id="v1"><navLabel><text>第一卷</text></navLabel>'
+    '<content src="OEBPS/ch1.xhtml"/>'
+    '<navPoint id="n1"><navLabel><text>第一章 序章</text></navLabel>'
+    '<content src="OEBPS/ch1.xhtml#p1"/></navPoint>'
+    '<navPoint id="n2"><navLabel><text>第二章 开端</text></navLabel>'
+    '<content src="OEBPS/ch1.xhtml#p2"/></navPoint>'
+    '</navPoint>'
+    '<navPoint id="n3"><navLabel><text>第三章 转折</text></navLabel>'
+    '<content src="OEBPS/ch2.xhtml"/></navPoint>'
+    '<navPoint id="n4"><navLabel><text>引子</text></navLabel>'
+    '<content src="OEBPS/ch2.xhtml"/></navPoint>'
+    '</navMap></ncx>'
+)
+ROOT_NAV = (
+    '<?xml version="1.0" encoding="utf-8"?>'
+    '<html xmlns="http://www.w3.org/1999/xhtml" '
+    'xmlns:epub="http://www.idpf.org/2007/ops">'
+    '<head><title>Navigation</title></head>'
+    '<body><nav epub:type="toc"><ol>'
+    '<li><a href="OEBPS/ch1.xhtml">第一卷</a></li>'
+    '<li><a href="OEBPS/ch2.xhtml">第三章 转折</a></li>'
+    '</ol></nav></body></html>'
+)
+
+
+def build_root_toc_epub(path):
+    """构建 ncx/nav 在包根、manifest href 带 ../ 的迷你 EPUB（nav 在 spine 末条）。"""
+    opf = (
+        '<?xml version="1.0"?>'
+        '<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+        '<metadata><dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">测试书</dc:title></metadata>'
+        '<manifest>'
+        '<item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/>'
+        '<item id="c2" href="ch2.xhtml" media-type="application/xhtml+xml"/>'
+        '<item id="css" href="style.css" media-type="text/css"/>'
+        '<item id="ncx" href="../toc.ncx" media-type="application/x-dtbncx+xml"/>'
+        '<item id="nav" href="../nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>'
+        '</manifest>'
+        '<spine><itemref idref="c1"/><itemref idref="c2"/><itemref idref="nav"/></spine>'
+        '</package>'
+    )
+    with zipfile.ZipFile(path, "w") as zf:
+        zf.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
+        zf.writestr("META-INF/container.xml", CONTAINER)
+        zf.writestr("OEBPS/content.opf", opf)
+        zf.writestr("OEBPS/ch1.xhtml", CH1)
+        zf.writestr("OEBPS/ch2.xhtml", CH2)
+        zf.writestr("OEBPS/style.css", CSS)
+        zf.writestr("toc.ncx", ROOT_NCX)
+        zf.writestr("nav.xhtml", ROOT_NAV)
+
+
+class TestTocParentDirHrefs(unittest.TestCase):
+    """目录数据源 ../ 相对路径：包根 ncx/nav 必须能解析对齐到 zip 条目。"""
+
+    def test_resolve_zip_parent_segments(self):
+        self.assertEqual(lib._resolve_zip("OEBPS/", "../toc.ncx"), "toc.ncx")
+        self.assertEqual(lib._resolve_zip("OEBPS/", "../sub/x.xhtml"), "sub/x.xhtml")
+        self.assertEqual(lib._resolve_zip("", "a/../b.xhtml"), "b.xhtml")
+        # 无 ../ 时行为不变
+        self.assertEqual(lib._resolve_zip("OEBPS/", "ch1.xhtml"), "OEBPS/ch1.xhtml")
+        self.assertEqual(lib._resolve_zip("OEBPS/", "a/b.xhtml"), "OEBPS/a/b.xhtml")
+
+    def test_toc_generated_for_root_ncx_and_nav(self):
+        tmp = os.path.join(TESTS_DIR, "_tmp_root_src.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_root_out.epub")
+        build_root_toc_epub(tmp)
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            stats = lib.beautify(tmp, out, css)
+            self.assertTrue(stats["toc_generated"])
+            self.assertEqual(stats["toc_entries"], 5)
+            self.assertEqual(stats["toc_links_ok"], 5)
+            with zipfile.ZipFile(out) as zf:
+                names = zf.namelist()
+                self.assertIn("OEBPS/mb-toc.xhtml", names)
+                # NCX 数据源优先生效（含锚点条目，链接相对 OEBPS/ 计算）
+                toc = zf.read("OEBPS/mb-toc.xhtml").decode("utf-8")
+                self.assertIn("第一章 序章", toc)
+                self.assertIn('href="ch1.xhtml#p1"', toc)
+                # spine 中 nav 语义条目被替换为目录页；nav 文件保留在 manifest
+                opf = zf.read("OEBPS/content.opf").decode("utf-8")
+                self.assertIn('id="mb-toc"', opf)
+                self.assertNotIn('idref="nav"', opf)
+                self.assertIn('href="../nav.xhtml"', opf)
+                self.assertIn('<itemref idref="mb-toc" linear="yes"/>', opf)
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)
+
+

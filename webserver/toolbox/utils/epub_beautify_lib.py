@@ -16,6 +16,7 @@ EPUB 容器读写（container → OPF → manifest/spine、mimetype 置首 ZIP_S
 
 import logging
 import os
+import posixpath
 import re
 import zipfile
 import xml.etree.ElementTree as ET
@@ -190,6 +191,45 @@ def _read_zip_entries(path: str) -> dict:
     return entries
 
 
+class _ZipEntryView:
+    """analyze 轻量条目视图（P1）：键集合=中央目录名（穿越条目已剔除），
+    取值按需解压并缓存；配 `head()` 做前缀局部读，preview 线程不再被
+    大书全量解压阻塞（beautify 后台线程仍走 `_read_zip_entries` 全量读）。"""
+
+    def __init__(self, zf, infos):
+        self._zf = zf
+        self._infos = infos
+        self._cache = {}
+
+    def __contains__(self, name):
+        return name in self._infos
+
+    def __iter__(self):
+        return iter(self._infos)
+
+    def keys(self):
+        return self._infos.keys()
+
+    def get(self, name, default=None):
+        if name not in self._infos:
+            return default
+        return self[name]
+
+    def __getitem__(self, name):
+        if name in self._cache:
+            return self._cache[name]
+        if name not in self._infos:
+            raise KeyError(name)
+        data = self._zf.read(name)
+        self._cache[name] = data
+        return data
+
+    def head(self, name, n):
+        """条目前 n 字节（不解压全量；配 `_decode_head` / `_classify_toc_entry`）。"""
+        with self._zf.open(name) as fh:
+            return fh.read(n)
+
+
 def _write_zip(entries: dict, out_path: str) -> None:
     """规范重写 zip：mimetype 置首且 ZIP_STORED，其余 DEFLATED（原子写）。"""
     order = [k for k in entries if k != 'mimetype']
@@ -318,8 +358,15 @@ def _resolve_zip(base_dir: str, href: str) -> str:
     """把 OPF 相对 href 解析为 zip 内绝对路径。"""
     href = href.split('#')[0].split('?')[0]
     if href.startswith('/'):
-        return href.lstrip('/')
-    return base_dir + href
+        path = href.lstrip('/')
+    else:
+        path = base_dir + href
+    # OPF 在子目录而资源在包根的书（weread 导出等），manifest href 带 ../
+    # 前缀；裸拼接的 OEBPS/../x 查不中 zip 条目，须归一化（zip 路径用
+    # posixpath，os.path 在 Windows 会产出反斜杠）
+    if '..' in path.split('/'):
+        path = posixpath.normpath(path)
+    return path
 
 
 def _snap_entry(entries: dict, path: str) -> str:
@@ -741,6 +788,35 @@ def _is_toc_doc(zip_path: str, html_str: str = '') -> bool:
     if html_str and _has_nav_toc_semantics(html_str):
         return True
     return bool(html_str) and _looks_like_link_toc(html_str)
+
+
+# 链接目录形态复核窗口（P1：8KB 头不足判定时按 64KB 片段复核，不全量解码；
+# analyze 与 beautify 主流程共用同一窗口，判定口径一致）
+_TOC_RECHECK_BYTES = 64 * 1024
+
+
+def _classify_toc_entry(zip_path: str, raw: bytes) -> tuple:
+    """单条目目录页判定（analyze 与 beautify 主流程共用，口径一致）。
+
+    文件名特征零解码；nav 语义看 8KB 头；头 8KB 内链接 ≥2 时以 64KB 片段
+    复核链接目录形态（``_looks_like_link_toc``），不再全量解码——此前
+    beautify 主流程只看头 2000/4000 字、analyze 用全量复核，两端口径不一，
+    长 ``<head>`` 的目录页会 preview 报「保留原书目录」而 run 误打章节标记。
+    :param raw: 条目原始字节（可为局部读取片段，≥ `_TOC_RECHECK_BYTES` 最佳）。
+    :return: (is_toc_doc, nav_semantic)
+    """
+    is_toc = bool(_TOC_FILE_RE.search(zip_path.rsplit('/', 1)[-1]))
+    nav_semantic = False
+    head = _decode_head(raw)
+    if _has_nav_toc_semantics(head):
+        nav_semantic = True
+        is_toc = True
+    if not is_toc and len(re.findall(rb'<a\b', raw[:8192], re.IGNORECASE)) >= 2:
+        probe = _decode_head(raw, raw_n=_TOC_RECHECK_BYTES,
+                             out_n=_TOC_RECHECK_BYTES)
+        if _looks_like_link_toc(probe):
+            is_toc = True
+    return is_toc, nav_semantic
 
 
 # 误打在目录页上的章节标记清理（修复旧版缺陷输出，见 _is_toc_doc）
@@ -1201,157 +1277,179 @@ def _sample_preview_chapter(html_str: str) -> dict:
 def analyze_epub(epub_path: str, sample_limit: int = 20) -> dict:
     """扫描 EPUB，返回美化方案分析（不写文件）。
 
+    轻量读取（P1）：preview 在请求线程内同步执行，图片等大条目不再进入
+    内存——只读中央目录元数据（名字 + file_size），container/OPF/NCX/CSS
+    与采样的正文条目按需解压，目录嗅探以 8KB 头 + 64KB 复核切片完成；
+    `beautify` 后台线程仍走 `_read_zip_entries` 全量读取。
     :param sample_limit: 标题统计与 p 开闭预警的采样正文文件数上限（防超大书卡死）。
     """
-    entries = _read_zip_entries(epub_path)
-    ctx = _parse_opf(entries)
-    text_entries = _text_entries(ctx, entries)
-    css_names = [n for n in entries if n.lower().endswith('.css')]
-    has_fontface = False
-    calibre_soup = False
-    css_important_count = 0
-    for n in css_names:
-        css = _decode(entries[n])
-        if '@font-face' in css:
-            has_fontface = True
-        css_important_count += css.count('!important')
-    for n in css_names:
-        if '.calibre' in _decode(entries[n]):
-            calibre_soup = True
-            break
+    try:
+        zf = zipfile.ZipFile(epub_path, 'r')
+    except zipfile.BadZipFile as e:
+        raise RuntimeError("EPUB 解析失败，文件可能已损坏：%s" % e) from e
+    except zipfile.LargeZipFile as e:
+        raise RuntimeError("EPUB 文件过大：%s" % e) from e
+    try:
+        with zf:
+            infos = {}
+            for info in zf.infolist():
+                if info.is_dir():
+                    continue
+                if info.filename.startswith('/') or '..' in info.filename.split('/'):
+                    logging.warning("[epub_beautify] Skip traversal entry: %s", info.filename)
+                    continue
+                infos[info.filename] = info
+            if sum(i.file_size for i in infos.values()) > _ZIP_MAX_TOTAL \
+                    or len(infos) > _ZIP_MAX_ENTRIES:
+                raise RuntimeError("EPUB 文件过大或条目过多，疑似 Zip Bomb")
+            entries = _ZipEntryView(zf, infos)
 
-    ncx_count = 0
-    if ctx.ncx_path and ctx.ncx_path in entries:
-        ncx_count = len(_parse_ncx(entries[ctx.ncx_path]))
-    nav_count = 0
-    if ctx.nav_path and ctx.nav_path in entries:
-        nav_count = len(_parse_nav_doc(entries[ctx.nav_path]))
+            ctx = _parse_opf(entries)
+            text_entries = _text_entries(ctx, entries)
+            css_names = [n for n in entries if n.lower().endswith('.css')]
+            has_fontface = False
+            calibre_soup = False
+            css_important_count = 0
+            for n in css_names:
+                css = _decode(entries[n])
+                if '@font-face' in css:
+                    has_fontface = True
+                css_important_count += css.count('!important')
+            for n in css_names:
+                if '.calibre' in _decode(entries[n]):
+                    calibre_soup = True
+                    break
 
-    # 与 beautify 同源判定（_is_toc_doc）：文件名或 nav 结构均为目录页；
-    # nav 语义页运行时会被替换为普通结构目录页，不计为「书内已有」
-    has_inbook_toc = False
-    for t in text_entries:
-        if t not in entries:
-            continue
-        # 切片后解码（P1）：先解全量再截 4000 字，大文件白白多解码数 MB；
-        # _decode_head 保证字节切片不断开多字节字符
-        head = _decode_head(entries[t])
-        if _is_toc_doc(t, head) and not _has_nav_toc_semantics(head):
-            has_inbook_toc = True
-            break
-        # 口径对齐 beautify（全量 html 检测）：8KB 原始片里已有 ≥2 个链接
-        # 但头片（4000 字）不足链接目录阈值时，可能是长头部把链接列表
-        # 截断，全量复核该文件，否则 preview 报“将生成目录”而 run 时
-        # 命中既有目录不生成；字节层计数，不额外解码
-        if len(re.findall(rb'<a\b', entries[t][:8192], re.IGNORECASE)) >= 2:
-            if _looks_like_link_toc(_decode(entries[t])):
-                has_inbook_toc = True
-                break
+            ncx_count = 0
+            if ctx.ncx_path and ctx.ncx_path in entries:
+                ncx_count = len(_parse_ncx(entries[ctx.ncx_path]))
+            nav_count = 0
+            if ctx.nav_path and ctx.nav_path in entries:
+                nav_count = len(_parse_nav_doc(entries[ctx.nav_path]))
 
-    h_stats = {'h1': 0, 'h2': 0, 'h3': 0, 'h4': 0, 'h5': 0, 'h6': 0}
-    text_headings = 0
-    sampled = 0
-    # 首章真实内容（前端预览用）：{title, paragraphs:[≤3]}
-    preview_chapter = None
-    # 健康报告采样：段首空格占比 / 空段估计 / p 开闭不齐文件数 / 对话行估计
-    leading_space_paras = 0
-    total_paras = 0
-    empty_para_est = 0
-    dialogue_paras = 0
-    # p 开闭不齐（烂书预警）：限采样计数（P1：全量两次正则扫描大书会卡死 IOLoop，
-    # 与标题统计共用 sample_limit 上限，统计语义为「采样内不齐文件数」）
-    p_close_mismatch_files = sum(
-        1 for t in text_entries[:sample_limit]
-        if t in entries
-        and len(re.findall(rb'<p\b', entries[t], re.IGNORECASE))
-        != len(re.findall(rb'</p>', entries[t], re.IGNORECASE))
-    )
-    for t in text_entries:
-        if t not in entries:
-            continue
-        if _is_front_file(t):
-            continue
-        if sampled >= sample_limit:
-            break
-        sampled += 1
-        html = _decode(entries[t])
-        empty_para_est += len(_EMPTY_P_RE.findall(html))
-        # 首章真实预览：取第一个可提取的正文文件（跳过目录页）
-        if preview_chapter is None and not _is_toc_doc(t, html[:2000]):
-            preview_chapter = _sample_preview_chapter(html)
-        for tag in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):
-            h_stats[tag] += len(re.findall(r'<%s\b' % tag, html, re.IGNORECASE))
-        for m in _BLOCK_RE.finditer(html):
-            inner = m.group(3)
-            total_paras += 1
-            if m.group(1).lower() == 'p' and (
-                re.match(r'^[\s\u3000]*(?:&nbsp;|&#160;)+', inner, re.IGNORECASE)
-                or re.match(r'^[\s\u3000]{2,}', inner)
-            ):
-                leading_space_paras += 1
-            if m.group(1).lower() == 'p' and _is_dialogue_text(_block_text(inner)):
-                dialogue_paras += 1
-            if chapter_patterns.paragraph_is_heading(_block_text(inner)):
-                text_headings += 1
+            # 与 beautify 同源判定（_classify_toc_entry）：文件名或 nav 结构
+            # 均为目录页；nav 语义页运行时会被替换为普通结构目录页，
+            # 不计为「书内已有」
+            has_inbook_toc = False
+            for t in text_entries:
+                if t not in entries:
+                    continue
+                # 轻量嗅探（P1）：64KB 片段按需读，替代旧的全量解压复核
+                is_toc, is_nav = _classify_toc_entry(
+                    t, entries.head(t, _TOC_RECHECK_BYTES))
+                if is_toc and not is_nav:
+                    has_inbook_toc = True
+                    break
 
-    # 弹注统计（采样正文文件，防大书全量解码；健康报告与推荐徽章用，
-    # 语义为「采样内计数」）
-    notes_refs = 0
-    notes_items = 0
-    for t in text_entries[:sample_limit]:
-        if t not in entries:
-            continue
-        h = _decode(entries[t])
-        notes_refs += len(_NOTE_REF_RE.findall(h))
-        notes_items += len(_NOTE_ITEM_CNT_RE.findall(h))
+            h_stats = {'h1': 0, 'h2': 0, 'h3': 0, 'h4': 0, 'h5': 0, 'h6': 0}
+            text_headings = 0
+            sampled = 0
+            # 首章真实内容（前端预览用）：{title, paragraphs:[≤3]}
+            preview_chapter = None
+            # 健康报告采样：段首空格占比 / 空段估计 / p 开闭不齐文件数 / 对话行估计
+            leading_space_paras = 0
+            total_paras = 0
+            empty_para_est = 0
+            dialogue_paras = 0
+            # p 开闭不齐（烂书预警）：限采样计数（P1：全量两次正则扫描大书会卡死 IOLoop，
+            # 与标题统计共用 sample_limit 上限，统计语义为「采样内不齐文件数」）
+            p_close_mismatch_files = sum(
+                1 for t in text_entries[:sample_limit]
+                if t in entries
+                and len(re.findall(rb'<p\b', entries[t], re.IGNORECASE))
+                != len(re.findall(rb'</p>', entries[t], re.IGNORECASE))
+            )
+            for t in text_entries:
+                if t not in entries:
+                    continue
+                if _is_front_file(t):
+                    continue
+                if sampled >= sample_limit:
+                    break
+                sampled += 1
+                html = _decode(entries[t])
+                empty_para_est += len(_EMPTY_P_RE.findall(html))
+                # 首章真实预览：取第一个可提取的正文文件（跳过目录页）
+                if preview_chapter is None and not _is_toc_doc(t, html[:2000]):
+                    preview_chapter = _sample_preview_chapter(html)
+                for tag in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):
+                    h_stats[tag] += len(re.findall(r'<%s\b' % tag, html, re.IGNORECASE))
+                for m in _BLOCK_RE.finditer(html):
+                    inner = m.group(3)
+                    total_paras += 1
+                    if m.group(1).lower() == 'p' and (
+                        re.match(r'^[\s\u3000]*(?:&nbsp;|&#160;)+', inner, re.IGNORECASE)
+                        or re.match(r'^[\s\u3000]{2,}', inner)
+                    ):
+                        leading_space_paras += 1
+                    if m.group(1).lower() == 'p' and _is_dialogue_text(_block_text(inner)):
+                        dialogue_paras += 1
+                    if chapter_patterns.paragraph_is_heading(_block_text(inner)):
+                        text_headings += 1
 
-    # 目录预览：应用排除规则后的前若干条标题（与生成逻辑同源）
-    toc_preview_titles = []
-    raw_toc = []
-    if ctx.ncx_path and ctx.ncx_path in entries:
-        raw_toc = [(lv, title, src) for lv, title, src in _parse_ncx(entries[ctx.ncx_path])]
-    if not raw_toc and ctx.nav_path and ctx.nav_path in entries:
-        raw_toc = [(lv, title, href) for lv, title, href in _parse_nav_doc(entries[ctx.nav_path])]
-    for lv, title, _src in raw_toc:
-        if title and _toc_entry_allowed(title):
-            toc_preview_titles.append(title)
-        if len(toc_preview_titles) >= 12:
-            break
+            # 弹注统计（采样正文文件，防大书全量解码；健康报告与推荐徽章用，
+            # 语义为「采样内计数」；同批文件命中视图缓存，不重复解压）
+            notes_refs = 0
+            notes_items = 0
+            for t in text_entries[:sample_limit]:
+                if t not in entries:
+                    continue
+                h = _decode(entries[t])
+                notes_refs += len(_NOTE_REF_RE.findall(h))
+                notes_items += len(_NOTE_ITEM_CNT_RE.findall(h))
 
-    # 图片体检：数量 + 超大图计数（只报不改）
-    img_exts = ('.jpg', '.jpeg', '.png', '.gif', '.webp')
-    image_count = sum(1 for k in entries if k.lower().endswith(img_exts))
-    image_oversize = sum(
-        1 for k, v in entries.items()
-        if k.lower().endswith(img_exts) and len(v) > 2 * 1024 * 1024
-    )
+            # 目录预览：应用排除规则后的前若干条标题（与生成逻辑同源）
+            toc_preview_titles = []
+            raw_toc = []
+            if ctx.ncx_path and ctx.ncx_path in entries:
+                raw_toc = [(lv, title, src) for lv, title, src in _parse_ncx(entries[ctx.ncx_path])]
+            if not raw_toc and ctx.nav_path and ctx.nav_path in entries:
+                raw_toc = [(lv, title, href) for lv, title, href in _parse_nav_doc(entries[ctx.nav_path])]
+            for lv, title, _src in raw_toc:
+                if title and _toc_entry_allowed(title):
+                    toc_preview_titles.append(title)
+                if len(toc_preview_titles) >= 12:
+                    break
 
-    return {
-        'title': ctx.title,
-        'text_entries': len(text_entries),
-        'css_files': css_names,
-        'has_fontface': has_fontface,
-        'calibre_soup': calibre_soup,
-        'has_inbook_toc': has_inbook_toc,
-        'ncx_entries': ncx_count,
-        'nav_entries': nav_count,
-        'heading_stats': h_stats,
-        'text_headings': text_headings,
-        'preview_chapter': preview_chapter,
-        'notes_refs': notes_refs,
-        'notes_items': notes_items,
-        # ── 健康报告 ──
-        'leading_space_paras': leading_space_paras,
-        'sampled_paras': total_paras,
-        'empty_para_est': empty_para_est,
-        'dialogue_paras': dialogue_paras,
-        'p_close_mismatch_files': p_close_mismatch_files,
-        'css_important_count': css_important_count,
-        'css_conflict_risk': css_important_count > 30,
-        'image_count': image_count,
-        'image_oversize': image_oversize,
-        'toc_preview_titles': toc_preview_titles,
-    }
+            # 图片体检：数量 + 超大图计数（只报不改）；体积走中央目录
+            # file_size（即解压后大小），轻量路径不解压图片
+            img_exts = ('.jpg', '.jpeg', '.png', '.gif', '.webp')
+            image_count = sum(1 for k in entries if k.lower().endswith(img_exts))
+            image_oversize = sum(
+                1 for k, info in infos.items()
+                if k.lower().endswith(img_exts) and info.file_size > 2 * 1024 * 1024
+            )
+
+            return {
+                'title': ctx.title,
+                'text_entries': len(text_entries),
+                'css_files': css_names,
+                'has_fontface': has_fontface,
+                'calibre_soup': calibre_soup,
+                'has_inbook_toc': has_inbook_toc,
+                'ncx_entries': ncx_count,
+                'nav_entries': nav_count,
+                'heading_stats': h_stats,
+                'text_headings': text_headings,
+                'preview_chapter': preview_chapter,
+                'notes_refs': notes_refs,
+                'notes_items': notes_items,
+                # ── 健康报告 ──
+                'leading_space_paras': leading_space_paras,
+                'sampled_paras': total_paras,
+                'empty_para_est': empty_para_est,
+                'dialogue_paras': dialogue_paras,
+                'p_close_mismatch_files': p_close_mismatch_files,
+                'css_important_count': css_important_count,
+                'css_conflict_risk': css_important_count > 30,
+                'image_count': image_count,
+                'image_oversize': image_oversize,
+                'toc_preview_titles': toc_preview_titles,
+            }
+    except zipfile.BadZipFile as e:
+        raise RuntimeError("EPUB 解析失败，文件可能已损坏：%s" % e) from e
+    except zipfile.LargeZipFile as e:
+        raise RuntimeError("EPUB 文件过大：%s" % e) from e
 
 
 # ── 主流程 ────────────────────────────────────────────────────────────────────
@@ -1498,18 +1596,21 @@ def beautify(
         ]
         toc_items, toc_excluded = _collect_toc(raw)
 
-    # 书内目录页：spine 中文件名为目录特征或含 <nav epub:type="toc">
-    inbook_toc_paths = [
-        t for t in text_entries
-        if _is_toc_doc(t, _decode(entries[t])[:2000] if t in entries else '')
-    ]
+    # 书内目录页判定：与 analyze 共用 _classify_toc_entry（8KB 头 + 64KB
+    # 链接复核，全量字节已在内存不二次解码），两端口径一致——此前 run 侧
+    # 仅看头 2000/4000 字，长 <head> 的目录页会漏判而误打章节标记
+    toc_page_flags = {}
+    nav_semantic_flags = {}
+    for t in text_entries:
+        if t not in entries:
+            continue
+        is_toc, is_nav = _classify_toc_entry(t, entries[t])
+        toc_page_flags[t] = is_toc
+        nav_semantic_flags[t] = is_nav
+    inbook_toc_paths = [t for t in text_entries if toc_page_flags.get(t)]
     # nav 语义目录页（内容含 <nav epub:type="toc">）：手机阅读器当目录数据源
     # 特殊处理，spine 中无论 manifest 是否标 properties 都需替换为普通结构
-    nav_semantic_paths = [
-        t for t in text_entries
-        if t in entries
-        and _has_nav_toc_semantics(_decode(entries[t])[:4000])
-    ]
+    nav_semantic_paths = [t for t in text_entries if nav_semantic_flags.get(t)]
     nav_semantic_in_spine = bool(nav_semantic_paths)
     # spine 条目 zip 路径 → idref 映射（用于替换 itemref）。
     # 必须从 ctx.spine 逐项解析构建，不能 zip(text_entries, linear idrefs)——
@@ -1658,8 +1759,9 @@ def beautify(
         if html.lstrip().startswith('<?xml'):
             html = re.sub(r"""(<\?xml[^>]*encoding\s*=\s*)["'][^"']*["']""", r'\1"utf-8"', html, count=1, flags=re.IGNORECASE)
         changed = False
-        # 弹注/标注美化（先于章节标记执行，豁免类才能生效；目录/前置页不做）
-        if notes and not _is_toc_doc(t, html) and not _is_front_file(t):
+        # 弹注/标注美化（先于章节标记执行，豁免类才能生效；目录/前置页不做；
+        # 目录页判定用前置 pass 的 flags，不再对（可能已被修改的）html 重复全量正则）
+        if notes and not toc_page_flags.get(t) and not _is_front_file(t):
             new_html, nstats = mark_notes_in_html(html, normalize=True,
                                                   note_mark=note_mark)
             if nstats['refs'] or nstats['items']:
@@ -1670,7 +1772,7 @@ def beautify(
                 changed = True
                 html = new_html
         # 内容清理（段首空格归一/空段/meta），目录页不做文本清理避免破坏布局
-        if not _is_toc_doc(t, html):
+        if not toc_page_flags.get(t):
             new_html, n_lead, n_empty = _clean_html_body(html, cleanup_n)
             if n_lead or n_empty or new_html != html:
                 cleaned_leading += n_lead
@@ -1679,7 +1781,7 @@ def beautify(
                     changed = True
                     html = new_html
         # 目录页：body 打 mb-toc-page 标记 + 注入真实装饰元素，不做章节标记
-        if _is_toc_doc(t, html):
+        if toc_page_flags.get(t):
             # 修复旧版缺陷输出：目录行曾被误当章节标题打标，mb-ch 的
             # page-break-before 会把目录页炸成多个「第x章」独立页
             fixed = _strip_chapter_marks(html)
@@ -1703,7 +1805,7 @@ def beautify(
                 changed = True
                 html = new_html
         # 对话行点缀（开关控制打标；目录/前置页不做）
-        if dialogue and not _is_toc_doc(t, html) and not _is_front_file(t):
+        if dialogue and not toc_page_flags.get(t) and not _is_front_file(t):
             new_html, dcount = mark_dialogue_in_html(html)
             if dcount:
                 dialogues_marked += dcount

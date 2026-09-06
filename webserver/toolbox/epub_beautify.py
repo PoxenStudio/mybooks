@@ -68,7 +68,7 @@ class EpubBeautifyTool(BaseTool):
         """保存全书背景图：PIL 统一重编码为 JPEG（宽>1080 等比缩小）。
 
         :param builtin_id: 非空时忽略 data/filename，改用内置纹理。
-        :raises ValueError: 格式/大小不合法或纹理 id 非法。
+        :raises ValueError: 格式/大小/纹理 id 不合法或图片无法解析。
         """
         if builtin_id:
             from webserver.toolbox.utils.styles import get_texture_bytes
@@ -84,7 +84,11 @@ class EpubBeautifyTool(BaseTool):
         except ImportError as err:
             raise RuntimeError(_('服务器缺少图像处理组件(PIL)，无法处理背景图')) from err
         import io as _io
-        img = Image.open(_io.BytesIO(data)).convert('RGB')
+        try:
+            img = Image.open(_io.BytesIO(data)).convert('RGB')
+        except Exception as err:
+            # 截断文件抛 OSError、超大像素抛 DecompressionBombError 等，统一转业务错误
+            raise ValueError(_('背景图无法解析：%s') % err) from err
         w, h = img.size
         target_w = 1080
         if w > target_w:
