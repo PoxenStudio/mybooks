@@ -2737,6 +2737,31 @@ class TestTocSignalsAndGuard(unittest.TestCase):
         self.assertNotIn('toc_guard', mk)
         self.assertIn('mb-ch', new)
 
+    def test_mark_guard_not_fired_named_anchor_aggregate(self):
+        """章题内嵌 <a name> 具名锚（无 href）/<abbr> 不是链接：判别式按
+        内部 href 口径计数，聚合正文不触发安全阀（review N1 回归）。"""
+        html = ('<html><body>' + ''.join(
+            '<h2><a name="c%d"></a>第%d章 标题%d</h2><p>正文内容段落。</p>'
+            '<p><a href="p%02d.xhtml">上一章</a><a href="p%02d.xhtml">下一章</a></p>'
+            % (i, i, i, i - 1, i + 1) for i in range(1, 13)) + '</body></html>')
+        new, mk = lib.mark_chapters_in_html(html)
+        self.assertEqual(mk['chapters'], 12)
+        self.assertNotIn('toc_guard', mk)
+        self.assertIn('mb-ch', new)
+
+    def test_internal_href_regex_excludes_external(self):
+        """_INTERNAL_HREF_RE：外链（含前导空白变体）/协议相对地址不算内部链接
+        （review N2：\\s* 在前瞻外会被回溯击穿）。"""
+        for href in ('https://x.com/a', '  https://x.com/a', '\tHTTP://x.com/a',
+                     '\n//cdn.x.com/a', '//x.com/a', 'mailto:a@b.c',
+                     '  javascript:void(0)'):
+            self.assertEqual(lib._INTERNAL_HREF_RE.findall(
+                '<a href="%s">x</a>' % href), [], repr(href))
+        for href in ('part1.xhtml#f1', '#f1', ' ../c1.xhtml',
+                     ' TEXT/page.html'):
+            self.assertEqual(len(lib._INTERNAL_HREF_RE.findall(
+                '<a href="%s">x</a>' % href)), 1, repr(href))
+
     def _build_ncx_epub(self, path, ncx, chapters):
         manifest = ''.join(
             '<item id="c%d" href="%s" media-type="application/xhtml+xml"/>'

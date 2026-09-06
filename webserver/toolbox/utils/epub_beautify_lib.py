@@ -759,10 +759,12 @@ def _has_nav_toc_semantics(html_str: str) -> bool:
     return bool(_NAV_TOC_RE.search(html_str or ''))
 
 
-# 内部链接（排除外链协议/协议相对地址）与块级元素计数——目录页结构信号用
+# 内部链接（排除外链协议/协议相对地址）与块级元素计数——目录页结构信号用。
+# 注意 \s* 必须放进前瞻内：放在前瞻外会被回溯击穿（href="  https://…" 逐格
+# 回退后前瞻改看空白字符而通过，外链被误计为内部链接）
 _INTERNAL_HREF_RE = re.compile(
-    r'<a\b[^>]*href\s*=\s*["\']\s*(?!(?:https?|mailto|file|ftp|javascript):)'
-    r'(?!//)[^"\']*["\']', re.I)
+    r'<a\b[^>]*href\s*=\s*["\'](?!\s*(?:https?|mailto|file|ftp|javascript):)'
+    r'(?!\s*//)[^"\']*["\']', re.I)
 _BLOCK_OPEN_RE = re.compile(r'<(?:p|div|li|blockquote|h[1-6])\b', re.I)
 # 结构/语义信号的最低内部链接数门槛（防两块互链的小页误判）
 _TOC_LINK_MIN = 5
@@ -1096,7 +1098,10 @@ def mark_chapters_in_html(html_str: str, split_title: bool = False) -> tuple:
                     # 拆分标记类：预设据此关闭章扉式大顶距（双 span 已增高）
                     new_attrs = _add_class(new_attrs, 'mb-ch-split')
             heading_seen = True
-            if '<a' in (inner or '').lower():
+            # 判别式用"含内部 href 的链接"口径（与页级安全阀计数一致）：
+            # <a name> 具名锚/<abbr> 等非链接标签不得计入，否则聚合正文的
+            # 章题块（老转换器惯放具名锚）会被安全阀误杀
+            if _INTERNAL_HREF_RE.search(inner or ''):
                 marked_with_links += 1
             return '<%s%s>%s</%s>%s' % (tag, new_attrs, inner, tag,
                                         '' if is_volume else _MB_SEP)
