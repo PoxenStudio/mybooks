@@ -558,7 +558,7 @@ class TestBook(TestWithUserLogin):
 
 
 class TestSendToMailLastRecipient(TestWithUserLogin):
-    """分享到邮箱：发送成功后按用户记住上次收件人（Reader.extra.last_share_email）"""
+    """分享到邮箱：入队推送后按用户记住上次收件人（Reader.extra.last_share_email）"""
 
     def test_mailto_saves_last_email(self):
         d = self.json(

@@ -551,7 +551,7 @@ class UserInfo(BaseHandler):
         d["share_annotations"] = (user.extra or {}).get("share_annotations", True)
         if user.extra:
             d["kindle_email"] = user.extra.get("kindle_email", "")
-            # 上次分享到邮箱的收件人（BookSendToMail 发送成功时写入），
+            # 上次分享到邮箱的收件人（BookSendToMail 入队推送时写入），
             # 供分享对话框"发送给上次分享的邮箱"一键填入
             d["last_share_email"] = user.extra.get("last_share_email", "")
             if detail:

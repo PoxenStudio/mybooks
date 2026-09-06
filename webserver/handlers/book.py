@@ -3650,12 +3650,18 @@ class BookSendToMail(BaseHandler):
         )
 
         # 记住本次分享邮箱（Reader.extra 按用户区分；游客推送无 current_user
-        # 不记忆；发送成功才写入，失败邮箱不留痕）。extra 兼容历史 NULL 行
+        # 不记忆）。send_book 挂 @AsyncService 入队即返回，故语义是"入队即
+        # 记"——SMTP 结果在后台线程产生，失败邮箱同样留痕，重发即覆盖。
+        # best-effort：推送已入队，记忆写失败不应让用户误判发送失败而重发
+        # （参照 base.py 登录处 user.save() 的 try/except 先例）
         if self.current_user:
-            extra = self.current_user.extra or {}
-            extra["last_share_email"] = mail_to
-            self.current_user.extra = extra
-            self.sqlite_session.commit()
+            try:
+                extra = self.current_user.extra or {}
+                extra["last_share_email"] = mail_to
+                self.current_user.extra = extra
+                self.sqlite_session.commit()
+            except Exception as e:
+                logging.warning("[SEND_TO_MAIL] 保存 last_share_email 失败: %s", e)
 
         return {"err": "ok", "msg": _("后台正在推送，稍后可以刷新页面，在通知消息中查看结果。")}
 

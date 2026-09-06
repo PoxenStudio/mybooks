@@ -3788,7 +3788,12 @@ export default {
                 });
 
                 if (response.err === 'ok') {
-                    // 后端已写入 Reader.extra，本地同步供本会话内下次打开即显
+                    // 后端已写入 Reader.extra；同步写回 store——AppHeader 仅
+                    // mounted 拉一次 /user/info，不写回的话本会话内再开弹窗
+                    // 会被 store 旧值打回（参照 AppHeader 直接改 state 的先例）
+                    if (this.$store.state.user) {
+                        this.$store.state.user.last_share_email = this.email_address.trim();
+                    }
                     this.lastShareEmail = this.email_address.trim();
                     this.$alert('success', this.$t('book.sendToEmailSuccess', { email: this.email_address }));
                     this.closeEmailDialog();
