@@ -2588,6 +2588,264 @@ class TestStripHardening(unittest.TestCase):
         self.assertNotIn('mb-ch"', out)
 
 
+# ── 目录页三层信号 / 防炸页安全阀 / NCX 驱动打标（2026-09-06 批 2 复验）──
+# 通用篇名 + 跨文件链接（calibre 拆分书形态）：形态比例必然失效，仅密度信号可判
+DENSITY_TOC_HTML = (
+    '<html><head><title>z</title></head><body>'
+    '<p>Table of Contents</p>'
+    + ''.join('<p><a href="part%03d.xhtml#filepos%d">条目标题%03d</a></p>' % (i, i, i)
+              for i in range(1, 21))
+    + '</body></html>'
+)
+# 密度不足（6 链接 / 30+ 填充块），靠标题语义信号判定
+TITLE_SIGNAL_TOC_HTML = (
+    '<html><head><title>t</title></head><body>'
+    '<h1>目录</h1>'
+    + ''.join('<div>此处为版式填充段落，避免链接密度达标。</div>' for _ in range(30))
+    + ''.join('<p><a href="s%02d.html">篇目%d</a></p>' % (i, i) for i in range(1, 7))
+    + '</body></html>'
+)
+
+
+class TestTocSignalsAndGuard(unittest.TestCase):
+    """目录页三层信号（形态/密度/标题）、防炸页安全阀、NCX 驱动打标。"""
+
+    def test_density_signal_cross_file_links(self):
+        self.assertTrue(lib._is_toc_doc('index_split_000.html', DENSITY_TOC_HTML))
+
+    def test_title_signal_low_density(self):
+        self.assertTrue(lib._is_toc_doc('x.html', TITLE_SIGNAL_TOC_HTML))
+
+    def test_title_signal_needs_min_links(self):
+        """4 个链接（≥3 早退门之上、<5 结构信号门槛）即使有目录标题也不判目录。"""
+        html = ('<html><body><p>目录</p>'
+                + ''.join('<p><a href="s%d.html">篇目%d</a></p>' % (i, i)
+                          for i in range(1, 5))
+                + '</body></html>')
+        self.assertFalse(lib._is_toc_doc('x.html', html))
+
+    def test_title_signal_via_title_tag(self):
+        """<title>目录</title> 命中标题语义信号（低密度页）。"""
+        html = ('<html><head><title>目录</title></head><body>'
+                + ''.join('<div>填充段落文本，稀释链接密度。</div>' for _ in range(30))
+                + ''.join('<p><a href="s%02d.html">篇目%d</a></p>' % (i, i)
+                          for i in range(1, 7))
+                + '</body></html>')
+        self.assertTrue(lib._is_toc_doc('x.html', html))
+
+    def test_endnote_backlink_page_not_toc(self):
+        """合并式尾注页（行行是回链的注释容器）不得判为目录页——否则会
+        抑制目录生成并跳过该页弹注美化（review 阻断项回归）。"""
+        endnote = ('<html><body><h2>注释</h2>'
+                   '<ol class="footnote-content">'
+                   + ''.join('<li class="footnote-item" id="n%d">'
+                             '<a href="c%02d.xhtml#ref%d">%d</a> 注文内容%d。</li>'
+                             % (i, i, i, i, i) for i in range(1, 21))
+                   + '</ol></body></html>')
+        self.assertFalse(lib._is_toc_doc('notes.xhtml', endnote))
+        # 无容器的裸 li 回链列表：回链文本为纯数字，"有意义文本"占比检验拦下
+        endnote2 = ('<html><body><p>注释</p>'
+                    + ''.join('<li id="n%d"><a href="c%02d.xhtml#ref%d">%d</a>'
+                              ' 注文内容%d。</li>' % (i, i, i, i, i)
+                              for i in range(1, 21))
+                    + '</body></html>')
+        self.assertFalse(lib._is_toc_doc('notes.xhtml', endnote2))
+
+    def test_beautify_density_toc_not_exploded(self):
+        """密度判定的目录页：不打章节标、获得目录页装饰、保持单页。"""
+        tmp = os.path.join(TESTS_DIR, "_tmp_dens_toc.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_dens_toc_out.epub")
+        manifest = (
+            '<item id="toc0" href="index_split_000.html" '
+            'media-type="application/xhtml+xml"/>'
+            '<item id="c1" href="c01.xhtml" media-type="application/xhtml+xml"/>'
+            '<item id="c2" href="c02.xhtml" media-type="application/xhtml+xml"/>'
+            '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>'
+        )
+        spine = '<itemref idref="toc0"/><itemref idref="c1"/><itemref idref="c2"/>'
+        opf = (
+            '<?xml version="1.0"?>'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+            '<metadata><dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">'
+            '密度目录书</dc:title></metadata>'
+            '<manifest>%s</manifest><spine>%s</spine></package>'
+        ) % (manifest, spine)
+        with zipfile.ZipFile(tmp, "w") as zf:
+            zf.writestr("mimetype", "application/epub+zip",
+                        compress_type=zipfile.ZIP_STORED)
+            zf.writestr("META-INF/container.xml", CONTAINER)
+            zf.writestr("OEBPS/content.opf", opf)
+            zf.writestr("OEBPS/index_split_000.html", DENSITY_TOC_HTML)
+            zf.writestr("OEBPS/c01.xhtml",
+                        '<html><body><p>第一章 开端</p><p>正文。</p></body></html>')
+            zf.writestr("OEBPS/c02.xhtml",
+                        '<html><body><p>第二章 转折</p><p>正文。</p></body></html>')
+            zf.writestr("OEBPS/toc.ncx", NCX)
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            stats = lib.beautify(tmp, out, css)
+            self.assertFalse(stats["toc_generated"])
+            self.assertEqual(stats.get("mark_guard_files", 0), 0)
+            with zipfile.ZipFile(out) as zf:
+                toc_page = zf.read("OEBPS/index_split_000.html").decode("utf-8")
+            self.assertIn("mb-toc-page", toc_page)
+            self.assertNotIn("mb-ch", toc_page)
+            self.assertIn("mb-toc-title", toc_page)  # p 标题 "Table of Contents"
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_mark_guard_link_heavy_page(self):
+        html = '<html><body>' + ''.join(
+            '<p><a href="p%d.html#f%d">第%d章 标题%d</a></p>' % (i, i, i, i)
+            for i in range(1, 13)) + '</body></html>'
+        new, mk = lib.mark_chapters_in_html(html)
+        self.assertEqual(mk, {'chapters': 0, 'volumes': 0, 'splits': 0,
+                              'toc_guard': 1})
+        self.assertEqual(new, html)
+
+    def test_mark_guard_not_fired_aggregate(self):
+        """聚合多章的正文文件（标题无链接）不受安全阀影响。"""
+        html = '<html><body>' + ''.join(
+            '<p>第%d章 标题%d</p><p>正文内容段落。</p>' % (i, i)
+            for i in range(1, 13)) + '</body></html>'
+        new, mk = lib.mark_chapters_in_html(html)
+        self.assertEqual(mk['chapters'], 12)
+        self.assertNotIn('toc_guard', mk)
+        self.assertIn('mb-ch', new)
+
+    def test_mark_guard_below_threshold(self):
+        """标记数未达门槛（<10）时安全阀不介入。"""
+        html = '<html><body>' + ''.join(
+            '<p><a href="p%d.html">第%d章 标题%d</a></p>' % (i, i, i)
+            for i in range(1, 10)) + '</body></html>'
+        new, mk = lib.mark_chapters_in_html(html)
+        self.assertEqual(mk['chapters'], 9)
+        self.assertNotIn('toc_guard', mk)
+        self.assertIn('mb-ch', new)
+
+    def test_mark_guard_not_fired_aggregate_with_nav(self):
+        """聚合多章正文 + 每章上/下章导航链接：章题块自身无链接，
+        安全阀判别式（被标块多数含链接）不命中，标记照常保留。"""
+        html = ('<html><body>' + ''.join(
+            '<p>第%d章 标题%d</p><p>正文内容段落。</p>'
+            '<p><a href="p%02d.xhtml">上一章</a><a href="p%02d.xhtml">下一章</a></p>'
+            % (i, i, i - 1, i + 1) for i in range(1, 13)) + '</body></html>')
+        new, mk = lib.mark_chapters_in_html(html)
+        self.assertEqual(mk['chapters'], 12)
+        self.assertNotIn('toc_guard', mk)
+        self.assertIn('mb-ch', new)
+
+    def _build_ncx_epub(self, path, ncx, chapters):
+        manifest = ''.join(
+            '<item id="c%d" href="%s" media-type="application/xhtml+xml"/>'
+            % (i, h) for i, (h, _html) in enumerate(chapters))
+        manifest += ('<item id="ncx" href="toc.ncx" '
+                     'media-type="application/x-dtbncx+xml"/>')
+        spine = ''.join('<itemref idref="c%d"/>' % i for i in range(len(chapters)))
+        opf = (
+            '<?xml version="1.0"?>'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+            '<metadata><dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">'
+            'NCX打标书</dc:title></metadata>'
+            '<manifest>%s</manifest><spine toc="ncx">%s</spine></package>'
+        ) % (manifest, spine)
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.writestr("mimetype", "application/epub+zip",
+                        compress_type=zipfile.ZIP_STORED)
+            zf.writestr("META-INF/container.xml", CONTAINER)
+            zf.writestr("OEBPS/content.opf", opf)
+            zf.writestr("OEBPS/toc.ncx", ncx)
+            for i, (h, html) in enumerate(chapters):
+                zf.writestr("OEBPS/" + h, html)
+
+    def test_toc_title_driven_volume_marking(self):
+        """NCX 条目标题兜底打标：h3 层级 + 书名前缀的卷名页按 mb-vol 处理。"""
+        tmp = os.path.join(TESTS_DIR, "_tmp_ncxmark.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_ncxmark_out.epub")
+        ncx = (
+            '<?xml version="1.0"?>'
+            '<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">'
+            '<navMap>'
+            '<navPoint id="v1"><navLabel><text>资治通鉴第一卷</text></navLabel>'
+            '<content src="v1.xhtml"/></navPoint>'
+            '<navPoint id="c2"><navLabel><text>第二章 正文标题</text></navLabel>'
+            '<content src="c2.xhtml"/></navPoint>'
+            '</navMap></ncx>'
+        )
+        chapters = [
+            ('v1.xhtml', '<html><body><h3>资治通鉴第一卷</h3>'
+                         '<p>周纪一。</p></body></html>'),
+            ('c2.xhtml', '<html><body><h2>第二章 正文标题</h2>'
+                         '<p>正文。</p></body></html>'),
+        ]
+        self._build_ncx_epub(tmp, ncx, chapters)
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            stats = lib.beautify(tmp, out, css)
+            self.assertEqual(stats.get("toc_titles_marked"), 1)
+            with zipfile.ZipFile(out) as zf:
+                v1 = zf.read("OEBPS/v1.xhtml").decode("utf-8")
+            self.assertIn('class="mb-vol"', v1)
+            self.assertNotIn('mb-ch-sep', v1)
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_toc_title_containment_prefers_heading(self):
+        """两段式匹配：书名段（资治通鉴）不得借包含命中抢在卷名块之前；
+        无全等时包含匹配仅限 h1-h6。"""
+        html = ('<html><body><p>资治通鉴</p>'
+                '<h3>第七十四卷</h3><p>魏纪六。</p></body></html>')
+        new, n = lib.mark_toc_title_in_html(html, '资治通鉴第七十四卷')
+        self.assertEqual(n, 1)
+        self.assertIn('<h3 class="mb-vol">', new)      # 卷名 h3 被标
+        self.assertNotIn('mb-ch-sep', new)             # 卷级无长线
+        self.assertIn('<p>资治通鉴</p>', new)           # 书名段原样
+        # 全等优先：任意标签的全等块直接命中（含卷尾 → 卷级样式）
+        html2 = '<html><body><p>资治通鉴第七十四卷</p><h3>别的</h3></body></html>'
+        new2, n2 = lib.mark_toc_title_in_html(html2, '资治通鉴第七十四卷')
+        self.assertEqual(n2, 1)
+        self.assertIn('<p class="mb-vol">', new2)
+
+    def test_toc_title_driven_skips(self):
+        """已打标文件跳过；非编号标题（无第X形态）不参与兜底。"""
+        tmp = os.path.join(TESTS_DIR, "_tmp_ncxskip.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_ncxskip_out.epub")
+        ncx = (
+            '<?xml version="1.0"?>'
+            '<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">'
+            '<navMap>'
+            '<navPoint id="c1"><navLabel><text>第一章 开端</text></navLabel>'
+            '<content src="c1.xhtml"/></navPoint>'
+            '<navPoint id="c3"><navLabel><text>夜</text></navLabel>'
+            '<content src="c3.xhtml"/></navPoint>'
+            '</navMap></ncx>'
+        )
+        chapters = [
+            ('c1.xhtml', '<html><body><h2>第一章 开端</h2>'
+                         '<p>正文。</p></body></html>'),
+            ('c3.xhtml', '<html><body><p>夜</p><p>正文。</p></body></html>'),
+        ]
+        self._build_ncx_epub(tmp, ncx, chapters)
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            stats = lib.beautify(tmp, out, css)
+            self.assertEqual(stats.get("toc_titles_marked"), 0)
+            with zipfile.ZipFile(out) as zf:
+                c1 = zf.read("OEBPS/c1.xhtml").decode("utf-8")
+                c3 = zf.read("OEBPS/c3.xhtml").decode("utf-8")
+            self.assertIn('mb-ch', c1)      # 常规 h2 打标照常
+            self.assertNotIn('mb-ch', c3)   # 非编号标题不兜底
+            self.assertNotIn('mb-vol', c3)
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)
+
+
 if __name__ == "__main__":
     unittest.main()
 # ncx/nav 在包根目录、OPF 在 OEBPS/ 的书（weread 导出布局）：

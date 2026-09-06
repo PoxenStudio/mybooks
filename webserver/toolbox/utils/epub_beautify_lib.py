@@ -759,11 +759,53 @@ def _has_nav_toc_semantics(html_str: str) -> bool:
     return bool(_NAV_TOC_RE.search(html_str or ''))
 
 
+# 内部链接（排除外链协议/协议相对地址）与块级元素计数——目录页结构信号用
+_INTERNAL_HREF_RE = re.compile(
+    r'<a\b[^>]*href\s*=\s*["\']\s*(?!(?:https?|mailto|file|ftp|javascript):)'
+    r'(?!//)[^"\']*["\']', re.I)
+_BLOCK_OPEN_RE = re.compile(r'<(?:p|div|li|blockquote|h[1-6])\b', re.I)
+# 结构/语义信号的最低内部链接数门槛（防两块互链的小页误判）
+_TOC_LINK_MIN = 5
+# 实义文本剥离（数字/符号/下划线）——目录页回链占比检验用
+_SYMBOL_TEXT_RE = re.compile(r'[\d\W_]+', re.UNICODE)
+# 首个链接位置（<a\t/<a\n 变体也覆盖）
+_FIRST_LINK_RE = re.compile(r'<a\b', re.I)
+
+
+def _has_toc_title_text(html_str: str) -> bool:
+    """首链接之前的块文本或 <title> 是否全等目录标题（复用 _TOC_TITLE_TEXT_RE）。
+
+    p/div/li 等块与裸 div（_SIMPLE_DIV_RE，calibre 平铺形态）都扫，与
+    _decorate_toc_page 的标题兜底口径对称。"""
+    m = re.search(r'<title\b[^>]*>(.*?)</title>', html_str[:4096], re.I | re.S)
+    if m and _TOC_TITLE_TEXT_RE.match(_block_text(m.group(1)).strip()):
+        return True
+    m = _FIRST_LINK_RE.search(html_str)
+    scan = (html_str if m is None else html_str[:m.start()])[:4096]
+    for bm in _BLOCK_RE.finditer(scan):
+        if _TOC_TITLE_TEXT_RE.match(_block_text(bm.group(3)).strip()):
+            return True
+    for dm in _SIMPLE_DIV_RE.finditer(scan):
+        if _TOC_TITLE_TEXT_RE.match(_block_text(dm.group(2)).strip()):
+            return True
+    return False
+
+
 def _looks_like_link_toc(html_str: str) -> bool:
     """链接列表型目录页检测：calibre「Table of Contents」等无 nav 语义的
-    纯链接目录（<p><a>第x章</a></p> 列表）。≥3 个链接且多数行文本呈
-    章节标题形态即判定。真章节页的链接是脚注/引用（文本非标题形态），
-    占比远低于阈值，不会误判。"""
+    纯链接目录（<p><a>第x章</a></p> 列表）。三层信号任一命中即判定：
+
+    1. 形态比例（原有）：≥3 链接且多数条目呈章节标题形态；
+    2. 链接密度（结构）：内部链接 ≥5 且占块级元素 ≥60%——目录页的本质是
+       "几乎每块都指向书内链接"的容器，对「送葬」「贫穷的标准」这类无编号
+       篇名（形态比例必然失效）免疫；跨文件链接（calibre 拆分书的
+       ``part0002.xhtml#filepos…``）与同文件锚点同等计入，不能只看 ``#`` 前缀；
+    3. 标题语义：首链接之前的块文本或 <title> 全等目录标题（目录/目次/Contents…）。
+
+    真章节页的链接是脚注/引用（数量少、密度低、无目录标题），不会误判。
+    误判后果轻微（该页不打章节标 + 获得目录页装饰），双门槛（≥5 链接 +
+    60% 密度）压制概率。信号 2/3 仅在形态比例不通过时计算（性能：实测
+    进复核路径的文件约 10%，逐文件额外 ~1ms 有界正则）。"""
     anchors = re.findall(r'<a\b[^>]*href=[^>]*>(.*?)</a>', html_str, re.I | re.S)
     if len(anchors) < 3:
         return False
@@ -774,7 +816,28 @@ def _looks_like_link_toc(html_str: str) -> bool:
         1 for t in texts
         if len(t) <= 60 and chapter_patterns.paragraph_is_heading(t)
     )
-    return like >= 3 and like * 2 >= len(texts)
+    if like >= 3 and like * 2 >= len(texts):
+        return True
+    if len(anchors) < _TOC_LINK_MIN:
+        return False
+    # 合并式尾注/脚注页一票否决：行行是回链的注释容器密度与目录页相同，
+    # 但它是注释内容——误判会连带抑制目录生成并跳过该页的弹注美化
+    if _FOOTNOTE_ASIDE_RE.search(html_str) or _NOTES_OL_BLOCK_RE.search(html_str):
+        return False
+    # 回链文本占比检验：尾注回链是纯数字/符号（1、↑、◎），目录条目是
+    # 篇名文本；剥离数字与符号后的实义字符（字母/汉字）≥2 才算有意义——
+    # 多位数页码回链（10、20）同样拦下
+    meaningful = sum(1 for t in texts if len(_SYMBOL_TEXT_RE.sub('', t)) >= 2)
+    if meaningful * 2 < len(texts):
+        return False
+    internal = len(_INTERNAL_HREF_RE.findall(html_str))
+    if internal >= _TOC_LINK_MIN:
+        blocks = len(_BLOCK_OPEN_RE.findall(html_str))
+        if blocks and internal * 10 >= blocks * 6:
+            return True
+        if _has_toc_title_text(html_str):
+            return True
+    return False
 
 
 def _is_toc_doc(zip_path: str, html_str: str = '') -> bool:
@@ -879,8 +942,8 @@ def _decorate_toc_page(html_str: str) -> str:
     # 平铺目录页标题兜底：只在首个链接之前的块里找（标题必在条目前），
     # 文本全等关键词才命中，不做模糊猜测——类汤首块可能是任何内容
     if 'mb-toc-sub' not in html_str:
-        _first_link = html_str.lower().find('<a ')
-        _scan = html_str if _first_link < 0 else html_str[:_first_link]
+        _m = _FIRST_LINK_RE.search(html_str)
+        _scan = html_str if _m is None else html_str[:_m.start()]
         for m in _BLOCK_RE.finditer(_scan):
             if m.group(1).lower() != 'p':
                 continue
@@ -948,6 +1011,11 @@ def _is_volume_text(text: str) -> bool:
     return bool(_MB_VOL_RE.match((text or '').strip()))
 
 
+# 防炸页安全阀门槛：单文件章节标记数达到该值且页内内部链接数 ≥ 标记数时
+# 放弃全部标记（疑似漏判的链接目录页，见 mark_chapters_in_html 尾部）
+_MARK_GUARD_MIN = 10
+
+
 def mark_chapters_in_html(html_str: str, split_title: bool = False) -> tuple:
     """正文条目内标记章节标题（mb-ch / 卷级 mb-vol）与章首段（data-mb-first）。
 
@@ -955,7 +1023,9 @@ def mark_chapters_in_html(html_str: str, split_title: bool = False) -> tuple:
     :param split_title: True 时把纯文本章题拆为 mb-ch-num + mb-ch-title 两行
         span（双行排版，仅章级；块内含子标签则跳过不动）。拆分时标题元素追加
         mb-ch-split 类，供预设关闭章扉式大顶距（双 span 已增高，见 xuanzhi.css）。
-    :return: (new_html, stats)，stats = {'chapters','volumes','splits'}
+    :return: (new_html, stats)，stats = {'chapters','volumes','splits'}；
+        触发防炸页安全阀时 stats = {'chapters':0,'volumes':0,'splits':0,
+        'toc_guard':1} 且原样返回
     """
     empty = {'chapters': 0, 'volumes': 0, 'splits': 0}
     if (re.search(r'class="[^"]*\bmb-ch\b', html_str) or re.search(r'class="[^"]*\bmb-vol\b', html_str)) or ('<html' not in html_str.lower() and '<body' not in html_str.lower()):
@@ -966,6 +1036,9 @@ def mark_chapters_in_html(html_str: str, split_title: bool = False) -> tuple:
     stats = dict(empty)
     first_done = False
     heading_seen = False
+    # 被标块自身含链接的计数（安全阀判别式：目录行是 <p><a>第X章</a></p>，
+    # 聚合正文的章题块无链接——见函数末尾安全阀）
+    marked_with_links = 0
     # 性能护栏：开闭不齐的大文件跳过块级正则（避免 _BLOCK_RE O(n²) 退化）
     if len(html_str) > 80000:
         # 粗略统计 p 标签开闭数，不匹配且文件较大则跳过标记（与 analyze 的 p_close_mismatch 思路一致）
@@ -978,7 +1051,7 @@ def mark_chapters_in_html(html_str: str, split_title: bool = False) -> tuple:
             pass
 
     def _handle_block(tag, attrs, inner, is_div=False):
-        nonlocal heading_seen, first_done
+        nonlocal heading_seen, first_done, marked_with_links
         # 弹注条目豁免（mb-note-item 由 mark_notes_in_html 打标）：注释内容
         # 不是章节标题，且 ◎《…》/短条目可能撞上弱正则
         if 'mb-note-item' in (attrs or ''):
@@ -1023,6 +1096,8 @@ def mark_chapters_in_html(html_str: str, split_title: bool = False) -> tuple:
                     # 拆分标记类：预设据此关闭章扉式大顶距（双 span 已增高）
                     new_attrs = _add_class(new_attrs, 'mb-ch-split')
             heading_seen = True
+            if '<a' in (inner or '').lower():
+                marked_with_links += 1
             return '<%s%s>%s</%s>%s' % (tag, new_attrs, inner, tag,
                                         '' if is_volume else _MB_SEP)
         if heading_seen and not first_done and not is_div:
@@ -1048,7 +1123,84 @@ def mark_chapters_in_html(html_str: str, split_title: bool = False) -> tuple:
             return out if out is not None else m.group(0)
 
         new_html = _SIMPLE_DIV_RE.sub(_replace_div, new_html)
+
+    # 防炸页安全阀（与目录页判定解耦的最后防线）：单文件被打 ≥10 个章节标、
+    # 多数被标块自身就是链接（目录行形态）且页内内部链接数 ≥ 标记数 → 几乎
+    # 必然是漏判的链接目录页，放弃本页全部标记，宁可不标也不允许
+    # page-break 把一页目录炸成几十个单页。聚合多章的正文文件章题块无链接，
+    # 即使带每章上/下一章导航链接（标记数 < 链接数、标记块含链接占比低）
+    # 也不会命中判别式
+    total_marks = stats['chapters'] + stats['volumes']
+    if total_marks >= _MARK_GUARD_MIN and marked_with_links * 2 >= total_marks \
+            and len(_INTERNAL_HREF_RE.findall(html_str)) >= total_marks:
+        logging.getLogger(__name__).info(
+            "[epub_beautify] chapter-mark guard fired: %d marks (%d linked) "
+            "with >=%d internal links, file kept unmarked (suspected TOC page)",
+            total_marks, marked_with_links, total_marks)
+        stats = {'chapters': 0, 'volumes': 0, 'splits': 0, 'toc_guard': 1}
+        return html_str, stats
     return new_html, stats
+
+
+# 编号型目录标题（第X章节回篇卷部集季）——NCX 驱动打标的准入门槛
+_CH_NUM_RE = re.compile(
+    r'第\s*[0-9零〇一二三四五六七八九十百千万兩两]+\s*[章节回篇卷部集季]')
+# 卷级尾部（无锚定）：「资治通鉴第七十四卷」这类带书名前缀的卷名按 mb-vol 处理
+# （_MB_VOL_RE 是 ^ 锚定的，前缀书名会漏判）
+_VOL_TAIL_RE = re.compile(
+    r'第\s*[0-9零〇一二三四五六七八九十百千万兩两]+\s*[卷部篇]')
+
+
+def mark_toc_title_in_html(html_str: str, title: str) -> tuple:
+    """目录条目标题驱动的卷名/章名打标（NCX 数据源兜底）。
+
+    适用形态：正文页标题层级是 h3+（常规标记只打 h1/h2，防小节头炸页）
+    或带书名前缀（「资治通鉴第七十四卷」不匹配 ^第X卷 章节正则），导致
+    常规标记零命中，而目录条目恰好指向该页。由调用方保证只对零标记文件
+    调用且标题已过编号门槛（_CH_NUM_RE）。
+
+    匹配两段式（防书名块误标）：先全窗口找**全等**块（任意标签），无全等
+    再做包含匹配且仅限 h1-h6 标题标签——避免「资治通鉴」书名段先于
+    「第七十四卷」卷名块被包含命中。窗口为文件前 16K 字符内的全部块
+    （标题页的标题总在页首，16K 字符对 CJK 约合 5K+ 汉字）。卷级判定用
+    无锚定 _VOL_TAIL_RE（前缀容忍 → mb-vol 独页大字样式）。
+    幂等：文件已含 mb-ch/mb-vol 时原样返回。
+    :return: (new_html, marked)；marked ∈ {0, 1}
+    """
+    if re.search(r'class="[^"]*\b(?:mb-ch|mb-vol)\b', html_str):
+        return html_str, 0
+    norm_title = ''.join(title.split())
+    if len(norm_title) < 2:
+        return html_str, 0
+    contains_hit = None  # (match, tag, attrs, inner, is_volume)
+    for bm in _BLOCK_RE.finditer(html_str[:16384]):
+        tag, attrs, inner = bm.group(1), bm.group(2), bm.group(3)
+        text = _block_text(inner)
+        norm_block = ''.join(text.split())
+        if not norm_block:
+            continue
+        if norm_block == norm_title:
+            return _mark_toc_title_block(html_str, bm, tag, attrs, inner, text)
+        if contains_hit is None and tag.lower() in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):
+            ok = ((len(norm_block) >= 4 and norm_block in norm_title)
+                  or (len(norm_title) >= 4 and norm_title in norm_block))
+            if ok:
+                contains_hit = (bm, tag, attrs, inner, text)
+    if contains_hit is not None:
+        bm, tag, attrs, inner, text = contains_hit
+        return _mark_toc_title_block(html_str, bm, tag, attrs, inner, text)
+    return html_str, 0
+
+
+def _mark_toc_title_block(html_str: str, bm, tag, attrs, inner, text) -> tuple:
+    """给命中的块打 mb-vol/mb-ch（卷级无长线），返回 (new_html, 1)。"""
+    is_volume = bool(_VOL_TAIL_RE.search(text))
+    new_attrs = _add_class(attrs, 'mb-vol' if is_volume else 'mb-ch')
+    new_html = (html_str[:bm.start()]
+                + '<%s%s>%s</%s>%s' % (tag, new_attrs, inner, tag,
+                                       '' if is_volume else _MB_SEP)
+                + html_str[bm.end():])
+    return new_html, 1
 
 
 # ── 对话行点缀（mb-dialog）────────────────────────────────────────────
@@ -1564,7 +1716,8 @@ def beautify(
         toc_generated / toc_entries / injected_css / chapters / rtl /
         cleaned_leading / removed_empty / toc_excluded / toc_links_ok /
         toc_links_total / dialogues_marked / notes_refs / notes_items /
-        notes_normalized / notes_wrapped）
+        notes_normalized / notes_wrapped / toc_titles_marked /
+        mark_guard_files）
     """
     if notes:
         _validate_note_mark(note_mark)
@@ -1798,6 +1951,18 @@ def beautify(
     removed_empty = 0
     dialogues_marked = 0
     notes_refs = notes_items = notes_normalized = notes_wrapped = 0
+    toc_titles_marked = 0
+    mark_guard_files = 0
+    # NCX 驱动打标目标：目录条目标题含编号形态（第X卷/章…）时，指向的文件
+    # 若常规标记零命中（标题是 h3+ 层级或带书名前缀），由条目标题兜底打标。
+    # 每文件只记首条标题：兜底仅在零标记文件触发，多章同文件且全为 h3 的书
+    # 只兜底标到第一章（半改善可接受，不为边际收益扩回归面）
+    toc_title_map = {}
+    for _lv, _title, _src in toc_items:
+        if _title and _CH_NUM_RE.search(_title):
+            _path = _src.split('#', 1)[0]
+            if _path and _path not in toc_title_map:
+                toc_title_map[_path] = _title
     for t in text_entries:
         if t not in entries:
             continue
@@ -1845,12 +2010,22 @@ def beautify(
                 html = new_html
         elif not _is_front_file(t):
             new_html, mk = mark_chapters_in_html(html, split_title=bool(split_title))
+            if mk.get('toc_guard'):
+                mark_guard_files += 1
             if mk['chapters'] or mk['volumes'] or mk['splits']:
                 marked_headers += mk['chapters']
                 marked_volumes += mk['volumes']
                 titles_split += mk['splits']
                 changed = True
                 html = new_html
+            elif not mk.get('toc_guard') and toc_title_map.get(t):
+                # 常规标记零命中且未被安全阀拦下 → 目录条目标题兜底打标
+                # （资治通鉴卷名页：h3 层级 + 书名前缀，常规路径打不中）
+                new_html, n = mark_toc_title_in_html(html, toc_title_map[t])
+                if n:
+                    toc_titles_marked += n
+                    changed = True
+                    html = new_html
         # 对话行点缀（开关控制打标；目录/前置页不做）
         if dialogue and not toc_page_flags.get(t) and not _is_front_file(t):
             new_html, dcount = mark_dialogue_in_html(html)
@@ -1899,4 +2074,6 @@ def beautify(
         'note_mark': note_mark if notes else '',
         'toc_blank_pruned': toc_blank_pruned,
         'extra_assets': extra_count,
+        'toc_titles_marked': toc_titles_marked,
+        'mark_guard_files': mark_guard_files,
     }
