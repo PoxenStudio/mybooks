@@ -1851,13 +1851,15 @@ class TestBackgroundImage(unittest.TestCase):
             BUILTIN_TEXTURES, get_texture_bytes, list_builtin_textures,
         )
         ids = [t['id'] for t in list_builtin_textures()]
-        self.assertEqual(ids, ['xuanzhi', 'parchment', 'linen'])
+        self.assertEqual(ids, ['xuanzhi', 'yunwen', 'gaobai',
+                               'daolin', 'yangpi', 'caojing'])
         for tid in ids:
             data, mt = get_texture_bytes(tid)
             self.assertEqual(mt, 'image/jpeg')
             self.assertEqual(data[:2], b'\xff\xd8')
-            self.assertLess(len(data), 140 * 1024)
+            self.assertLess(len(data), 400 * 1024)
         self.assertIn('tex_xuanzhi.jpg', BUILTIN_TEXTURES['xuanzhi']['file'])
+        self.assertIn('tex_caojing.jpg', BUILTIN_TEXTURES['caojing']['file'])
         try:
             get_texture_bytes('nope')
             self.fail('expected ValueError')

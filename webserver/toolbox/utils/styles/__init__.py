@@ -358,15 +358,15 @@ def get_preset_css(preset_id: str, use_system_fonts: bool = True,
 
 
 # ── 背景图片（内置纹理 + 用户上传）────────────────────────────────────────────
-# 纹理来源与许可：
-#   tex_xuanzhi.jpg   ← transparenttextures.com "Rice Paper 2"（站点声明免费可用）
-#   tex_parchment.jpg ← Wikimedia Commons "Pergament.2.jpg"（CC0，作者 Membeth）
-#   tex_linen.jpg     ← transparenttextures.com "Low Contrast Linen"（反色染米白）
+# 纹理来源：实书纸样扫描件（JPEG 重编码，最长边 ≤1080，q85）
 _TEXTURES_DIR = os.path.join(_PRESETS_DIR, 'textures')
 BUILTIN_TEXTURES = {
-    'xuanzhi': {'name': '宣纸纹', 'name_en': 'Rice Paper', 'file': 'tex_xuanzhi.jpg'},
-    'parchment': {'name': '羊皮纸', 'name_en': 'Parchment', 'file': 'tex_parchment.jpg'},
-    'linen': {'name': '素麻布', 'name_en': 'Linen', 'file': 'tex_linen.jpg'},
+    'xuanzhi': {'name': '宣纸纹', 'name_en': 'Rice Fiber', 'file': 'tex_xuanzhi.jpg'},
+    'yunwen': {'name': '云纹纸', 'name_en': 'Mottled Paper', 'file': 'tex_yunwen.jpg'},
+    'gaobai': {'name': '高白宣', 'name_en': 'Bright Xuan', 'file': 'tex_gaobai.jpg'},
+    'daolin': {'name': '道林纸', 'name_en': 'Book Paper', 'file': 'tex_daolin.jpg'},
+    'yangpi': {'name': '羊皮纸', 'name_en': 'Parchment', 'file': 'tex_yangpi.jpg'},
+    'caojing': {'name': '草纤纸', 'name_en': 'Straw Fiber', 'file': 'tex_caojing.jpg'},
 }
 
 
