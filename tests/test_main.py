@@ -560,6 +560,14 @@ class TestBook(TestWithUserLogin):
 class TestSendToMailLastRecipient(TestWithUserLogin):
     """分享到邮箱：入队推送后按用户记住上次收件人（Reader.extra.last_share_email）"""
 
+    def setUp(self):
+        super().setUp()
+        # 清底：负向断言（key 不存在）不依赖用例字母序的执行运气
+        user = get_db().query(models.Reader).filter(models.Reader.id == 1).first()
+        if user and user.extra and "last_share_email" in user.extra:
+            del user.extra["last_share_email"]
+            get_db().commit()
+
     def test_mailto_saves_last_email(self):
         d = self.json(
             "/api/book/1/mailto", method="POST",
