@@ -55,6 +55,15 @@ p[data-mb-first] {
     widows: 2;
 }
 
+/* 双行标题（split_title，lib 加 mb-ch-split 类）关闭章扉大顶距：
+   num+title 双 span 已增高，再叠 34% 顶距会把标题、长线与正文挤出首屏
+   （顶空修复）。无拆分的书保留 34% 章扉留白。裸类选择器（0-1-0）与
+   .mb-ch 同特异性、按其后置源序取胜；手机端仍由 responsive 的
+   body .mb-ch（0-1-1）接管 2.2em 顶距 */
+.mb-ch-split {
+    margin: 4em 0 0.8em 0 !important;
+}
+
 /* 标题内副标/卷号：楷体小字宽字距 */
 .mb-ch span {
     display: block;

@@ -383,6 +383,7 @@
                     v-for="t in textures"
                     :key="t.id"
                     :class="['eb-tex', 'eb-tex-' + t.id]"
+                    :style="{ backgroundImage: 'url(/api/toolbox/epub_beautify/texture_raw?builtin_id=' + t.id + ')' }"
                     :title="t.name"
                     @click="pickBuiltin(t.id)"
                   ></span>
@@ -408,7 +409,8 @@
                   :label="$t('epubBeautify.suffix')"
                   outlined
                   dense
-                  :hide-details="true"
+                  maxlength="30"
+                  :counter="30"
                   prepend-inner-icon="mdi-format-title"
                 />
               </div>
@@ -627,7 +629,7 @@ export default {
     titleSplit: false,
     // 段落排版：首行缩进独立开关 + 段间距数值（em，0=跟随预设）
     paraIndent: true,
-    paraGap: 0,
+    paraGap: 0.5,
     // 目录双栏（默认关，仅生成的目录页）
     tocColumns: false,
     // 批量队列（勾选入队的书籍 ID）
@@ -639,8 +641,11 @@ export default {
     bgObjectUrl: '',
     textures: [
       { id: 'xuanzhi', name: '宣纸纹' },
-      { id: 'parchment', name: '羊皮纸' },
-      { id: 'linen', name: '素麻布' },
+      { id: 'yunwen', name: '云纹纸' },
+      { id: 'gaobai', name: '高白宣' },
+      { id: 'daolin', name: '道林纸' },
+      { id: 'yangpi', name: '羊皮纸' },
+      { id: 'caojing', name: '草纤纸' },
     ],
     // 目录深度（0 = 全部）
     tocDepth: 0,
@@ -745,11 +750,12 @@ export default {
         { value: 'svg:inkdrop', label: this.$t('epubBeautify.markSvgInkdrop') },
         { value: 'svg:spark', label: this.$t('epubBeautify.markSvgSpark') },
         { value: 'svg:sealdot', label: this.$t('epubBeautify.markSvgSealdot') },
+        { value: 'zhu', label: this.$t('epubBeautify.markZhu') },
       ];
     },
     markGlyph() {
       // 选择器旁的即时预览字符（SVG 模板用近似字形示意）
-      const map = { orig: '●', sym: '※', num: '[1]', 'svg:dot': '◉', 'svg:fold': '❏', 'svg:inkdrop': '❍', 'svg:spark': '✦', 'svg:sealdot': '▣' };
+      const map = { orig: '●', sym: '※', num: '[1]', 'svg:dot': '◉', 'svg:fold': '❏', 'svg:inkdrop': '❍', 'svg:spark': '✦', 'svg:sealdot': '▣', zhu: '注' };
       return map[this.noteMark] || '●';
     },
     tocSampleRows() {
@@ -939,15 +945,15 @@ export default {
       try {
         const rsp = await this.$backend('/toolbox/epub_beautify/bg_meta');
         const has = !!(rsp.data && rsp.data.has);
-        if (has !== this.bgHas || (has && !this.bgObjectUrl)) {
-          this.bgHas = has;
-          if (has) {
-            await this.loadBgPreview();
-          } else if (this.bgObjectUrl) {
-            URL.revokeObjectURL(this.bgObjectUrl);
-            this.bgObjectUrl = '';
-            this.bgOn = false;
-          }
+        this.bgHas = has;
+        if (has) {
+          // 已有背景时也必须重拉预览：切换内置纹理后服务端文件已变，
+          // 仅凭 bgHas 状态判断会跳过刷新（表现为"先删除再选择才能换图"）
+          await this.loadBgPreview();
+        } else if (this.bgObjectUrl) {
+          URL.revokeObjectURL(this.bgObjectUrl);
+          this.bgObjectUrl = '';
+          this.bgOn = false;
         }
       } catch (_e) {
         this.bgHas = false;
@@ -955,7 +961,8 @@ export default {
     },
     async loadBgPreview() {
       try {
-        const resp = await fetch('/api/toolbox/epub_beautify/bg_raw');
+        // 时间戳防 HTTP 缓存：bg_raw 内容随选择变化而 URL 不变
+        const resp = await fetch('/api/toolbox/epub_beautify/bg_raw?t=' + Date.now());
         if (!resp.ok) return;
         const blob = await resp.blob();
         if (this.bgObjectUrl) URL.revokeObjectURL(this.bgObjectUrl);
@@ -1663,19 +1670,13 @@ export default {
   cursor: pointer;
   margin-right: 7px;
   transition: transform 0.12s, border-color 0.12s;
+  /* 缩略图 = 真实纹理纸样（texture_raw 端点），铺满裁切保证与实际图无色差 */
+  background-size: cover;
+  background-position: center;
 }
 .eb-tex:hover {
   transform: translateY(-1px);
   border-color: #1976d2;
-}
-.eb-tex-xuanzhi {
-  background: linear-gradient(135deg, #f9f4e8, #efe6d2);
-}
-.eb-tex-parchment {
-  background: linear-gradient(135deg, #f2e6c6, #e2d0a6);
-}
-.eb-tex-linen {
-  background: repeating-linear-gradient(45deg, #efebde 0 3px, #e4decd 3px 5px);
 }
 .eb-bgpick {
   width: 44px;

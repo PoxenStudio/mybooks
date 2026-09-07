@@ -168,12 +168,22 @@ def _apply_page_tint(css: str, page_tint, params: dict) -> str:
 
 _PARA_BLOCK_HEAD = '\n\n/* ── 段落排版（用户自定义：缩进/段距）── */\n'
 
-# responsive.css 对 Calibre 类汤书用 .calibre* 选择器（特异性 0-1-1，带 !important）
-# 强制 text-indent/margin，通用 `p` 规则（0-0-1）会被压制——responsive 已前置注入，
-# 末尾以同选择器列表覆写即可（同特异性按源序取胜）。段距覆写仅限段落级选择器：
+# responsive.css 对 Calibre 类汤书用 .calibre* 选择器（:not(.mb-ch):not(.mb-vol)
+# 排除标题后实际特异性 0-3-1，带 !important）强制 text-indent/margin，通用 `p`
+# 规则（0-0-1）会被压制——responsive 已前置注入，末尾以同选择器列表覆写即可
+# （同特异性按源序取胜；列表须与 responsive.css 逐字一致，TestCssCascade 校验，
+# 漂移会让顶格/段距开关在类汤书上失效）。:not 同时把标题排除在覆写外，
+# 用户段距/顶格不再覆盖预设 .mb-ch 的大顶距。段距覆写仅限段落级选择器：
 # 裸 .calibre / .calibre1 常是 body/容器元素，参与段距会造成整页漂移。
-_CALIBRE_INDENT_SELECTORS = 'p.calibre, p.calibre1, p.calibre2, div.calibre1, .calibre1, .calibre'
-_CALIBRE_MARGIN_SELECTORS = 'p.calibre, p.calibre1, p.calibre2, div.calibre1'
+_CALIBRE_INDENT_SELECTORS = (
+    'p.calibre1:not(.mb-ch):not(.mb-vol), p.calibre:not(.mb-ch):not(.mb-vol), '
+    'p.calibre2:not(.mb-ch):not(.mb-vol), div.calibre1:not(.mb-ch):not(.mb-vol), '
+    '.calibre1:not(.mb-ch):not(.mb-vol), .calibre:not(.mb-ch):not(.mb-vol)'
+)
+_CALIBRE_MARGIN_SELECTORS = (
+    'p.calibre1:not(.mb-ch):not(.mb-vol), p.calibre:not(.mb-ch):not(.mb-vol), '
+    'p.calibre2:not(.mb-ch):not(.mb-vol), div.calibre1:not(.mb-ch):not(.mb-vol)'
+)
 
 
 def _clamp_gap(value) -> float:
@@ -198,6 +208,8 @@ def _apply_para_style(css: str, para_indent: bool = True, para_gap=None) -> str:
       ``.calibre*`` 高特异性强制缩进由同选择器末尾覆写归零）；
     - para_gap>0 → 段落下边距取该值（em），并恢复引文内紧凑无段距
       （类汤书的 ``p.calibre*`` 段落同步覆写 margin）。
+    通用 p 规则一律 body 前缀（0-0-2）：responsive 手机块同为 body p（A4），
+    同特异性靠本块在末尾的源序取胜，用户设置不被手机默认值覆盖。
     均为默认时原样返回，保证存量输出零变化。
     """
     gap = _clamp_gap(para_gap)
@@ -213,7 +225,7 @@ def _apply_para_style(css: str, para_indent: bool = True, para_gap=None) -> str:
         ]
     if gap > 0:
         p_rules.append('    margin: 0 0 %sem 0 !important;' % ('%g' % gap))
-    block = _PARA_BLOCK_HEAD + 'p {\n' + '\n'.join(p_rules) + '\n}'
+    block = _PARA_BLOCK_HEAD + 'body p {\n' + '\n'.join(p_rules) + '\n}'
 
     # Calibre 类汤书兜底：responsive.css 的 .calibre* 规则（0-1-1）会压制上文
     # 通用 p 规则（0-0-1），导致顶格/段距开关在该类书上失效——同选择器覆写
@@ -234,7 +246,7 @@ def _apply_para_style(css: str, para_indent: bool = True, para_gap=None) -> str:
     # 缩进仍开启且调整了段距时，章首段顶格需重申（否则被上面的通用规则覆盖）
     if not indent_off:
         block += (
-            '\np[data-mb-first] {\n'
+            '\nbody p[data-mb-first] {\n'
             '    text-indent: 0 !important;\n'
             '    duokan-text-indent: 0;\n'
             '}'
@@ -346,15 +358,15 @@ def get_preset_css(preset_id: str, use_system_fonts: bool = True,
 
 
 # ── 背景图片（内置纹理 + 用户上传）────────────────────────────────────────────
-# 纹理来源与许可：
-#   tex_xuanzhi.jpg   ← transparenttextures.com "Rice Paper 2"（站点声明免费可用）
-#   tex_parchment.jpg ← Wikimedia Commons "Pergament.2.jpg"（CC0，作者 Membeth）
-#   tex_linen.jpg     ← transparenttextures.com "Low Contrast Linen"（反色染米白）
+# 纹理来源：实书纸样扫描件（JPEG 重编码，最长边 ≤1080，q85）
 _TEXTURES_DIR = os.path.join(_PRESETS_DIR, 'textures')
 BUILTIN_TEXTURES = {
-    'xuanzhi':   {'name': '宣纸纹', 'name_en': 'Rice Paper', 'file': 'tex_xuanzhi.jpg'},
-    'parchment': {'name': '羊皮纸', 'name_en': 'Parchment',  'file': 'tex_parchment.jpg'},
-    'linen':     {'name': '素麻布', 'name_en': 'Linen',      'file': 'tex_linen.jpg'},
+    'xuanzhi': {'name': '宣纸纹', 'name_en': 'Rice Fiber', 'file': 'tex_xuanzhi.jpg'},
+    'yunwen': {'name': '云纹纸', 'name_en': 'Mottled Paper', 'file': 'tex_yunwen.jpg'},
+    'gaobai': {'name': '高白宣', 'name_en': 'Bright Xuan', 'file': 'tex_gaobai.jpg'},
+    'daolin': {'name': '道林纸', 'name_en': 'Book Paper', 'file': 'tex_daolin.jpg'},
+    'yangpi': {'name': '羊皮纸', 'name_en': 'Parchment', 'file': 'tex_yangpi.jpg'},
+    'caojing': {'name': '草纤纸', 'name_en': 'Straw Fiber', 'file': 'tex_caojing.jpg'},
 }
 
 

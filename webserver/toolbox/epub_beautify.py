@@ -68,7 +68,7 @@ class EpubBeautifyTool(BaseTool):
         """保存全书背景图：PIL 统一重编码为 JPEG（宽>1080 等比缩小）。
 
         :param builtin_id: 非空时忽略 data/filename，改用内置纹理。
-        :raises ValueError: 格式/大小不合法或纹理 id 非法。
+        :raises ValueError: 格式/大小/纹理 id 不合法或图片无法解析。
         """
         if builtin_id:
             from webserver.toolbox.utils.styles import get_texture_bytes
@@ -84,7 +84,11 @@ class EpubBeautifyTool(BaseTool):
         except ImportError as err:
             raise RuntimeError(_('服务器缺少图像处理组件(PIL)，无法处理背景图')) from err
         import io as _io
-        img = Image.open(_io.BytesIO(data)).convert('RGB')
+        try:
+            img = Image.open(_io.BytesIO(data)).convert('RGB')
+        except Exception as err:
+            # 截断文件抛 OSError、超大像素抛 DecompressionBombError 等，统一转业务错误
+            raise ValueError(_('背景图无法解析：%s') % err) from err
         w, h = img.size
         target_w = 1080
         if w > target_w:
@@ -115,7 +119,7 @@ class EpubBeautifyTool(BaseTool):
             "tool_id": "epub_beautify",
             "name": "EPUB美化",
             "description": "美化 EPUB 的目录、章节名与字体排版（12 套风格预设 × 4 种目录形式，含竖排右翻古籍；卷章分级、双行排版、对话行点缀；支持批量队列与全书底色/自定义配色），生成新书",
-            "revision": "0.1.0",
+            "revision": "0.2.0",
             "author": "黏菌",
             "publish_date": "2026-08-22",
         }
@@ -201,7 +205,7 @@ class EpubBeautifyTool(BaseTool):
         :param preset:           预设 id（classic/modern/webnovel/classical/navy/youth/children/refined/xuanzhi/inkstone/voyage/vertclassical）。
         :param use_system_fonts: 是否统一系统字体栈（False 保留原书字体，兼容旧接口）。
         :param toc_style:        目录形式（elegant 精致 / cool 酷炫 / seal 朱印 / minimal 极简），配色随预设令牌。
-        :param suffix:           新书标题后缀（默认「（精排版）」）。
+        :param suffix:           新书标题后缀（默认「（美化版）」）。
         :param user_id:          操作用户 ID。
         :param font_overrides:   细粒度字体开关 {"body":bool,"head":bool,"kai":bool,"code":bool}，覆盖 use_system_fonts。
         :param toc_depth:        目录收录层级上限（None=全部；1/2/3=只收前 N 级）。
@@ -244,16 +248,21 @@ class EpubBeautifyTool(BaseTool):
             # 校验放在抢锁之前：避免拿到锁后提前 return 却忘记 release，把锁永久卡死
             skip_task_id = self.create_task(progress_data={"status": "failed"})
             self.complete_task(skip_task_id, error_message=_("未提供有效的书籍 ID"))
-            EpubBeautifyTool._last_task_id = skip_task_id
+            # P3：仅在无在跑任务可轮询时才落 skip id，避免覆盖在跑任务的轮询句柄
+            if not EpubBeautifyTool.is_running():
+                EpubBeautifyTool._last_task_id = skip_task_id
             return
-        if not EpubBeautifyTool._run_lock.acquire(blocking=False):
-            # 静默跳过会让前端永远轮询不到任务（卡"处理中"），落一条失败任务
+        acquired = EpubBeautifyTool._run_lock.acquire(blocking=False)
+        if not acquired:
+            # 静默跳过会让前端永远轮询不到任务（卡"处理中"），落一条失败任务；
+            # P3：仅在无在跑任务可轮询时才落 skip id（同上，防覆盖）
             skip_task_id = self.create_task(progress_data={"status": "failed", "book_ids": ids})
             self.complete_task(
                 skip_task_id,
                 error_message=_("已有美化任务正在运行，请等待完成后再试"),
             )
-            EpubBeautifyTool._last_task_id = skip_task_id
+            if not EpubBeautifyTool.is_running():
+                EpubBeautifyTool._last_task_id = skip_task_id
             logging.warning(
                 "[EpubBeautifyTool] Already running, skipping run for ids=%s [uid:%d]",
                 ids, user_id,
@@ -353,7 +362,7 @@ class EpubBeautifyTool(BaseTool):
                     self.update_task_progress(task_id, _pct(80), dict(prog_common, stage="saving"))
 
                     new_book_id = book_utils.import_as_new_book(
-                        self, bid, out_path, suffix or _("（精排版）"), user_id,
+                        self, bid, out_path, suffix or _("（美化版）"), user_id,
                     )
                     last_new_book_id = new_book_id
                     ok_count += 1
@@ -413,5 +422,6 @@ class EpubBeautifyTool(BaseTool):
                          "results": results},
                     )
                 self.complete_task(task_id, error_message=error_message)
-            if EpubBeautifyTool._run_lock.locked():
+            # P4：locked() 恒真会掩盖误释放——只在本次确曾抢到锁时释放
+            if acquired:
                 EpubBeautifyTool._run_lock.release()

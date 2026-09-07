@@ -1019,7 +1019,8 @@ class AdminTextReplaceRun(BaseHandler):
         pattern = (data.get("pattern") or "").strip()
         replacement = data.get("replacement") or ""
         use_regex = bool(data.get("use_regex", False))
-        suffix = (data.get("suffix") or "").strip()
+        # P7：防超长串落库（前端 v-model counter 同限 30）
+        suffix = (data.get("suffix") or "").strip()[:30]
         fmt = (data.get("format") or "").strip().upper()
 
         if not book_id:
@@ -1112,7 +1113,8 @@ class AdminEpubBeautifyRun(BaseHandler):
             use_system_fonts = use_system_fonts.lower() not in ("false", "0", "no", "")
         else:
             use_system_fonts = bool(use_system_fonts)
-        suffix = (data.get("suffix") or "").strip()
+        # P7：防超长串落库（前端 v-model counter 同限 30）
+        suffix = (data.get("suffix") or "").strip()[:30]
         font_overrides = data.get("font_overrides")
         # 兼容细粒度单独键
         if font_overrides is None:
@@ -1291,6 +1293,32 @@ class AdminEpubBeautifyBgDelete(BaseHandler):
         return {"err": "ok", "msg": _("背景图已删除")}
 
 
+class AdminEpubBeautifyTextureRaw(BaseHandler):
+    """内置纹理原图（前端缩略图直接加载真实纸样，避免 CSS 色块失真）。"""
+
+    def get(self):
+        if not self.current_user:
+            self.set_status(401)
+            self.finish({"err": "user.need_login", "msg": _("请先登录")})
+            return
+        if not self.admin_user:
+            self.set_status(403)
+            self.finish({"err": "permission.not_admin", "msg": _("当前用户非管理员, 无权限操作")})
+            return
+        from webserver.toolbox.utils.styles import get_texture_bytes
+        try:
+            data, mime = get_texture_bytes(self.get_argument("builtin_id", ""))
+        except ValueError:
+            self.set_status(404)
+            self.finish("Texture not found")
+            return
+        # 静态资产：允许浏览器缓存（文件随版本发布，不随请求变化）
+        self.set_header("Content-Type", mime)
+        self.set_header("Cache-Control", "public, max-age=86400")
+        self.write(data)
+        self.finish()
+
+
 class AdminEpubBeautifyProgress(BaseHandler):
     @js
     @is_admin
@@ -1375,6 +1403,7 @@ def routes():
                 (r"/api/toolbox/epub_beautify/bg_meta", AdminEpubBeautifyBgMeta),
                 (r"/api/toolbox/epub_beautify/bg_raw", AdminEpubBeautifyBgRaw),
                 (r"/api/toolbox/epub_beautify/bg_delete", AdminEpubBeautifyBgDelete),
+                (r"/api/toolbox/epub_beautify/texture_raw", AdminEpubBeautifyTextureRaw),
     ] + toolbox_manager.collect_tool_routes() + [
                 # 必须放在整个列表最后：这是个不加区分的单段路径通配（DELETE 卸载），
                 # 排在前面会抢先匹配到上面所有单段路径的工具路由（如

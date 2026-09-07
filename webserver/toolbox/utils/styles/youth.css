@@ -160,3 +160,17 @@ a {
 
 {{RESPONSIVE}}
 {{TOC_STYLE}}
+
+/* 标题下方长线 — 青春：绛红短线（此前缺失，回落 responsive 默认灰线） */
+.mb-ch-sep {
+    width: 52% !important;
+    background: {{ACCENT}} !important;
+    opacity: 0.4;
+}
+
+/* 夜间：强调红点缀转亮（ACCENT 深红沉入 #121212 不可读） */
+@media (prefers-color-scheme: dark) {
+  em {
+    color: {{ACCENT_DARK}} !important;
+  }
+}

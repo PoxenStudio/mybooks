@@ -19,9 +19,11 @@ body.mb-toc-page div.mulu,
 body.mb-toc-page table.mulu {
     margin: 2.5em 1.2em;
 }
-/* 标题：深色渐变标题栏 + 白色大字 + 金色细线（不支持渐变时回落纯色） */
+/* 标题：深色渐变标题栏 + 白色大字 + 金色细线（不支持渐变时回落纯色；
+   .mb-toc-title = 书内平铺目录页的 p/div 标题兜底类） */
 body.mb-toc-page h1,
-body.mb-toc-page h2 {
+body.mb-toc-page h2,
+body.mb-toc-page .mb-toc-title {
     {{FONT_HEAD}}
     text-align: center !important;
     font-weight: bold;
@@ -79,7 +81,9 @@ body.mb-toc-page .mb-toc-num {
     color: {{ACCENT}};
     line-height: inherit;
 }
-body.mb-toc-page li a {
+body.mb-toc-page li a,
+body.mb-toc-page p a,
+body.mb-toc-page div a {
     text-decoration: none !important;
     color: inherit;
 }
@@ -89,12 +93,12 @@ body.mb-toc-page li li {
     font-size: 0.92em;
     color: {{MUTED}};
 }
-/* 平铺式目录（p/div 条目）兜底 */
+/* 平铺式目录（p/div 条目）兜底；标题块走 .mb-toc-title 的标题样式不在此列 */
 body.mb-toc-page p,
 body.mb-toc-page div {
     text-indent: 0 !important;
 }
-body.mb-toc-page p {
+body.mb-toc-page p:not(.mb-toc-title) {
     margin: 0.7em 0 !important;
     line-height: 1.9 !important;
 }
@@ -137,7 +141,8 @@ body.mb-toc-page .mb-toc-truncated {
     margin: 1.2em 0.6em !important;
   }
   body.mb-toc-page h1,
-  body.mb-toc-page h2 {
+  body.mb-toc-page h2,
+  body.mb-toc-page .mb-toc-title {
     font-size: 1.35em !important;
     padding: 1.2em 0.4em 1em !important;
   }

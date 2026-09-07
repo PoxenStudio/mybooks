@@ -13,14 +13,14 @@ body {
     hyphens: auto;
 }
 
-/* 正文：问答节奏，段距略大，适合亲子共读 */
+/* 正文：缩进制统一（段距归零，间距由用户段距设置驱动，亲子共读可调大） */
 p {
     text-indent: 2em !important;
     duokan-text-indent: 2em;
     text-align: justify !important;
     text-justify: inter-ideograph;
     line-height: {{LINE_HEIGHT}} !important;
-    margin: 0.2em 0 !important;
+    margin: 0 !important;
     orphans: 2;
     widows: 2;
 }

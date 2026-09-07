@@ -62,14 +62,15 @@ h1, h2, h3 {
     widows: 2;
 }
 
-/* 引文：楷体、左右外扩（-2em 出血），中性灰底 + 正红边线 */
+/* 引文：楷体、中性灰底 + 正红边线（原 -1em 左右出血外扩在固定宽度
+   阅读器有溢出/截断风险，收敛为不外扩；窄屏此前已由 responsive 收敛） */
 blockquote {
     {{FONT_KAI}}
     font-size: 0.95em;
     line-height: 1.8;
     text-indent: 0 !important;
     duokan-text-indent: 0;
-    margin: 1em -1em !important;
+    margin: 1em 0 !important;
     padding: 0.4em 0;
     color: #333;
     border-left: 2px solid {{ACCENT}};
