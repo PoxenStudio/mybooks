@@ -2,15 +2,6 @@
 @font-face {
   font-family: 'Poppins';
   font-style: normal;
-  font-weight: 300;
-  font-display: swap;
-  src: url('/static/fonts/Poppins-Light.ttf') format('truetype');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-
-@font-face {
-  font-family: 'Poppins';
-  font-style: normal;
   font-weight: 400;
   font-display: swap;
   src: url('/static/fonts/Poppins-Regular.ttf') format('truetype');
@@ -26,43 +17,9 @@
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* MiSans - 中文，用于优化中文显示效果。不限制 unicode-range，Poppins 覆盖的拉丁字符
-   会优先命中 Poppins，其余字符（含中文）落到这里，而不是系统默认无衬线字体 */
-@font-face {
-  font-family: 'MiSans';
-  font-style: normal;
-  font-weight: 300;
-  font-display: swap;
-  src: url('/static/fonts/MiSans-Light.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'MiSans';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/static/fonts/MiSans-Regular.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'MiSans';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('/static/fonts/MiSans-Medium.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'MiSans';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('/static/fonts/MiSans-Bold.woff2') format('woff2');
-}
-
 /* 全局字体设置 */
 :root {
-  --font-family-sans-serif: 'Poppins', 'MiSans', sans-serif;
+  --font-family-sans-serif: 'Poppins', sans-serif;
   --font-family-base: var(--font-family-sans-serif);
 }
 
