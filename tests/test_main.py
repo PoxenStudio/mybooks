@@ -557,6 +557,38 @@ class TestBook(TestWithUserLogin):
         self.assertEqual(r["err"], "params.invalid")
 
 
+class TestSendToMailLastRecipient(TestWithUserLogin):
+    """分享到邮箱：入队推送后按用户记住上次收件人（Reader.extra.last_share_email）"""
+
+    def setUp(self):
+        super().setUp()
+        # 清底：负向断言（key 不存在）不依赖用例字母序的执行运气
+        user = get_db().query(models.Reader).filter(models.Reader.id == 1).first()
+        if user and user.extra and "last_share_email" in user.extra:
+            del user.extra["last_share_email"]
+            get_db().commit()
+
+    def test_mailto_saves_last_email(self):
+        d = self.json(
+            "/api/book/1/mailto", method="POST",
+            body=json.dumps({"email": "reader@example.com", "format": "epub"}),
+        )
+        self.assertEqual(d["err"], "ok")
+        user = get_db().query(models.Reader).filter(models.Reader.id == 1).first()
+        self.assertEqual((user.extra or {}).get("last_share_email"), "reader@example.com")
+        d = self.json("/api/user/info")
+        self.assertEqual(d["user"]["last_share_email"], "reader@example.com")
+
+    def test_mailto_invalid_email_not_saved(self):
+        d = self.json(
+            "/api/book/1/mailto", method="POST",
+            body=json.dumps({"email": "bad-email", "format": "epub"}),
+        )
+        self.assertEqual(d["err"], "email.invalid")
+        user = get_db().query(models.Reader).filter(models.Reader.id == 1).first()
+        self.assertIsNone((user.extra or {}).get("last_share_email"))
+
+
 class TestReferDouban(TestWithUserLogin):
     def setUp(self):
         self.douban_url = "http://10.0.0.15:7001"
