@@ -3,6 +3,12 @@ export default {
         'static': '../public',
     },
   srcDir: 'src/',
+
+  // dev/build/generate 启动时自动重新生成 mdi 图标子集（见 scripts/build-mdi-subset.js），
+  // 避免忘记在新增图标后手动跑 `npm run icons:subset` 导致新图标缺字形不显示。
+  hooks: {
+    'build:before': () => require('./scripts/build-mdi-subset')(),
+  },
   // Global page headers: https://go.nuxtjs.dev/config-head
   head: {
     title: "PoxenStudio",
