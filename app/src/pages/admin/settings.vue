@@ -1385,7 +1385,7 @@ export default {
             label: "settings.chunk_upload_size",
           },
           {
-            icon: "mdi-language",
+            icon: "mdi-translate",
             key: "DEFAULT_LANGUAGE",
             label: "settings.default_language",
             type: "select",

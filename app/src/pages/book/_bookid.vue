@@ -1287,7 +1287,7 @@
         v-model="dialog_stamp_position"
         type="action"
         :title="$t('book.selectStampPosition')"
-        icon="mdi-stamp"
+        icon="mdi-postage-stamp"
         max-width="500"
         :confirm-text="$t('common.ok')"
         :confirm-disabled="!stamp_selected_position"

@@ -31,7 +31,7 @@ export default {
 
   // Global CSS: https://go.nuxtjs.dev/config-css
   css: [
-    '@mdi/font/css/materialdesignicons.css',
+    '~/assets/css/mdi-subset.css',
     '~/assets/css/fonts.css',
     '~/assets/css/background.css',
     '~/assets/css/scrollbar.css',

@@ -9,7 +9,8 @@
     "start": "nuxt start",
     "generate": "eslint --ext .js,.vue src && nuxt generate",
     "lint": "eslint --ext .js,.vue src",
-    "lint:fix": "eslint --ext .js,.vue src --fix"
+    "lint:fix": "eslint --ext .js,.vue src --fix",
+    "icons:subset": "python3 scripts/build_mdi_subset.py"
   },
   "dependencies": {
     "chart.js": "^3.9.1",

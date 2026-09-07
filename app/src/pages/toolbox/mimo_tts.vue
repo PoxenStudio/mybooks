@@ -388,7 +388,7 @@
                 :disabled="processing || !canConvert"
                 @click="startConvert"
               >
-                <v-icon left>mdi-voice</v-icon>
+                <v-icon left>mdi-headphones</v-icon>
                 {{ $t('mimoTts.startBtn') }}
               </v-btn>
             </div>
