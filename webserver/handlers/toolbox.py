@@ -31,6 +31,7 @@ from webserver.toolbox.chinese_converter_tool import ChineseConverterTool, DIREC
 from webserver.toolbox.bookbarn_acceptor_tool import BookBarnAcceptorTool
 from webserver.toolbox.epub_beautify import EpubBeautifyTool
 from webserver.toolbox.utils.styles import TOC_STYLES as EB_TOC_STYLES, list_presets as eb_list_presets
+from webserver.toolbox.utils.epub_beautify_lib import validate_note_mark as eb_validate_note_mark
 from webserver.services.background_service import BackgroundTask
 
 CONF = get_settings()
@@ -1183,8 +1184,11 @@ class AdminEpubBeautifyRun(BaseHandler):
         # 弹注/标注美化（默认关）+ 标注样式（orig/sym/num/svg:<模板>）
         notes_on = bool(data.get("notes", False))
         note_mark = data.get("note_mark") or "orig"
-        _svg_ok = note_mark.startswith("svg:") and len(note_mark) > 4
-        if note_mark != "orig" and note_mark not in ("sym", "num") and not _svg_ok:
+        try:
+            # 复用 lib 唯一事实源校验（此前 handler 自维护白名单漏掉 zhu，
+            # 前端「注字圆章」选项 100% 报参数错误）
+            eb_validate_note_mark(note_mark)
+        except ValueError:
             return {"err": "params.invalid", "msg": _("未知标注样式：%s") % note_mark}
         # 背景图片开关（与前端 bg_image 一致）
         bg_image = bool(data.get("bg_image", False))

@@ -2999,3 +2999,184 @@ class TestTocParentDirHrefs(unittest.TestCase):
                     os.remove(p)
 
 
+# ── 2026-09-08 复审修复回归 ────────────────────────────────────────────────────
+
+class TestReviewFixes20260908(unittest.TestCase):
+    """复审修复回归：epub 命名空间声明 / 标注样式白名单对齐 / 无链接纯文本
+    目录页 / li 标题分隔符 / 标题计数口径。"""
+
+    PLAIN_TOC_ROWS = "".join(
+        '<p class="calibre1">第%s章 标题%s</p>' % (n, n) for n in
+        ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "十二"])
+
+    # ── P1-a：注入 epub:type 前必须声明 xmlns:epub（否则整份文档非良构）──
+
+    def test_notes_declares_epub_namespace(self):
+        for name in ("NOTES_CH_A", "NOTES_CH_B", "NOTES_CH_G"):
+            src = globals()[name]
+            new, _ = lib.mark_notes_in_html(src)
+            self.assertIn('xmlns:epub="http://www.idpf.org/2007/ops"', new, name)
+            ET.fromstring(new)  # 未绑定前缀会抛 ParseError
+            twice, _ = lib.mark_notes_in_html(new)
+            self.assertEqual(twice.count("xmlns:epub"), 1, name)  # 幂等
+
+    def test_notes_namespace_not_duplicated_when_present(self):
+        src = NOTES_CH_B.replace(
+            '<html xmlns="http://www.w3.org/1999/xhtml"',
+            '<html xmlns="http://www.w3.org/1999/xhtml" '
+            'xmlns:epub="http://www.idpf.org/2007/ops"')
+        new, _ = lib.mark_notes_in_html(src)
+        self.assertEqual(new.count("xmlns:epub"), 1)
+        ET.fromstring(new)
+
+    def test_notes_wellformed_for_class_only_source(self):
+        """源文件无任何 epub: 属性的 B 型书（calibre 导出形态）：归一化后仍良构。"""
+        src = ('<html xmlns="http://www.w3.org/1999/xhtml"><head><title>t</title></head>'
+               '<body><p>正文<a class="footnote" href="#n1">1</a>。</p>'
+               '<ol class="footnote-content"><li class="footnote-item" id="n1">注文。</li></ol>'
+               '</body></html>')
+        new, st = lib.mark_notes_in_html(src, normalize=True)
+        self.assertEqual(st["wrapped"], 1)
+        self.assertIn('epub:type="noteref"', new)
+        ET.fromstring(new)
+
+    def test_notes_no_namespace_when_normalize_off(self):
+        """normalize=False 不注入 epub: 属性，也就无需补声明（行为不变）。"""
+        new, _ = lib.mark_notes_in_html(NOTES_CH_B, normalize=False)
+        self.assertNotIn("xmlns:epub", new)
+
+    # ── P1-b：前端每个标注选项都必须通过 lib 校验（zhu 曾漏在白名单外）──
+
+    def test_frontend_note_mark_options_are_valid(self):
+        vue = os.path.join(TESTS_DIR, "..", "app", "src", "pages",
+                           "toolbox", "epub_beautify.vue")
+        if not os.path.exists(vue):
+            self.skipTest("vue 页面不可见（独立测试环境）")
+        with io.open(vue, encoding="utf-8") as f:
+            src = f.read()
+        block = src[src.index("noteMarkItems()"):][:2000]
+        values = re.findall(r"value:\s*'([^']+)'", block)
+        self.assertIn("zhu", values)
+        self.assertGreaterEqual(len(values), 9)
+        for v in values:
+            lib.validate_note_mark(v)
+
+    def test_handler_reuses_lib_validator(self):
+        """handler 必须复用 lib 校验（防白名单再次漂移出 zhu 这类漏项）。"""
+        path = os.path.join(TESTS_DIR, "..", "webserver", "handlers", "toolbox.py")
+        if not os.path.exists(path):
+            self.skipTest("handler 源码不可见")
+        with io.open(path, encoding="utf-8") as f:
+            src = f.read()
+        self.assertIn("validate_note_mark as eb_validate_note_mark", src)
+        self.assertNotIn('note_mark not in ("sym", "num")', src)
+
+    # ── P2：无链接纯文本目录页 ──
+
+    def _plain_toc_html(self, title="目录", tail=""):
+        return ('<html xmlns="http://www.w3.org/1999/xhtml"><head><title>%s</title>'
+                '</head><body>%s%s</body></html>') % (title, self.PLAIN_TOC_ROWS, tail)
+
+    def _build_plain_toc_epub(self, path):
+        opf = (
+            '<?xml version="1.0"?>'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+            '<metadata><dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">无链接目录书</dc:title></metadata>'
+            '<manifest>'
+            '<item id="t" href="part0003.xhtml" media-type="application/xhtml+xml"/>'
+            '<item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/>'
+            '</manifest>'
+            '<spine><itemref idref="t"/><itemref idref="c1"/></spine></package>'
+        )
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
+            zf.writestr("META-INF/container.xml", CONTAINER)
+            zf.writestr("OEBPS/content.opf", opf)
+            zf.writestr("OEBPS/part0003.xhtml", self._plain_toc_html())
+            zf.writestr("OEBPS/ch1.xhtml", CH1)
+
+    def test_plain_text_toc_detected(self):
+        html = self._plain_toc_html()
+        self.assertTrue(lib._is_toc_doc("OEBPS/part0003.xhtml", html))
+        is_toc, nav = lib._classify_toc_entry("OEBPS/part0003.xhtml",
+                                             html.encode("utf-8"))
+        self.assertTrue(is_toc)
+        self.assertFalse(nav)
+
+    def test_plain_text_toc_page_not_chapter_marked(self):
+        tmp = os.path.join(TESTS_DIR, "_tmp_plain_src.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_plain_out.epub")
+        self._build_plain_toc_epub(tmp)
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            stats = lib.beautify(tmp, out, css)
+            with zipfile.ZipFile(out) as zf:
+                toc = zf.read("OEBPS/part0003.xhtml").decode("utf-8")
+                ch1 = zf.read("OEBPS/ch1.xhtml").decode("utf-8")
+            self.assertNotIn('class="mb-ch"', toc)
+            self.assertNotIn("mb-ch-sep", toc)
+            self.assertIn("mb-toc-page", toc)   # 目录页装饰路径生效
+            self.assertIn("mb-toc-end", toc)
+            self.assertIn("mb-ch", ch1)         # 真章节页不受影响
+            self.assertEqual(stats["marked_headers"], 2)
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_plain_toc_negative_with_long_prose(self):
+        html = self._plain_toc_html(tail='<p>%s</p>' % ("正文" * 60))
+        self.assertFalse(lib._looks_like_plain_toc(html))
+        self.assertFalse(lib._is_toc_doc("OEBPS/part0003.xhtml", html))
+
+    def test_plain_toc_negative_without_title(self):
+        self.assertFalse(lib._looks_like_plain_toc(self._plain_toc_html(title="无名页")))
+
+    def test_plain_toc_negative_when_prose_dilutes_rows(self):
+        prose = "".join('<p>%s</p>' % ("短句" * 8) for _ in range(12))
+        html = ('<html xmlns="http://www.w3.org/1999/xhtml"><head><title>目录</title>'
+                '</head><body>%s%s</body></html>') % (self.PLAIN_TOC_ROWS, prose)
+        self.assertFalse(lib._looks_like_plain_toc(html))
+
+    # ── P3：li 标题不插块级分隔符 ──
+
+    def test_li_heading_has_no_sep_div(self):
+        html = ('<html xmlns="http://www.w3.org/1999/xhtml"><head><title>t</title></head>'
+                '<body><ul><li>第一章 列表标题</li></ul>'
+                '<h1>第二章 正文标题</h1><p>正文。</p></body></html>')
+        new, mk = lib.mark_chapters_in_html(html)
+        self.assertEqual(mk["chapters"], 2)
+        li_part = new[new.index("<ul>"):new.index("</ul>")]
+        self.assertIn("mb-ch", li_part)
+        self.assertNotIn("<div", li_part)   # ul 内不得出现块级 div
+        self.assertIn('<div class="mb-ch-sep"></div>', new)  # 非 li 标题仍有长线
+
+    # ── 小项：标题计数口径不重复 ──
+
+    def test_text_headings_excludes_h_tags(self):
+        tmp = os.path.join(TESTS_DIR, "_tmp_hcount.epub")
+        files = {
+            "OEBPS/content.opf": (
+                '<?xml version="1.0"?>'
+                '<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+                '<metadata><dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">计数书</dc:title></metadata>'
+                '<manifest><item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/></manifest>'
+                '<spine><itemref idref="c1"/></spine></package>'),
+            "OEBPS/ch1.xhtml": (
+                '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>t</title></head>'
+                '<body><h1>第一章 标题</h1><p>正文。</p>'
+                '<p>第二章 标题</p><p>正文。</p></body></html>'),
+        }
+        with zipfile.ZipFile(tmp, "w") as zf:
+            zf.writestr("mimetype", "application/epub+zip",
+                        compress_type=zipfile.ZIP_STORED)
+            zf.writestr("META-INF/container.xml", CONTAINER)
+            for name, data in files.items():
+                zf.writestr(name, data)
+        try:
+            a = lib.analyze_epub(tmp)
+            self.assertEqual(a["heading_stats"]["h1"], 1)
+            self.assertEqual(a["text_headings"], 1)  # 仅 <p> 标题，不与 h1 重复
+        finally:
+            if os.path.exists(tmp):
+                os.remove(tmp)
