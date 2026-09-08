@@ -20,6 +20,7 @@
       ref="frame"
       :src="iframeSrc"
       :title="tool.name"
+      :style="{ height: iframeHeight }"
       class="toolbox-tool-frame"
       frameborder="0"
     ></iframe>
@@ -40,6 +41,11 @@ export default {
     // 首次渲染时携带一次 theme/locale 作为 iframe 的初始值（4.3 节），此后不再修改
     // src——主题/语言变化改走 postMessage 实时推送（4.5 节），避免每次切换都重新加载 iframe。
     iframeSrc: '',
+    // toolbox-bridge.js 会自动上报工具页面的实际内容高度（resize 消息，见 onBridgeMessage）；
+    // 撑满可视区这个初始值只是首次渲染、还没收到第一条上报之前的占位，避免那零点几秒里
+    // iframe 塌成一条缝。之后随内容高度增长，交给宿主页面自己的滚动条，不再让工具页面在
+    // 自己的 iframe 里出现内部滚动条。
+    iframeHeight: 'calc(100vh - 64px)',
   }),
   head() {
     return {
@@ -101,14 +107,23 @@ export default {
       if (!frame || !frame.contentWindow) return;
       frame.contentWindow.postMessage(Object.assign({ source: 'mybooks-toolbox-host', type }, payload), window.location.origin);
     },
-    // 响应 toolbox-bridge.js 里 bridge.notify() 发出的 postMessage，复用宿主的全局提示组件
-    // （见 app/src/plugins/mybooks.js 里的 $alert），4.3 节里描述的可选能力。
+    // 响应 toolbox-bridge.js 发来的 postMessage：notify 复用宿主的全局提示组件（见
+    // app/src/plugins/mybooks.js 里的 $alert，4.3 节里描述的可选能力）；resize 是
+    // bridge.js 自动上报的工具页面实际内容高度，用来把 iframe 撑到刚好装下内容，而不是
+    // 固定卡在 calc(100vh - 64px) 里逼工具页面自己出内部滚动条。
     onBridgeMessage(event) {
       if (event.origin !== window.location.origin) return;
       const data = event.data;
-      if (!data || data.source !== 'mybooks-toolbox-bridge' || data.type !== 'notify') return;
+      if (!data || data.source !== 'mybooks-toolbox-bridge') return;
       if (this.tool && data.toolId && data.toolId !== this.tool.id) return;
-      this.$alert(data.level || 'info', data.message || '');
+      if (data.type === 'notify') {
+        this.$alert(data.level || 'info', data.message || '');
+      } else if (data.type === 'resize' && typeof data.height === 'number' && data.height > 0) {
+        // 给个下限：内容比视口矮的工具页面依然撑满可视区，不会因为"自动贴合内容"反而缩成
+        // 一小条，视觉上和之前保持一致；只有内容更高时才让 iframe（进而是宿主页面）变高。
+        const minHeight = window.innerHeight - 64;
+        this.iframeHeight = Math.max(data.height, minHeight) + 'px';
+      }
     },
   },
 };
@@ -118,11 +133,11 @@ export default {
 .toolbox-tool-container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 64px);
+  min-height: calc(100vh - 64px);
 }
 .toolbox-tool-frame {
-  flex: 1 1 auto;
   width: 100%;
   border: none;
+  transition: height 0.15s ease;
 }
 </style>

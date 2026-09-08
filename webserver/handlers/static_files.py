@@ -419,7 +419,7 @@ def routes():
     return [
         (r"/get/tool/([^/]+)/icon", ToolIconHandler),
         (r"/get/tool/([a-z0-9_]+)/index\.html", ToolFrontendIndexHandler),
-        (r"/get/tool/([a-z0-9_]+)/assets/(.*)", ToolFrontendAssetHandler),
+        (r"/get/tool/([a-z0-9_]+)/(.+)", ToolFrontendAssetHandler),
         (r"/get/progress/([0-9]+)", ProgressHandler),
         (r"/get/extract/([0-9]+)/(.*)", EpubReader),
         (r"/get/pcover", ProxyImageHandler),

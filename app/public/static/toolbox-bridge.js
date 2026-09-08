@@ -143,6 +143,40 @@
     };
   }
 
+  /**
+   * 自动上报页面内容高度，供宿主把 <iframe> 撑到刚好装下内容（4.3 节的 iframe 承载页原来
+   * 用 flex 把 iframe 撑满一个固定 calc(100vh - 64px) 的容器，工具页面一旦比这个高度高，
+   * 就只能在 iframe 内部自己出一条纵向滚动条——观感上像是工具页面"被塞进一个小窗口"，
+   * 而不是宿主页面本身在滚动。这里不需要工具作者自己调用任何接口：用 ResizeObserver 监听
+   * <html> 的实际渲染高度，一变化就自动 postMessage 给宿主（_id.vue 监听后设置
+   * iframe.style.height），宿主页面（连同它自带的细滚动条样式）自然接管滚动。
+   *
+   * 不支持 ResizeObserver 的极老浏览器退化成只在 load/resize 时报一次，没有 iframe 内容
+   * 动态变化时的持续跟踪，但不影响首次渲染的高度撑开。
+   */
+  var lastReportedHeight = 0;
+  function reportHeight() {
+    if (!toolId) return;
+    var height = document.documentElement.scrollHeight;
+    if (!height || height === lastReportedHeight) return;
+    lastReportedHeight = height;
+    window.parent.postMessage(
+      { source: 'mybooks-toolbox-bridge', type: 'resize', toolId: toolId, height: height },
+      window.location.origin
+    );
+  }
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(reportHeight).observe(document.documentElement);
+  } else {
+    window.addEventListener('load', reportHeight);
+    window.addEventListener('resize', reportHeight);
+  }
+  if (document.readyState === 'complete') {
+    reportHeight();
+  } else {
+    window.addEventListener('load', reportHeight);
+  }
+
   var bridge = {
     toolId: toolId,
     fetch: bridgeFetch,
