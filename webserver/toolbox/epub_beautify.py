@@ -4,8 +4,9 @@
 对指定书籍的 EPUB 格式执行无损美化（目录样式 / 章节名样式 / 字体排版），
 以「生成新书」模式入库，原书零改动：
 
-- **目录**：书内已有目录页则注入统一样式；无目录页时从 NCX/nav 生成
-  ``mb-toc.xhtml`` 目录页并注册进 OPF（spine 首条）；
+- **目录**：书内已有可点击目录页则注入统一样式；无目录页、或仅有 nav 语义页
+  / 无链接纯文本目录页时，从 NCX/nav 生成 ``mb-toc.xhtml`` 并注册进 OPF
+  （spine 首条或替换原目录页条目）；
 - **章节名**：三层识别章节标题（h1-h6 / 已知标题类 / 段落文本章节正则，
   正则移植自 hehetoshang/txt2epub-next，MIT），标记 ``mb-ch`` 统一样式
   （居中、分页、标题字体、留白），章首段顶格；
@@ -373,9 +374,10 @@ class EpubBeautifyTool(BaseTool):
                         dict(prog_common, stage="saving", new_book_id=new_book_id),
                     )
                     logging.info(
-                        "[EpubBeautifyTool] Beautified book_id=%d (headers=%d, vols=%d, splits=%d, toc=%s, rtl=%s, dialogs=%d, notes=%s/%s) -> new book_id=%d [uid:%d]",
+                        "[EpubBeautifyTool] Beautified book_id=%d (headers=%d, vols=%d, splits=%d, toc=%s/替换无链接%d, rtl=%s, dialogs=%d, notes=%s/%s) -> new book_id=%d [uid:%d]",
                         bid, stats.get("marked_headers", 0), stats.get("marked_volumes", 0),
                         stats.get("titles_split", 0), stats.get("toc_generated"),
+                        stats.get("toc_replaced_linkless", 0),
                         stats.get("page_progression") or "-", stats.get("dialogues_marked", 0),
                         stats.get("notes_refs", 0), stats.get("note_mark") or "-",
                         new_book_id, user_id,
