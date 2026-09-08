@@ -3133,10 +3133,22 @@ class TestReviewFixes20260908(unittest.TestCase):
     def test_plain_text_toc_detected(self):
         html = self._plain_toc_html()
         self.assertTrue(lib._is_toc_doc("OEBPS/part0003.xhtml", html))
-        is_toc, nav = lib._classify_toc_entry("OEBPS/part0003.xhtml",
-                                             html.encode("utf-8"))
+        is_toc, nav, linkless = lib._classify_toc_entry(
+            "OEBPS/part0003.xhtml", html.encode("utf-8"))
         self.assertTrue(is_toc)
         self.assertFalse(nav)
+        self.assertTrue(linkless)   # 无链接 → 需替换为生成的链接目录页
+
+    def test_link_toc_not_linkless(self):
+        """可点击的链接目录页 linkless=False（保留原页，不替换）。"""
+        html = ('<html><head><title>目录</title></head><body>'
+                + "".join('<p><a href="c%02d.xhtml">第%d章 标题</a></p>' % (i, i)
+                          for i in range(1, 13)) + '</body></html>')
+        is_toc, nav, linkless = lib._classify_toc_entry(
+            "OEBPS/part0003.xhtml", html.encode("utf-8"))
+        self.assertTrue(is_toc)
+        self.assertFalse(nav)
+        self.assertFalse(linkless)
 
     def test_plain_text_toc_page_not_chapter_marked(self):
         tmp = os.path.join(TESTS_DIR, "_tmp_plain_src.epub")
@@ -3235,3 +3247,151 @@ class TestReviewFixes20260908(unittest.TestCase):
         finally:
             if os.path.exists(tmp):
                 os.remove(tmp)
+
+
+class TestLinklessTocReplacement(unittest.TestCase):
+    """无链接纯文本目录页 → 生成链接目录页并替换 spine 条目。
+
+    有 NCX/nav 数据源时替换（原页保留在包内，无损）；无数据源时退回仅样式化。
+    """
+
+    NCX = ('<?xml version="1.0" encoding="utf-8"?>'
+           '<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1"><navMap>'
+           '<navPoint id="n1" playOrder="1"><navLabel><text>第一章 开端</text></navLabel>'
+           '<content src="c1.xhtml"/></navPoint>'
+           '<navPoint id="n2" playOrder="2"><navLabel><text>第二章 转折</text></navLabel>'
+           '<content src="c2.xhtml"/></navPoint>'
+           '</navMap></ncx>')
+
+    def _plain_toc_html(self):
+        rows = "".join('<p class="calibre1">第%s章 标题%s</p>' % (n, n) for n in
+                       ["一", "二", "三", "四", "五", "六",
+                        "七", "八", "九", "十", "十一", "十二"])
+        return ('<html xmlns="http://www.w3.org/1999/xhtml"><head><title>目录</title>'
+                '</head><body>%s</body></html>') % rows
+
+    def _build(self, path, with_ncx=True, toc_html=None):
+        """封面 → 目录页 → 两章（spine 顺序固定，便于断言位置）。"""
+        manifest = (
+            '<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>'
+            '<item id="t" href="part0003.xhtml" media-type="application/xhtml+xml"/>'
+            '<item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/>'
+            '<item id="c2" href="c2.xhtml" media-type="application/xhtml+xml"/>')
+        spine_attr = ''
+        if with_ncx:
+            manifest += ('<item id="ncx" href="toc.ncx" '
+                         'media-type="application/x-dtbncx+xml"/>')
+            spine_attr = ' toc="ncx"'
+        opf = (
+            '<?xml version="1.0"?>'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+            '<metadata><dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">'
+            '无链接目录书</dc:title></metadata>'
+            '<manifest>%s</manifest>'
+            '<spine%s><itemref idref="cover"/><itemref idref="t"/>'
+            '<itemref idref="c1"/><itemref idref="c2"/></spine></package>'
+        ) % (manifest, spine_attr)
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.writestr("mimetype", "application/epub+zip",
+                        compress_type=zipfile.ZIP_STORED)
+            zf.writestr("META-INF/container.xml", CONTAINER)
+            zf.writestr("OEBPS/content.opf", opf)
+            zf.writestr("OEBPS/cover.xhtml",
+                        '<html xmlns="http://www.w3.org/1999/xhtml">'
+                        '<body><h1>封面</h1></body></html>')
+            zf.writestr("OEBPS/part0003.xhtml", toc_html or self._plain_toc_html())
+            zf.writestr("OEBPS/c1.xhtml",
+                        '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                        '<p>第一章 开端</p><p>正文。</p></body></html>')
+            zf.writestr("OEBPS/c2.xhtml",
+                        '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                        '<p>第二章 转折</p><p>正文。</p></body></html>')
+            if with_ncx:
+                zf.writestr("OEBPS/toc.ncx", self.NCX)
+
+    def test_linkless_toc_replaced_by_generated(self):
+        tmp = os.path.join(TESTS_DIR, "_tmp_ll_src.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_ll_out.epub")
+        self._build(tmp, with_ncx=True)
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            stats = lib.beautify(tmp, out, css)
+            self.assertTrue(stats["toc_generated"])
+            self.assertEqual(stats["toc_replaced_linkless"], 1)
+            self.assertEqual(stats["toc_links_ok"], stats["toc_links_total"])
+            with zipfile.ZipFile(out) as zf:
+                names = zf.namelist()
+                opf = zf.read("OEBPS/content.opf").decode("utf-8")
+                toc = zf.read("OEBPS/mb-toc.xhtml").decode("utf-8")
+                plain = zf.read("OEBPS/part0003.xhtml").decode("utf-8")
+            # 原目录页文件保留在包内（无损红线）
+            self.assertIn("OEBPS/part0003.xhtml", names)
+            # 生成的目录页带可点击链接
+            self.assertIn('href="c1.xhtml"', toc)
+            self.assertIn('id="mb-toc"', opf)
+            # 原无链接目录页的 spine 条目被替换掉
+            self.assertNotIn('idref="t"', opf)
+            # 位置沿用原目录页在 spine 中的位置：封面之后、正文之前
+            self.assertLess(opf.index('idref="cover"'), opf.index('idref="mb-toc"'))
+            self.assertLess(opf.index('idref="mb-toc"'), opf.index('idref="c1"'))
+            # 炸页防线不回退：原无链接页仍不打章节标记
+            self.assertNotIn('class="mb-ch"', plain)
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_linkless_toc_kept_without_toc_source(self):
+        """无 NCX/nav 数据源 → 无法生成链接目录，退回仅样式化（不替换）。"""
+        tmp = os.path.join(TESTS_DIR, "_tmp_ll2_src.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_ll2_out.epub")
+        self._build(tmp, with_ncx=False)
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            stats = lib.beautify(tmp, out, css)
+            self.assertFalse(stats["toc_generated"])
+            self.assertEqual(stats["toc_replaced_linkless"], 0)
+            with zipfile.ZipFile(out) as zf:
+                opf = zf.read("OEBPS/content.opf").decode("utf-8")
+                plain = zf.read("OEBPS/part0003.xhtml").decode("utf-8")
+            self.assertIn('idref="t"', opf)          # 原条目保留
+            self.assertIn("mb-toc-page", plain)      # 仍被样式化
+            self.assertNotIn('class="mb-ch"', plain)
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_analyze_linkless_toc_not_counted_as_inbook(self):
+        """无链接目录页会被替换，analyze 不把它算作「书内已有目录」。"""
+        tmp = os.path.join(TESTS_DIR, "_tmp_ll3.epub")
+        self._build(tmp, with_ncx=True)
+        try:
+            a = lib.analyze_epub(tmp)
+            self.assertFalse(a["has_inbook_toc"])
+        finally:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+
+    def test_link_toc_still_kept(self):
+        """可点击的链接目录页不受影响：保留原页、不生成 mb-toc。"""
+        tmp = os.path.join(TESTS_DIR, "_tmp_ll4_src.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_ll4_out.epub")
+        link_toc = ('<html xmlns="http://www.w3.org/1999/xhtml"><head><title>目录</title>'
+                    '</head><body>'
+                    + "".join('<p><a href="c1.xhtml">第%d章 标题</a></p>' % i
+                              for i in range(1, 13))
+                    + '</body></html>')
+        self._build(tmp, with_ncx=True, toc_html=link_toc)
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            stats = lib.beautify(tmp, out, css)
+            self.assertFalse(stats["toc_generated"])
+            self.assertEqual(stats["toc_replaced_linkless"], 0)
+            with zipfile.ZipFile(out) as zf:
+                opf = zf.read("OEBPS/content.opf").decode("utf-8")
+            self.assertIn('idref="t"', opf)
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)

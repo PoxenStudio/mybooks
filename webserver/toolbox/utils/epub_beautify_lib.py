@@ -2,8 +2,10 @@
 """EPUB 美化核心库。
 
 对既有 EPUB 做无损美化（生成新书模式，原书零改动）：
-1. **目录**：书内已有目录页时仅样式化；无目录页时从 NCX/nav（EPUB3 nav）
-   生成 ``mb-toc.xhtml`` 目录页并注册进 OPF（manifest + spine，幂等）；
+1. **目录**：书内已有**可点击**目录页时仅样式化；无目录页、或仅有 nav 语义页
+   / 无链接纯文本目录页（两者保留无意义）时，从 NCX/nav（EPUB3 nav）生成
+   ``mb-toc.xhtml`` 目录页并注册进 OPF（manifest + spine，幂等），
+   nav 语义页与无链接页在 spine 中的条目被替换（原文件保留在包内）；
 2. **章节名**：正文条目三层识别章节标题（h1-h6 / 已知标题类 / 段落文本
    章节正则，后者移植自 hehetoshang/txt2epub-next，MIT）并标记 ``mb-ch``，
    章首段标记 ``data-mb-first``；
@@ -914,33 +916,37 @@ _TOC_RECHECK_BYTES = 64 * 1024
 def _classify_toc_entry(zip_path: str, raw: bytes) -> tuple:
     """单条目目录页判定（analyze 与 beautify 主流程共用，口径一致）。
 
-    文件名特征零解码；nav 语义看 8KB 头；头 8KB 内链接 ≥2 时以 64KB 片段
-    复核链接目录形态（``_looks_like_link_toc``），无链接时按目录标题门槛
-    复核纯文本列表形态（``_looks_like_plain_toc``），不再全量解码——此前
-    beautify 主流程只看头 2000/4000 字、analyze 用全量复核，两端口径不一，
-    长 ``<head>`` 的目录页会 preview 报「保留原书目录」而 run 误打章节标记。
+    文件名特征零解码；nav 语义看 8KB 头；无 nav 语义时按 8KB 头有无链接分流：
+    有链接以 64KB 片段复核链接目录形态（``_looks_like_link_toc``），无链接则
+    按目录标题门槛复核纯文本列表形态（``_looks_like_plain_toc``），不再全量
+    解码——此前 beautify 主流程只看头 2000/4000 字、analyze 用全量复核，两端
+    口径不一，长 ``<head>`` 的目录页会 preview 报「保留原书目录」而 run 误打
+    章节标记。
     :param raw: 条目原始字节（可为局部读取片段，≥ `_TOC_RECHECK_BYTES` 最佳）。
-    :return: (is_toc_doc, nav_semantic)
+    :return: (is_toc_doc, nav_semantic, linkless)
+        linkless=True 表示仅由纯文本列表形态判定（条目不可点击，保留无意义）
+        ——beautify 会像处理 nav 语义页一样用生成的链接目录页替换它。
     """
-    is_toc = bool(_TOC_FILE_RE.search(zip_path.rsplit('/', 1)[-1]))
-    nav_semantic = False
     head = _decode_head(raw)
-    if _has_nav_toc_semantics(head):
-        nav_semantic = True
-        is_toc = True
-    if not is_toc and len(re.findall(rb'<a\b', raw[:8192], re.IGNORECASE)) >= 2:
-        probe = _decode_head(raw, raw_n=_TOC_RECHECK_BYTES,
-                             out_n=_TOC_RECHECK_BYTES)
-        if _looks_like_link_toc(probe):
-            is_toc = True
-    elif not is_toc and _has_toc_title_text(head):
-        # 无链接纯文本目录页兜底：标题门槛在 8KB 头即可判定（常见书零成本
-        # 短路），命中才解码 64KB 复核章节行密度
-        probe = _decode_head(raw, raw_n=_TOC_RECHECK_BYTES,
-                             out_n=_TOC_RECHECK_BYTES)
-        if _looks_like_plain_toc(probe):
-            is_toc = True
-    return is_toc, nav_semantic
+    nav_semantic = bool(_has_nav_toc_semantics(head))
+    is_toc = bool(_TOC_FILE_RE.search(zip_path.rsplit('/', 1)[-1])) or nav_semantic
+    linkless = False
+    if not nav_semantic:
+        if len(re.findall(rb'<a\b', raw[:8192], re.IGNORECASE)) >= 2:
+            if not is_toc:
+                probe = _decode_head(raw, raw_n=_TOC_RECHECK_BYTES,
+                                     out_n=_TOC_RECHECK_BYTES)
+                if _looks_like_link_toc(probe):
+                    is_toc = True
+        elif _has_toc_title_text(head):
+            # 无链接纯文本目录页（含文件名已命中的 mulu.xhtml 等）：标题门槛
+            # 在 8KB 头即可判定（常见书零成本短路），命中才解码 64KB 复核行密度
+            probe = _decode_head(raw, raw_n=_TOC_RECHECK_BYTES,
+                                 out_n=_TOC_RECHECK_BYTES)
+            if _looks_like_plain_toc(probe):
+                is_toc = True
+                linkless = True
+    return is_toc, nav_semantic, linkless
 
 
 # 误打在目录页上的章节标记清理（修复旧版缺陷输出，见 _is_toc_doc）
@@ -1657,10 +1663,12 @@ def analyze_epub(epub_path: str, sample_limit: int = 20) -> dict:
             for t in text_entries:
                 if t not in entries:
                     continue
-                # 轻量嗅探（P1）：64KB 片段按需读，替代旧的全量解压复核
-                is_toc, is_nav = _classify_toc_entry(
+                # 轻量嗅探（P1）：64KB 片段按需读，替代旧的全量解压复核。
+                # 「书内已有目录」只认可点击的目录页：nav 语义页与无链接纯文本
+                # 目录页都会被生成的链接目录页替换，不计入（与 run 侧同口径）
+                is_toc, is_nav, is_linkless = _classify_toc_entry(
                     t, entries.head(t, _TOC_RECHECK_BYTES))
-                if is_toc and not is_nav:
+                if is_toc and not is_nav and not is_linkless:
                     has_inbook_toc = True
                     break
 
@@ -1842,9 +1850,9 @@ def beautify(
     :return: 统计 dict（marked_headers / marked_volumes / titles_split /
         toc_generated / toc_entries / injected_css / chapters / rtl /
         cleaned_leading / removed_empty / toc_excluded / toc_links_ok /
-        toc_links_total / dialogues_marked / notes_refs / notes_items /
-        notes_normalized / notes_wrapped / toc_titles_marked /
-        mark_guard_files）
+        toc_links_total / toc_replaced_linkless / dialogues_marked /
+        notes_refs / notes_items / notes_normalized / notes_wrapped /
+        toc_titles_marked / mark_guard_files）
     """
     if notes:
         validate_note_mark(note_mark)
@@ -1884,6 +1892,7 @@ def beautify(
     toc_excluded = 0
     toc_links_ok = 0
     toc_links_total = 0
+    toc_replaced_linkless = 0
 
     def _abs_with_anchor(base_dir, ref):
         """把目录条目引用解析为 zip 绝对路径（保留 #锚点）。"""
@@ -1928,17 +1937,25 @@ def beautify(
     # 仅看头 2000/4000 字，长 <head> 的目录页会漏判而误打章节标记
     toc_page_flags = {}
     nav_semantic_flags = {}
+    linkless_flags = {}
     for t in text_entries:
         if t not in entries:
             continue
-        is_toc, is_nav = _classify_toc_entry(t, entries[t])
+        is_toc, is_nav, is_linkless = _classify_toc_entry(t, entries[t])
         toc_page_flags[t] = is_toc
         nav_semantic_flags[t] = is_nav
+        linkless_flags[t] = is_linkless
     inbook_toc_paths = [t for t in text_entries if toc_page_flags.get(t)]
     # nav 语义目录页（内容含 <nav epub:type="toc">）：手机阅读器当目录数据源
-    # 特殊处理，spine 中无论 manifest 是否标 properties 都需替换为普通结构
+    # 特殊处理，spine 中无论 manifest 是否标 properties 都需替换为普通结构。
+    # 无链接纯文本目录页（linkless）条目不可点击，保留无意义——有 NCX/nav
+    # 数据时同样替换为生成的链接目录页；无数据源（toc_items 为空）则退回
+    # 仅样式化，至少不炸页。两类目标按 spine 顺序合并，替换后目录页占
+    # 原首个目标页的位置。
     nav_semantic_paths = [t for t in text_entries if nav_semantic_flags.get(t)]
-    nav_semantic_in_spine = bool(nav_semantic_paths)
+    toc_target_paths = [t for t in text_entries
+                        if nav_semantic_flags.get(t) or linkless_flags.get(t)]
+    replace_in_spine = bool(toc_target_paths)
     # spine 条目 zip 路径 → idref 映射（用于替换 itemref）。
     # 必须从 ctx.spine 逐项解析构建，不能 zip(text_entries, linear idrefs)——
     # spine 含非 XHTML 的 linear 条目（SVG 插图页 / 烂书直接塞图）或 manifest
@@ -1953,7 +1970,7 @@ def beautify(
         p = _snap_entry(entries, _resolve_zip(ctx.opf_dir, item['href']))
         path_to_idref.setdefault(p, idref)
 
-    if (not inbook_toc_paths or nav_semantic_in_spine) and toc_items:
+    if (not inbook_toc_paths or replace_in_spine) and toc_items:
         # 截断仅在显式传入 max_toc_entries 时发生（默认 None = 全量收录）
         truncated = (max_toc_entries is not None) and len(toc_items) > max_toc_entries
         if truncated:
@@ -1980,12 +1997,16 @@ def beautify(
                 % (mb_id, MB_TOC_NAME),
                 '目录页',
             )
-            # 找出 spine 中待替换的 idref：有 nav 语义时只替换 nav 页，否则为无目录时的插入
-            if nav_semantic_in_spine:
+            # 找出 spine 中待替换的 idref：nav 语义页 / 无链接纯文本目录页，
+            # 否则为无目录时的插入
+            if replace_in_spine:
                 replace_ids = [
-                    path_to_idref[t] for t in nav_semantic_paths
+                    path_to_idref[t] for t in toc_target_paths
                     if path_to_idref.get(t) and path_to_idref[t] != mb_id
                 ]
+                toc_replaced_linkless = sum(
+                    1 for t in toc_target_paths
+                    if linkless_flags.get(t) and path_to_idref.get(t))
             else:
                 replace_ids = []
             if replace_ids:
@@ -2192,6 +2213,7 @@ def beautify(
         'cleaned_leading': cleaned_leading,
         'removed_empty': removed_empty,
         'toc_excluded': toc_excluded,
+        'toc_replaced_linkless': toc_replaced_linkless,
         'toc_depth': toc_depth or 0,
         'toc_links_ok': toc_links_ok if toc_generated else 0,
         'toc_links_total': toc_links_total if toc_generated else 0,
