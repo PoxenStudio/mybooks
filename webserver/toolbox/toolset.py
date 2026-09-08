@@ -116,9 +116,11 @@ class ToolSet:
         from .txt_encoding_fixer import TxtEncodingFixerTool
         from .chinese_converter_tool import ChineseConverterTool
         from .epub_beautify import EpubBeautifyTool
+        from .epub_merge import EpubMergeTool
 
         ToolSet.register(MergeFormatsTool.info())
         ToolSet.register(EpubBeautifyTool.info())
+        ToolSet.register(EpubMergeTool.info())
         ToolSet.register(MimoTTSTool.info())
         ToolSet.register(TextReplaceTool.info())
         ToolSet.register(TxtEncodingFixerTool.info())
