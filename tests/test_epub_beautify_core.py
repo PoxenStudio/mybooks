@@ -3059,6 +3059,22 @@ class TestReviewFixes20260908(unittest.TestCase):
         self.assertIn('<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub=', new)
         ET.fromstring(new)
 
+    def test_legacy_output_namespace_repaired(self):
+        """旧版缺陷输出（已带 mb-notemark 但缺 xmlns:epub）再美化时补声明。"""
+        legacy = ('<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                  '<p>正文<a class="footnote mb-notemark" epub:type="noteref" '
+                  'href="#n1">1</a>。</p>'
+                  '<ol class="footnote-content mb-notes">'
+                  '<li class="footnote-item mb-note-item" id="n1">注。</li></ol>'
+                  '</body></html>')
+        new, st = lib.mark_notes_in_html(legacy)
+        self.assertEqual(st, {'refs': 0, 'items': 0, 'normalized': 0, 'wrapped': 0})
+        self.assertIn("xmlns:epub", new)
+        ET.fromstring(new)
+        # 幂等：再跑一次不再变化
+        again, _ = lib.mark_notes_in_html(new)
+        self.assertEqual(again, new)
+
     def test_notes_no_namespace_when_normalize_off(self):
         """normalize=False 不注入 epub: 属性，也就无需补声明（行为不变）。"""
         new, _ = lib.mark_notes_in_html(NOTES_CH_B, normalize=False)

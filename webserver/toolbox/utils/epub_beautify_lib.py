@@ -1460,13 +1460,15 @@ def mark_notes_in_html(html_str: str, normalize: bool = True,
     - 条目 li 追加 ``mb-note-item`` 豁免类——章末注释不会被章节标题扫描误标。
 
     安全红线：只增不改不删（除用户显式选择的 img 替换），href/id/class 原样保留。
-    幂等：已含 mb-notemark 的文件直接原样返回。
+    幂等：已含 mb-notemark 的文件不再打标（仅按需补 xmlns:epub 声明——旧版
+    缺陷输出修复，见 _ensure_epub_ns）。
     :return: (new_html, stats)；stats = {refs, items, normalized, wrapped}
     """
     validate_note_mark(note_mark)
     empty = {'refs': 0, 'items': 0, 'normalized': 0, 'wrapped': 0}
     if 'mb-notemark' in html_str or 'mb-notes' in html_str:
-        return html_str, dict(empty)
+        # 旧版输出可能已注入 epub:type 却未声明前缀（非良构）：再美化时补上
+        return (_ensure_epub_ns(html_str) if normalize else html_str), dict(empty)
     refs_found = _NOTE_REF_RE.findall(html_str)
     items_found = _NOTE_ITEM_CNT_RE.findall(html_str)
     if not refs_found and not items_found:
@@ -2106,6 +2108,8 @@ def beautify(
                 notes_items += nstats['items']
                 notes_normalized += nstats['normalized']
                 notes_wrapped += nstats['wrapped']
+            if new_html != html:
+                # 零统计也可能有变更：旧版缺陷输出补 xmlns:epub 声明
                 changed = True
                 html = new_html
         # 内容清理（段首空格归一/空段/meta），目录页不做文本清理避免破坏布局
