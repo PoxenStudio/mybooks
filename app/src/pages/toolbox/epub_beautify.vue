@@ -1147,7 +1147,10 @@ export default {
               return s;
             });
           }
-          if (this.presets.length > 0) this.preset = this.presets[0].id;
+          // 仅在当前预设已失效（不在列表）时兜底——选书不应重置用户已选的风格
+          if (this.presets.length > 0 && !this.presets.some((p) => p.id === this.preset)) {
+            this.preset = this.presets[0].id;
+          }
           this.applyCleanupRecommendations();
         } else {
           this.analysisError = rsp.msg || rsp.err;

@@ -842,17 +842,68 @@ def _looks_like_link_toc(html_str: str) -> bool:
     return False
 
 
+# 无链接纯文本目录页（部分制作器产出 `<p>第X章 …</p>` 列表、整页无 <a>）：
+# 文件名/nav 语义/链接密度三类信号全部失效，此前该形态直接落进章节标记，
+# page-break 把一页目录炸成 N 个单页（安全阀判别式依赖被标块含链接，无链接
+# 时恒不触发）。此处补形态信号：目录标题 + 章节行密度 + 无长正文块。
+_PLAIN_TOC_MIN_ROWS = 5        # 至少 5 个章节形态短块
+_PLAIN_TOC_LONG_BLOCK = 80     # 页内出现超长正文块即否决
+_PLAIN_TOC_SCAN = 64 * 1024    # 扫描窗口（目录页总在页首，长目录也够用）
+
+
+def _plain_toc_rows(html_str: str) -> tuple:
+    """:return: (章节形态短块数, 短块总数, 长正文块数)。"""
+    rows = shorts = longs = 0
+
+    def _acc(text):
+        nonlocal rows, shorts, longs
+        if not text:
+            return
+        if len(text) > _PLAIN_TOC_LONG_BLOCK:
+            longs += 1
+            return
+        shorts += 1
+        if chapter_patterns.paragraph_is_heading(text):
+            rows += 1
+
+    for m in _BLOCK_RE.finditer(html_str):
+        _acc(_block_text(m.group(3)))
+    for m in _SIMPLE_DIV_RE.finditer(html_str):
+        inner = m.group(2)
+        # 容器型 div（内含块级标签）：文本已由内部块统计，跳过避免重复计数
+        if re.search(r'<(?:p|div|ul|ol|li|h[1-6]|table)\b', inner, re.I):
+            continue
+        _acc(_block_text(inner))
+    return rows, shorts, longs
+
+
+def _looks_like_plain_toc(html_str: str) -> bool:
+    """无链接纯文本目录页检测（链接密度信号的兜底，analyze/beautify 共用）。
+
+    必要条件：页首块或 ``<title>`` 恰为「目录/目次/Contents」
+    （``_has_toc_title_text``）——不满足直接返回，真章节页不会被误判，
+    也让调用方在 8KB 头即可零成本短路。命中后要求页内以章节形态短块为主
+    （≥5 行、占比 ≥60%）且无长正文块：散文页/文集页的长段落一票否决。
+    """
+    if not html_str or not _has_toc_title_text(html_str):
+        return False
+    rows, shorts, longs = _plain_toc_rows(html_str[:_PLAIN_TOC_SCAN])
+    return (rows >= _PLAIN_TOC_MIN_ROWS and not longs
+            and rows * 10 >= shorts * 6)
+
+
 def _is_toc_doc(zip_path: str, html_str: str = '') -> bool:
     """判断条目是否为书内目录页：文件名（mulu/toc/nav/contents）、
-    ``<nav epub:type="toc">`` 结构、或链接列表形态（P：纯链接目录页此前
-    检测不到，会落入章节标记，mb-ch 的 page-break-before 把目录页炸成
-    多个「第x章」独立页）。"""
+    ``<nav epub:type="toc">`` 结构、链接列表形态或纯文本列表形态（P：链接
+    目录页/无链接目录页此前检测不到，会落入章节标记，mb-ch 的
+    page-break-before 把目录页炸成多个「第x章」独立页）。"""
     base = zip_path.rsplit('/', 1)[-1]
     if _TOC_FILE_RE.search(base):
         return True
     if html_str and _has_nav_toc_semantics(html_str):
         return True
-    return bool(html_str) and _looks_like_link_toc(html_str)
+    return bool(html_str) and (_looks_like_link_toc(html_str)
+                               or _looks_like_plain_toc(html_str))
 
 
 # 链接目录形态复核窗口（P1：8KB 头不足判定时按 64KB 片段复核，不全量解码；
@@ -864,7 +915,8 @@ def _classify_toc_entry(zip_path: str, raw: bytes) -> tuple:
     """单条目目录页判定（analyze 与 beautify 主流程共用，口径一致）。
 
     文件名特征零解码；nav 语义看 8KB 头；头 8KB 内链接 ≥2 时以 64KB 片段
-    复核链接目录形态（``_looks_like_link_toc``），不再全量解码——此前
+    复核链接目录形态（``_looks_like_link_toc``），无链接时按目录标题门槛
+    复核纯文本列表形态（``_looks_like_plain_toc``），不再全量解码——此前
     beautify 主流程只看头 2000/4000 字、analyze 用全量复核，两端口径不一，
     长 ``<head>`` 的目录页会 preview 报「保留原书目录」而 run 误打章节标记。
     :param raw: 条目原始字节（可为局部读取片段，≥ `_TOC_RECHECK_BYTES` 最佳）。
@@ -881,6 +933,13 @@ def _classify_toc_entry(zip_path: str, raw: bytes) -> tuple:
                              out_n=_TOC_RECHECK_BYTES)
         if _looks_like_link_toc(probe):
             is_toc = True
+    elif not is_toc and _has_toc_title_text(head):
+        # 无链接纯文本目录页兜底：标题门槛在 8KB 头即可判定（常见书零成本
+        # 短路），命中才解码 64KB 复核章节行密度
+        probe = _decode_head(raw, raw_n=_TOC_RECHECK_BYTES,
+                             out_n=_TOC_RECHECK_BYTES)
+        if _looks_like_plain_toc(probe):
+            is_toc = True
     return is_toc, nav_semantic
 
 
@@ -895,19 +954,22 @@ def _strip_chapter_marks(html_str: str) -> str:
     """移除误打在目录页上的章节标记（mb-ch/mb-vol/mb-ch-split 类 + 长线 div）。
 
     正常流程不给目录页打标，页面上的标记只能来自旧版检测缺陷，剥离即修复。
-    幂等：无标记时原样返回；类名剥空时整个 class 属性移除，不留 class=""。
+    幂等：无标记时逐字原样返回（class 的前导空白一并捕获后原样回写——此前
+    回写固定带一个前导空格，每跑一次每个 class 属性就多一个空格）；
+    类名剥空时整个 class 属性（连同前导空白）移除，不留 class=""。
     单双引号两种写法均处理（自家注入为双引号，手写单引号书亦兼容）。"""
     out = _MB_SEP_DIV_RE.sub('', html_str)
 
     def _fix_class(m):
+        lead = m.group(1)
+        val = m.group(2) if m.group(2) is not None else m.group(3)
         quote = '"' if '"' in m.group(0) else "'"
-        val = m.group(1) if m.group(1) is not None else m.group(2)
         tokens = [t for t in val.split() if t not in _CH_MARK_TOKENS]
         if not tokens:
             return ''
-        return ' class=%s%s%s' % (quote, ' '.join(tokens), quote)
+        return '%sclass=%s%s%s' % (lead, quote, ' '.join(tokens), quote)
 
-    return re.sub(r'''class\s*=\s*(?:"([^"]*)"|'([^']*)')''', _fix_class, out)
+    return re.sub(r'''(\s*)class\s*=\s*(?:"([^"]*)"|'([^']*)')''', _fix_class, out)
 
 
 def _mark_toc_page_body(html_str: str) -> str:
@@ -1112,8 +1174,10 @@ def mark_chapters_in_html(html_str: str, split_title: bool = False) -> tuple:
             # 章题块（老转换器惯放具名锚）会被安全阀误杀
             if _INTERNAL_HREF_RE.search(inner or ''):
                 marked_with_links += 1
-            return '<%s%s>%s</%s>%s' % (tag, new_attrs, inner, tag,
-                                        '' if is_volume else _MB_SEP)
+            # 长线分隔符是块级 div：li 的父级是 ul/ol，插 div 会破坏 XHTML
+            # 内容模型（EPUBCheck 报错），li 标记不打分隔符
+            sep = '' if (is_volume or tag_l == 'li') else _MB_SEP
+            return '<%s%s>%s</%s>%s' % (tag, new_attrs, inner, tag, sep)
         if heading_seen and not first_done and not is_div:
             if 'data-mb-first' in (cls_attr or ''):
                 return None
@@ -1309,8 +1373,12 @@ NOTE_MARK_SVGS = {
 NOTE_MARK_MODES = ('orig', 'sym', 'num', 'zhu')
 
 
-def _validate_note_mark(note_mark: str) -> None:
-    """校验标注样式 id：orig/sym/num 或 svg:<模板id>；非法抛 ValueError。"""
+def validate_note_mark(note_mark: str) -> None:
+    """校验标注样式 id：orig/sym/num/zhu 或 svg:<模板id>；非法抛 ValueError。
+
+    公开入口：HTTP 层必须复用本函数，不要再维护第二份白名单——历史上
+    handler 白名单漏掉 zhu，前端选项直接 100% 报参数错误。
+    """
     if note_mark in NOTE_MARK_MODES:
         return
     if isinstance(note_mark, str) and note_mark.startswith('svg:'):
@@ -1343,6 +1411,38 @@ def _add_epub_type_noteref(attrs: str) -> str:
     return attrs.rstrip() + ' epub:type="noteref"'
 
 
+# epub 命名空间声明：注入 epub:type 的前置条件。EPUB2/calibre 导出常只声明
+# 默认 XHTML 命名空间，直接写 epub:type 会让整份内容文档变成非良构 XML
+# （未绑定前缀是致命解析错误），严格阅读器/EPUBCheck 会判整章不可读。
+_EPUB_NS_ATTR = 'xmlns:epub="http://www.idpf.org/2007/ops"'
+_HTML_TAG_RE = re.compile(r'<!--[\s\S]*?-->|<html\b[^>]*>', re.I)
+
+
+def _ensure_epub_ns(html_str: str) -> str:
+    """确保 <html> 根声明 epub 前缀（幂等；无 <html> 标签时原样返回）。
+
+    已用别的前缀绑定同一命名空间（如 xmlns:ops）时仍补 epub: ——同一命名
+    空间允许多前缀绑定，而注入用的就是 epub: 前缀。注释里的 ``<html…>``
+    不是根元素，跳过继续向后找（否则声明会被写进注释而依然未绑定）。
+    """
+    pos = 0
+    while True:
+        m = _HTML_TAG_RE.search(html_str, pos)
+        if not m:
+            return html_str
+        tag = m.group(0)
+        if tag.startswith('<!--'):
+            pos = m.end()
+            continue
+        if re.search(r'xmlns:epub\s*=', tag, re.I):
+            return html_str
+        if tag.rstrip().endswith('/>'):
+            new_tag = tag.rstrip()[:-2].rstrip() + ' %s/>' % _EPUB_NS_ATTR
+        else:
+            new_tag = tag[:-1].rstrip() + ' %s>' % _EPUB_NS_ATTR
+        return html_str[:m.start()] + new_tag + html_str[m.end():]
+
+
 def mark_notes_in_html(html_str: str, normalize: bool = True,
                        note_mark: str = 'orig') -> tuple:
     """美化书内弹注：标注符与注释容器打标，可选语义归一化/换标记元素。
@@ -1360,13 +1460,15 @@ def mark_notes_in_html(html_str: str, normalize: bool = True,
     - 条目 li 追加 ``mb-note-item`` 豁免类——章末注释不会被章节标题扫描误标。
 
     安全红线：只增不改不删（除用户显式选择的 img 替换），href/id/class 原样保留。
-    幂等：已含 mb-notemark 的文件直接原样返回。
+    幂等：已含 mb-notemark 的文件不再打标（仅按需补 xmlns:epub 声明——旧版
+    缺陷输出修复，见 _ensure_epub_ns）。
     :return: (new_html, stats)；stats = {refs, items, normalized, wrapped}
     """
-    _validate_note_mark(note_mark)
+    validate_note_mark(note_mark)
     empty = {'refs': 0, 'items': 0, 'normalized': 0, 'wrapped': 0}
     if 'mb-notemark' in html_str or 'mb-notes' in html_str:
-        return html_str, dict(empty)
+        # 旧版输出可能已注入 epub:type 却未声明前缀（非良构）：再美化时补上
+        return (_ensure_epub_ns(html_str) if normalize else html_str), dict(empty)
     refs_found = _NOTE_REF_RE.findall(html_str)
     items_found = _NOTE_ITEM_CNT_RE.findall(html_str)
     if not refs_found and not items_found:
@@ -1374,6 +1476,10 @@ def mark_notes_in_html(html_str: str, normalize: bool = True,
 
     stats = {'refs': len(refs_found), 'items': len(items_found),
              'normalized': 0, 'wrapped': 0}
+    if normalize:
+        # 注入 epub:type 前先确保 <html> 声明 epub 前缀：否则 calibre 类
+        # EPUB2 书（只声明默认 XHTML 命名空间）会整份文档非良构
+        html_str = _ensure_epub_ns(html_str)
     seq = {'n': 0}
 
     def _ref_repl(m):
@@ -1601,7 +1707,10 @@ def analyze_epub(epub_path: str, sample_limit: int = 20) -> dict:
                         leading_space_paras += 1
                     if m.group(1).lower() == 'p' and _is_dialogue_text(_block_text(inner)):
                         dialogue_paras += 1
-                    if chapter_patterns.paragraph_is_heading(_block_text(inner)):
+                    # 段落文本识别数：排除 h1-h6 块（它们已计入 heading_stats，
+                    # 否则同一标题被两个口径各计一次，前端相加后数字翻倍）
+                    if m.group(1).lower() not in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6') \
+                            and chapter_patterns.paragraph_is_heading(_block_text(inner)):
                         text_headings += 1
 
             # 弹注统计（采样正文文件，防大书全量解码；健康报告与推荐徽章用，
@@ -1738,7 +1847,7 @@ def beautify(
         mark_guard_files）
     """
     if notes:
-        _validate_note_mark(note_mark)
+        validate_note_mark(note_mark)
     cleanup_n = _normalize_cleanup(cleanup)
     entries = _read_zip_entries(epub_path)
     ctx = _parse_opf(entries)
@@ -1999,6 +2108,8 @@ def beautify(
                 notes_items += nstats['items']
                 notes_normalized += nstats['normalized']
                 notes_wrapped += nstats['wrapped']
+            if new_html != html:
+                # 零统计也可能有变更：旧版缺陷输出补 xmlns:epub 声明
                 changed = True
                 html = new_html
         # 内容清理（段首空格归一/空段/meta），目录页不做文本清理避免破坏布局
