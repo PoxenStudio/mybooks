@@ -954,19 +954,22 @@ def _strip_chapter_marks(html_str: str) -> str:
     """移除误打在目录页上的章节标记（mb-ch/mb-vol/mb-ch-split 类 + 长线 div）。
 
     正常流程不给目录页打标，页面上的标记只能来自旧版检测缺陷，剥离即修复。
-    幂等：无标记时原样返回；类名剥空时整个 class 属性移除，不留 class=""。
+    幂等：无标记时逐字原样返回（class 的前导空白一并捕获后原样回写——此前
+    回写固定带一个前导空格，每跑一次每个 class 属性就多一个空格）；
+    类名剥空时整个 class 属性（连同前导空白）移除，不留 class=""。
     单双引号两种写法均处理（自家注入为双引号，手写单引号书亦兼容）。"""
     out = _MB_SEP_DIV_RE.sub('', html_str)
 
     def _fix_class(m):
+        lead = m.group(1)
+        val = m.group(2) if m.group(2) is not None else m.group(3)
         quote = '"' if '"' in m.group(0) else "'"
-        val = m.group(1) if m.group(1) is not None else m.group(2)
         tokens = [t for t in val.split() if t not in _CH_MARK_TOKENS]
         if not tokens:
             return ''
-        return ' class=%s%s%s' % (quote, ' '.join(tokens), quote)
+        return '%sclass=%s%s%s' % (lead, quote, ' '.join(tokens), quote)
 
-    return re.sub(r'''class\s*=\s*(?:"([^"]*)"|'([^']*)')''', _fix_class, out)
+    return re.sub(r'''(\s*)class\s*=\s*(?:"([^"]*)"|'([^']*)')''', _fix_class, out)
 
 
 def _mark_toc_page_body(html_str: str) -> str:
@@ -1412,26 +1415,32 @@ def _add_epub_type_noteref(attrs: str) -> str:
 # 默认 XHTML 命名空间，直接写 epub:type 会让整份内容文档变成非良构 XML
 # （未绑定前缀是致命解析错误），严格阅读器/EPUBCheck 会判整章不可读。
 _EPUB_NS_ATTR = 'xmlns:epub="http://www.idpf.org/2007/ops"'
-_HTML_TAG_RE = re.compile(r'<html\b[^>]*>', re.I)
+_HTML_TAG_RE = re.compile(r'<!--[\s\S]*?-->|<html\b[^>]*>', re.I)
 
 
 def _ensure_epub_ns(html_str: str) -> str:
     """确保 <html> 根声明 epub 前缀（幂等；无 <html> 标签时原样返回）。
 
     已用别的前缀绑定同一命名空间（如 xmlns:ops）时仍补 epub: ——同一命名
-    空间允许多前缀绑定，而注入用的就是 epub: 前缀。
+    空间允许多前缀绑定，而注入用的就是 epub: 前缀。注释里的 ``<html…>``
+    不是根元素，跳过继续向后找（否则声明会被写进注释而依然未绑定）。
     """
-    m = _HTML_TAG_RE.search(html_str)
-    if not m:
-        return html_str
-    tag = m.group(0)
-    if re.search(r'xmlns:epub\s*=', tag, re.I):
-        return html_str
-    if tag.rstrip().endswith('/>'):
-        new_tag = tag.rstrip()[:-2].rstrip() + ' %s/>' % _EPUB_NS_ATTR
-    else:
-        new_tag = tag[:-1].rstrip() + ' %s>' % _EPUB_NS_ATTR
-    return html_str[:m.start()] + new_tag + html_str[m.end():]
+    pos = 0
+    while True:
+        m = _HTML_TAG_RE.search(html_str, pos)
+        if not m:
+            return html_str
+        tag = m.group(0)
+        if tag.startswith('<!--'):
+            pos = m.end()
+            continue
+        if re.search(r'xmlns:epub\s*=', tag, re.I):
+            return html_str
+        if tag.rstrip().endswith('/>'):
+            new_tag = tag.rstrip()[:-2].rstrip() + ' %s/>' % _EPUB_NS_ATTR
+        else:
+            new_tag = tag[:-1].rstrip() + ' %s>' % _EPUB_NS_ATTR
+        return html_str[:m.start()] + new_tag + html_str[m.end():]
 
 
 def mark_notes_in_html(html_str: str, normalize: bool = True,

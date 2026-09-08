@@ -2614,6 +2614,15 @@ class TestStripHardening(unittest.TestCase):
         self.assertIn('class="calibre1"', out)
         self.assertNotIn('mb-ch"', out)
 
+    def test_strip_whitespace_idempotent(self):
+        """空白幂等：无标记时逐字原样返回（此前每跑一次多一个空格，
+        重复美化会在每个 class 属性前累积空白）。"""
+        for html in ('<p class="calibre1">正文</p><body class="mb-toc-page">',
+                     "<p class='a b'>x</p>"):
+            once = lib._strip_chapter_marks(html)
+            self.assertEqual(once, html)
+            self.assertEqual(lib._strip_chapter_marks(once), once)
+
 
 # ── 目录页三层信号 / 防炸页安全阀 / NCX 驱动打标（2026-09-06 批 2 复验）──
 # 通用篇名 + 跨文件链接（calibre 拆分书形态）：形态比例必然失效，仅密度信号可判
@@ -3040,6 +3049,16 @@ class TestReviewFixes20260908(unittest.TestCase):
         self.assertIn('epub:type="noteref"', new)
         ET.fromstring(new)
 
+    def test_notes_namespace_skips_html_in_comment(self):
+        """注释里的 <html…> 不是根元素：声明必须落在真根上。"""
+        src = ('<!-- <html> --><html xmlns="http://www.w3.org/1999/xhtml"><body>'
+               '<p>正文<a class="footnote" href="#n1">1</a>。</p>'
+               '<ol class="footnote-content"><li class="footnote-item" id="n1">注。</li></ol>'
+               '</body></html>')
+        new, _ = lib.mark_notes_in_html(src)
+        self.assertIn('<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub=', new)
+        ET.fromstring(new)
+
     def test_notes_no_namespace_when_normalize_off(self):
         """normalize=False 不注入 epub: 属性，也就无需补声明（行为不变）。"""
         new, _ = lib.mark_notes_in_html(NOTES_CH_B, normalize=False)
@@ -3150,6 +3169,26 @@ class TestReviewFixes20260908(unittest.TestCase):
         self.assertIn("mb-ch", li_part)
         self.assertNotIn("<div", li_part)   # ul 内不得出现块级 div
         self.assertIn('<div class="mb-ch-sep"></div>', new)  # 非 li 标题仍有长线
+
+    # ── 重复美化：逐条目字节一致（含空白/命名空间声明/注册幂等）──
+
+    def test_beautify_byte_idempotent(self):
+        tmp = os.path.join(TESTS_DIR, "_tmp_idem_src.epub")
+        o1 = os.path.join(TESTS_DIR, "_tmp_idem_1.epub")
+        o2 = os.path.join(TESTS_DIR, "_tmp_idem_2.epub")
+        build_notes_epub(tmp)
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            lib.beautify(tmp, o1, css, notes=True, note_mark="zhu")
+            lib.beautify(o1, o2, css, notes=True, note_mark="zhu")
+            with zipfile.ZipFile(o1) as a, zipfile.ZipFile(o2) as b:
+                self.assertEqual(a.namelist(), b.namelist())
+                for name in a.namelist():
+                    self.assertEqual(a.read(name), b.read(name), name)
+        finally:
+            for p in (tmp, o1, o2):
+                if os.path.exists(p):
+                    os.remove(p)
 
     # ── 小项：标题计数口径不重复 ──
 
