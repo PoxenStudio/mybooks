@@ -281,6 +281,46 @@ def _require_installed(tool_id: str) -> InstalledTool:
 # 一次、处处拿到同一个模块/同一份类对象。
 _module_cache: Dict[tuple, "object"] = {}
 
+# tool_id -> 该工具 backend/ 目录对应的 package 名（没有 backend/__init__.py 的旧工具是
+# None，见 _ensure_backend_package()）。和 _module_cache 一样，只在一次 load_all() 内有效，
+# 由 load_all() 负责清空。
+_package_cache: Dict[str, Optional[str]] = {}
+
+
+def _ensure_backend_package(tool_id: str, tool_dir: str) -> Optional[str]:
+    """把工具的 backend/ 目录注册成一个真正的 Python package（sys.modules 里有对应条目、
+    __path__ 指向 backend/），这样 backend/ 下多个文件之间才能用相对 import
+    （`from . import job_store` / `from .job_store import JobStore`）互相引用——3.1 节的
+    目录结构里 backend/ 本就带了 __init__.py，暗示了这个预期，但如果只用
+    importlib.util.spec_from_file_location 单独加载 entry_backend 指向的那一个文件，
+    Python 并不知道它属于哪个 package，相对 import 会直接报
+    "attempted relative import with no known parent package"。
+
+    没有 backend/__init__.py 的旧工具包（打包时没跟上这个约定）：退回成不带 package 的
+    加载方式，行为和这个函数出现之前完全一致，只是不支持 backend/ 内的相对 import。
+    """
+    if tool_id in _package_cache:
+        return _package_cache[tool_id]
+
+    backend_dir = os.path.join(tool_dir, "backend")
+    init_file = os.path.join(backend_dir, "__init__.py")
+    if not os.path.exists(init_file):
+        _package_cache[tool_id] = None
+        return None
+
+    package_name = f"mybooks_tool_{tool_id}_backend"
+    spec = importlib.util.spec_from_file_location(
+        package_name, init_file, submodule_search_locations=[backend_dir],
+    )
+    if spec is None or spec.loader is None:
+        raise ToolValidationError(_("无法加载模块文件：%s") % init_file)
+    package = importlib.util.module_from_spec(spec)
+    sys.modules[package_name] = package
+    spec.loader.exec_module(package)
+
+    _package_cache[tool_id] = package_name
+    return package_name
+
 
 def _import_backend_module(tool_id: str, tool_dir: str, module_rel: str):
     cache_key = (tool_id, module_rel)
@@ -288,12 +328,18 @@ def _import_backend_module(tool_id: str, tool_dir: str, module_rel: str):
         return _module_cache[cache_key]
 
     module_file = _module_file_for(tool_dir, module_rel)
-    module_name = f"mybooks_tool_{tool_id}_{module_rel.replace('.', '_')}"
+    package_name = _ensure_backend_package(tool_id, tool_dir)
+    module_name = (
+        f"{package_name}.{module_rel}" if package_name
+        else f"mybooks_tool_{tool_id}_{module_rel.replace('.', '_')}"
+    )
 
     spec = importlib.util.spec_from_file_location(module_name, module_file)
     if spec is None or spec.loader is None:
         raise ToolValidationError(_("无法加载模块文件：%s") % module_file)
     module = importlib.util.module_from_spec(spec)
+    if package_name:
+        module.__package__ = package_name
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
 
@@ -343,6 +389,7 @@ def load_all() -> None:
     _loaded_classes.clear()
     _loaded_at_startup.clear()
     _module_cache.clear()
+    _package_cache.clear()
     sync_builtin_records()
 
     for record in InstalledTool.all():

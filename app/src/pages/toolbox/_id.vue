@@ -86,7 +86,7 @@ export default {
   },
   methods: {
     goBack() {
-      this.$router.push('/toolbox');
+      this.$router.push('/admin/toolbox');
     },
     initIframeSrc() {
       if (!this.tool) return;
