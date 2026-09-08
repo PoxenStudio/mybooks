@@ -1814,6 +1814,50 @@ def _set_page_progression(opf_str: str, direction: str) -> str:
     return opf_str[:m.start()] + new_tag + opf_str[m.end():]
 
 
+# 封面/前置页文件名特征：生成目录页时据此把目录挂到封面之后。
+# 刻意不含 title / index / author 等裸名——它们会误伤正文首章（如 index.html）
+_COVER_FILE_RE = re.compile(
+    r'\b(?:cover|titlepage|title-page|half-title|halftitle|feiye|banquan|'
+    r'copyright|colophon|imprint)\b',
+    re.IGNORECASE,
+)
+
+
+def _toc_anchor_after_cover(ctx: OpfContext, entries: dict, opf_str: str) -> str:
+    """spine 开头连续「封面/前置页」中最后一个条目的 idref（无则 ''）。
+
+    生成目录页时的挂载锚点：目录排在封面（含扉页/版权等前置页）之后，而不是
+    顶到 spine 首位把封面挤到第二页。识别信号：EPUB2 ``guide`` 的
+    ``<reference type="cover">`` 指向页、manifest 条目 id 含 cover、文件名
+    命中 ``_COVER_FILE_RE``。只取**开头连续段**——正文首章一旦出现即停止，
+    避免把目录页插到正文中间。
+    """
+    guide_path = ''
+    m = re.search(r'<reference\b[^>]*type\s*=\s*["\']cover["\'][^>]*>', opf_str, re.I)
+    if m:
+        hm = re.search(r'href\s*=\s*["\']([^"\']+)["\']', m.group(0), re.I)
+        if hm:
+            guide_path = _snap_entry(entries, _resolve_zip(ctx.opf_dir, hm.group(1)))
+    anchor = ''
+    for idref, linear in ctx.spine:
+        if not linear:
+            continue
+        item = ctx.manifest.get(idref)
+        if not item:
+            break
+        path = _snap_entry(entries, _resolve_zip(ctx.opf_dir, item['href']))
+        base = path.rsplit('/', 1)[-1]
+        coverish = (
+            (bool(guide_path) and path == guide_path)
+            or bool(_COVER_FILE_RE.search(base))
+            or 'cover' in idref.lower()
+        )
+        if not coverish:
+            break
+        anchor = idref
+    return anchor
+
+
 def beautify(
     epub_path: str,
     out_path: str,
@@ -2025,10 +2069,17 @@ def beautify(
                         '', opf_str, count=1,
                     )
             else:
-                # 插入 spine 第一个 linear 条目之前
+                # 插入封面/前置页之后（识别不到封面时退回 spine 首位）
                 spine_m = re.search(r'<spine[^>]*>', opf_str)
                 if spine_m:
                     insert_at = spine_m.end()
+                    anchor_id = _toc_anchor_after_cover(ctx, entries, opf_str)
+                    if anchor_id:
+                        am = re.search(
+                            r'<itemref\b[^>]*idref=["\']%s["\'][^>]*/?>'
+                            % re.escape(anchor_id), opf_str)
+                        if am:
+                            insert_at = am.end()
                     opf_str = (
                         opf_str[:insert_at]
                         + '\n<itemref idref="%s" linear="yes"/>' % mb_id

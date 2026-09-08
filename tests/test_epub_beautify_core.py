@@ -3373,6 +3373,123 @@ class TestLinklessTocReplacement(unittest.TestCase):
             if os.path.exists(tmp):
                 os.remove(tmp)
 
+    def test_toc_inserted_after_cover(self):
+        """无书内目录页时，生成的目录页挂在封面之后（不再顶到 spine 首位）。"""
+        tmp = os.path.join(TESTS_DIR, "_tmp_pos_src.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_pos_out.epub")
+        self._build_position_epub(tmp, front_files=("cover.xhtml",))
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            lib.beautify(tmp, out, css)
+            self.assertEqual(self._spine(out), ["f0", "mb-toc", "c1", "c2"])
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_toc_inserted_after_front_matter_block(self):
+        """封面 + 扉页 + 版权页：目录排在整段前置页之后。"""
+        tmp = os.path.join(TESTS_DIR, "_tmp_pos2_src.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_pos2_out.epub")
+        self._build_position_epub(
+            tmp, front_files=("cover.xhtml", "titlepage.xhtml", "banquan.xhtml"))
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            lib.beautify(tmp, out, css)
+            self.assertEqual(self._spine(out),
+                             ["f0", "f1", "f2", "mb-toc", "c1", "c2"])
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_toc_inserted_at_front_without_cover(self):
+        """无封面/前置页：维持原行为（spine 首位）。"""
+        tmp = os.path.join(TESTS_DIR, "_tmp_pos3_src.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_pos3_out.epub")
+        self._build_position_epub(tmp, front_files=())
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            lib.beautify(tmp, out, css)
+            self.assertEqual(self._spine(out), ["mb-toc", "c1", "c2"])
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_toc_inserted_after_guide_cover(self):
+        """文件名无 cover 特征时靠 guide reference type=cover 定位。"""
+        tmp = os.path.join(TESTS_DIR, "_tmp_pos4_src.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_pos4_out.epub")
+        self._build_position_epub(tmp, front_files=("p001.xhtml",),
+                                  guide_href="p001.xhtml")
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            lib.beautify(tmp, out, css)
+            self.assertEqual(self._spine(out), ["f0", "mb-toc", "c1", "c2"])
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_bare_title_first_file_not_anchor(self):
+        """裸 title.html 不在封面特征表内 → 不当前置页，目录仍排 spine 首位。"""
+        tmp = os.path.join(TESTS_DIR, "_tmp_pos5_src.epub")
+        out = os.path.join(TESTS_DIR, "_tmp_pos5_out.epub")
+        self._build_position_epub(tmp, front_files=("title.html",))
+        try:
+            css = get_preset_css("classic", use_system_fonts=True)
+            lib.beautify(tmp, out, css)
+            self.assertEqual(self._spine(out), ["mb-toc", "f0", "c1", "c2"])
+        finally:
+            for p in (tmp, out):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def _build_position_epub(self, path, front_files=("cover.xhtml",),
+                             guide_href=None):
+        """前置页 + 两章 + NCX；spine = 前置页 → c1 → c2。"""
+        manifest = "".join(
+            '<item id="f%d" href="%s" media-type="application/xhtml+xml"/>' % (i, f)
+            for i, f in enumerate(front_files))
+        manifest += (
+            '<item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/>'
+            '<item id="c2" href="c2.xhtml" media-type="application/xhtml+xml"/>'
+            '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>')
+        spine = "".join('<itemref idref="f%d"/>' % i
+                        for i in range(len(front_files)))
+        spine += '<itemref idref="c1"/><itemref idref="c2"/>'
+        guide = ('<guide><reference type="cover" href="%s"/></guide>' % guide_href
+                 if guide_href else '')
+        opf = (
+            '<?xml version="1.0"?>'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+            '<metadata><dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">'
+            '位置书</dc:title></metadata>'
+            '<manifest>%s</manifest><spine toc="ncx">%s</spine>%s</package>'
+        ) % (manifest, spine, guide)
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.writestr("mimetype", "application/epub+zip",
+                        compress_type=zipfile.ZIP_STORED)
+            zf.writestr("META-INF/container.xml", CONTAINER)
+            zf.writestr("OEBPS/content.opf", opf)
+            for f in front_files:
+                zf.writestr("OEBPS/" + f,
+                            '<html xmlns="http://www.w3.org/1999/xhtml">'
+                            '<body><p>前置页。</p></body></html>')
+            zf.writestr("OEBPS/c1.xhtml",
+                        '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                        '<p>第一章 开端</p><p>正文。</p></body></html>')
+            zf.writestr("OEBPS/c2.xhtml",
+                        '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                        '<p>第二章 转折</p><p>正文。</p></body></html>')
+            zf.writestr("OEBPS/toc.ncx", self.NCX)
+
+    def _spine(self, out):
+        with zipfile.ZipFile(out) as zf:
+            opf = zf.read("OEBPS/content.opf").decode("utf-8")
+        return re.findall(r'<itemref[^>]*idref="([^"]+)"', opf)
+
     def test_link_toc_still_kept(self):
         """可点击的链接目录页不受影响：保留原页、不生成 mb-toc。"""
         tmp = os.path.join(TESTS_DIR, "_tmp_ll4_src.epub")
