@@ -540,6 +540,7 @@
     "douban_plugin_description": "If you need to enable the Douban plugin, please refer to the installation documentation. If it fails, try changing the mirror, such as poxenstudio/douban-api-rs.",
     "import_and_upload": "Importing and Uploading",
     "category_with_folder": "Set category with top folder name",
+    "upload_ignore_title_checking": "Ignore duplicated file checking",
     "auto_importing": "Monitor importing folder and import automatically (only process new books, deleting files has no effect)",
     "update_category_with_folder_rename": "After monitoring the import directory, when renaming the first-level directory or moving files to a new directory, use the latest first-level directory name to update the category of the imported books",
     "remove_imported_file": "Remove original files after import (will be ineffective if monitoring import directory is enabled)",

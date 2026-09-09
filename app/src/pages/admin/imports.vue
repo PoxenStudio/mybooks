@@ -250,7 +250,6 @@ export default {
         count_processed: 0,
         ignored_errors: [],
         headers: [
-            { text: "ID", sortable: true, value: "id" },
             { text: "状态", sortable: true, value: "status" },
             { text: "路径", sortable: true, value: "path" },
             { text: "扫描信息", sortable: false, value: "title" },

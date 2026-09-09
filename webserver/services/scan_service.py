@@ -439,7 +439,7 @@ class ScanService(AsyncService):
 
         new_book_id = None
         try:
-            if force:
+            if force or CONF.get("UPLOAD_IGNORE_TITLE_CHECKING", False):
                 ids = []
             else:
                 ids = self.db.books_with_same_title(mi)

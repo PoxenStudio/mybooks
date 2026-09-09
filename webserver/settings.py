@@ -128,6 +128,7 @@ settings = {
     "SEND_MAIL_FOR_NEW_BOOKS" : False,
     "REMOVE_IMPORTED_FILE": False,
     "KEEP_UPLOAD_SOURCE_FILE": False,
+    "UPLOAD_IGNORE_TITLE_CHECKING": False,
     "BATCH_ADD_IN_FORCE": False,
 
     "PDF_TILE_WITH_FILE_NAME": False,

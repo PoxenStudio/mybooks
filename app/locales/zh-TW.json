@@ -782,6 +782,7 @@
     "douban_plugin_description": "若需要啟用豆瓣外掛，請參閱安裝文件的說明。若出現失敗，可嘗試更換映像，例如 poxenstudio/douban-api-rs",
     "import_and_upload": "匯入與上傳",
     "category_with_folder": "使用第一層目錄為自訂類別名稱 (如匯入目錄下 a/b/c.epub 匯入後，類別為 a。目錄名不要有特殊字元，超過 10 個字元會被忽略)",
+    "upload_ignore_title_checking": "忽略根據書名和作者的同書檢查（書庫將存在重復的書籍）",
     "auto_importing": "監控匯入目錄，自動進行匯入 (只處理新增入庫，刪除檔案沒有影響。如果放入的檔案不完整，會被忽略。盡量保留匯入記錄，避免重複處理)",
     "update_category_with_folder_rename": "監控匯入目錄後，重新命名第一層目錄或檔案移動到新的目錄時使用最新的第一層目錄名更新已匯入書籍的類別",
     "remove_imported_file": "匯入完成後刪除原始檔案 (啟用監控匯入目錄後將失效)",

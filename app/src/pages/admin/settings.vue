@@ -1437,6 +1437,12 @@ export default {
             label: "settings.category_with_folder",
             type: "checkbox",
           },
+          {
+            icon: "mdi-file-document-outline",
+            key: "UPLOAD_IGNORE_TITLE_CHECKING",
+            label: "settings.upload_ignore_title_checking",
+            type: "checkbox",
+          },
         ],
         groups: [
           {
