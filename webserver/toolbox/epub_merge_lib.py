@@ -30,6 +30,7 @@ import posixpath
 import re
 import uuid
 import zipfile
+from datetime import datetime, timezone
 from urllib.parse import quote, unquote
 
 logger = logging.getLogger(__name__)
@@ -1004,6 +1005,10 @@ def _rewrite_doc_refs(text: str, old_dir: str, new_dir: str,
 
     def _repl_srcset(m):
         attr, q, val = m.group("attr"), m.group("q"), m.group("val")
+        if "data:" in val.lower():
+            # data URI 负载自带逗号，按逗号切分会改坏 base64；整组跳过（不改写
+            # 根绝对引用是保守取舍，避免产生损坏的 data URI）
+            return m.group(0)
         changed = False
         parts = []
         for candidate in val.split(","):
@@ -1316,9 +1321,16 @@ def _build_divider(book_title: str, index: int, total: int) -> bytes:
 
 def _build_opf(meta: dict, manifest: list, spine: list, uid: str,
                cover_name: str | None, cover_mt: str | None) -> bytes:
-    """组装新书 OPF（EPUB2 风格，抄 split 写包语义；href 统一 URI 转义）。"""
+    """组装新书 OPF（EPUB 3.0；href 统一 URI 转义）。
+
+    3.0 而非 2.0：输出带 EPUB3 导航文档（`properties="nav"`），EPUB2 包
+    不支持 nav 文件（epubcheck HTM-004），必须整体按 3.0 出包；NCX 保留并
+    由 `spine toc="ncx"` 引用，兼容 EPUB2 阅读器。EPUB3 必需项：
+    `dcterms:modified`；封面改用 `cover-image` 属性（EPUB2 的
+    `<meta name="cover">`/`<guide>` 在 3.0 里不合法/已废弃，不再输出）。
+    """
     creators = "".join(
-        '<dc:creator opf:role="aut">%s</dc:creator>' % html.escape(a)
+        "<dc:creator>%s</dc:creator>" % html.escape(a)
         for a in meta.get("authors") or [])
     langs = "".join(
         "<dc:language>%s</dc:language>" % html.escape(lang)
@@ -1332,38 +1344,32 @@ def _build_opf(meta: dict, manifest: list, spine: list, uid: str,
             ' properties="nav"' if href == "nav.xhtml" else "")
         for iid, href, mt in manifest)
     if cover_name:
-        items += '<item id="cover-image" href="%s" media-type="%s"/>' % (
-            _xml_attr(_quote_href(cover_name)), cover_mt)
+        items += ('<item id="cover-image" href="%s" media-type="%s" '
+                  'properties="cover-image"/>'
+                  % (_xml_attr(_quote_href(cover_name)), cover_mt))
     refs = "".join('<itemref idref="%s"/>' % iid for iid in spine)
-    cover_meta = ""
-    guide = ""
-    if cover_name:
-        cover_meta = '<meta name="cover" content="cover-image"/>'
-        guide = ('<guide><reference type="cover" title="Cover" href="%s"/></guide>'
-                 % _xml_attr(_quote_href(cover_name)))
+    modified = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     head = [
         '<?xml version="1.0" encoding="utf-8"?>',
-        '<package version="2.0" xmlns="http://www.idpf.org/2007/opf" '
+        '<package version="3.0" xmlns="http://www.idpf.org/2007/opf" '
         'unique-identifier="merge-id">',
-        '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/" '
-        'xmlns:opf="http://www.idpf.org/2007/opf">',
+        '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">',
         '<dc:identifier id="merge-id">%s</dc:identifier>' % uid,
         "<dc:title>%s</dc:title>" % html.escape(meta.get("title") or ""),
         creators,
-        '<dc:contributor opf:role="bkp">MyBooks epub_merge</dc:contributor>',
+        "<dc:contributor>MyBooks epub_merge</dc:contributor>",
         langs,
         "<dc:description>%s</dc:description>" % html.escape(
             _strip_tags(meta.get("description") or "")),
         subjects,
+        '<meta property="dcterms:modified">%s</meta>' % modified,
     ]
     if meta.get("publisher"):
         head.append("<dc:publisher>%s</dc:publisher>"
                     % html.escape(meta["publisher"]))
-    head.append(cover_meta)
     head.append("</metadata>")
     head.append("<manifest>%s</manifest>" % items)
     head.append('<spine toc="ncx">%s</spine>' % refs)
-    head.append(guide)
     head.append("</package>")
     return "".join(head).encode("utf-8")
 

@@ -524,8 +524,11 @@ class TestMerge(unittest.TestCase):
         self.assertIn("cover.png", entries)
         opf = entries["content.opf"].decode("utf-8")
         self.assertIn('id="cover-image"', opf)
-        self.assertIn('name="cover"', opf)
-        self.assertIn("<guide>", opf)
+        # EPUB3 包：封面用 properties 标记，不再有 EPUB2 的 meta name=cover/guide
+        self.assertIn('properties="cover-image"', opf)
+        self.assertIn('version="3.0"', opf)
+        self.assertIn("dcterms:modified", opf)
+        self.assertNotIn("<guide>", opf)
 
     def test_empty_spine_raises(self):
         opf = _build_opf("空书", ["作者"], [], ncx=False)
@@ -651,7 +654,7 @@ class TestMerge(unittest.TestCase):
 
         def _strip_ns(data):
             return data.replace(
-                b'xmlns:dc="http://purl.org/dc/elements/1.1/" ', b"")
+                b'xmlns:dc="http://purl.org/dc/elements/1.1/"', b"")
         with self.assertRaises(ValueError):
             lib.validate_output(self._repack(out, patch_opf=_strip_ns))
 
@@ -1594,6 +1597,14 @@ class TestReviewFixes2(unittest.TestCase):
         self.assertIn('srcset="a.png 1x, b.png 2x"', out_doc)
         self.assertIn('poster="p.jpg"', out_doc)
         self.assertIn('data="o.bin"', out_doc)
+
+    def test_srcset_with_data_uri_untouched(self):
+        # data URI 负载自带逗号，不能按逗号切分候选（否则 base64 被改坏）；
+        # 含 data: 的整组 srcset 保守跳过
+        text = '<img srcset="data:image/png;base64,AAAA 1x, /OEBPS/a.png 2x"/>'
+        out, _warns = lib._rewrite_doc_refs(
+            text, "OEBPS", "b0/OEBPS", {"OEBPS/a.png": "b0/OEBPS/a.png"})
+        self.assertEqual(out, text)
 
 
 class TestProgressAndCancel(unittest.TestCase):
