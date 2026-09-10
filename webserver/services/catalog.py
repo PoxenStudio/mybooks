@@ -16,6 +16,7 @@ from webserver.services import AsyncService
 # 目录提取的格式优先级：其他格式（mobi/azw3/docx等）暂无可靠的目录提取方案，先忽略
 CATALOG_FORMAT_PRIORITY = ["EPUB", "PDF", "TXT"]
 MAX_TITLE_LENGTH = 200
+MAX_CATALOG_LEN = 204800
 
 
 class CatalogExtractService(AsyncService):
@@ -105,6 +106,8 @@ class CatalogExtractService(AsyncService):
                 continue
 
             if markdown and len(markdown.splitlines()) > 1:
+                if len(markdown) > MAX_CATALOG_LEN:
+                    markdown = markdown[:MAX_CATALOG_LEN] + "\n\n* 目录过长，已被截断*"
                 cache.set_field(CALIBRE_COLUMN_CATALOG, {book_id: markdown})
                 return {"err": "ok", "format": fmt, "catalog": markdown}
             else:
