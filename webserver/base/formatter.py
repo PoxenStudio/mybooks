@@ -7,6 +7,7 @@ from webserver.constants import CALIBRE_COLUMN_EXT_LINK, CALIBRE_COLUMN_CATEGORY
 from webserver.constants import CALIBRE_COLUMN_TRANSLATORS
 from webserver.constants import BOOK_TYPE_EBOOK, CALIBRE_COLUMN_DYNAMIC_COVER
 from webserver.constants import CALIBRE_COLUMN_LOCATION, BOOK_TYPE_PHYSICAL
+from webserver.constants import CALIBRE_COLUMN_CATALOG
 
 
 class SimpleBookFormatter:
@@ -53,6 +54,7 @@ class SimpleBookFormatter:
         dynamic_cover = self.val(CALIBRE_COLUMN_DYNAMIC_COVER, 0)
         comments = self.val("comments", _("暂无简介")) if include_comments else ""
         translators = self.val(CALIBRE_COLUMN_TRANSLATORS, "")
+        catalog = self.val(CALIBRE_COLUMN_CATALOG, "") if include_comments else ""
         if strip_comments and comments:
             comments = comments[:120] + "..." if len(comments) > 120 else comments
         return {
@@ -69,6 +71,7 @@ class SimpleBookFormatter:
             "tags": b["tags"],
             "publisher": self.val("publisher"),
             "comments": comments,
+            "catalog": catalog,
             "series": self.val("series", None),
             "series_index": self.val("series_index", None),
             "languages": self.val("languages", None),

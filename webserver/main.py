@@ -29,7 +29,7 @@ from webserver.services.item_sync import ItemSyncService
 from webserver.services.resource_service import ResourceService
 from webserver.constants import COLUMN_CATEGORY, COLUMN_PHY_COUNT, COLUMN_BOOK_TYPE, COLUMN_TRANSLATORS
 from webserver.constants import COLUMN_EXT_LINK, CUSTOM_COVER_IMAGE, COLUMN_DYNAMIC_COVER
-from webserver.constants import COLUMN_LOCATION
+from webserver.constants import COLUMN_LOCATION, COLUMN_CATALOG
 from webserver.version import VERSION
 
 CONF = loader.get_settings()
@@ -337,7 +337,8 @@ def make_app():
         _ = add_meta_in_calibre(cache, COLUMN_EXT_LINK, "External Link", "text")
         _ = add_meta_in_calibre(cache, COLUMN_DYNAMIC_COVER, "Dynamic Cover", "int")
         added_translator = add_meta_in_calibre(cache, COLUMN_TRANSLATORS, "Translator", "text")
-        if added_source or added_category or added_phy_count or added_location or added_translator:
+        added_catalog = add_meta_in_calibre(cache, COLUMN_CATALOG, "Catalog", "comments")
+        if added_source or added_category or added_phy_count or added_location or added_translator or added_catalog:
             need_sync_item_to_calibre = added_source or added_category or added_phy_count
             book_db = LibraryDatabase(os.path.expanduser(options.with_library))
             cache = book_db.new_api

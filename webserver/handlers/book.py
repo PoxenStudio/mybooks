@@ -35,6 +35,7 @@ from webserver.base.image_helper import ImageHelper
 from webserver.base.epub_helper import EpubHelper
 from webserver.services.autofill import AutoFillService
 from webserver.services.ai_fillinfo import AIFillInfoService
+from webserver.services.catalog import CatalogExtractService
 from webserver.services.book_search import BookSearch
 from webserver.services.converter import ConverterService
 from webserver.services.extract import ExtractService
@@ -355,6 +356,58 @@ class BookLocation(BaseHandler):
         except Exception as e:
             logging.error(f"Error updating location for book {book_id}: {e}")
             return {"err": "internal", "msg": _("更新位置失败")}
+
+
+class BookCatalog(BaseHandler):
+    """重新提取单本书籍的目录信息，优先使用EPUB，其次PDF、TXT"""
+    @js
+    @auth
+    def post(self, id):
+        book_id = int(id)
+        book = self.get_book(book_id, raise_exception=False)
+        if not book:
+            return {"err": "params.book.invalid", "msg": _("书籍不存在")}
+
+        if not self.is_admin() and not self.is_book_owner(book_id, self.user_id()):
+            return {"err": "user.no_permission", "msg": _("无权限")}
+
+        result = CatalogExtractService().extract_one(book_id, force=True)
+        if result.get("err") != "ok":
+            return {"err": result.get("err", "internal"), "msg": result.get("msg", _("目录提取失败"))}
+        return {"err": "ok", "msg": _("目录提取成功"), "catalog": result.get("catalog", "")}
+
+
+class BookCatalogBatch(BaseHandler):
+    """批量提取书籍目录：传入idlist时只处理指定书籍(强制重新提取)，否则处理全部书籍(跳过已有目录的书籍)"""
+    # 同步处理，避免一次请求内阻塞过久
+    MAX_BATCH_SIZE = 2000
+
+    @js
+    @auth
+    def post(self):
+        if not self.is_admin():
+            return {"err": "user.no_permission", "msg": _("无权限")}
+
+        data = tornado.escape.json_decode(self.request.body)
+        idlist = data.get("idlist")
+
+        if isinstance(idlist, list) and len(idlist) > 0:
+            book_ids = [int(bid) for bid in idlist]
+            force = True
+        else:
+            book_ids = list(self.calibre_db_cache.all_book_ids())
+            force = False
+
+        total = len(book_ids)
+        truncated = total > self.MAX_BATCH_SIZE
+        if truncated:
+            book_ids = book_ids[:self.MAX_BATCH_SIZE]
+
+        summary = CatalogExtractService().extract_batch(book_ids, force=force)
+        msg = _("目录提取完成：成功 %d，跳过 %d，失败 %d") % (summary["done"], summary["skip"], summary["fail"])
+        if truncated:
+            msg += _("（共 %d 本，本次仅处理前 %d 本，请再次执行以处理剩余书籍）") % (total, self.MAX_BATCH_SIZE)
+        return {"err": "ok", "msg": msg, **summary}
 
 
 class BookCategoryBatch(BaseHandler):
@@ -4096,6 +4149,8 @@ def routes():
         (r"/api/book/category", BookCategoryBatch),
         (r"/api/book/([0-9]+)/category", BookCategory),
         (r"/api/book/([0-9]+)/location", BookLocation),
+        (r"/api/book/([0-9]+)/catalog", BookCatalog),
+        (r"/api/book/catalog/batch", BookCatalogBatch),
         (r"/api/categories", BookCategories),
         (r"/api/tags/search", TagSearch),
         (r"/api/authors/search", AuthorSearch),

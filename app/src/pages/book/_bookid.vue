@@ -393,6 +393,10 @@
                                     <v-icon>mdi-robot</v-icon>
                                     {{ $t('book.aiUpdate') }}
                                 </v-list-item>
+                                <v-list-item @click="extractCatalog" :disabled="!hasCatalogFormats || catalog_extracting">
+                                    <v-icon>mdi-format-list-bulleted</v-icon>
+                                    {{ $t('book.extractCatalog') }}
+                                </v-list-item>
                                 <v-list-item v-if="$store.state.user?.is_login" @click="openEmailDialog" :disabled="!hasCompatibleEmailFormats">
                                     <v-icon>mdi-email-send</v-icon>
                                     {{ $t('book.shareToEmail') }}
@@ -751,6 +755,21 @@
                         <v-card-text>
                             <p v-if="book.comments" v-html="book.comments"></p>
                             <p v-else>{{ $t('book.clickToViewDetails') }}</p>
+                        </v-card-text>
+                        <v-card-text v-if="book.catalog" class="pt-0">
+                            <div class="catalog-toggle" @click="catalogExpanded = !catalogExpanded">
+                                <v-icon small>{{ catalogExpanded ? 'mdi-chevron-down' : 'mdi-chevron-right' }}</v-icon>
+                                <span class="ml-1">{{ $t('book.catalogInfo') }}</span>
+                            </div>
+                            <v-expand-transition>
+                                <div v-if="catalogExpanded" class="catalog-content">
+                                    <div
+                                        v-for="(line, index) in catalogLines"
+                                        :key="index"
+                                        :style="{ paddingLeft: (line.depth * 16) + 'px' }"
+                                    >{{ line.title }}</div>
+                                </div>
+                            </v-expand-transition>
                         </v-card-text>
                     </v-col>
                 </v-row>
@@ -1581,6 +1600,25 @@ export default {
             return this.book.files.some(file => file.format.toLowerCase() === 'pdf');
         },
 
+        // 目录提取当前仅支持从 EPUB/PDF/TXT 中解析
+        hasCatalogFormats() {
+            if (!this.book || !this.book.files) return false;
+            return this.book.files.some(file => {
+                const format = file.format.toLowerCase();
+                return format === 'epub' || format === 'pdf' || format === 'txt';
+            });
+        },
+
+        // 将 markdown 嵌套列表（"  - 标题"）解析为带缩进层级的行，用于目录面板展示
+        catalogLines() {
+            if (!this.book || !this.book.catalog) return [];
+            return this.book.catalog.split('\n').filter(line => line.trim() !== '').map(line => {
+                const match = line.match(/^(\s*)-\s?(.*)$/);
+                if (!match) return { depth: 0, title: line.trim() };
+                return { depth: Math.floor(match[1].length / 2), title: match[2] };
+            });
+        },
+
         // 是否存在按 EPUB 阅读的格式（epub/azw3/mobi/azw/docx 均按 EPUB 处理，内部自动转换）
         hasEpubFormat() {
             if (!this.book || !this.book.files) return false;
@@ -1790,6 +1828,8 @@ export default {
         debug: false,
         loaded: false,
         ai_filling: false,
+        catalog_extracting: false,
+        catalogExpanded: false,
         editing_location: false,
         location_input: "",
         mail_to: "",
@@ -2432,6 +2472,25 @@ export default {
                 }
             }).finally(() => {
                 this.ai_filling = false;
+            });
+        },
+        extractCatalog() {
+            if (this.catalog_extracting) return;
+            this.catalog_extracting = true;
+            this.$backend("/book/" + this.book.id + "/catalog", {
+                method: "POST",
+            }).then((rsp) => {
+                if (rsp.err === "ok") {
+                    this.book.catalog = rsp.catalog || "";
+                    this.catalogExpanded = true;
+                    this.$alert("success", rsp.msg || this.$t('book.extractCatalogSuccess'));
+                } else {
+                    this.$alert("error", rsp.msg || this.$t('book.extractCatalogFailed'));
+                }
+            }).catch(() => {
+                this.$alert("error", this.$t('book.extractCatalogFailed'));
+            }).finally(() => {
+                this.catalog_extracting = false;
             });
         },
         convertBook() {
@@ -4013,5 +4072,20 @@ h1.book-detail-title {
         flex: 0 0 25%;
         max-width: 25%;
     }
+}
+
+.catalog-toggle {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+    font-weight: 500;
+}
+.catalog-content {
+    margin-top: 8px;
+    font-size: 0.9rem;
+    line-height: 1.7;
+    max-height: 360px;
+    overflow-y: auto;
 }
 </style>

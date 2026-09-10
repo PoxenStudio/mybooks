@@ -49,6 +49,10 @@ CALIBRE_COLUMN_DYNAMIC_COVER = "#dynamic_cover"
 COLUMN_TRANSLATORS = "translators"
 CALIBRE_COLUMN_TRANSLATORS = "#translators"
 
+# 书籍目录结构（markdown格式，保留层次），见 webserver/services/catalog.py
+COLUMN_CATALOG = "catalog"
+CALIBRE_COLUMN_CATALOG = "#catalog"
+
 # Audio related constants
 ENABLE_VIP_QUOTA_KEY = "ENABLE_VIP_QUOTA"
 ENABLE_AUDIO_CONVERSION_LOG = "ENABLE_AUDIO_CONVERSION_LOG"
