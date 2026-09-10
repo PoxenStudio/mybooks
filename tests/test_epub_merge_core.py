@@ -1107,6 +1107,36 @@ class TestTocFallbacks(unittest.TestCase):
         self.assertIn("ch2", labels)
         self.assertEqual(lib.validate_output(out), [])
 
+    def test_ncx_reference_to_loose_file_kept(self):
+        # 回归：NCX 引用 manifest 未列、靠散件兜底入包的文件时，目录项不得被丢
+        container = (
+            '<?xml version="1.0"?><container version="1.0" '
+            'xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+            '<rootfiles><rootfile full-path="OEBPS/content.opf" '
+            'media-type="application/oebps-package+xml"/></rootfiles></container>')
+        opf = ('<?xml version="1.0"?><package version="2.0" '
+               'xmlns="http://www.idpf.org/2007/opf" unique-identifier="u">'
+               '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+               '<dc:identifier id="u">u</dc:identifier><dc:title>卷一</dc:title>'
+               '</metadata><manifest>'
+               '<item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/>'
+               '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>'
+               '</manifest><spine toc="ncx"><itemref idref="c1"/></spine></package>')
+        data = _make_epub({
+            "META-INF/container.xml": container.encode("utf-8"),
+            "OEBPS/content.opf": opf.encode("utf-8"),
+            "OEBPS/toc.ncx": _build_ncx("卷一", [("loose.xhtml", "散件章")]).encode("utf-8"),
+            "OEBPS/ch1.xhtml": b"<html><body><p>ch1</p></body></html>",
+            "OEBPS/loose.xhtml": b"<html><body><p>loose</p></body></html>",
+        })
+        out = _merge_two_epubs(data, _make_min_epub(title="卷二", n_docs=1))
+        entries = _zip_entries(out)
+        self.assertIn("b0/OEBPS/loose.xhtml", entries)
+        out_ncx = entries["toc.ncx"].decode("utf-8")
+        self.assertIn("散件章", out_ncx)
+        self.assertIn('src="b0/OEBPS/loose.xhtml"', out_ncx)
+        self.assertEqual(lib.validate_output(out), [])
+
 
 class TestHrefEncoding(unittest.TestCase):
     """生成的 OPF/NCX 引用必须按 URI 规则转义（`#`/空格/非 ASCII/字面 %）。"""

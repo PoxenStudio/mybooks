@@ -121,7 +121,6 @@ class EpubMergeTool(BaseTool):
         authors = _ordered_unique(list(mi.authors or []) or info["authors"])
         isbns = _ordered_unique(
             ([mi.isbn] if getattr(mi, "isbn", "") else []) + info["isbns"])
-        cover = self.api.calibre.cover(book_id)
 
         return {
             "book_id": book_id,
@@ -135,7 +134,9 @@ class EpubMergeTool(BaseTool):
             "spine_count": info["spine_count"],
             "toc_count": info["toc_count"],
             "size": info["size"],
-            "has_cover": bool(cover),
+            # 封面只判有无（mi.has_cover 由 calibre 元数据带出），不取整包字节：
+            # preview 在请求线程同步跑，20 本整封面读入纯属浪费
+            "has_cover": bool(getattr(mi, "has_cover", False)),
             "error": None,
             "warnings": info["warnings"],
         }

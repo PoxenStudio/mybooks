@@ -1329,7 +1329,6 @@ def _merge_into(out, sources: list, inputs: list, meta: dict, divider: bool,
                     warnings.append("[%s] 链接列表目录页不进正文：%s"
                                     % (book_title, real))
                 skip_reals = nav_reals | link_toc_reals
-                lower_o2n = {k.lower(): v for k, v in old_to_new.items()}
 
                 def _emit(real, new_name, mt):
                     """非 spine 资源：CSS 读入改写，其余直接流式转写（不过内存）。"""
@@ -1363,6 +1362,9 @@ def _merge_into(out, sources: list, inputs: list, meta: dict, divider: bool,
                     loose.append((name, new_name))
                 for name, new_name in loose:
                     warnings.append("[%s] 散件已收录：%s" % (book_title, name))
+                # TOC 映射必须在散件登记后重建：NCX/nav 可能引用 manifest 未列、
+                # 靠散件兜底才进包的文件，用旧映射会把这类目录项静默丢掉
+                lower_o2n = {k.lower(): v for k, v in old_to_new.items()}
 
                 new_spine_docs = []
                 emitted = set()
