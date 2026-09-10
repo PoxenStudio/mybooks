@@ -1569,9 +1569,14 @@
     "coverUpload": "自定义封面",
     "coverUploadBtn": "上传",
     "coverUploaded": "自定义封面已上传",
+    "coverGrid": "前 9 本封面拼图",
     "dividerLabel": "在每本书之间加入分卷页",
     "deleteSourceLabel": "合并后删除源书",
     "deleteSourceHint": "默认关闭，保留源书",
+    "deleteSourceConfirmTitle": "删除源书确认",
+    "deleteSourceConfirmText": "合并成功后将删除所选的源书，删除后无法恢复。确定继续吗？",
+    "confirmOk": "确定删除",
+    "confirmCancel": "取消",
     "descriptionLabel": "简介（可改）",
     "restoreDefault": "恢复默认",
     "merging": "合并中...",
@@ -1584,6 +1589,8 @@
     "stageMerging": "合并中",
     "stageValidating": "校验输出",
     "stageSaving": "入库中",
+    "cancelBtn": "取消合并",
+    "cancelRequested": "已请求取消...",
     "descTruncated": "简介过长，预览仅展示前 20 万字符，服务端将截断至 5 万字符"
   },
   "textProcessor": {

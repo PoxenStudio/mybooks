@@ -1568,9 +1568,14 @@
     "coverUpload": "Custom cover",
     "coverUploadBtn": "Upload",
     "coverUploaded": "Custom cover uploaded",
+    "coverGrid": "Cover grid (first 9 books)",
     "dividerLabel": "Insert a divider page between books",
     "deleteSourceLabel": "Delete source books after merge",
     "deleteSourceHint": "Off by default; sources are kept",
+    "deleteSourceConfirmTitle": "Delete source books?",
+    "deleteSourceConfirmText": "The selected source books will be deleted after a successful merge. This cannot be undone. Continue?",
+    "confirmOk": "Delete",
+    "confirmCancel": "Cancel",
     "descriptionLabel": "Description (editable)",
     "restoreDefault": "Restore default",
     "merging": "Merging...",
@@ -1583,6 +1588,8 @@
     "stageMerging": "Merging",
     "stageValidating": "Validating output",
     "stageSaving": "Saving to library",
+    "cancelBtn": "Cancel merge",
+    "cancelRequested": "Cancelling...",
     "descTruncated": "Description too long: preview limited to 200,000 characters; the server will truncate it to 50,000"
   },
   "textProcessor": {

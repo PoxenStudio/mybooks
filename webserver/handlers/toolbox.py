@@ -31,6 +31,7 @@ from webserver.toolbox.chinese_converter_tool import ChineseConverterTool, DIREC
 from webserver.toolbox.bookbarn_acceptor_tool import BookBarnAcceptorTool
 from webserver.toolbox.epub_beautify import EpubBeautifyTool
 from webserver.toolbox.epub_merge import EpubMergeTool
+from webserver.toolbox import epub_merge_lib
 from webserver.toolbox.utils.styles import TOC_STYLES as EB_TOC_STYLES, list_presets as eb_list_presets
 from webserver.toolbox.utils.epub_beautify_lib import validate_note_mark as eb_validate_note_mark
 from webserver.services.background_service import BackgroundTask
@@ -1392,18 +1393,9 @@ class AdminEpubMergeRun(BaseHandler):
         tags = data.get("tags") or []
         publisher = str(data.get("publisher") or "").strip()[:200]
         language = str(data.get("language") or "").strip()
-        # 布尔兼容 string/bool（抄 beautify use_system_fonts 写法）：
-        # 裸 API 传 "false"/"0" 字符串时 bool() 会误判为 True
-        divider = data.get("divider", True)
-        if isinstance(divider, str):
-            divider = divider.strip().lower() not in ("false", "0", "no", "")
-        else:
-            divider = bool(divider)
-        delete_source = data.get("delete_source", False)
-        if isinstance(delete_source, str):
-            delete_source = delete_source.strip().lower() not in ("false", "0", "no", "")
-        else:
-            delete_source = bool(delete_source)
+        # 布尔兼容 string/bool（裸 API 传 "false"/"0" 字符串时 bool() 会误判为 True）
+        divider = epub_merge_lib.coerce_bool(data.get("divider"), True)
+        delete_source = epub_merge_lib.coerce_bool(data.get("delete_source"), False)
         cover = data.get("cover") or {"type": "first"}
 
         if not isinstance(book_ids, list) or not (2 <= len(book_ids) <= 20):
@@ -1461,6 +1453,15 @@ class AdminEpubMergeProgress(BaseHandler):
         if task.get("status") == BackgroundTask.STATUS_COMPLETED:
             return {"err": "ok", "msg": _("合并已完成"), "data": result}
         return {"err": "ok", "data": result}
+
+
+class AdminEpubMergeCancel(BaseHandler):
+    @js
+    @is_admin
+    def post(self):
+        if not EpubMergeTool.request_cancel():
+            return {"err": "task.not_found", "msg": _("没有正在执行的合并任务")}
+        return {"err": "ok", "msg": _("已请求取消，将在当前书籍处理完后停止")}
 
 
 class AdminEpubMergeCoverUpload(BaseHandler):
@@ -1538,6 +1539,7 @@ def routes():
                 (r"/api/toolbox/epub_merge/preview", AdminEpubMergePreview),
                 (r"/api/toolbox/epub_merge/merge", AdminEpubMergeRun),
                 (r"/api/toolbox/epub_merge/progress", AdminEpubMergeProgress),
+                (r"/api/toolbox/epub_merge/cancel", AdminEpubMergeCancel),
                 (r"/api/toolbox/epub_merge/cover_upload", AdminEpubMergeCoverUpload),
                 (r"/api/toolbox/epub_beautify/texture_raw", AdminEpubBeautifyTextureRaw),
     ] + toolbox_manager.collect_tool_routes() + [

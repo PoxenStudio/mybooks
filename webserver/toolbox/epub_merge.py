@@ -9,7 +9,9 @@
 文件校验与入库抄 `utils/book_utils.py`（`get_book_file` 直接调用，
 `import_as_new_book` 为 N 源改写于 `_import_merged_book`）。
 """
+import io
 import logging
+import math
 import os
 import re
 import threading
@@ -39,23 +41,22 @@ _COVER_TOKEN_RE = re.compile(r"^[a-f0-9]{16}$")
 # 靠这里兜底（工具根目录不随任务清理）
 _COVER_GC_SECONDS = 24 * 3600
 
+# analyze 告警码 → 本地化文案（lib 只回码，边界翻译；catalog 缺翻译时回退中文）
+_WARN_MESSAGES = {
+    epub_merge_lib.WARN_NO_NCX: "无 NCX 目录，合并时改用 EPUB3 导航 / spine 顺序兜底",
+    epub_merge_lib.WARN_NO_SPINE: "未定位到正文条目",
+    epub_merge_lib.WARN_ENCRYPTED_ASSETS: "含字体混淆资源，合并时将剔除",
+}
+
 
 def _ordered_unique(values) -> list:
-    """strip 去空保序去重（作者/标签/ISBN 并集用）。"""
-    seen = set()
-    out = []
-    for v in values or []:
-        s = (v or "").strip()
-        if s and s not in seen:
-            seen.add(s)
-            out.append(s)
-    return out
+    """strip 去空保序去重（实现下沉 lib，便于 standalone 单测）。"""
+    return epub_merge_lib.ordered_unique(values)
 
 
 def _default_title(titles: list) -> str:
-    """默认合集标题：源书名用 `，` 连接 + `合集`，超限硬截断（前后端双截）。"""
-    title = "，".join([t for t in titles if t]) + "合集"
-    return title[:_TITLE_MAX]
+    """默认合集标题（实现下沉 lib）。"""
+    return epub_merge_lib.default_merge_title(titles, _TITLE_MAX)
 
 
 class EpubMergeTool(BaseTool):
@@ -65,6 +66,21 @@ class EpubMergeTool(BaseTool):
 
     _run_lock = threading.Lock()
     _last_task_id: Optional[int] = None
+    # 取消信号：handler 置位、合并线程每本开始前检查
+    _cancel_event = threading.Event()
+    # preview 的 EPUB 摘要缓存（仅分析结果，不缓存 calibre 元数据）：
+    # 以 (路径, mtime_ns, size) 失效，避免每次选书变更重复解压小条目
+    _analyze_cache = {}
+    _analyze_cache_lock = threading.Lock()
+    _ANALYZE_CACHE_MAX = 256
+
+    @classmethod
+    def request_cancel(cls) -> bool:
+        """请求取消当前合并任务（无任务时返回 False）。"""
+        if not cls.is_running():
+            return False
+        cls._cancel_event.set()
+        return True
 
     @staticmethod
     def info() -> dict:
@@ -92,18 +108,29 @@ class EpubMergeTool(BaseTool):
 
     @staticmethod
     def _normalize_ids(book_ids) -> list:
-        """校验并归一化 ID 列表（2–20 本整数，无重复）。"""
-        if not isinstance(book_ids, list) or not (2 <= len(book_ids) <= 20):
-            raise RuntimeError(_("请选择 2–20 本书进行合并"))
-        ids = []
-        for bid in book_ids:
-            try:
-                ids.append(int(bid))
-            except (TypeError, ValueError):
-                raise RuntimeError(_("书籍 ID 非法：%r") % (bid,)) from None
-        if len(set(ids)) != len(ids):
-            raise RuntimeError(_("书籍重复选择，请去重后再试"))
-        return ids
+        """校验并归一化 ID 列表（2–20 本整数，无重复；逻辑在 lib）。"""
+        try:
+            return epub_merge_lib.normalize_book_ids(book_ids)
+        except ValueError as err:
+            raise RuntimeError(_(str(err))) from None
+
+    def _analyze_cached(self, epub_path: str) -> dict:
+        """analyze_epub(lite) 带缓存（以文件 mtime/size 失效）。"""
+        try:
+            st = os.stat(epub_path)
+            key = (epub_path, st.st_mtime_ns, st.st_size)
+        except OSError:
+            return epub_merge_lib.analyze_epub(epub_path, lite=True)
+        with EpubMergeTool._analyze_cache_lock:
+            hit = EpubMergeTool._analyze_cache.get(key)
+        if hit is not None:
+            return hit
+        info = epub_merge_lib.analyze_epub(epub_path, lite=True)
+        with EpubMergeTool._analyze_cache_lock:
+            if len(EpubMergeTool._analyze_cache) >= EpubMergeTool._ANALYZE_CACHE_MAX:
+                EpubMergeTool._analyze_cache.clear()
+            EpubMergeTool._analyze_cache[key] = info
+        return info
 
     # ---------------------------------------------------------------- 预览
 
@@ -114,7 +141,7 @@ class EpubMergeTool(BaseTool):
         preview 在请求线程内同步执行，既不能全量解压、也不该把整本读进内存。
         """
         epub_path = book_utils.get_book_file(self, book_id, "EPUB")
-        info = epub_merge_lib.analyze_epub(epub_path, lite=True)
+        info = self._analyze_cached(epub_path)
 
         mi = self.get_book_metadata(book_id)
         title = utils.super_strip(mi.title or info["title"] or "")
@@ -138,7 +165,8 @@ class EpubMergeTool(BaseTool):
             # preview 在请求线程同步跑，20 本整封面读入纯属浪费
             "has_cover": bool(getattr(mi, "has_cover", False)),
             "error": None,
-            "warnings": info["warnings"],
+            # 告警码在此翻译（lib 不依赖 i18n；未知码原样透出）
+            "warnings": [_(_WARN_MESSAGES.get(w, w)) for w in info["warnings"]],
         }
 
     @AsyncService.register_function
@@ -217,6 +245,18 @@ class EpubMergeTool(BaseTool):
         except OSError as err:
             logging.warning("[EpubMergeTool] Cover GC failed: %s", err)
 
+    @staticmethod
+    def _encode_cover_jpeg(img) -> tuple:
+        """PIL RGB 图 → (jpeg bytes, width, height)，宽>1080 等比缩小。"""
+        from PIL import Image
+        w, h = img.size
+        if w > 1080:
+            img = img.resize((1080, max(1, int(h * 1080 / w))), Image.LANCZOS)
+            w, h = img.size
+        buf = io.BytesIO()
+        img.save(buf, "JPEG", quality=85, optimize=True)
+        return buf.getvalue(), w, h
+
     def save_cover_upload(self, data: bytes, filename: str) -> dict:
         """保存自定义封面：PIL 统一重编码为 JPEG（宽>1080 等比缩小）。
 
@@ -233,40 +273,115 @@ class EpubMergeTool(BaseTool):
             from PIL import Image
         except ImportError as err:
             raise RuntimeError(_("服务器缺少图像处理组件(PIL)，无法处理封面")) from err
-        import io as _io
         try:
-            img = Image.open(_io.BytesIO(data)).convert("RGB")
+            img = Image.open(io.BytesIO(data)).convert("RGB")
         except Exception as err:
             # 截断文件抛 OSError、超大像素抛 DecompressionBombError 等，统一转业务错误
             raise ValueError(_("封面图片无法解析：%s") % err) from err
-        w, h = img.size
-        if w > 1080:
-            img = img.resize((1080, max(1, int(h * 1080 / w))), Image.LANCZOS)
-            w, h = img.size
-        buf = _io.BytesIO()
-        img.save(buf, "JPEG", quality=85, optimize=True)
+        jpeg, w, h = self._encode_cover_jpeg(img)
         token = uuid.uuid4().hex[:16]
         out = os.path.join(self.get_work_dir(""), "cover_%s.jpg" % token)
         self._gc_cover_uploads()
         with open(out, "wb") as f:
-            f.write(buf.getvalue())
+            f.write(jpeg)
         return {"token": token, "width": w, "height": h}
+
+    def _normalize_cover(self, raw: bytes, ext: str) -> tuple:
+        """库内/内嵌封面统一重编码为 JPEG；PIL 缺失或解析失败时原样返回。"""
+        if not raw:
+            return None, None
+        try:
+            from PIL import Image
+            img = Image.open(io.BytesIO(raw)).convert("RGB")
+            jpeg, _w, _h = self._encode_cover_jpeg(img)
+            return "jpg", jpeg
+        except Exception as err:
+            logging.warning("[EpubMergeTool] Normalize cover skipped: %s", err)
+            return (ext or "jpg").lower(), raw
+
+    def _embedded_cover(self, bid: int) -> tuple:
+        """读源书 EPUB 内嵌封面（传路径，只解压候选条目）。失败返回 (None, None)。"""
+        try:
+            epub_path = book_utils.get_book_file(self, bid, "EPUB")
+            return epub_merge_lib.extract_cover(epub_path)
+        except Exception as err:
+            logging.error("[EpubMergeTool] Embedded cover failed: %s", err)
+            return None, None
+
+    def _first_available_cover(self, book_ids: list) -> tuple:
+        """按合并顺序找第一本有封面的书（库封面 → 内嵌封面）。"""
+        for bid in book_ids:
+            try:
+                raw = self.api.calibre.cover(bid)
+            except Exception as err:
+                logging.warning("[EpubMergeTool] Library cover failed: %s", err)
+                raw = None
+            if raw:
+                return raw, "jpg"
+            raw, ext = self._embedded_cover(bid)
+            if raw:
+                logging.info("[EpubMergeTool] Cover fallback to embedded: book_id=%d", bid)
+                return raw, ext
+        return None, None
+
+    def _collect_book_covers(self, book_ids: list, limit: int = 9) -> list:
+        """收集前 N 本源书封面原始字节（拼图封面用）。"""
+        out = []
+        for bid in book_ids[:limit]:
+            try:
+                raw = self.api.calibre.cover(bid)
+            except Exception as err:
+                logging.warning("[EpubMergeTool] Grid cover failed: %s", err)
+                raw = None
+            if not raw:
+                raw, _ext = self._embedded_cover(bid)
+            if raw:
+                out.append(raw)
+        return out
+
+    def _make_cover_grid(self, images: list):
+        """前 9 张封面按最多 3 列拼图 → ("jpg", bytes)；无图/PIL 缺失返回 None。"""
+        try:
+            from PIL import Image
+        except ImportError:
+            return None
+        imgs = []
+        for raw in (images or [])[:9]:
+            try:
+                imgs.append(Image.open(io.BytesIO(raw)).convert("RGB"))
+            except Exception:
+                continue
+        if not imgs:
+            return None
+        cell = 360
+        cols = max(1, min(3, math.ceil(math.sqrt(len(imgs)))))
+        rows = math.ceil(len(imgs) / cols)
+        canvas = Image.new("RGB", (cols * cell, rows * cell), (255, 255, 255))
+        for i, img in enumerate(imgs):
+            img.thumbnail((cell, cell))
+            x = (i % cols) * cell + (cell - img.width) // 2
+            y = (i // cols) * cell + (cell - img.height) // 2
+            canvas.paste(img, (x, y))
+        data, _w, _h = self._encode_cover_jpeg(canvas)
+        return "jpg", data
 
     def _resolve_cover(self, cover: dict, book_ids: list) -> tuple:
         """决议封面字节。返回 ((ext, data) | None, warning | None)。
 
-        calibre 书库封面优先；缺失时降级读该书 EPUB 内嵌封面
-        （`epub_merge_lib.extract_cover`）；仍无则 warn 继续。
+        - first：按合并顺序取第一本有封面的书（库封面优先，内嵌兜底）；
+        - book:<id>：指定源书，非法 ID / 不在列表给业务错误；
+        - upload:<token>：上传图，token 失效降级为无封面（封面可选，不阻断合并）；
+        - grid：前 9 本封面拼图，PIL 不可用/无图时降级 first。
+        库内封面与内嵌封面统一重编码 JPEG（PIL 不可用时原样）。
         """
         if not cover:
             return None, None
         ctype = (cover.get("type") or "first").strip()
-        bid = None
         try:
             if ctype == "first":
-                bid = book_ids[0]
-                raw = self.api.calibre.cover(bid)
-                ext = "jpg"
+                raw, ext = self._first_available_cover(book_ids)
+                if not raw:
+                    return None, _("所选书籍无封面，已使用无封面继续")
             elif ctype.startswith("book:"):
                 try:
                     bid = int(ctype.split(":", 1)[1])
@@ -276,14 +391,29 @@ class EpubMergeTool(BaseTool):
                     raise ValueError(_("封面来源书籍不在合并列表中"))
                 raw = self.api.calibre.cover(bid)
                 ext = "jpg"
+                if not raw:
+                    raw, ext = self._embedded_cover(bid)
+                if not raw:
+                    return None, _("所选书籍无封面，已使用无封面继续")
             elif ctype.startswith("upload:"):
                 token = ctype.split(":", 1)[1]
-                path = self._cover_token_path(token)
-                with open(path, "rb") as f:
-                    raw = f.read()
-                ext = "jpg"  # 上传已统一重编码为 JPEG
-                # 不在此处删除：合并失败时保留文件，用户可重试；成功入库后由
-                # `_delete_cover_upload` 删除，放弃的残留由 `_gc_cover_uploads` 回收
+                try:
+                    path = self._cover_token_path(token)
+                    with open(path, "rb") as f:
+                        raw = f.read()
+                except ValueError as err:
+                    # 封面可选：过期/非法 token 不应让已进行的合并失败
+                    logging.warning("[EpubMergeTool] Cover upload unavailable: %s", err)
+                    return None, _("封面已过期或无效，已使用无封面继续")
+                # 上传时已统一重编码 JPEG，直接使用
+                return ("jpg", raw), None
+            elif ctype == "grid":
+                grid = self._make_cover_grid(self._collect_book_covers(book_ids))
+                if grid:
+                    return grid, None
+                raw, ext = self._first_available_cover(book_ids)
+                if not raw:
+                    return None, _("所选书籍无封面，已使用无封面继续")
             else:
                 raise ValueError(_("封面类型未知：%s") % ctype)
         except ValueError:
@@ -291,19 +421,7 @@ class EpubMergeTool(BaseTool):
         except Exception as err:
             logging.error("[EpubMergeTool] Resolve cover failed: %s", err)
             return None, _("封面读取失败，已使用无封面继续")
-        if not raw and bid is not None:
-            try:
-                epub_path = book_utils.get_book_file(self, bid, "EPUB")
-                # 传路径：只解压封面候选条目，不把整本读进内存
-                raw, ext = epub_merge_lib.extract_cover(epub_path)
-                if raw:
-                    logging.info("[EpubMergeTool] Cover fallback to embedded: book_id=%d", bid)
-            except Exception as err:
-                logging.error("[EpubMergeTool] Embedded cover failed: %s", err)
-                raw = None
-        if not raw:
-            return None, _("所选书籍无封面，已使用无封面继续")
-        return ((ext or "jpg"), raw), None
+        return self._normalize_cover(raw, ext), None
 
     def _delete_cover_upload(self, cover: dict) -> None:
         """入库成功后删除本次使用的一次性上传封面（失败静默，残留由 GC 回收）。"""
@@ -335,6 +453,16 @@ class EpubMergeTool(BaseTool):
         mi.languages = [language] if language else ["zho"]
         if isbns:
             mi.isbn = isbns[0]
+            # 全量 ISBN 落入 identifiers（isbn/isbn13），不再只保留首个
+            identifiers = dict(getattr(mi, "identifiers", None) or {})
+            for value in isbns:
+                cleaned = value.replace("-", "").replace(" ", "")
+                if len(cleaned) == 13 and cleaned.isdigit():
+                    identifiers.setdefault("isbn13", value)
+                elif len(cleaned) == 10 and cleaned.isdigit():
+                    identifiers.setdefault("isbn", value)
+            if identifiers:
+                mi.identifiers = identifiers
         if cover_data:
             ext = (cover_data[0] or "jpg").lower()
             mi.cover_data = ("jpeg" if ext in ("jpg", "jpeg") else ext, cover_data[1])
@@ -369,6 +497,7 @@ class EpubMergeTool(BaseTool):
             if not EpubMergeTool.is_running():
                 EpubMergeTool._last_task_id = skip_task_id
             return
+        EpubMergeTool._cancel_event.clear()
 
         task_id = None
         error_message = None
@@ -399,8 +528,8 @@ class EpubMergeTool(BaseTool):
             tags = _ordered_unique(options.get("tags"))
             publisher = utils.super_strip(options.get("publisher") or "")
             language = (options.get("language") or "").strip() or "zho"
-            divider = bool(options.get("divider", True))
-            delete_source = bool(options.get("delete_source", False))
+            divider = epub_merge_lib.coerce_bool(options.get("divider"), True)
+            delete_source = epub_merge_lib.coerce_bool(options.get("delete_source"), False)
 
             total = len(ids)
             seg = 70.0 / total
@@ -439,6 +568,15 @@ class EpubMergeTool(BaseTool):
             self.update_task_progress(task_id, 75, {"status": "running", "stage": "merging"})
             work_dir = self.get_work_dir("-".join(str(i) for i in ids))
             out_path = os.path.join(work_dir, "merged_%d.epub" % int(time.time()))
+
+            def _on_book(book_index, book_total):
+                # 75→90 按本细分（此前 75→85 一跳，大书期间进度条长时间不动）
+                pct = 75 + int(15.0 * (book_index - 1) / max(1, book_total))
+                self.update_task_progress(
+                    task_id, min(pct, 89),
+                    {"status": "running", "stage": "merging",
+                     "book_index": book_index, "book_total": book_total})
+
             # out_path 模式：lib 直接把合并结果流式写入文件（不在内存里拼整包）
             epub_merge_lib.merge_epubs(
                 inputs,
@@ -446,6 +584,8 @@ class EpubMergeTool(BaseTool):
                  "tags": tags, "description": description, "publisher": publisher},
                 {"divider": divider,
                  "out_path": out_path,
+                 "progress_cb": _on_book,
+                 "cancel_event": EpubMergeTool._cancel_event,
                  "cover": ({"data": cover_data[1], "ext": cover_data[0]}
                            if cover_data else None)})
             self.update_task_progress(task_id, 85, {"status": "running", "stage": "validating"})
@@ -481,6 +621,13 @@ class EpubMergeTool(BaseTool):
 
             self.add_msg(user_id, "success", _("合集 [%s] 生成成功！%s") % (title, extra))
 
+        except epub_merge_lib.MergeCancelled:
+            error_message = _("任务已取消")
+            logging.info("[EpubMergeTool] Cancelled by user [uid:%d]", user_id)
+            try:
+                self.add_msg(user_id, "info", _("合集任务已取消"))
+            except Exception:
+                pass
         except Exception as err:
             error_message = str(err)
             logging.error("[EpubMergeTool] Unexpected error [uid:%d]: %s", user_id, err)
@@ -492,6 +639,7 @@ class EpubMergeTool(BaseTool):
         finally:
             if work_dir is not None:
                 self.cleanup_work_dir(work_dir)
+            EpubMergeTool._cancel_event.clear()
             if task_id is not None:
                 if error_message is None:
                     self.update_task_progress(

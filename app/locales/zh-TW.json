@@ -1562,9 +1562,14 @@
     "coverUpload": "自定義封面",
     "coverUploadBtn": "上傳",
     "coverUploaded": "自定義封面已上傳",
+    "coverGrid": "前 9 本封面拼圖",
     "dividerLabel": "在每本書之間加入分卷頁",
     "deleteSourceLabel": "合併後刪除源書",
     "deleteSourceHint": "默認關閉，保留源書",
+    "deleteSourceConfirmTitle": "刪除源書確認",
+    "deleteSourceConfirmText": "合併成功後將刪除所選的源書，刪除後無法恢復。確定繼續嗎？",
+    "confirmOk": "確定刪除",
+    "confirmCancel": "取消",
     "descriptionLabel": "簡介（可改）",
     "restoreDefault": "恢復默認",
     "merging": "合併中...",
@@ -1577,6 +1582,8 @@
     "stageMerging": "合併中",
     "stageValidating": "校驗輸出",
     "stageSaving": "入庫中",
+    "cancelBtn": "取消合併",
+    "cancelRequested": "已請求取消...",
     "descTruncated": "簡介過長，預覽僅顯示前 20 萬字符，伺服器將截斷至 5 萬字符"
   },
   "textProcessor": {

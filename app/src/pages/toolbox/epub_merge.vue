@@ -264,12 +264,19 @@
               <div class="text-caption grey--text mb-1">{{ $t('epubMerge.coverLabel') }}</div>
               <v-radio-group v-model="coverType" dense class="mt-0 mb-1">
                 <v-radio value="first" :label="$t('epubMerge.coverFirst')" />
+                <v-radio value="grid" :label="$t('epubMerge.coverGrid')" />
                 <v-radio
                   v-for="book in selected"
                   :key="book.id"
                   :value="'book:' + book.id"
-                  :label="book.title"
-                />
+                >
+                  <template v-slot:label>
+                    <v-avatar tile size="24" class="mr-2">
+                      <img :src="book.thumb" :alt="book.title" />
+                    </v-avatar>
+                    <span>{{ book.title }}</span>
+                  </template>
+                </v-radio>
                 <!-- value 带 token：与 coverType 精确匹配才能显示选中态 -->
                 <v-radio
                   :value="'upload:' + coverToken"
@@ -312,11 +319,12 @@
                 </v-col>
                 <v-col cols="12" sm="6">
                   <v-checkbox
-                    v-model="form.deleteSource"
+                    :input-value="form.deleteSource"
                     :label="$t('epubMerge.deleteSourceLabel')"
                     :hint="$t('epubMerge.deleteSourceHint')"
                     persistent-hint
                     dense
+                    @change="onDeleteSourceChange"
                   />
                 </v-col>
               </v-row>
@@ -357,6 +365,15 @@
                   <span>{{ progress }}%</span>
                 </div>
                 <v-progress-linear v-model="progress" height="10" rounded />
+                <div class="text-right mt-1">
+                  <v-btn
+                    x-small
+                    text
+                    color="error"
+                    :disabled="cancelRequested"
+                    @click="cancelMerge"
+                  >{{ cancelRequested ? $t('epubMerge.cancelRequested') : $t('epubMerge.cancelBtn') }}</v-btn>
+                </div>
               </div>
 
               <v-btn
@@ -375,7 +392,8 @@
                 <div v-if="resultBook" class="text-center mt-4">
                   <v-alert type="success" dense text rounded="lg">
                     {{ $t('epubMerge.mergeSuccess') }}
-                    <a :href="'/book/' + resultBook.book_id" target="_blank" class="font-weight-bold">{{ resultBook.title }}</a>
+                    <a v-if="resultBook.book_id" :href="'/book/' + resultBook.book_id" target="_blank" class="font-weight-bold">{{ resultBook.title }}</a>
+                    <span v-else class="font-weight-bold">{{ resultBook.title }}</span>
                   </v-alert>
                 </div>
               </transition>
@@ -395,6 +413,18 @@
         </v-card>
       </v-col>
     </v-row>
+
+    <v-dialog v-model="deleteSourceDialog" max-width="420">
+      <v-card>
+        <v-card-title class="text-subtitle-1">{{ $t('epubMerge.deleteSourceConfirmTitle') }}</v-card-title>
+        <v-card-text>{{ $t('epubMerge.deleteSourceConfirmText') }}</v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn text @click="cancelDeleteSource">{{ $t('epubMerge.confirmCancel') }}</v-btn>
+          <v-btn text color="error" @click="confirmDeleteSource">{{ $t('epubMerge.confirmOk') }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
@@ -457,6 +487,8 @@ export default {
     errorMsg: '',
     resultBook: null,
     pollInterval: null,
+    cancelRequested: false,
+    deleteSourceDialog: false,
   }),
   computed: {
     errorBooks() {
@@ -564,6 +596,8 @@ export default {
       this.preview = null;
       this.previewError = '';
       this.previewPending = false;
+      this.cancelRequested = false;
+      this.deleteSourceDialog = false;
       this.form = {
         title: '', authors: [], isbns: [], tags: [], publisher: '',
         language: '', divider: true, deleteSource: false, description: '',
@@ -709,6 +743,31 @@ export default {
         this.dirty.description = false;
       }
     },
+    onDeleteSourceChange(value) {
+      // 破坏性操作走确认弹窗；取消则不改变选择
+      if (value) {
+        this.deleteSourceDialog = true;
+      } else {
+        this.form.deleteSource = false;
+      }
+    },
+    confirmDeleteSource() {
+      this.form.deleteSource = true;
+      this.deleteSourceDialog = false;
+    },
+    cancelDeleteSource() {
+      this.form.deleteSource = false;
+      this.deleteSourceDialog = false;
+    },
+    async cancelMerge() {
+      this.cancelRequested = true;
+      try {
+        const rsp = await this.$backend('/toolbox/epub_merge/cancel', { method: 'POST' });
+        if (rsp.err !== 'ok') this.errorMsg = rsp.msg || rsp.err;
+      } catch (e) {
+        this.errorMsg = String(e);
+      }
+    },
     async uploadCover() {
       if (!this.coverFile) return;
       this.coverUploading = true;
@@ -741,11 +800,14 @@ export default {
       this.merging = true;
       this.progress = 0;
       this.mergeStage = '';
+      this.cancelRequested = false;
       let cover = { type: 'first' };
       if (this.coverType.startsWith('upload:')) {
         cover = { type: this.coverType };
       } else if (this.coverType.startsWith('book:')) {
         cover = { type: this.coverType };
+      } else if (this.coverType === 'grid') {
+        cover = { type: 'grid' };
       }
       try {
         const rsp = await this.$backend('/toolbox/epub_merge/merge', {

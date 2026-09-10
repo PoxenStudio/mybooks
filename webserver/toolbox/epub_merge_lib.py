@@ -66,6 +66,22 @@ _NAVPOINT_RE = re.compile(r"<navpoint\b", re.IGNORECASE)
 # quote 后 round-trip 无损（`c%20d.xhtml` → `c%2520d.xhtml` → unquote 还原）。
 _HREF_SAFE = "/~@$+,-.;=[]!_'"
 
+# analyze 告警码：preview 边界统一翻译为本地化文案（lib 不依赖 webserver/i18n）
+WARN_NO_NCX = "no_ncx"
+WARN_NO_SPINE = "no_spine"
+WARN_ENCRYPTED_ASSETS = "encrypted_assets"
+
+# 加密/DRM：rights.xml 或正文/CSS/NCX 被加密时拒绝合并；encryption.xml 仅
+# 字体混淆（常见于商业电子书）时剔除相关资源并告警，正文照常合并。
+_ENCRYPTION_NAME = "META-INF/encryption.xml"
+_RIGHTS_NAME = "META-INF/rights.xml"
+_CIPHER_URI_RE = re.compile(
+    r"""CipherReference\b[^>]*?\bURI\s*=\s*["']([^"']+)["']""", re.IGNORECASE)
+
+
+class MergeCancelled(Exception):
+    """合并任务被用户取消（工具层转为终止态，不作为异常告警）。"""
+
 
 def _quote_href(name: str) -> str:
     """把 zip 条目名编码为合法 URI 路径（fragment/query/空格/非 ASCII 转义）。"""
@@ -108,6 +124,49 @@ def _normalize_zip_path(href: str, base_dir: str = "") -> str:
 def _is_traversal(name: str) -> bool:
     """zip 条目路径穿越检查（抄本地加固版 :164）。"""
     return name.startswith("/") or ".." in name.split("/")
+
+
+def _get_entry(entries, name: str):
+    """按名字大小写不敏感读取条目内容（dict 或 _ZipSource），缺失返回 None。"""
+    lower = name.lower()
+    if hasattr(entries, "lower_map"):
+        real = entries.lower_map().get(lower)
+        return entries.read(real) if real else None
+    for key in entries:
+        if key.lower() == lower:
+            return entries[key]
+    return None
+
+
+def _encryption_status(entries, spine_names) -> dict:
+    """检测加密/DRM 资源。返回 {"rights","targets","text","other"}；无加密返回 {}。
+
+    text（正文/CSS/NCX 被加密）或 rights.xml 存在时合并必须拒绝；other 多为
+    字体混淆（无密钥无法还原），剔除即可、正文不受影响。
+    :param entries: dict（全量/lite）或 _ZipSource。
+    :param spine_names: 该书的 spine 条目名（用于判定加密目标是否正文）。
+    """
+    encryption = _get_entry(entries, _ENCRYPTION_NAME)
+    rights = _get_entry(entries, _RIGHTS_NAME)
+    if encryption is None and rights is None:
+        return {}
+    spine_low = {n.lower() for n in (spine_names or [])}
+    targets = []
+    if encryption:
+        for uri in _CIPHER_URI_RE.findall(_decode(encryption)):
+            name = _normalize_zip_path(uri)
+            if name:
+                targets.append(name)
+    text_suffixes = (".xhtml", ".html", ".htm", ".css", ".ncx")
+    text_targets = [
+        t for t in targets
+        if t.lower() in spine_low or t.lower().endswith(text_suffixes)]
+    return {
+        "rights": rights is not None,
+        "targets": targets,
+        "text": text_targets,
+        "other": [t for t in targets if t not in text_targets],
+    }
 
 
 def _read_zip_entries(source, max_total=_ZIP_MAX_TOTAL,
@@ -403,6 +462,11 @@ def _read_meta_entries(source) -> tuple:
                         real = lower_names.get(name.lower())
                         if real and real not in meta:
                             meta[real] = _read_small(real)
+            # 加密/DRM 小文件同样按需读取（preview 据此拒绝加密书）
+            for extra in (_ENCRYPTION_NAME, _RIGHTS_NAME):
+                real = lower_names.get(extra.lower())
+                if real and real not in meta:
+                    meta[real] = _read_small(real)
     except zipfile.BadZipFile as err:
         raise ValueError("EPUB 解析失败，文件可能已损坏：%s" % err) from err
     except zipfile.LargeZipFile as err:
@@ -547,11 +611,18 @@ def _analyze_from(opf_path: str, entries: dict, size: int) -> dict:
     spine = _find_spine_entries(entries)
     toc_count, found_ncx = _count_ncx_entries(entries)
 
+    # 加密书直接拒绝：正文被加密时合并出的包无法阅读，必须在 preview 就暴露
+    enc = _encryption_status(entries, spine)
+    if enc and (enc["rights"] or enc["text"]):
+        raise ValueError("书籍含加密正文（DRM/内容加密），无法合并")
+
     warnings = []
+    if enc and enc["other"]:
+        warnings.append(WARN_ENCRYPTED_ASSETS)
     if not found_ncx:
-        warnings.append("无 NCX 目录，合并时改用 EPUB3 导航 / spine 顺序兜底")
+        warnings.append(WARN_NO_NCX)
     if not spine:
-        warnings.append("未定位到正文条目")
+        warnings.append(WARN_NO_SPINE)
 
     return {
         "title": meta["title"],
@@ -675,11 +746,15 @@ def is_valid_isbn(isbn: str) -> bool:
 
 
 def _to_html_block(comments: str) -> str:
-    """简介片段转 HTML：已有标签原样嵌入；纯文本转义后换行变 <br />；空填暂无简介。"""
+    """简介片段转 HTML：已是标签才原样嵌入；纯文本转义后换行变 <br />；空填暂无简介。
+
+    用「成对/自闭合标签」正则判定 HTML，而非 `"<" in text`：纯文本里的
+    小于号（如「3 < 5」）不是标签，按 HTML 原样嵌入会丢内容/破坏结构。
+    """
     text = (comments or "").strip()
     if not text:
         return "暂无简介"
-    if "<" in text:
+    if _HTML_TAG_RE.search(text):
         return text
     return html.escape(text).replace("\n", "<br />")
 
@@ -702,6 +777,69 @@ def compose_description(new_title: str, items: list, isbns=None) -> str:
     return "".join(parts)
 
 
+# ------------------------------------------------------------ 请求参数纯函数
+# （工具/handler 共用；下沉到 lib 便于 standalone 单测，不依赖 calibre/webserver）
+
+def ordered_unique(values) -> list:
+    """strip 去空保序去重（作者/标签/ISBN 并集用）。"""
+    seen = set()
+    out = []
+    for v in values or []:
+        s = str(v).strip() if v is not None else ""
+        if s and s not in seen:
+            seen.add(s)
+            out.append(s)
+    return out
+
+
+def default_merge_title(titles: list, max_len: int = 100) -> str:
+    """默认合集标题：源书名用 `，` 连接 + `合集`，超限硬截断（前后端双截）。"""
+    title = "，".join([t for t in (titles or []) if t]) + "合集"
+    return title[:max_len]
+
+
+def normalize_book_ids(book_ids, min_books: int = 2, max_books: int = 20) -> list:
+    """校验并归一化 ID 列表（整数、无重复），越界/非法抛 ValueError。"""
+    if not isinstance(book_ids, list) or not (min_books <= len(book_ids) <= max_books):
+        raise ValueError("请选择 %d–%d 本书进行合并" % (min_books, max_books))
+    ids = []
+    for bid in book_ids:
+        try:
+            ids.append(int(bid))
+        except (TypeError, ValueError):
+            raise ValueError("书籍 ID 非法：%r" % (bid,)) from None
+    if len(set(ids)) != len(ids):
+        raise ValueError("书籍重复选择，请去重后再试")
+    return ids
+
+
+def coerce_bool(value, default: bool = False) -> bool:
+    """布尔兼容 string/bool（裸 API 传 "false"/"0" 时 bool() 会误判为 True）。"""
+    if value is None:
+        return default
+    if isinstance(value, str):
+        s = value.strip().lower()
+        if s in ("false", "0", "no", ""):
+            return False
+        if s in ("true", "1", "yes"):
+            return True
+        return True
+    return bool(value)
+
+
+def clean_text(value, max_len: int = 0) -> str:
+    """str 归一化 + strip（None/空安全），max_len>0 时截断。"""
+    s = str(value).strip() if value not in (None, "") else ""
+    return s[:max_len] if max_len else s
+
+
+def clean_str_list(value) -> list:
+    """字符串列表归一化（strip 去空）；非列表抛 ValueError（防字符串被逐字迭代）。"""
+    if not isinstance(value, list):
+        raise ValueError("列表格式不合法")
+    return [s for s in (str(v).strip() if v is not None else "" for v in value) if s]
+
+
 # 单次合并输出上限 1GB（与读取总量上限对齐；合集超 50MB 很常见，不再设单本上限）
 _MERGE_MAX_OUTPUT = 1024 * 1024 * 1024
 # 源文件总体积闸：合并期间全部输入与输出同时驻留内存，峰值约为总体积的数倍，
@@ -714,9 +852,15 @@ _EXTERNAL_SCHEMES = ("http:", "https:", "mailto:", "data:", "ftp:", "ftps:")
 
 # 属性名前加 (?<![-\w]) 负向断言：`\b` 挡不住 `data-id` / `data-src`
 # （`-` 是非词字符，词边界依然成立），会把无关属性值一并改写。
+# poster/object data 也是引用属性；srcset 是逗号列表，单独用 _SRCSET_RE 处理。
 _ATTR_RE = re.compile(
-    r'''(?P<attr>(?<![-\w])(?:href|src|xlink:href)\s*=\s*)(?P<q>["'])(?P<val>.*?)(?P=q)''',
+    r'''(?P<attr>(?<![-\w])(?:href|src|xlink:href|poster|data)\s*=\s*)(?P<q>["'])(?P<val>.*?)(?P=q)''',
     re.IGNORECASE | re.DOTALL)
+_SRCSET_RE = re.compile(
+    r'''(?P<attr>(?<![-\w])srcset\s*=\s*)(?P<q>["'])(?P<val>.*?)(?P=q)''',
+    re.IGNORECASE | re.DOTALL)
+# 简介 HTML 判定：形如 <p> / </p> / <br/> / <img ...> 的标签才视为 HTML
+_HTML_TAG_RE = re.compile(r"</?[a-zA-Z][\w:-]*(?:\s[^<>]*)?/?>")
 # 改写禁区：HTML 注释与 CDATA 段不是代码，里面的路径文本不得改写
 # （注释不可见无影响但不该动；CDATA 作正文展示时改写会篡改读者看到的文字）。
 # script/style 不在此列：其内的 href=/src= `=` 形式多为真实 URL 字符串，
@@ -820,23 +964,23 @@ def _rewrite_doc_refs(text: str, old_dir: str, new_dir: str,
         rel = posixpath.relpath(new_name, new_dir or ".")
         return rel.replace("\\", "/")
 
-    def _repl_attr(m):
-        attr, q, val = m.group("attr"), m.group("q"), m.group("val")
+    def _map_ref_value(val: str):
+        """把单个引用值映射为新值；无需改写返回 None（保持原文）。"""
         low = val.lower()
         if "://" in val or low.startswith(_EXTERNAL_SCHEMES):
-            return m.group(0)
+            return None
         if "#" in val:
             fpart, frag = val.split("#", 1)
         else:
             fpart, frag = val, None
         if not fpart:
             # 同文档片段：目标 id 未改名，这里原样保留
-            return m.group(0)
+            return None
         if fpart.startswith("/"):
             new_name = _map_file(fpart)
             if new_name is None:
                 warnings.append("无法解析的根引用：%s" % val)
-                return m.group(0)
+                return None
             # 合成的相对路径按 URI 规则转义（目标名可能含空格/非 ASCII/#）
             out = _quote_href(_rel(new_name))
         else:
@@ -845,14 +989,42 @@ def _rewrite_doc_refs(text: str, old_dir: str, new_dir: str,
                 # 相对引用保持原样（结构保留即有效）；映射外引用仅提示
                 if old and fpart not in ("", "."):
                     warnings.append("引用目标缺失，已保留原文：%s" % val)
-                return m.group(0)
-            out = fpart
+                return None
+            return None
         if frag:
             out += "#%s" % frag
+        return out
+
+    def _repl_attr(m):
+        attr, q, val = m.group("attr"), m.group("q"), m.group("val")
+        out = _map_ref_value(val)
+        if out is None:
+            return m.group(0)
         return "%s%s%s%s" % (attr, q, out, q)
 
+    def _repl_srcset(m):
+        attr, q, val = m.group("attr"), m.group("q"), m.group("val")
+        changed = False
+        parts = []
+        for candidate in val.split(","):
+            bits = candidate.strip().split(None, 1)
+            if not bits:
+                parts.append(candidate)
+                continue
+            url = bits[0]
+            desc = (" " + bits[1]) if len(bits) > 1 else ""
+            new_url = _map_ref_value(url)
+            if new_url is not None:
+                changed = True
+                parts.append(new_url + desc)
+            else:
+                parts.append(candidate.strip())
+        if not changed:
+            return m.group(0)
+        return "%s%s%s%s" % (attr, q, ", ".join(parts), q)
+
     def _rewrite_segment(segment: str) -> str:
-        return _ATTR_RE.sub(_repl_attr, segment)
+        return _SRCSET_RE.sub(_repl_srcset, _ATTR_RE.sub(_repl_attr, segment))
 
     # 注释/CDATA 禁区原样保留，其余段改写后拼回
     parts = _SKIP_RE.split(text)
@@ -940,6 +1112,62 @@ def _parse_ncx_pairs(ncx_text: str) -> list:
                 pairs.append((stack[-1]["label"], stack[-1]["src"]))
                 stack[-1]["done"] = True
     return pairs
+
+
+def _parse_ncx_tree(ncx_text: str) -> list:
+    """按 navPoint 嵌套结构提取 NCX 目录树（命名空间无关）。
+
+    与 `_parse_ncx_pairs` 同一套 token 扫描/栈逻辑，区别是保留父子层级：
+    每个节点 `{"label","src","children"}`。合并输出据此重建多级目录，
+    不再把三级目录压平。
+    """
+    m = _NCX_NAVMAP_RE.search(ncx_text)
+    if not m:
+        return []
+    roots = []
+    stack = []
+    for tok in _NCX_TOKEN_RE.finditer(m.group(1)):
+        raw = tok.group(0)
+        low = raw[:12].lower()
+        if low.startswith("<navpoint"):
+            node = {"label": "", "src": None, "children": []}
+            if stack:
+                stack[-1]["children"].append(node)
+            else:
+                roots.append(node)
+            stack.append(node)
+        elif low.startswith("</navpoint"):
+            if stack:
+                stack.pop()
+        elif low.startswith("<navlabel"):
+            if stack:
+                label = _strip_tags(tok.group(1) or "")
+                if label and not stack[-1]["label"]:
+                    stack[-1]["label"] = label
+        else:  # <content src="...">
+            if stack and not stack[-1]["src"]:
+                stack[-1]["src"] = tok.group(2)
+    return roots
+
+
+def _toc_nodes_from_tree(nodes: list, base_dir: str, lower_o2n: dict,
+                         fallback_label: str) -> list:
+    """把 NCX 树映射为新包内 TOC 节点，保留嵌套。
+
+    映射失败/无 src 的分组节点不产出自身 navPoint（NCX DTD 要求 content），
+    其子节点上提一级，避免生成非法或死链目录项。
+    """
+    out = []
+    for node in nodes:
+        kids = _toc_nodes_from_tree(node["children"], base_dir, lower_o2n,
+                                    fallback_label)
+        mapped = _map_toc_src(node["src"], base_dir, lower_o2n) if node["src"] else None
+        if mapped:
+            out.append((node["label"] or fallback_label,
+                        mapped[0], mapped[1], kids))
+        else:
+            out.extend(kids)
+    return out
 
 
 def _parse_nav_pairs(nav_text: str) -> list:
@@ -1099,8 +1327,9 @@ def _build_opf(meta: dict, manifest: list, spine: list, uid: str,
         "<dc:subject>%s</dc:subject>" % html.escape(t)
         for t in meta.get("tags") or [])
     items = "".join(
-        '<item id="%s" href="%s" media-type="%s"/>' % (
-            iid, _xml_attr(_quote_href(href)), mt)
+        '<item id="%s" href="%s" media-type="%s"%s/>' % (
+            iid, _xml_attr(_quote_href(href)), mt,
+            ' properties="nav"' if href == "nav.xhtml" else "")
         for iid, href, mt in manifest)
     if cover_name:
         items += '<item id="cover-image" href="%s" media-type="%s"/>' % (
@@ -1148,34 +1377,42 @@ def _build_ncx(title: str, books_toc: list, uid: str) -> bytes:
     """组装新书 NCX：每源书一个父节点挂其条目，playOrder 全局重排。
 
     :param books_toc: [(book_title, (parent_path, parent_frag),
-        [(label, path, frag), ...]), ...]，路径均为新包内路径；开分卷页时
-        父节点指向分卷页。路径与 fragment 分开传入（路径可能含 `#`）。
+        [TOC 节点, ...]), ...]；TOC 节点 = (label, path, frag, [子节点...])，
+        即源 NCX 的嵌套层级原样保留。路径均为新包内路径；开分卷页时父节点
+        指向分卷页。路径与 fragment 分开传入（路径可能含 `#`）。
     """
     order = 0
+
+    def _emit_nodes(nodes, bi):
+        nonlocal order
+        xml = []
+        for label, path, frag, kids in nodes:
+            order += 1
+            cur = order
+            xml.append(
+                '<navPoint id="m%d_%d" playOrder="%d"><navLabel><text>%s</text>'
+                '</navLabel><content src="%s"/>%s</navPoint>'
+                % (bi, cur, cur, html.escape(label),
+                   _xml_attr(_quote_toc_src(path, frag)),
+                   "".join(_emit_nodes(kids, bi))))
+        return xml
+
     navpoints = []
-    for bi, (book_title, parent, pairs) in enumerate(books_toc):
+    for bi, (book_title, parent, nodes) in enumerate(books_toc):
         order += 1
         parent_order = order
-        children = []
-        for label, path, frag in pairs:
-            order += 1
-            children.append(
-                '<navPoint id="m%d_%d" playOrder="%d"><navLabel><text>%s</text>'
-                '</navLabel><content src="%s"/></navPoint>'
-                % (bi, order, order, html.escape(label),
-                   _xml_attr(_quote_toc_src(path, frag))))
         navpoints.append(
             '<navPoint id="m%d" playOrder="%d"><navLabel><text>%s</text></navLabel>'
             '<content src="%s"/>%s</navPoint>'
             % (bi, parent_order, html.escape(book_title),
                _xml_attr(_quote_toc_src(parent[0], parent[1])),
-               "".join(children)))
+               "".join(_emit_nodes(nodes, bi))))
     head = [
         '<?xml version="1.0" encoding="utf-8"?>',
         '<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">',
         "<head>",
         '<meta name="dtb:uid" content="%s"/>' % _xml_attr(uid),
-        '<meta name="dtb:depth" content="2"/>',
+        '<meta name="dtb:depth" content="3"/>',
         '<meta name="dtb:totalPageCount" content="0"/>',
         '<meta name="dtb:maxPageNumber" content="0"/>',
         "</head>",
@@ -1183,6 +1420,36 @@ def _build_ncx(title: str, books_toc: list, uid: str) -> bytes:
         "<navMap>%s</navMap></ncx>" % "".join(navpoints),
     ]
     return "".join(head).encode("utf-8")
+
+
+def _build_nav(title: str, books_toc: list) -> bytes:
+    """生成 EPUB3 导航文档（`properties="nav"`，与 NCX 同源同层级）。
+
+    输出 OPF 仍为 EPUB2 风格，nav.xhtml 是给 EPUB3 阅读器的加分项；
+    href 与 NCX 相同（路径已 URI 转义）。
+    """
+    def _emit_nodes(nodes):
+        lis = []
+        for label, path, frag, kids in nodes:
+            sub = _emit_nodes(kids)
+            lis.append('<li><a href="%s">%s</a>%s</li>' % (
+                _xml_attr(_quote_toc_src(path, frag)), html.escape(label),
+                ("<ol>%s</ol>" % sub) if sub else ""))
+        return "".join(lis)
+
+    books = []
+    for book_title, parent, nodes in books_toc:
+        books.append('<li><a href="%s">%s</a><ol>%s</ol></li>' % (
+            _xml_attr(_quote_toc_src(parent[0], parent[1])),
+            html.escape(book_title), _emit_nodes(nodes)))
+    return (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<html xmlns="http://www.w3.org/1999/xhtml" '
+        'xmlns:epub="http://www.idpf.org/2007/ops">'
+        "<head><title>%s</title></head><body>"
+        '<nav epub:type="toc" id="toc"><h1>%s</h1><ol>%s</ol></nav>'
+        "</body></html>" % (html.escape(title), html.escape(title), "".join(books))
+    ).encode("utf-8")
 
 
 def _input_source(item: dict) -> tuple:
@@ -1216,15 +1483,20 @@ def merge_epubs(inputs: list, meta: dict, options: dict | None = None):
     :param meta: {"title", "authors", "languages", "tags", "description",
         "publisher"}，缺失键用空值/缺省。
     :param options: {"divider": bool（默认 True）, "cover": {"data": bytes,
-        "ext": str} | None, "out_path": str | None}。cover 由工具层决议后传入
-        原始字节；给定 out_path 时输出流式写入该文件并返回 None（避免在内存里
-        再拼一份完整 zip），否则返回合并结果字节。
+        "ext": str} | None, "out_path": str | None, "progress_cb": callable,
+        "cancel_event": threading.Event-like | None}。cover 由工具层决议后传入
+        原始字节；progress_cb(book_index, book_total) 逐本回调；cancel_event
+        每本开始前检查，置位时抛 MergeCancelled；给定 out_path 时输出流式写入
+        该文件并返回 None（避免在内存里再拼一份完整 zip），否则返回合并结果字节。
     :raises ValueError: 本数越界 / 单本结构异常 / 输出超限。
+    :raises MergeCancelled: cancel_event 置位。
     """
     options = options or {}
     divider = options.get("divider", True)
     cover = options.get("cover")
     out_path = options.get("out_path")
+    progress_cb = options.get("progress_cb")
+    cancel_event = options.get("cancel_event")
     if not isinstance(inputs, list) or not (_MERGE_MIN_BOOKS <= len(inputs) <= _MERGE_MAX_BOOKS):
         raise ValueError("请选择 %d–%d 本书进行合并" % (_MERGE_MIN_BOOKS, _MERGE_MAX_BOOKS))
     sources = [_input_source(item) for item in inputs]
@@ -1235,12 +1507,14 @@ def merge_epubs(inputs: list, meta: dict, options: dict | None = None):
     uid = "epubmerge-%s" % uuid.uuid4().hex
     if out_path:
         with open(out_path, "wb") as fh:
-            _merge_into(fh, sources, inputs, meta, divider, cover, uid)
+            _merge_into(fh, sources, inputs, meta, divider, cover, uid,
+                        progress_cb, cancel_event)
         result = None
         out_size = os.path.getsize(out_path)
     else:
         buf = io.BytesIO()
-        _merge_into(buf, sources, inputs, meta, divider, cover, uid)
+        _merge_into(buf, sources, inputs, meta, divider, cover, uid,
+                    progress_cb, cancel_event)
         result = buf.getvalue()
         out_size = len(result)
     if out_size > _MERGE_MAX_OUTPUT:
@@ -1249,14 +1523,16 @@ def merge_epubs(inputs: list, meta: dict, options: dict | None = None):
 
 
 def _merge_into(out, sources: list, inputs: list, meta: dict, divider: bool,
-                cover, uid: str) -> None:
+                cover, uid: str, progress_cb=None, cancel_event=None) -> None:
     """流式合并主体：逐本读取源条目并立即写入 `out`（zip 输出流）。
 
     manifest / spine / TOC 只累积小结构（id 与路径字符串），条目字节不驻留。
+    每本开始前检查 cancel_event（置位抛 MergeCancelled）并回调 progress_cb。
     """
     manifest = []           # (id, href, media-type)
     spine = []              # manifest id 顺序
-    # [(book_title, (parent_path, parent_frag), [(label, path, frag), ...]), ...]
+    # [(book_title, (parent_path, parent_frag), [TOC 节点, ...]), ...]
+    # TOC 节点 = (label, path, frag, [子节点, ...])，保留源 NCX 嵌套层级
     books_toc = []
     warnings = []
     counter = 0
@@ -1277,6 +1553,10 @@ def _merge_into(out, sources: list, inputs: list, meta: dict, divider: bool,
 
         total = len(sources)
         for idx, ((source, _size), item) in enumerate(zip(sources, inputs)):
+            if cancel_event is not None and cancel_event.is_set():
+                raise MergeCancelled("任务已取消")
+            if progress_cb is not None:
+                progress_cb(idx + 1, total)
             prefix = "b%d" % idx
             book_title = (item.get("title") or "").strip() or ("分册%d" % (idx + 1))
             with _ZipSource(source) as src:
@@ -1304,6 +1584,20 @@ def _merge_into(out, sources: list, inputs: list, meta: dict, divider: bool,
                     real = lower_entries.get(name.lower())
                     if real:
                         old_to_new[real] = "%s/%s" % (prefix, real)
+                # 加密/DRM：正文或 rights.xml 存在 → 拒绝整本；仅字体混淆 → 剔除资源
+                enc = _encryption_status(
+                    src, [items[i][0] for i in ordered_ids if i in items])
+                if enc and (enc["rights"] or enc["text"]):
+                    raise ValueError(
+                        "书籍 [%s] 含加密正文（DRM/内容加密），无法合并" % book_title)
+                enc_asset_reals = set()
+                if enc and enc["other"]:
+                    for target in enc["other"]:
+                        real = lower_entries.get(target.lower())
+                        if real:
+                            enc_asset_reals.add(real)
+                            warnings.append("[%s] 混淆字体已剔除（无法还原）：%s"
+                                            % (book_title, real))
                 # EPUB3 nav 文档按目录处理：不进 spine / manifest / 散件，从映射移除，
                 # 残留引用走「目标缺失」告警而非静默死链
                 nav_reals = {lower_entries[n] for n in nav_names
@@ -1312,6 +1606,8 @@ def _merge_into(out, sources: list, inputs: list, meta: dict, divider: bool,
                     old_to_new.pop(real, None)
                     warnings.append("[%s] EPUB3 nav 目录页不进正文：%s"
                                     % (book_title, real))
+                for real in enc_asset_reals:
+                    old_to_new.pop(real, None)
                 # 无 nav 语义的链接列表目录页（calibre「Table of Contents」等）：
                 # 先按文件名筛候选，再读内容复核，命中同样不计正文
                 link_toc_reals = set()
@@ -1328,7 +1624,7 @@ def _merge_into(out, sources: list, inputs: list, meta: dict, divider: bool,
                     old_to_new.pop(real, None)
                     warnings.append("[%s] 链接列表目录页不进正文：%s"
                                     % (book_title, real))
-                skip_reals = nav_reals | link_toc_reals
+                skip_reals = nav_reals | link_toc_reals | enc_asset_reals
 
                 def _emit(real, new_name, mt):
                     """非 spine 资源：CSS 读入改写，其余直接流式转写（不过内存）。"""
@@ -1378,6 +1674,9 @@ def _merge_into(out, sources: list, inputs: list, meta: dict, divider: bool,
                     if name.lower() in nav_names or real in skip_reals:
                         continue
                     new_name = old_to_new[real]
+                    # 同一文件被多条 itemref 别名引用：只登记一次，防重复 manifest/spine
+                    if new_name in emitted:
+                        continue
                     raw = src.read(real)
                     if mt in _TEXT_MEDIA_TYPES:
                         text = _decode(raw)
@@ -1436,9 +1735,9 @@ def _merge_into(out, sources: list, inputs: list, meta: dict, divider: bool,
                                      if h == new_spine_docs[0])
                     spine.insert(spine.index(first_mid), div_id)
 
-                # TOC：NCX 重映射（src 相对 NCX 自身目录解析）→ EPUB3 nav 兜底
-                # → spine 兜底。frag 原样保留：目标 id 未改名（见 _rewrite_doc_refs）。
-                pairs = []
+                # TOC：NCX 重映射（src 相对 NCX 自身目录解析，保留嵌套层级）→
+                # EPUB3 nav 兜底 → spine 兜底。frag 原样保留：目标 id 未改名。
+                nodes = []
                 for _iid, (name, mt) in items.items():
                     if mt != _NCX_MEDIA_TYPE:
                         continue
@@ -1446,13 +1745,11 @@ def _merge_into(out, sources: list, inputs: list, meta: dict, divider: bool,
                     if not real:
                         break
                     ncx_base = real.rsplit("/", 1)[0] if "/" in real else ""
-                    for label, src_ref in _parse_ncx_pairs(_decode(src.read(real))):
-                        mapped = _map_toc_src(src_ref, ncx_base, lower_o2n)
-                        if mapped:
-                            pairs.append((label or book_title,
-                                          mapped[0], mapped[1]))
+                    nodes = _toc_nodes_from_tree(
+                        _parse_ncx_tree(_decode(src.read(real))),
+                        ncx_base, lower_o2n, book_title)
                     break
-                if not pairs:
+                if not nodes:
                     nav_real = next((lower_entries[n] for n in nav_names
                                      if n in lower_entries), None)
                     if nav_real:
@@ -1460,26 +1757,29 @@ def _merge_into(out, sources: list, inputs: list, meta: dict, divider: bool,
                         for label, href in _parse_nav_pairs(_decode(src.read(nav_real))):
                             mapped = _map_toc_src(href, nav_base, lower_o2n)
                             if mapped:
-                                pairs.append((label or book_title,
-                                              mapped[0], mapped[1]))
-                        if pairs:
+                                nodes.append((label or book_title,
+                                              mapped[0], mapped[1], []))
+                        if nodes:
                             warnings.append("[%s] 无 NCX 目录，已改用 EPUB3 导航"
                                             % book_title)
-                if not pairs:
+                if not nodes:
                     # spine 兜底：条目名取文件名主干（排除目录页；nav 页已不在 spine）
-                    pairs = [(posixpath.basename(n).rsplit(".", 1)[0] or book_title,
-                              n, None) for n in new_spine_docs]
+                    nodes = [(posixpath.basename(n).rsplit(".", 1)[0] or book_title,
+                              n, None, []) for n in new_spine_docs]
                     warnings.append("[%s] 无 NCX / EPUB3 导航，已降级为 spine 顺序"
                                     % book_title)
                 # 父节点指向分卷页（开 divider 时点父节点先见卷名页），否则指向首篇
-                parent = (div_name, None) if divider else (pairs[0][1], pairs[0][2])
-                books_toc.append((book_title, parent, pairs))
+                parent = (div_name, None) if divider else (nodes[0][1], nodes[0][2])
+                books_toc.append((book_title, parent, nodes))
 
         manifest.append(("ncx", "toc.ncx", _NCX_MEDIA_TYPE))
+        manifest.append(("nav", "nav.xhtml", "application/xhtml+xml"))
         writer.write("content.opf",
                      _build_opf(meta, manifest, spine, uid, cover_name, cover_mt))
         writer.write("toc.ncx",
                      _build_ncx(meta.get("title") or "", books_toc, uid))
+        writer.write("nav.xhtml",
+                     _build_nav(meta.get("title") or "", books_toc))
         writer.write("META-INF/container.xml", (
             '<?xml version="1.0"?>'
             '<container version="1.0" '

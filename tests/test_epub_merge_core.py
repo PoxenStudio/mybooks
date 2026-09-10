@@ -318,7 +318,7 @@ class TestAnalyze(unittest.TestCase):
     def test_no_ncx_warning(self):
         info = lib.analyze_epub(_make_min_epub(with_ncx=False))
         self.assertEqual(info["toc_count"], 0)
-        self.assertTrue(any("NCX" in w for w in info["warnings"]))
+        self.assertIn(lib.WARN_NO_NCX, info["warnings"])
 
     def test_empty_input_raises(self):
         with self.assertRaises(ValueError):
@@ -766,8 +766,9 @@ class TestReviewFixes(unittest.TestCase):
         out = self._merge_two_first(data)
         with zipfile.ZipFile(io.BytesIO(out)) as zf:
             entries = {i.filename: zf.read(i.filename) for i in zf.infolist()}
-        # nav 页不进包：ch1+分卷 ×2 = 4
-        self.assertFalse([n for n in entries if "nav.xhtml" in n])
+        # 源 nav 页不进包（ch1+分卷 ×2 = 4）；根目录生成合并目录 nav.xhtml
+        self.assertNotIn("b0/OEBPS/nav.xhtml", entries)
+        self.assertIn("nav.xhtml", entries)
         self.assertEqual(lib.analyze_epub(out)["spine_count"], 4)
         self.assertEqual(lib.validate_output(out), [])
 
@@ -1077,8 +1078,9 @@ class TestTocFallbacks(unittest.TestCase):
         srcs = re.findall(r'<content src="([^"]*)"', ncx)
         self.assertIn("b0/OEBPS/ch1.xhtml", srcs)
         self.assertIn("b1/OEBPS/ch2.xhtml", srcs)
-        # nav 页本身不进包，也不出现在目录里
-        self.assertFalse([n for n in entries if "nav.xhtml" in n])
+        # nav 页本身不进包，但生成合并目录 nav.xhtml（根目录）
+        self.assertNotIn("b0/OEBPS/nav.xhtml", entries)
+        self.assertIn("nav.xhtml", entries)
         self.assertEqual(lib.validate_output(out), [])
 
     def test_nav_without_type_attribute(self):
@@ -1415,6 +1417,263 @@ class TestCoverPathFix(unittest.TestCase):
             self.assertEqual(lib.extract_cover(data), (b"COVER", "jpg"))
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+
+class TestEncryption(unittest.TestCase):
+    """加密/DRM：正文加密拒绝、字体混淆剔除、rights.xml 拒绝。"""
+
+    CONTAINER = (
+        '<?xml version="1.0"?><container version="1.0" '
+        'xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+        '<rootfiles><rootfile full-path="OEBPS/content.opf" '
+        'media-type="application/oebps-package+xml"/></rootfiles></container>')
+
+    def _book(self, cipher_uris, resources=(), rights=False):
+        items = ['<item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/>']
+        for i, (name, mt) in enumerate(resources):
+            items.append('<item id="r%d" href="%s" media-type="%s"/>' % (i, name, mt))
+        opf = ('<?xml version="1.0"?><package version="2.0" '
+               'xmlns="http://www.idpf.org/2007/opf" unique-identifier="u">'
+               '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+               '<dc:identifier id="u">u</dc:identifier><dc:title>加密卷</dc:title>'
+               '</metadata><manifest>%s</manifest>'
+               '<spine><itemref idref="c1"/></spine></package>') % "".join(items)
+        files = {
+            "META-INF/container.xml": self.CONTAINER.encode("utf-8"),
+            "OEBPS/content.opf": opf.encode("utf-8"),
+            "OEBPS/ch1.xhtml": b"<html><body><p>secret</p></body></html>",
+        }
+        for name, _mt in resources:
+            files["OEBPS/" + name] = b"BINARY"
+        if cipher_uris:
+            refs = "".join(
+                '<enc:EncryptedData><enc:CipherData>'
+                '<enc:CipherReference URI="%s"/></enc:CipherData>'
+                '</enc:EncryptedData>' % u for u in cipher_uris)
+            files["META-INF/encryption.xml"] = (
+                '<?xml version="1.0"?><encryption '
+                'xmlns:enc="http://www.w3.org/2001/04/xmlenc#">%s</encryption>'
+                % refs).encode("utf-8")
+        if rights:
+            files["META-INF/rights.xml"] = b"<rights/>"
+        return _make_epub(files)
+
+    def test_text_encryption_rejected(self):
+        bad = self._book(["OEBPS/ch1.xhtml"])
+        with self.assertRaises(ValueError):
+            lib.analyze_epub(bad)
+        with self.assertRaises(ValueError):
+            lib.analyze_epub(bad, lite=True)
+        good = _make_min_epub(title="卷二", n_docs=1)
+        with self.assertRaises(ValueError):
+            lib.merge_epubs([{"data": bad, "title": "加密卷"},
+                             {"data": good, "title": "卷二"}],
+                            {"title": "合集", "authors": ["作者"]})
+
+    def test_rights_xml_rejected(self):
+        with self.assertRaises(ValueError):
+            lib.analyze_epub(self._book([], rights=True))
+
+    def test_font_obfuscation_excluded(self):
+        # 仅字体被混淆：preview 给告警码，merge 剔除字体、正文照常
+        bad = self._book(["OEBPS/font.ttf"],
+                         resources=[("font.ttf", "font/ttf")])
+        info = lib.analyze_epub(bad, lite=True)
+        self.assertIn(lib.WARN_ENCRYPTED_ASSETS, info["warnings"])
+        good = _make_min_epub(title="卷二", n_docs=1)
+        out = lib.merge_epubs([{"data": bad, "title": "加密卷"},
+                               {"data": good, "title": "卷二"}],
+                              {"title": "合集", "authors": ["作者"]})
+        entries = _zip_entries(out)
+        self.assertNotIn("b0/OEBPS/font.ttf", entries)
+        self.assertIn("b0/OEBPS/ch1.xhtml", entries)
+        self.assertEqual(lib.validate_output(out), [])
+
+
+class TestReviewFixes2(unittest.TestCase):
+    """目录层级 / nav 输出 / 别名去重 / 引用属性。"""
+
+    CONTAINER = (
+        '<?xml version="1.0"?><container version="1.0" '
+        'xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+        '<rootfiles><rootfile full-path="OEBPS/content.opf" '
+        'media-type="application/oebps-package+xml"/></rootfiles></container>')
+
+    def _book(self, docs, ncx=None, spine_refs=None, title="卷一"):
+        items = "".join(
+            '<item id="%s" href="%s" media-type="%s"/>' % (iid, href, mt)
+            for iid, href, mt in docs)
+        refs = "".join('<itemref idref="%s"/>' % i
+                       for i in (spine_refs if spine_refs is not None
+                                 else [i for i, _h, _m in docs]))
+        ncx_item = ('<item id="ncx" href="toc.ncx" '
+                    'media-type="application/x-dtbncx+xml"/>') if ncx else ""
+        opf = ('<?xml version="1.0"?><package version="2.0" '
+               'xmlns="http://www.idpf.org/2007/opf" unique-identifier="u">'
+               '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+               '<dc:identifier id="u">u</dc:identifier><dc:title>%s</dc:title>'
+               '</metadata><manifest>%s%s</manifest>'
+               '<spine%s>%s</spine></package>'
+               ) % (title, items, ncx_item, ' toc="ncx"' if ncx else "", refs)
+        files = {"META-INF/container.xml": self.CONTAINER.encode("utf-8"),
+                 "OEBPS/content.opf": opf.encode("utf-8")}
+        for _iid, href, _mt in docs:
+            files["OEBPS/" + href] = (
+                "<html><body><p>%s</p></body></html>" % href).encode("utf-8")
+        if ncx:
+            files["OEBPS/toc.ncx"] = ncx.encode("utf-8")
+        return _make_epub(files)
+
+    def test_ncx_depth_preserved(self):
+        docs = [("c1", "ch1.xhtml", "application/xhtml+xml"),
+                ("c2", "ch2.xhtml", "application/xhtml+xml")]
+        ncx = ('<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">'
+               '<head></head><docTitle><text>卷一</text></docTitle><navMap>'
+               '<navPoint id="n1"><navLabel><text>上卷</text></navLabel>'
+               '<content src="ch1.xhtml"/>'
+               '<navPoint id="n1a"><navLabel><text>第一章</text></navLabel>'
+               '<content src="ch2.xhtml"/></navPoint>'
+               '</navPoint></navMap></ncx>')
+        data = self._book(docs, ncx=ncx)
+        out = _merge_two_epubs(data, _make_min_epub(title="卷二", n_docs=1))
+        root = ET.fromstring(_zip_entries(out)["toc.ncx"])
+        ns = "{http://www.daisy.org/z3986/2005/ncx/}"
+        book_parent = root.find("%snavMap/%snavPoint" % (ns, ns))
+        # 源书父节点下第一级应保留“上卷”，其下再挂“第一章”
+        nodes = book_parent.findall(ns + "navPoint")
+        self.assertEqual(nodes[0].find(ns + "navLabel/%stext" % ns).text, "上卷")
+        sub = nodes[0].findall(ns + "navPoint")
+        self.assertEqual(sub[0].find(ns + "navLabel/%stext" % ns).text, "第一章")
+
+    def test_nav_xhtml_generated(self):
+        out = _merge_two_epubs(_make_min_epub(title="卷一", n_docs=1),
+                               _make_min_epub(title="卷二", n_docs=1))
+        entries = _zip_entries(out)
+        self.assertIn("nav.xhtml", entries)
+        nav = entries["nav.xhtml"].decode("utf-8")
+        self.assertIn('epub:type="toc"', nav)
+        self.assertIn("卷一", nav)
+        self.assertIn('href="b0/OEBPS/ch1.xhtml"', nav)
+        opf = entries["content.opf"].decode("utf-8")
+        self.assertIn('properties="nav"', opf)
+        self.assertEqual(lib.validate_output(out), [])
+
+    def test_spine_alias_dedup(self):
+        docs = [("c1", "ch1.xhtml", "application/xhtml+xml")]
+        data = self._book(docs, spine_refs=["c1", "c1"])
+        out = _merge_two_epubs(data, _make_min_epub(title="卷二", n_docs=1))
+        entries = _zip_entries(out)
+        opf = entries["content.opf"].decode("utf-8")
+        self.assertEqual(opf.count('href="b0/OEBPS/ch1.xhtml"'), 1)
+        # b0: 1 正文 + 1 分卷；b1: 1 正文 + 1 分卷
+        self.assertEqual(lib.analyze_epub(out)["spine_count"], 4)
+
+    def test_srcset_poster_data_rewritten(self):
+        container = self.CONTAINER.encode("utf-8")
+        opf = ('<?xml version="1.0"?><package version="2.0" '
+               'xmlns="http://www.idpf.org/2007/opf" unique-identifier="u">'
+               '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+               '<dc:identifier id="u">u</dc:identifier><dc:title>卷一</dc:title>'
+               '</metadata><manifest>'
+               '<item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/>'
+               '<item id="a" href="a.png" media-type="image/png"/>'
+               '<item id="p" href="p.jpg" media-type="image/jpeg"/>'
+               '<item id="o" href="o.bin" media-type="application/octet-stream"/>'
+               '</manifest><spine><itemref idref="c1"/></spine></package>')
+        doc = ('<html><body><img srcset="/OEBPS/a.png 1x, b.png 2x"/>'
+               '<video poster="/OEBPS/p.jpg"></video>'
+               '<object data="/OEBPS/o.bin"></object></body></html>')
+        packed = _make_epub({
+            "META-INF/container.xml": container,
+            "OEBPS/content.opf": opf.encode("utf-8"),
+            "OEBPS/ch1.xhtml": doc.encode("utf-8"),
+            "OEBPS/a.png": b"PNG", "OEBPS/p.jpg": b"JPG", "OEBPS/o.bin": b"BIN",
+        })
+        out = _merge_two_epubs(packed, _make_min_epub(title="卷二", n_docs=1))
+        out_doc = _zip_entries(out)["b0/OEBPS/ch1.xhtml"].decode("utf-8")
+        self.assertIn('srcset="a.png 1x, b.png 2x"', out_doc)
+        self.assertIn('poster="p.jpg"', out_doc)
+        self.assertIn('data="o.bin"', out_doc)
+
+
+class TestProgressAndCancel(unittest.TestCase):
+    def _books(self, n=3):
+        return [_make_min_epub(title="卷%d" % i, n_docs=1) for i in range(1, n + 1)]
+
+    def test_progress_callback_order(self):
+        calls = []
+        lib.merge_epubs(
+            [{"data": b, "title": "卷%d" % i}
+             for i, b in enumerate(self._books(), 1)],
+            {"title": "合集", "authors": ["作者"]},
+            {"progress_cb": lambda i, n: calls.append((i, n))})
+        self.assertEqual(calls, [(1, 3), (2, 3), (3, 3)])
+
+    def test_cancel_stops_between_books(self):
+        class _Cancel:
+            flag = False
+
+            def is_set(self):
+                return self.flag
+
+        ev = _Cancel()
+
+        def cb(i, _n):
+            if i == 1:
+                ev.flag = True
+
+        with self.assertRaises(lib.MergeCancelled):
+            lib.merge_epubs(
+                [{"data": b, "title": "卷%d" % i}
+                 for i, b in enumerate(self._books(), 1)],
+                {"title": "合集", "authors": ["作者"]},
+                {"progress_cb": cb, "cancel_event": ev})
+
+
+class TestPureHelpers(unittest.TestCase):
+    def test_ordered_unique(self):
+        self.assertEqual(lib.ordered_unique(["a", " a ", None, "", "b", "a"]),
+                         ["a", "b"])
+        self.assertEqual(lib.ordered_unique(None), [])
+
+    def test_default_merge_title(self):
+        self.assertEqual(lib.default_merge_title(["A", "B"]), "A，B合集")
+        self.assertEqual(len(lib.default_merge_title(["x" * 80, "y" * 80])), 100)
+
+    def test_normalize_book_ids(self):
+        self.assertEqual(lib.normalize_book_ids([3, "1"]), [3, 1])
+        for bad in ([1], [1, 1, 2], [1, "x"], "1,2"):
+            with self.assertRaises(ValueError):
+                lib.normalize_book_ids(bad)
+
+    def test_coerce_bool(self):
+        for v in ("false", "0", "no", "", False):
+            self.assertFalse(lib.coerce_bool(v, False))
+        for v in ("true", "1", "yes", True, 1):
+            self.assertTrue(lib.coerce_bool(v, False))
+        self.assertTrue(lib.coerce_bool(None, True))
+        self.assertFalse(lib.coerce_bool(None, False))
+
+    def test_clean_text_and_list(self):
+        self.assertEqual(lib.clean_text(None), "")
+        self.assertEqual(lib.clean_text("  abc  "), "abc")
+        self.assertEqual(lib.clean_text("abcdef", 3), "abc")
+        self.assertEqual(lib.clean_str_list([" a ", None, "", 3]), ["a", "3"])
+        with self.assertRaises(ValueError):
+            lib.clean_str_list("abc")
+
+
+class TestHtmlBlock(unittest.TestCase):
+    def test_plain_text_with_lt_escaped(self):
+        out = lib.compose_description(
+            "合集", [{"title": "卷一", "comments": "3 < 5"}])
+        self.assertIn("3 &lt; 5", out)
+        self.assertNotIn("3 < 5", out)
+
+    def test_html_comments_kept(self):
+        out = lib.compose_description(
+            "合集", [{"title": "卷一", "comments": "<p>简介</p>"}])
+        self.assertIn("<p>简介</p>", out)
 
 
 if __name__ == "__main__":
