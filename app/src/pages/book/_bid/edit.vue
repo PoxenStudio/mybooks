@@ -325,7 +325,7 @@ export default {
             try {
                 const rsp = await this.$backend('/authors/search?q=' + encodeURIComponent(q) + '&limit=100');
                 if (rsp && rsp.err === 'ok') {
-                    this.authors_list = rsp.authors || [];
+                    this.authors_list = (rsp.authors || []).filter(a => a !== '佚名' && a !== 'Unknown');
                 }
             } catch (e) {
                 // ignore, 保留上一次的查询结果

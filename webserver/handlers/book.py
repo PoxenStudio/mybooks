@@ -33,6 +33,7 @@ from webserver.base.formatter import BookFormatter, ReadingStateFormatter
 from webserver.base.image_generator import ImageGenerator
 from webserver.base.image_helper import ImageHelper
 from webserver.base.epub_helper import EpubHelper
+from webserver.base.meta_helper import guess_authors
 from webserver.services.autofill import AutoFillService
 from webserver.services.ai_fillinfo import AIFillInfoService
 from webserver.services.catalog import CatalogExtractService
@@ -811,11 +812,13 @@ class BookRefer(BaseHandler):
         fmt = fmt.lower()
 
         # read ebook meta
+        _translators = []
         with open(book_path, "rb") as stream:
             org_mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
             org_mi.title = utils.super_strip(org_mi.title)
             if not org_mi.authors:
-                org_mi.authors = [utils.super_strip(org_mi.author_sort)]
+                _authors_, _translators = guess_authors(org_mi.author_sort)
+                org_mi.authors = _authors
             logging.info(f"[RESET] get the book title from book file: {org_mi.title}")
             if org_mi.isbn:
                 org_mi.set("isbn", utils.super_strip(org_mi.isbn))
@@ -869,6 +872,9 @@ class BookRefer(BaseHandler):
         self.calibre_db.set_metadata(book_id, org_mi, force_changes=True)
         self.calibre_db_cache.set_field(CALIBRE_COLUMN_CATEGORY, {book_id: ""})
         self.calibre_db_cache.set_field(CALIBRE_COLUMN_DYNAMIC_COVER, {book_id: 1 if dynamic_cover else 0})
+        if _translators:
+            translators = ",".join(_translators)
+            self.calibre_db_cache.set_field(CALIBRE_COLUMN_TRANSLATORS, {book_id: translators})
 
         return {"err": "ok", "book_id": book_id}
 
@@ -2553,6 +2559,7 @@ class BookUpload(BaseHandler):
         try:
             # read ebook meta
             failed = False
+            _translators = []
             with open(fpath, "rb") as stream:
                 mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
                 if mi.title and mi.title == CALIBRE_ERROR_FLAG:
@@ -2563,7 +2570,8 @@ class BookUpload(BaseHandler):
                         failed = True
                 mi.title = utils.super_strip(mi.title)
                 if mi.author_sort == "Unknown" and mi.authors and len(mi.authors) > 0:
-                    mi.authors = [utils.super_strip(a) for a in mi.authors]
+                    authors, _translators = guess_authors(mi.author_sort)
+                    mi.authors = authors
                 else:
                     mi.authors = [utils.super_strip(mi.author_sort)]
 
@@ -2623,6 +2631,9 @@ class BookUpload(BaseHandler):
             else:
                 fpaths = [fpath]
                 book_id = self._add_new_book(mi, fpaths, fmt)
+                if _translators:
+                    translators = ",".join(_translators)
+                    self.calibre_db_cache.set_field(CALIBRE_COLUMN_TRANSLATORS, {book_id: translators})
             self.add_msg("success", _("导入书籍成功！"))
             return {"err": "ok", "book_id": book_id}
         finally:
@@ -2815,6 +2826,7 @@ class BookUploadChunk(BaseHandler):
 
             # Read ebook metadata (same logic as BookUpload)
             failed = False
+            _translators = []
             with open(final_path, "rb") as stream:
                 mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
                 if mi.title and mi.title == CALIBRE_ERROR_FLAG:
@@ -2825,7 +2837,8 @@ class BookUploadChunk(BaseHandler):
                         failed = True
                 mi.title = utils.super_strip(mi.title)
                 if mi.author_sort == "Unknown" and mi.authors and len(mi.authors) > 0:
-                    mi.authors = [utils.super_strip(a) for a in mi.authors]
+                    authors, _translators = guess_authors(mi.author_sort)
+                    mi.authors = authors
                 else:
                     mi.authors = [utils.super_strip(mi.author_sort)]
             if failed:
@@ -2864,7 +2877,10 @@ class BookUploadChunk(BaseHandler):
                 else:
                     self.calibre_db.add_format(book_id, fmt.upper(), final_path, True)
             else:
-                book_id = self._add_new_book(mi, [final_path])
+                book_id = self._add_new_book(mi, [final_path], fmt)
+                if _translators:
+                    translators = ",".join(_translators)
+                    self.calibre_db_cache.set_field(CALIBRE_COLUMN_TRANSLATORS, {book_id: translators})
 
             self.add_msg("success", _("导入书籍成功！"))
             return {"err": "ok", "book_id": book_id}

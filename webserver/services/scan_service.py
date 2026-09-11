@@ -39,12 +39,13 @@ from sqlalchemy.exc import IntegrityError
 from webserver.i18n import _
 from webserver.base.image_helper import ImageHelper
 from webserver.base.image_generator import ImageGenerator
+from webserver.base.meta_helper import guess_authors
 from webserver.services import AsyncService
 from webserver.models import Item, ScanFile, Reader
 from webserver import utils, constants
 from webserver.services.autofill import AutoFillService
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_CATEGORY, CALIBRE_ERROR_FLAG
-from webserver.constants import BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL, CALIBRE_COLUMN_DYNAMIC_COVER
+from webserver.constants import BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL, CALIBRE_COLUMN_DYNAMIC_COVER, CALIBRE_COLUMN_TRANSLATORS
 from webserver.services.background_service import BackgroundService, BackgroundTask
 from webserver import loader
 
@@ -381,6 +382,7 @@ class ScanService(AsyncService):
         fname = os.path.basename(fpath)
         fmt = fpath.split(".")[-1].lower()
         start_time = time.time()
+        _translators = []
 
         # Skip metadata reading when title/author are derived from filename
         skip_metadata = (fmt == "txt")
@@ -397,7 +399,8 @@ class ScanService(AsyncService):
                 with open(fpath, "rb") as stream:
                     mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
                     mi.title = utils.super_strip(mi.title)
-                    mi.authors = [utils.super_strip(s) for s in mi.authors]
+                    authors, _translators = guess_authors(mi.author_sort)
+                    mi.authors = authors
                 logging.info("[IMPORT] Metadata read [%.3fs]: %s", time.time() - start_time, repr(mi.title))
             except Exception as e:
                 logging.error("[IMPORT] Error reading metadata from %s: %s", fpath, e)
@@ -484,6 +487,9 @@ class ScanService(AsyncService):
                 row.book_id = self.db.import_book(mi, [fpath], notify=False, import_hooks=False)
                 if row.book_id is not None and dynamic_cover:
                     self.db.new_api.set_field(CALIBRE_COLUMN_DYNAMIC_COVER, {row.book_id: 1})
+                    if _translators:
+                        translators = ",".join(_translators)
+                        self.db.new_api.set_field(CALIBRE_COLUMN_TRANSLATORS, {row.book_id: translators})
                 row.status = ScanFile.IMPORTED
                 logging.info("[IMPORT] Calibre import done, book_id=%d [%.3fs]", row.book_id, time.time() - start_time)
 
