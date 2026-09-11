@@ -380,7 +380,6 @@ class BookCatalog(BaseHandler):
 
 class BookCatalogBatch(BaseHandler):
     """批量提取书籍目录：传入idlist时只处理指定书籍(强制重新提取)，否则处理全部书籍(跳过已有目录的书籍)"""
-    MAX_BATCH_SIZE = 2000
 
     @js
     @auth
@@ -402,15 +401,8 @@ class BookCatalogBatch(BaseHandler):
             book_ids = list(self.calibre_db_cache.all_book_ids())
             force = False
 
-        total = len(book_ids)
-        truncated = total > self.MAX_BATCH_SIZE
-        if truncated:
-            book_ids = book_ids[:self.MAX_BATCH_SIZE]
-
         CatalogExtractService().extract_batch(self.current_user.id, book_ids, force=force)
         msg = _("目录提取任务已启动，共 %d 本，右上角可以查看进度") % len(book_ids)
-        if truncated:
-            msg += _("（共 %d 本，本次仅处理前 %d 本，请再次执行以处理剩余书籍）") % (total, self.MAX_BATCH_SIZE)
         return {"err": "ok", "msg": msg}
 
 

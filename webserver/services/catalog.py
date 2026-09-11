@@ -131,12 +131,14 @@ class CatalogExtractService(AsyncService):
 
         available = set(cache.formats(book_id, verify_formats=False) or [])
         last_error = _("书籍不包含可提取目录的格式（EPUB/PDF/TXT）")
+        skipped = True
         for fmt in CATALOG_FORMAT_PRIORITY:
             if fmt not in available:
                 continue
             fpath = self.db.format_abspath(book_id, fmt, index_is_id=True)
             if not fpath or not os.path.isfile(fpath):
                 continue
+            skipped = False
             try:
                 if fmt == "EPUB":
                     markdown = self._extract_epub_toc(fpath)
@@ -159,7 +161,7 @@ class CatalogExtractService(AsyncService):
                 cache.set_field(CALIBRE_COLUMN_CATALOG, {book_id: ""})
             last_error = _("未能从%s格式中解析出目录") % fmt
 
-        return {"err": "catalog.not_found", "msg": last_error}
+        return {"err": "catalog.not_found", "skipped": skipped, "msg": last_error}
 
     @AsyncService.register_function
     def extract_one(self, book_id, force=True):
@@ -208,10 +210,11 @@ class CatalogExtractService(AsyncService):
                 except Exception as e:
                     logging.error("[Catalog] batch extract error book=%s: %s", book_id, e)
                     ret = {"err": "internal"}
-                if ret.get("err") != "ok":
-                    self.count_fail += 1
-                elif ret.get("skipped"):
+                if ret.get("skipped"):
                     self.count_skip += 1
+                elif ret.get("err") != "ok":
+                    self.count_fail += 1
+                    logging.info("[Catalog] Failed to extract book=%s: %s", book_id, ret.get("msg", "Unknown error"))
                 else:
                     self.count_done += 1
 
