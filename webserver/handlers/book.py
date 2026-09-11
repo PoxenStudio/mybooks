@@ -1002,6 +1002,7 @@ class BookRefer(BaseHandler):
         if not refer_mi:
             return {"err": "plugin.fail", "msg": _("拉取图书信息异常，请重试")}
 
+        _author, _translator = [], []
         if only_cover == "yes":
             # just set cover
             if not refer_mi.cover_data:
@@ -1021,10 +1022,19 @@ class BookRefer(BaseHandler):
                     mi.tags += ts[:8]
                     logging.debug("tags are %s" % ','.join(mi.tags))
                     self.calibre_db.set_tags(book_id, mi.tags)
+            # update authors
+            if refer_mi.authors:
+                _authors, _translators = guess_authors(refer_mi.authors)
+            elif refer_mi.author_sort:
+                _authors, _translators = guess_authors([refer_mi.author_sort])
+            refer_mi.authors = _authors
             mi.smart_update(refer_mi, replace_metadata=True)
 
         mi.timestamp = nowf()
         self.calibre_db.set_metadata(book_id, mi, force_changes=True)
+        if _translator:
+            translators = ",".join(_translator)
+            self.calibre_db_cache.set_field(CALIBRE_COLUMN_TRANSLATORS, {book_id: translators})
         return {"err": "ok"}
 
 

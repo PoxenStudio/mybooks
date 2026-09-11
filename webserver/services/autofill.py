@@ -6,6 +6,7 @@ import time
 from webserver.i18n import _
 
 from webserver import loader, utils
+from webserver.base.meta_helper import guess_authors
 from webserver.plugins.meta.bookbarn_tags import BookBarnTags
 from webserver.services import AsyncService
 from webserver.services.background_service import BackgroundService, BackgroundTask
@@ -130,8 +131,13 @@ class AutoFillService(AsyncService):
             # 第三阶段：批量写入更新（减少数据库锁持有次数）
             for book_id, mi in updates:
                 try:
+                    _authors, _translators = guess_authors(mi.authors)
+                    mi.authors = _authors
                     mi.title_sort = utils.get_title_sort(mi.title)
                     self.db.set_metadata(book_id, mi, ignore_errors=True)
+                    if _translators:
+                        translators = ",".join(_translators)
+                        self.db.new_api.set_field(CALIBRE_COLUMN_TRANSLATORS, {book_id: translators})
                     logging.info(_("自动更新书籍 id=[%d] 的信息，title=%s"), book_id, mi.title)
                     self.count_done += 1
                 except Exception as err:
@@ -204,8 +210,13 @@ class AutoFillService(AsyncService):
         refer_mi.title = title
         refer_mi.title_sort = utils.get_title_sort(refer_mi.title)
 
+        _authors, _translators = guess_authors(mi.authors)
+        mi.authors = _authors
         mi.smart_update(refer_mi, replace_metadata=True)
         self.db.set_metadata(book_id, mi, ignore_errors=True)
+        if _translators:
+            translators = ",".join(_translators)
+            self.db.new_api.set_field(CALIBRE_COLUMN_TRANSLATORS, {book_id: translators})
         logging.info(_("自动更新书籍 id=[%d] 的信息，title=%s"), book_id, mi.title)
         return True
 

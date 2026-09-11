@@ -7,10 +7,11 @@ from typing import List, Tuple
 # 姓名前的地区/朝代标记，如 [明]、【美】、（清）、(英)、[唐] 等
 _DYNASTY_REGION_PREFIX = re.compile(r'^[\[【\(（][^\]】\)）]*[\]】\)）]\s*')
 
-# 姓名尾部的作者标识：空格/连字符 + 著/编/编著/author/editor；或括号包裹
+# 姓名尾部的作者标识：可选空格/连字符 + 著/编/编著/author/editor；或括号包裹
+# 注意中文后缀允许直接紧贴姓名（如 "温德著"），故使用 \s*
 _AUTHOR_SUFFIX = re.compile(
     r'(?:'
-    r'\s+(?:著|编|编著)|\s*[-–]\s*(?:著|编|编著)|'
+    r'\s*(?:著|编|编著)|\s*[-–]\s*(?:著|编|编著)|'
     r'\s+(?:author|Author|editor|Editor)|\s*[-–]\s*(?:author|Author|editor|Editor)|'
     r'\s*[\(\（]\s*(?:著|编|编著|author|Author|editor|Editor)\s*[\)\）]'
     r')$'
@@ -142,6 +143,12 @@ if __name__ == "__main__":
         (["张三/李四（John Smith）"], ["张三", "李四"], [], "斜杠+英文译名括号仅在后者"),
         (["鲁迅（Lu Xun） 著"], ["鲁迅"], [], "译名括号+著"),
         (["译者A（John Doe） 译"], [], ["译者A"], "译者+译名括号+译"),
+
+        # --- 扩展：全角/半角括号与无空格后缀 ---
+        (["（德）温德著"], ["温德"], [], "全角地区前缀+无空格著"),
+        (["(德)温德著"], ["温德"], [], "半角地区前缀+无空格著"),
+        (["陈惠雅（译）"], [], ["陈惠雅"], "全角括号译者"),
+        (["陈惠雅(译)"], [], ["陈惠雅"], "半角括号译者"),
     ]
     all_pass = True
     for idx, (inp, exp_auth, exp_trans, desc) in enumerate(author_tests, 1):
