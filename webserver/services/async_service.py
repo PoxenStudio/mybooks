@@ -273,7 +273,7 @@ class AsyncService(metaclass=SingletonType):
             ins.setup(s.db, s.scoped_session)
 
             if not s.async_mode():
-                logging.info("[FUNC ] service call %s(%s, %s)", name, args, kwargs)
+                logging.debug("[FUNC ] service call %s(%s, %s)", name, args, kwargs)
                 return service_func(ins, *args, **kwargs)
 
             logging.info("[ASYNC] service call %s", name)
