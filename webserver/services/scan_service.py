@@ -383,6 +383,7 @@ class ScanService(AsyncService):
         fmt = fpath.split(".")[-1].lower()
         start_time = time.time()
         _translators = []
+        _authors = []
 
         # Skip metadata reading when title/author are derived from filename
         skip_metadata = (fmt == "txt")
@@ -399,8 +400,11 @@ class ScanService(AsyncService):
                 with open(fpath, "rb") as stream:
                     mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
                     mi.title = utils.super_strip(mi.title)
-                    authors, _translators = guess_authors(mi.author_sort)
-                    mi.authors = authors
+                    if mi.authors:
+                        _authors, _translators = guess_authors(mi.authors)
+                    else:
+                        _authors, _translators = guess_authors([utils.super_strip(mi.author_sort)])
+                    mi.authors = _authors
                 logging.info("[IMPORT] Metadata read [%.3fs]: %s", time.time() - start_time, repr(mi.title))
             except Exception as e:
                 logging.error("[IMPORT] Error reading metadata from %s: %s", fpath, e)

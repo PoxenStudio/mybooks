@@ -816,9 +816,11 @@ class BookRefer(BaseHandler):
         with open(book_path, "rb") as stream:
             org_mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
             org_mi.title = utils.super_strip(org_mi.title)
-            if not org_mi.authors:
-                _authors_, _translators = guess_authors(org_mi.author_sort)
-                org_mi.authors = _authors
+            if org_mi.authors:
+                _authors_, _translators = guess_authors(org_mi.authors)
+            else:
+                _authors_, _translators = guess_authors([org_mi.author_sort])
+            org_mi.authors = _authors_
             logging.info(f"[RESET] get the book title from book file: {org_mi.title}")
             if org_mi.isbn:
                 org_mi.set("isbn", utils.super_strip(org_mi.isbn))
@@ -2560,6 +2562,7 @@ class BookUpload(BaseHandler):
             # read ebook meta
             failed = False
             _translators = []
+            _authors = []
             with open(fpath, "rb") as stream:
                 mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
                 if mi.title and mi.title == CALIBRE_ERROR_FLAG:
@@ -2569,11 +2572,11 @@ class BookUpload(BaseHandler):
                         logging.error("Failed to get metadata for %s, reason:%s", fpath, mi.comments)
                         failed = True
                 mi.title = utils.super_strip(mi.title)
-                if mi.author_sort == "Unknown" and mi.authors and len(mi.authors) > 0:
-                    authors, _translators = guess_authors(mi.author_sort)
-                    mi.authors = authors
+                if mi.authors:
+                    _authors, _translators = guess_authors(mi.authors)
                 else:
-                    mi.authors = [utils.super_strip(mi.author_sort)]
+                    _authors = guess_authors([utils.super_strip(mi.author_sort)])
+                mi.authors = _authors
 
             if failed:
                 return {"err": "book.invalid", "msg": _("此书籍文件无法识别, 或者受DRM保护无法导入")}
@@ -2827,6 +2830,7 @@ class BookUploadChunk(BaseHandler):
             # Read ebook metadata (same logic as BookUpload)
             failed = False
             _translators = []
+            _authors = []
             with open(final_path, "rb") as stream:
                 mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
                 if mi.title and mi.title == CALIBRE_ERROR_FLAG:
@@ -2836,11 +2840,11 @@ class BookUploadChunk(BaseHandler):
                         logger.error("Failed to get metadata for %s, reason:%s", final_path, mi.comments)
                         failed = True
                 mi.title = utils.super_strip(mi.title)
-                if mi.author_sort == "Unknown" and mi.authors and len(mi.authors) > 0:
-                    authors, _translators = guess_authors(mi.author_sort)
-                    mi.authors = authors
+                if mi.authors:
+                    _authors, _translators = guess_authors(mi.authors)
                 else:
-                    mi.authors = [utils.super_strip(mi.author_sort)]
+                    _authors, _translators = guess_authors([utils.super_strip(mi.author_sort)])
+                mi.authors = _authors
             if failed:
                 return {"err": "book.invalid", "msg": _("此书籍文件无法识别, 或者受DRM保护无法导入")}
 
