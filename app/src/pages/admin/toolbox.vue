@@ -120,7 +120,15 @@
       </v-row>
       <v-row v-else>
         <v-col v-for="entry in storeTools" :key="entry.tool_id" cols="12" md="4">
-          <v-card class="pa-2" rounded="xl" outlined>
+          <v-card class="pa-2" rounded="xl" outlined style="position: relative;">
+            <v-icon
+              v-if="entry.favorite"
+              class="store-favorite-badge"
+              color="amber darken-2"
+              :title="$t('toolbox.storeFavorite')"
+            >
+              mdi-star
+            </v-icon>
             <v-card-text>
               <div class="d-flex align-center mb-2">
                 <v-avatar size="32" class="mr-2" rounded>
@@ -406,6 +414,12 @@ export default {
 .tool-card:hover {
   box-shadow: 0 6px 20px rgba(144, 202, 249, 0.45) !important;
   transform: translateY(-2px);
+}
+/* 商店卡片右上角的精选星标 */
+.store-favorite-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
 }
 /* 简介固定为 3 行高度：文字不足时占位保持一致，超出时省略号截断 */
 .tool-desc {

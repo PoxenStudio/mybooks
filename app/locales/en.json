@@ -1356,10 +1356,11 @@
     "updateTool": "Update \"{name}\"",
     "uninstallConfirm": "Uninstall \"{name}\"? Takes full effect after restart; the tool's own data is kept.",
     "storeTitle": "Tool Store",
-    "storeSubtitle": "Fetch installable tools from mybooks.top (not live yet; enable \"Toolbox store\" in system settings first)",
+    "storeSubtitle": "Fetch installable tools from mybooks.top (enable \"Toolbox store\" in system settings first)",
     "storeEmpty": "No installable tools yet",
     "storeInstall": "Install",
-    "storeUpdate": "Update"
+    "storeUpdate": "Update",
+    "storeFavorite": "Featured tool"
   },
   "toolboxTool": {
     "title": "Tool",

@@ -43,14 +43,21 @@ class TestStoreEnabled(unittest.TestCase):
     def tearDown(self):
         CONF["ENABLE_TOOLBOX_STORE"] = False
 
+    VALID_ENTRY = {
+        "tool_id": "demo_tool",
+        "latest_revision": "0.2.0",
+        "icon_url": "https://mybooks.top/toolbox/logos/demo_tool.png",
+        "download_url": "https://mybooks.top/toolbox/files/favorite/demo_tool-0.2.0.zip",
+    }
+
     @patch("requests.get")
     def test_get_index_returns_tools_list(self, mock_get):
         mock_resp = MagicMock()
-        mock_resp.json.return_value = {"tools": [{"tool_id": "demo_tool", "latest_revision": "0.2.0"}]}
+        mock_resp.json.return_value = {"tools": [self.VALID_ENTRY]}
         mock_get.return_value = mock_resp
 
         tools = ToolboxStoreClient().get_index()
-        self.assertEqual(tools, [{"tool_id": "demo_tool", "latest_revision": "0.2.0"}])
+        self.assertEqual(tools, [self.VALID_ENTRY])
         mock_get.assert_called_once()
         self.assertEqual(mock_get.call_args.args[0], ToolboxStoreClient.INDEX_URL)
 
@@ -59,9 +66,32 @@ class TestStoreEnabled(unittest.TestCase):
         mock_get.side_effect = Exception("network down")
         self.assertEqual(ToolboxStoreClient().get_index(), [])
 
+    @patch("requests.get")
+    def test_get_index_drops_entries_with_untrusted_host(self, mock_get):
+        untrusted = dict(self.VALID_ENTRY, download_url="https://evil.example.com/demo_tool.zip")
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"tools": [untrusted, self.VALID_ENTRY]}
+        mock_get.return_value = mock_resp
+
+        tools = ToolboxStoreClient().get_index()
+        self.assertEqual(tools, [self.VALID_ENTRY])
+
+    @patch("requests.get")
+    def test_get_index_drops_entries_with_untrusted_icon_host(self, mock_get):
+        untrusted = dict(self.VALID_ENTRY, icon_url="https://evil.example.com/demo_tool.png")
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"tools": [untrusted]}
+        mock_get.return_value = mock_resp
+
+        self.assertEqual(ToolboxStoreClient().get_index(), [])
+
     def test_download_requires_sha256(self):
         with self.assertRaises(ToolboxStoreError):
             ToolboxStoreClient().download("https://mybooks.top/toolbox/files/favorite/demo.zip", "")
+
+    def test_download_rejects_untrusted_host(self):
+        with self.assertRaises(ToolboxStoreError):
+            ToolboxStoreClient().download("https://evil.example.com/demo.zip", "0" * 64)
 
     @patch("requests.get")
     def test_download_verifies_sha256_and_returns_path(self, mock_get):

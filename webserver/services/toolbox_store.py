@@ -15,6 +15,7 @@ import logging
 import os
 import tempfile
 import time
+from urllib.parse import urlparse
 
 import requests
 
@@ -26,6 +27,21 @@ CONF = loader.get_settings()
 
 # 索引缓存 TTL（秒）：管理员打开 /admin/toolbox 时不必每次都请求外网，见 3.4 节。
 INDEX_CACHE_TTL = 60 * 60
+
+# 商店索引里的 icon_url/download_url 必须落在这个域名下才可信——fulllist.json 来自外部
+# 服务，一旦被篡改（或未来商店索引其它来源）指向别的主机，图标/zip 下载就可能变成任意 URL，
+# 这里做一层白名单校验，拒绝跨域的下载/图标地址。
+ALLOWED_HOST = "mybooks.top"
+
+
+def _is_allowed_url(url: str) -> bool:
+    if not url:
+        return False
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    return parsed.scheme == "https" and (parsed.hostname or "").lower() == ALLOWED_HOST
 
 
 class ToolboxStoreError(Exception):
@@ -47,7 +63,9 @@ class ToolboxStoreClient:
     def get_index(self) -> list:
         """返回商店当前可安装的全部工具列表（`fulllist.json` 的 `tools` 数组）。
 
-        `ENABLE_TOOLBOX_STORE=False` 时直接返回空列表，不发起任何网络请求。
+        `ENABLE_TOOLBOX_STORE=False` 时直接返回空列表，不发起任何网络请求。条目的
+        `icon_url`/`download_url` 必须落在 `mybooks.top` 域名下，否则整条丢弃并记日志
+        （见模块顶部 `_is_allowed_url` 的说明）。
         """
         if not self.enabled():
             return []
@@ -55,7 +73,20 @@ class ToolboxStoreClient:
             resp = requests.get(self.INDEX_URL, headers=self.headers, timeout=30, verify=True)
             resp.raise_for_status()
             tools = resp.json().get("tools", [])
-            return tools if isinstance(tools, list) else []
+            if not isinstance(tools, list):
+                return []
+            result = []
+            for entry in tools:
+                if not isinstance(entry, dict):
+                    continue
+                if not _is_allowed_url(entry.get("download_url")) or not _is_allowed_url(entry.get("icon_url")):
+                    logging.warning(
+                        "[ToolboxStore] 忽略 tool_id=%s：icon_url/download_url 不在 %s 域名下",
+                        entry.get("tool_id"), ALLOWED_HOST,
+                    )
+                    continue
+                result.append(entry)
+            return result
         except Exception as err:
             logging.error("[ToolboxStore] get_index failed: %s", err)
             return []
@@ -64,12 +95,15 @@ class ToolboxStoreClient:
         """下载 zip 到本地临时文件并校验 sha256（**必须**校验，3.4 节），返回临时文件路径。
 
         调用方负责在用完（无论成功还是失败）后删除返回的临时文件。
-        :raises ToolboxStoreError: 商店未开启 / 下载失败 / sha256 校验不通过。
+        :raises ToolboxStoreError: 商店未开启 / 下载地址不在白名单域名下 / 下载失败 /
+            sha256 校验不通过。
         """
         if not self.enabled():
             raise ToolboxStoreError(_("工具商店未开启"))
         if not expected_sha256:
             raise ToolboxStoreError(_("商店索引缺少 sha256 校验码，拒绝安装"))
+        if not _is_allowed_url(download_url):
+            raise ToolboxStoreError(_("下载地址不在 %s 域名下，已拒绝") % ALLOWED_HOST)
 
         fd, path = tempfile.mkstemp(prefix="mybooks_tool_store_", suffix=".zip")
         try:

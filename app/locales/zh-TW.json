@@ -1350,10 +1350,11 @@
     "updateTool": "更新「{name}」",
     "uninstallConfirm": "確定要解除安裝「{name}」嗎？重啟後徹底生效，工具自身的資料不會被清除。",
     "storeTitle": "工具商店",
-    "storeSubtitle": "從 MyBooks 取得可安裝的工具（尚未上線，開啟前需在系統設定中開啟「啟用工具箱商店」）",
+    "storeSubtitle": "從 MyBooks 取得可安裝的工具（需要在系統設定中開啟「啟用工具箱商店」）",
     "storeEmpty": "暫無可安裝工具",
     "storeInstall": "安裝",
-    "storeUpdate": "更新"
+    "storeUpdate": "更新",
+    "storeFavorite": "精選工具"
   },
   "toolboxTool": {
     "title": "工具",
