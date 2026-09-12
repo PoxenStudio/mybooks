@@ -23,6 +23,7 @@
       :style="{ height: iframeHeight }"
       class="toolbox-tool-frame"
       frameborder="0"
+      scrolling="no"
     ></iframe>
   </v-container>
 </template>
@@ -137,7 +138,8 @@ export default {
 }
 .toolbox-tool-frame {
   width: 100%;
-  border: none;
+  border: 1px solid #90CAF9;
   transition: height 0.15s ease;
+  overflow: hidden;
 }
 </style>

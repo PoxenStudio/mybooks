@@ -39,6 +39,8 @@ import os
 from typing import Callable, List, Optional
 
 from webserver import loader
+from webserver.base.formatter import SimpleBookFormatter
+from webserver.base.global_state import get_global_state
 from webserver.i18n import _
 
 # Core API 的语义化版本号，工具 manifest.json 里的 core_api_version 据此做兼容性检查
@@ -63,12 +65,14 @@ class _NamespaceBase:
 class CalibreAPI(_NamespaceBase):
     """Calibre 书库访问。"""
 
-    def search_books(self, query: str, max_results: int = 20) -> List[dict]:
+    def search_books(self, query: str, max_results: int = 20, include_comments: bool = False) -> List[dict]:
         """按 Calibre 搜索语法查询书籍，返回 dict 列表（含 id/title/authors/formats 等字段）。"""
         ids = list(self._owner.db.new_api.search(query))[:max_results]
         if not ids:
             return []
-        return self._owner.db.get_data_as_dict(ids=ids)
+        books = self._owner.db.get_data_as_dict(ids=ids)
+        cdn_url = get_global_state().cdn_url
+        return [SimpleBookFormatter(b, cdn_url).format(include_comments) for b in books]
 
     def get_metadata(self, book_id: int, get_cover: bool = False, cover_as_data: bool = False):
         """返回指定书籍的 Calibre Metadata 对象；`get_cover`/`cover_as_data` 透传给 Calibre。"""
@@ -89,6 +93,10 @@ class CalibreAPI(_NamespaceBase):
     def cover(self, book_id: int) -> Optional[bytes]:
         """返回书籍封面的原始字节，没有封面时返回 None。"""
         return self._owner.db.cover(book_id, index_is_id=True)
+
+    def set_cover(self, book_id: int, cover: bytes) -> None:
+        """设置书籍封面。"""
+        self._owner.db.set_cover(book_id, cover)
 
     def import_book(self, mi, formats: List[str]) -> Optional[int]:
         """将本地格式文件与给定元数据一并入库，返回新书的 book_id。"""

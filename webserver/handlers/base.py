@@ -18,6 +18,7 @@ from tornado import web
 from webserver.i18n import _, choose_language, set_language
 from webserver import loader, utils
 from webserver.base.formatter import BookFormatter
+from webserver.base.global_state import get_global_state
 from webserver.services.resource_service import ResourceService
 from webserver.services.book_review_service import BookReviewService
 from webserver.models import BookReadingStats, BookReview, Item, ManualReadingLog, Message, Reader, Reading, ReadingRecord, ReadingState
@@ -327,6 +328,10 @@ class BaseHandler(web.RequestHandler):
             self.api_url = proto + "://" + host
             self.cdn_url = proto + "://" + CONF["static_host"]
         CONF["site_url"] = self.site_url
+
+        # 供不持有当前请求 handler 的代码（如后台任务里的 CoreAPI）读取最近一次请求算出的
+        # cdn_url/api_url，见 webserver/base/global_state.py 顶部说明。
+        get_global_state().update(cdn_url=self.cdn_url, api_url=self.api_url)
 
     def prepare(self):
         # 性能分析：记录请求开始时间

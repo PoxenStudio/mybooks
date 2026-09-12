@@ -118,19 +118,19 @@ class ToolSet:
         from .epub_beautify import EpubBeautifyTool
 
         ToolSet.register(MergeFormatsTool.info())
-        ToolSet.register(ReviewBookLanguageTool.info())
         ToolSet.register(EpubBeautifyTool.info())
+        ToolSet.register(MimoTTSTool.info())
         ToolSet.register(TextReplaceTool.info())
         ToolSet.register(TxtEncodingFixerTool.info())
         ToolSet.register(ChineseConverterTool.info())
-        ToolSet.register(MinifyPdfTool.info())
         ToolSet.register(TextProcessor.info())
         ToolSet.register(FormatsPruningTool.info())
-        ToolSet.register(EpubFixerTool.info())
         ToolSet.register(EpubSplitTool.info())
         ToolSet.register(AuthorCleanTool.info())
-        ToolSet.register(MimoTTSTool.info())
         ToolSet.register(RareBookDownloader.info())
+        ToolSet.register(ReviewBookLanguageTool.info())
+        ToolSet.register(EpubFixerTool.info())
+        ToolSet.register(MinifyPdfTool.info())
         ToolSet.register(BookBarnAcceptorTool.info())
 
         MinifyPdfTool.cleanup_old_files()

@@ -1619,7 +1619,7 @@
     "modelNamePlaceholder": "例如：mimo-v2.5-tts",
     "modelFixed": "MiMo TTS 類型下模型固定",
     "authType": "認證方式",
-    "authTypeApiKey": "api-key",
+    "authTypeApiKey": "API Key",
     "authTypeBearer": "Authorization: Bearer",
     "apiKey": "API Key",
     "apiKeyPlaceholder": "輸入你的 API Key",

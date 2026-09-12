@@ -1625,7 +1625,7 @@
     "modelNamePlaceholder": "e.g. mimo-v2.5-tts",
     "modelFixed": "Fixed for MiMo TTS",
     "authType": "Auth Method",
-    "authTypeApiKey": "api-key",
+    "authTypeApiKey": "API Key",
     "authTypeBearer": "Authorization: Bearer",
     "apiKey": "API Key",
     "apiKeyPlaceholder": "Enter your API Key",
