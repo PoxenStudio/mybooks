@@ -2,12 +2,15 @@
 """CoreAPI 单元测试（不依赖真实 Calibre/DB，用轻量 fake owner 验证命名空间转发逻辑）。
 
 覆盖 document/Toolbox_Dynamic_Design.md 第二节描述的 M0 交付物：
-- CoreAPI.calibre / .db / .tasks / .messages / .storage / .settings 六个命名空间存在且可用
+- CoreAPI.calibre / .db / .tasks / .messages / .storage / .settings / .utils
+  七个命名空间存在且可用
 - 已有 BaseTool 方法（import_file / merge_book_formats / delete_book_by_id /
   create_task / ...）的 CoreAPI 封装原样转发，不改变行为
 - CoreAPI.storage 的 get_config/set_config 新增能力
 - CoreAPI.settings 的白名单只读语义：白名单内的 key 转发到 CONF，白名单外的 key
   一律返回 default，不触碰真实 CONF
+- CoreAPI.utils 转发 `webserver/utils.py` 里的 strip/get_title_sort/
+  guess_title_author_from_filename/parse_date，不改变行为
 """
 import os
 import shutil
@@ -55,7 +58,7 @@ class TestCoreAPINamespaces(unittest.TestCase):
         self.assertRegex(CORE_API_VERSION, r"^\d+\.\d+\.\d+$")
 
     def test_namespaces_exist(self):
-        for ns in ("calibre", "db", "tasks", "messages", "storage", "settings"):
+        for ns in ("calibre", "db", "tasks", "messages", "storage", "settings", "utils"):
             self.assertTrue(hasattr(self.api, ns), f"CoreAPI 缺少命名空间 {ns}")
 
     # --- CoreAPI.calibre：转发到 owner 已有方法，行为不变 ---
@@ -205,6 +208,34 @@ class TestCoreAPINamespaces(unittest.TestCase):
         mock_get_settings.return_value = {"BOOKBARN_TOKEN": "super-secret"}
         self.assertEqual(self.api.settings.get("BOOKBARN_TOKEN", None), None)
         mock_get_settings.assert_not_called()
+
+
+class TestUtilsAPI(unittest.TestCase):
+    """CoreAPI.utils：转发 `webserver/utils.py` 的纯函数，不依赖 owner 状态。"""
+
+    def setUp(self):
+        self.owner = FakeOwner()
+        self.api = CoreAPI(self.owner)
+
+    def test_strip_trims_and_drops_unprintable(self):
+        self.assertEqual(self.api.utils.strip("  hi\x00there  "), "hithere")
+
+    @patch("webserver.utils.get_title_sort")
+    def test_get_title_sort_forwards(self, mock_get_title_sort):
+        mock_get_title_sort.return_value = "the matrix"
+        self.assertEqual(self.api.utils.get_title_sort("The Matrix"), "the matrix")
+        mock_get_title_sort.assert_called_once_with("The Matrix")
+
+    def test_guess_title_author_from_filename_forwards(self):
+        title, author = self.api.utils.guess_title_author_from_filename("《三体》作者：刘慈欣")
+        self.assertEqual(title, "三体")
+        self.assertEqual(author, "刘慈欣")
+
+    def test_parse_date_forwards(self):
+        result = self.api.utils.parse_date("2024-05-01")
+        self.assertIsNotNone(result)
+        self.assertEqual((result.year, result.month, result.day), (2024, 5, 1))
+        self.assertIsNone(self.api.utils.parse_date(""))
 
 
 if __name__ == "__main__":

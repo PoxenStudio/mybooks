@@ -14,6 +14,7 @@ Calibre / SQLAlchemy 的内部实现细节解耦。设计背景见
 - `CoreAPI.messages`  —— 站内消息
 - `CoreAPI.storage`   —— 工具专属数据目录 + 持久配置
 - `CoreAPI.settings`  —— 系统配置只读白名单（`SettingsAPI.ALLOWED_KEYS`）
+- `CoreAPI.utils`     —— 通用文本/日期处理，转发 `webserver/utils.py` 里的纯函数
 
 M0 阶段只做接口收敛，不改变现有 14 个内置工具的行为：凡是 `BaseTool` 已有对应方法
 的（`import_file`、`merge_book_formats`、`delete_book_by_id`、`get_all_book_ids`、
@@ -46,7 +47,8 @@ from webserver.i18n import _
 # Core API 的语义化版本号，工具 manifest.json 里的 core_api_version 据此做兼容性检查
 # （见 document/Toolbox_Dynamic_Design.md 2.3 节）。新增向后兼容的能力（如新命名空间/新方法）
 # bump 次版本号；破坏兼容性的改动 bump 主版本号。1.1.0：新增 CoreAPI.settings 命名空间。
-CORE_API_VERSION = "1.1.0"
+# 1.2.0：新增 CoreAPI.utils 命名空间。
+CORE_API_VERSION = "1.2.0"
 
 
 class _NamespaceBase:
@@ -304,6 +306,30 @@ class SettingsAPI(_NamespaceBase):
         return loader.get_settings().get(key, default)
 
 
+class UtilsAPI(_NamespaceBase):
+    """通用文本/日期处理，纯函数转发给 `webserver/utils.py`，不依赖宿主 `BaseTool` 的状态。"""
+
+    def strip(self, s: str) -> str:
+        """去除首尾空白，并过滤掉其余不可打印字符，转发 `webserver.utils.super_strip`。"""
+        from webserver.utils import super_strip
+        return super_strip(s)
+
+    def get_title_sort(self, title: str) -> str:
+        """把书名转成用于排序的 ASCII 小写形式，转发 `webserver.utils.get_title_sort`。"""
+        from webserver.utils import get_title_sort
+        return get_title_sort(title)
+
+    def guess_title_author_from_filename(self, name: str):
+        """从"《书名》作者：xxx"这类文件名里拆出 `(title, author)`。"""
+        from webserver.utils import guess_title_author_from_filename
+        return guess_title_author_from_filename(name)
+
+    def parse_date(self, date_str: str):
+        """按常见格式（含中文"年月日"）解析日期字符串，失败返回 `None`。"""
+        from webserver.utils import parse_date
+        return parse_date(date_str)
+
+
 class CoreAPI:
     """按命名空间聚合的 Core API 入口，`BaseTool.__init__` 里构造一次并挂在 `self.api`。"""
 
@@ -316,3 +342,4 @@ class CoreAPI:
         self.messages = MessagesAPI(owner)
         self.storage = StorageAPI(owner)
         self.settings = SettingsAPI(owner)
+        self.utils = UtilsAPI(owner)
