@@ -1513,16 +1513,16 @@ def mark_notes_in_html(html_str: str, normalize: bool = True,
 
     has_aside = bool(_FOOTNOTE_ASIDE_RE.search(html_str))
     if has_aside:
-        # A 型：给 footnote aside 追加容器类
+        # A 型：给 footnote aside 追加容器类。_add_class 兼容单/双引号且幂等
+        # （mb-notes 已在 class 里时原样返回）——此前只匹配双引号 class，单引号
+        # class（合法 XML 属性写法）的 aside 会追加第二个 class 属性，整份内容
+        # 文档非良构（与缺 xmlns:epub 声明同一失效级别，严格阅读器整章不可读）
         def _aside_repl(m):
             tag = m.group(0)
-            cls_m = re.search(r'\bclass\s*=\s*"([^"]*)"', tag)
-            if cls_m:
-                if 'mb-notes' in cls_m.group(1):
-                    return tag
-                return tag.replace(cls_m.group(0),
-                                   'class="%s mb-notes"' % cls_m.group(1), 1)
-            return tag[:-1] + ' class="mb-notes">'
+            self_closing = tag.rstrip()[-2:] == '/>'
+            body = tag[:-2].rstrip() if self_closing else tag[:-1]
+            attrs = _add_class(body[len('<aside'):], 'mb-notes')
+            return ('<aside%s/>' if self_closing else '<aside%s>') % attrs
         html_str = re.sub(r'<aside\b[^>]*epub:type\s*=\s*["\'][^"\']*footnote[^>]*>',
                           _aside_repl, html_str, flags=re.I)
     elif normalize:
