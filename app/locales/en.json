@@ -653,7 +653,7 @@
     "enable_opds_auth": "Enable OPDS catalog service authentication (requires username and password to access OPDS)",
     "enable_webdav_service": "Enable WebDAV service (allows readers to access the library via the WebDAV protocol)",
     "enable_podcast_service": "Enable Podcast catalog service (allows readers to access the library via the Podcast protocol)",
-    "enable_toolbox_dev_mode": "Enable Toolbox developer mode (lets admins upload a zip to install/update a tool from the Toolbox admin page; debugging only)",
+    "enable_toolbox_dev_mode": "Enable Toolbox developer mode (lets admins upload a zip to install/update a tool from the Toolbox admin page)",
     "enable_toolbox_store": "Enable Toolbox store (fetch installable tools/updates from mybooks.top; not live yet, list stays empty once enabled)",
     "allow_user_disable_statistic": "Allow users to opt out of reading/download statistics (when off, all users are tracked by default)",
     "enable_homepage_reading_stats": "Show reading stats banner on the homepage (enabled by default)",

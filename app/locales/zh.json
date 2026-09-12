@@ -910,7 +910,7 @@
     "enable_opds_auth": "启用OPDS目录服务认证（开启后访问OPDS需要输入用户名和密码）",
     "enable_webdav_service": "启用WebDAV服务（用于阅读器通过WebDAV协议访问书库）",
     "enable_podcast_service": "启用Podcast订阅服务（用于播放器通过Podcast协议访问有声书）",
-    "enable_toolbox_dev_mode": "启用工具箱开发者模式（允许在工具箱管理页手动上传 zip 安装/更新工具，仅用于调试）",
+    "enable_toolbox_dev_mode": "启用工具箱开发者模式（允许在工具箱管理页手动上传 zip 安装/更新工具）",
     "enable_toolbox_store": "启用工具箱商店（从MyBooks网站获取可安装工具列表与更新，尚未上线，开启后暂无可安装工具）",
     "allow_user_disable_statistic": "允许用户自行关闭阅读及下载数据采集（关闭后默认采集所有用户的数据）",
     "enable_homepage_reading_stats": "在首页显示阅读统计 Banner（默认开启）",

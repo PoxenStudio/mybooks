@@ -594,6 +594,7 @@ class AdminSettings(BaseHandler):
             "ENABLE_SHARED_NOTES",
             "ENABLE_AUDIO_SUBTITLE",
             "UPLOAD_IGNORE_TITLE_CHECKING",
+            "ENABLE_TOOLBOX_DEV_MODE",
         ]
 
         current_icon = CONF.get(

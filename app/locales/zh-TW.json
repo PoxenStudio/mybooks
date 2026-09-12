@@ -904,7 +904,7 @@
     "enable_opds_auth": "啟用 OPDS 目錄服務認證（開啟後訪問OPDS需要輸入用戶名和密碼）",
     "enable_webdav_service": "啟用 WebDAV 服務（用於閱讀器透過 WebDAV 協定存取書庫）",
     "enable_podcast_service": "啟用 Podcast 訂閱服務（用於播放器透過 Podcast 協定存取有聲書）",
-    "enable_toolbox_dev_mode": "啟用工具箱開發者模式（允許在工具箱管理頁手動上傳 zip 安裝／更新工具，僅用於除錯）",
+    "enable_toolbox_dev_mode": "啟用工具箱開發者模式（允許在工具箱管理頁手動上傳 zip 安裝／更新工具）",
     "enable_toolbox_store": "啟用工具箱商店（從MyBooks取得可安裝工具清單與更新，尚未上線，開啟後暫無可安裝工具）",
     "allow_user_disable_statistic": "允許使用者自行關閉閱讀及下載資料採集（關閉後預設採集所有使用者的資料）",
     "enable_homepage_reading_stats": "在首頁顯示閱讀統計 Banner（預設開啟）",

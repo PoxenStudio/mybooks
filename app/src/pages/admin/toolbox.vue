@@ -108,7 +108,7 @@
     </v-row>
 
     <!-- 工具商店：ENABLE_TOOLBOX_STORE=False 时列表恒为空，展示"暂无可安装工具" -->
-    <v-row class="mt-6 mb-2" align="center">
+    <v-row class="mt-6 mb-2" align="center" hidden>
       <v-col>
         <span class="text-h6 font-weight-bold">{{ $t('toolbox.storeTitle') }}</span>
         <div class="text-caption grey--text mt-1">{{ $t('toolbox.storeSubtitle') }}</div>
