@@ -34,3 +34,4 @@ jieba
 inotify_simple
 reportlab
 PyMuPDF
+epub-translator

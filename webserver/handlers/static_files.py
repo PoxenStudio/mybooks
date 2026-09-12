@@ -252,16 +252,26 @@ class EpubReader(BaseHandler):
 
 class ToolIconHandler(BaseHandler):
     def get(self, tool_id):
-        resource_path = CONF.get("resource_path", "")
-        toolbox_dir = os.path.join(resource_path, "toolbox")
+        from webserver.toolbox import toolbox_manager
+
         icon_path = None
-        for ext in ("jpg", "png"):
-            candidate = os.path.join(toolbox_dir, f"{tool_id}.{ext}")
-            if os.path.exists(candidate):
-                icon_path = candidate
-                break
+        # 动态/外部工具（source 为 store/dev）的图标固定放在包根目录下的 icon.png，
+        # 见 document/Toolbox_Dynamic_Design.md 三、工具包结构。
+        dynamic_icon = os.path.join(toolbox_manager.tool_root(), tool_id, "icon.png")
+        if os.path.exists(dynamic_icon):
+            icon_path = dynamic_icon
+
         if icon_path is None:
-            icon_path = os.path.join(toolbox_dir, "default_tool.png")
+            resource_path = CONF.get("resource_path", "")
+            toolbox_dir = os.path.join(resource_path, "toolbox")
+            for ext in ("jpg", "png"):
+                candidate = os.path.join(toolbox_dir, f"{tool_id}.{ext}")
+                if os.path.exists(candidate):
+                    icon_path = candidate
+                    break
+            if icon_path is None:
+                icon_path = os.path.join(toolbox_dir, "default_tool.png")
+
         if not os.path.exists(icon_path):
             raise web.HTTPError(404, "Tool icon not found")
         mime_type = mimetypes.guess_type(icon_path)[0] or "image/jpeg"
