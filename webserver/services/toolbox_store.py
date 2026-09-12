@@ -92,7 +92,8 @@ class ToolboxStoreClient:
             return []
 
     def download(self, download_url: str, expected_sha256: str) -> str:
-        """下载 zip 到本地临时文件并校验 sha256（**必须**校验，3.4 节），返回临时文件路径。
+        """下载安装包（zip 或 7z，见 toolbox_manager._extract_archive）到本地临时文件并校验
+        sha256（**必须**校验，3.4 节），返回临时文件路径。
 
         调用方负责在用完（无论成功还是失败）后删除返回的临时文件。
         :raises ToolboxStoreError: 商店未开启 / 下载地址不在白名单域名下 / 下载失败 /
@@ -105,7 +106,12 @@ class ToolboxStoreClient:
         if not _is_allowed_url(download_url):
             raise ToolboxStoreError(_("下载地址不在 %s 域名下，已拒绝") % ALLOWED_HOST)
 
-        fd, path = tempfile.mkstemp(prefix="mybooks_tool_store_", suffix=".zip")
+        # 后缀只是临时文件命名习惯，真正的格式判断在 toolbox_manager._extract_archive() 里
+        # 按文件头识别；这里尽量沿用 download_url 的后缀（.zip / .7z）方便排查问题时肉眼辨认。
+        suffix = os.path.splitext(urlparse(download_url).path)[1].lower()
+        if suffix not in (".zip", ".7z"):
+            suffix = ".zip"
+        fd, path = tempfile.mkstemp(prefix="mybooks_tool_store_", suffix=suffix)
         try:
             with os.fdopen(fd, "wb") as f:
                 with requests.get(

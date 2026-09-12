@@ -28,6 +28,7 @@ sentencex==0.6.1
 mcp>=1.0.0
 Pillow
 pyzbar
+py7zr
 requests_toolbelt
 WsgiDAV>=4.0.0
 jieba

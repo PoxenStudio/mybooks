@@ -72,14 +72,19 @@ class AdminToolList(BaseHandler):
 
 
 def _save_upload_to_tmpfile(file_meta) -> str:
-    fd, path = tempfile.mkstemp(prefix="mybooks_tool_upload_", suffix=".zip")
+    # 后缀只是临时文件命名习惯，真正的格式判断在 toolbox_manager._extract_archive() 里按
+    # 文件头识别；这里尽量沿用原始文件名的后缀（.zip / .7z）只是方便排查问题时肉眼辨认。
+    suffix = os.path.splitext(file_meta.get("filename") or "")[1].lower()
+    if suffix not in (".zip", ".7z"):
+        suffix = ".zip"
+    fd, path = tempfile.mkstemp(prefix="mybooks_tool_upload_", suffix=suffix)
     with os.fdopen(fd, "wb") as f:
         f.write(file_meta["body"])
     return path
 
 
 class AdminToolInstallUpload(BaseHandler):
-    """开发者模式：本地上传 zip 安装一个全新的外部工具。见 3.5 节。"""
+    """开发者模式：本地上传 zip/7z 安装一个全新的外部工具。见 3.5 节。"""
 
     @js
     @is_admin
@@ -108,7 +113,7 @@ class AdminToolInstallUpload(BaseHandler):
 
 
 class AdminToolUpdateUpload(BaseHandler):
-    """开发者模式：本地上传 zip 更新一个已安装的工具（builtin 或 tool 均可）。见 3.5 节。"""
+    """开发者模式：本地上传 zip/7z 更新一个已安装的工具（builtin 或 tool 均可）。见 3.5 节。"""
 
     @js
     @is_admin

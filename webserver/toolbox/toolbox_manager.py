@@ -31,6 +31,11 @@ import tempfile
 import zipfile
 from typing import Dict, List, Optional, Set, Type
 
+try:
+    import py7zr
+except ImportError:  # pragma: no cover - 可选依赖，未安装时 7z 安装包会给出明确报错
+    py7zr = None
+
 from webserver.i18n import _
 from webserver.loader import get_settings
 from webserver.models import InstalledTool
@@ -130,6 +135,57 @@ def _safe_extract(zf: zipfile.ZipFile, dest_dir: str) -> None:
     zf.extractall(dest_dir)
 
 
+# zip: 本地文件头 / 空归档 / 分卷归档三种 magic；7z: 官方固定文件头。用文件头而不是文件名
+# 后缀识别格式——调用方传进来的临时文件名后缀（.zip/.7z）只是命名习惯，不保证和实际内容一致
+# （比如商店索引/上传文件名被人为改过后缀）。
+_ZIP_MAGIC_PREFIXES = (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")
+_SEVENZIP_MAGIC = b"7z\xbc\xaf\x27\x1c"
+
+
+def _detect_archive_kind(archive_path: str) -> str:
+    """按文件头 magic number 判断安装包格式，返回 "zip" 或 "7z"；两者都不是则报错。"""
+    try:
+        with open(archive_path, "rb") as f:
+            header = f.read(8)
+    except OSError as err:
+        raise ToolValidationError(_("无法读取安装包: %s") % err) from err
+    if header.startswith(_ZIP_MAGIC_PREFIXES):
+        return "zip"
+    if header.startswith(_SEVENZIP_MAGIC):
+        return "7z"
+    raise ToolValidationError(_("不支持的安装包格式，目前仅支持 zip / 7z"))
+
+
+def _safe_extract_7z(archive: "py7zr.SevenZipFile", dest_dir: str) -> None:
+    """7z 版的 _safe_extract：同样先校验全部成员路径，避免路径穿越，再解压。"""
+    dest_abs = os.path.abspath(dest_dir)
+    for name in archive.getnames():
+        member_path = os.path.abspath(os.path.join(dest_dir, name))
+        if not member_path.startswith(dest_abs + os.sep) and member_path != dest_abs:
+            raise ToolValidationError(_("7z 包内包含非法路径：%s") % name)
+    archive.extractall(path=dest_dir)
+
+
+def _extract_archive(archive_path: str, dest_dir: str) -> None:
+    """把安装包解压到 dest_dir，同时支持 zip 和 7z（按文件头自动识别）。7z 依赖可选的
+    py7zr 库；服务器没装的话给出明确的可读错误，而不是 ImportError/AttributeError。"""
+    kind = _detect_archive_kind(archive_path)
+    if kind == "zip":
+        try:
+            with zipfile.ZipFile(archive_path) as zf:
+                _safe_extract(zf, dest_dir)
+        except zipfile.BadZipFile as err:
+            raise ToolValidationError(_("不是合法的 zip 文件: %s") % err) from err
+    else:
+        if py7zr is None:
+            raise ToolValidationError(_("服务器未安装 7z 解压依赖（py7zr），无法安装 7z 格式的工具包"))
+        try:
+            with py7zr.SevenZipFile(archive_path, mode="r") as archive:
+                _safe_extract_7z(archive, dest_dir)
+        except py7zr.exceptions.Bad7zFile as err:
+            raise ToolValidationError(_("不是合法的 7z 文件: %s") % err) from err
+
+
 # ---------------------------------------------------------------------------
 # 安装 / 更新（3.3 / 3.5 节，M1 只支持开发者模式来源）
 # ---------------------------------------------------------------------------
@@ -142,7 +198,10 @@ def install_from_zip(
     installed_by: Optional[int] = None,
     source: str = InstalledTool.SOURCE_DEV,
 ) -> InstalledTool:
-    """校验并把 zip 解压落盘到 TOOL_ROOT/<tool_id>/，写入/更新 InstalledTool 记录。
+    """校验并把安装包解压落盘到 TOOL_ROOT/<tool_id>/，写入/更新 InstalledTool 记录。
+
+    尽管参数名/函数名沿用了历史上的"zip"叫法，`zip_path` 实际上可以是 zip 或 7z 包
+    （按文件头自动识别，见 `_extract_archive`），商店下载与开发者模式上传都走这同一个函数。
 
     只做文件系统 + 数据库操作，不做任何动态 import / 路由注册 —— 那些只在下次进程启动、
     `load_all()` 运行时才会发生（"重启生效"模型，见 3.3.1 节）。
@@ -155,11 +214,7 @@ def install_from_zip(
     tmp_dir = tempfile.mkdtemp(prefix="mybooks_tool_install_")
     moved = False
     try:
-        try:
-            with zipfile.ZipFile(zip_path) as zf:
-                _safe_extract(zf, tmp_dir)
-        except zipfile.BadZipFile as err:
-            raise ToolValidationError(_("不是合法的 zip 文件: %s") % err) from err
+        _extract_archive(zip_path, tmp_dir)
 
         manifest = _read_manifest(tmp_dir)
         validate_manifest(manifest)

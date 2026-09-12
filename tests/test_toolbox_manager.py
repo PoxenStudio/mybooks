@@ -92,8 +92,8 @@ class PingHandler(BaseHandler):
 '''
 
 
-def _write_demo_tool(tool_id="demo_tool", revision="1.0.0", entry_backend="tool.DemoTool", extra_manifest=None):
-    """在临时目录里搭建一个符合 3.1 节结构的工具源码树，打成 zip，返回 zip 路径。"""
+def _build_demo_tool_src(tool_id="demo_tool", revision="1.0.0", entry_backend="tool.DemoTool", extra_manifest=None):
+    """在临时目录里搭建一个符合 3.1 节结构的工具源码树，返回源码目录路径（调用方负责打包）。"""
     src_dir = tempfile.mkdtemp(prefix="mybooks_demo_tool_src_")
     manifest = {
         "tool_id": tool_id,
@@ -129,6 +129,12 @@ def _write_demo_tool(tool_id="demo_tool", revision="1.0.0", entry_backend="tool.
     with open(os.path.join(frontend_dir, "index.html"), "w", encoding="utf-8") as f:
         f.write("<html><body>demo</body></html>")
 
+    return src_dir
+
+
+def _write_demo_tool(tool_id="demo_tool", revision="1.0.0", entry_backend="tool.DemoTool", extra_manifest=None):
+    """搭建一个符合 3.1 节结构的工具源码树，打成 zip，返回 zip 路径。"""
+    src_dir = _build_demo_tool_src(tool_id, revision, entry_backend, extra_manifest)
     zip_path = os.path.join(tempfile.mkdtemp(prefix="mybooks_demo_tool_zip_"), f"{tool_id}-{revision}.zip")
     with zipfile.ZipFile(zip_path, "w") as zf:
         for root, _dirs, files in os.walk(src_dir):
@@ -139,6 +145,23 @@ def _write_demo_tool(tool_id="demo_tool", revision="1.0.0", entry_backend="tool.
 
     shutil.rmtree(src_dir, ignore_errors=True)
     return zip_path
+
+
+def _write_demo_tool_7z(tool_id="demo_tool", revision="1.0.0", entry_backend="tool.DemoTool", extra_manifest=None):
+    """搭建同样的工具源码树，打成 7z（覆盖 `_extract_archive` 的 7z 分支），返回 7z 路径。"""
+    import py7zr  # 惰性 import：只有这个测试需要，py7zr 不是必装依赖时其它测试不受影响
+
+    src_dir = _build_demo_tool_src(tool_id, revision, entry_backend, extra_manifest)
+    archive_path = os.path.join(tempfile.mkdtemp(prefix="mybooks_demo_tool_7z_"), f"{tool_id}-{revision}.7z")
+    with py7zr.SevenZipFile(archive_path, "w") as archive:
+        for root, _dirs, files in os.walk(src_dir):
+            for name in files:
+                abs_path = os.path.join(root, name)
+                rel_path = os.path.relpath(abs_path, src_dir)
+                archive.write(abs_path, rel_path)
+
+    shutil.rmtree(src_dir, ignore_errors=True)
+    return archive_path
 
 
 class TestToolboxManager(unittest.TestCase):
@@ -191,6 +214,31 @@ class TestToolboxManager(unittest.TestCase):
         self.assertTrue(record.enabled)
         self.assertTrue(os.path.isdir(toolbox_manager._tool_dir("demo_tool")))
         self.assertIsNotNone(InstalledTool.get("demo_tool"))
+
+    def test_install_new_tool_from_7z_package(self):
+        """商店/开发者模式下，7z 包（按文件头识别，不看文件名后缀）应该和 zip 包一样能装成功。"""
+        try:
+            import py7zr  # noqa: F401
+        except ImportError:
+            self.skipTest("py7zr 未安装，跳过 7z 安装包测试")
+
+        archive_path = _write_demo_tool_7z(tool_id="demo_tool_7z")
+        self._tmp_files.append(archive_path)
+        record = toolbox_manager.install_from_zip(archive_path, is_update=False, installed_by=1)
+
+        self.assertEqual(record.type, InstalledTool.TYPE_TOOL)
+        self.assertEqual(record.installed_revision, "1.0.0")
+        self.assertTrue(os.path.isdir(toolbox_manager._tool_dir("demo_tool_7z")))
+        self.assertIsNotNone(InstalledTool.get("demo_tool_7z"))
+
+    def test_install_rejects_unknown_archive_format(self):
+        garbage_path = os.path.join(tempfile.mkdtemp(prefix="mybooks_garbage_"), "not_an_archive.zip")
+        with open(garbage_path, "wb") as f:
+            f.write(b"this is not a zip or 7z file")
+        self._tmp_files.append(garbage_path)
+
+        with self.assertRaises(toolbox_manager.ToolValidationError):
+            toolbox_manager.install_from_zip(garbage_path, is_update=False)
 
     def test_install_duplicate_tool_id_rejected(self):
         zip_path = self._install(tool_id="demo_tool")

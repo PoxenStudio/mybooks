@@ -174,7 +174,7 @@
     >
       <v-file-input
         v-model="installFile"
-        accept=".zip"
+        accept=".zip,.7z"
         :label="$t('toolbox.selectZip')"
         show-size
       ></v-file-input>
@@ -195,7 +195,7 @@
     >
       <v-file-input
         v-model="updateFile"
-        accept=".zip"
+        accept=".zip,.7z"
         :label="$t('toolbox.selectZip')"
         show-size
       ></v-file-input>
