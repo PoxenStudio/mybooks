@@ -11,10 +11,14 @@
   一律返回 default，不触碰真实 CONF
 - CoreAPI.utils 转发 `webserver/utils.py` 里的 strip/get_title_sort/
   guess_title_author_from_filename/parse_date，不改变行为
+- CoreAPI.calibre.new_metadata 构造 BookMetadata（Protocol 本身不能被实例化，真正的
+  构造逻辑转发给 calibre.ebooks.metadata.book.base.Metadata），调用方不需要 import calibre
 """
 import os
 import shutil
+import sys
 import tempfile
+import types
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -236,6 +240,48 @@ class TestUtilsAPI(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual((result.year, result.month, result.day), (2024, 5, 1))
         self.assertIsNone(self.api.utils.parse_date(""))
+
+
+def _install_fake_calibre_metadata_module():
+    """往 sys.modules 里塞一份假的 calibre.ebooks.metadata.book.base，让
+    `from calibre.ebooks.metadata.book.base import Metadata` 在没有真实 Calibre 的
+    环境下也能导入——`FakeMetadata` 只记录构造参数，足够验证 `new_metadata` 的转发逻辑。
+    """
+    class FakeMetadata:
+        def __init__(self, title, authors):
+            self.title = title
+            self.authors = authors
+
+    base = types.ModuleType("calibre.ebooks.metadata.book.base")
+    base.Metadata = FakeMetadata
+    modules = {
+        "calibre": types.ModuleType("calibre"),
+        "calibre.ebooks": types.ModuleType("calibre.ebooks"),
+        "calibre.ebooks.metadata": types.ModuleType("calibre.ebooks.metadata"),
+        "calibre.ebooks.metadata.book": types.ModuleType("calibre.ebooks.metadata.book"),
+        "calibre.ebooks.metadata.book.base": base,
+    }
+    return modules
+
+
+class TestCalibreNewMetadata(unittest.TestCase):
+    """CoreAPI.calibre.new_metadata：BookMetadata 是 Protocol，不能被实例化，真正的构造
+    转发给 calibre 的 Metadata，调用方不需要自己 import calibre。"""
+
+    def setUp(self):
+        self.owner = FakeOwner()
+        self.api = CoreAPI(self.owner)
+
+    def test_new_metadata_forwards_to_calibre(self):
+        with patch.dict(sys.modules, _install_fake_calibre_metadata_module()):
+            mi = self.api.calibre.new_metadata("Title", ["Author A"])
+        self.assertEqual(mi.title, "Title")
+        self.assertEqual(mi.authors, ["Author A"])
+
+    def test_new_metadata_defaults_authors_when_empty(self):
+        with patch.dict(sys.modules, _install_fake_calibre_metadata_module()):
+            mi = self.api.calibre.new_metadata("Title")
+        self.assertEqual(len(mi.authors), 1)
 
 
 if __name__ == "__main__":
