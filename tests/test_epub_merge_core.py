@@ -1687,5 +1687,100 @@ class TestHtmlBlock(unittest.TestCase):
         self.assertIn("<p>简介</p>", out)
 
 
+class TestHtmlMediaTypeNormalize(unittest.TestCase):
+    """2026-09-12 review 修复：text/html 内容文档出包归一 application/xhtml+xml。
+
+    EPUB3 内容文档只允许 xhtml media-type（version=3.0 的包里保留 text/html
+    会被 epubcheck 判违规）；归一只改 OPF 描述、不动文档字节，validate_output
+    对 text/html 守门防回归。
+    """
+
+    def _html_mt_book(self, mark):
+        """spine 两篇：ch1 标 text/html、ch2 标 xhtml；另附 manifest 未列的散件 stray.html。"""
+        container = (
+            '<?xml version="1.0"?>'
+            '<container version="1.0" '
+            'xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+            '<rootfiles><rootfile full-path="OEBPS/content.opf" '
+            'media-type="application/oebps-package+xml"/></rootfiles></container>')
+        docs = [("ch1", "ch1.xhtml", "text/html"),
+                ("ch2", "ch2.xhtml", "application/xhtml+xml")]
+        opf = _build_opf("%s卷" % mark, ("作者A",), docs, ncx=True)
+        files = {
+            "META-INF/container.xml": container.encode("utf-8"),
+            "OEBPS/content.opf": opf.encode("utf-8"),
+            "OEBPS/ch1.xhtml":
+                ('<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                 '<p>%s-1</p></body></html>' % mark).encode("utf-8"),
+            "OEBPS/ch2.xhtml":
+                ('<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                 '<p>%s-2</p></body></html>' % mark).encode("utf-8"),
+            "OEBPS/stray.html":
+                b'<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                b"<p>stray</p></body></html>",
+        }
+        files["OEBPS/toc.ncx"] = _build_ncx(
+            "%s卷" % mark,
+            [("ch1.xhtml", "第1章"), ("ch2.xhtml", "第2章")]).encode("utf-8")
+        return _make_epub(files)
+
+    def test_text_html_relabeled_and_bytes_kept(self):
+        merged = lib.merge_epubs(
+            [{"data": self._html_mt_book("甲"), "title": "甲卷"},
+             {"data": _make_min_epub(title="乙卷", n_docs=1), "title": "乙卷"}],
+            {"title": "合集", "authors": ["作者"]})
+        root = ET.fromstring(zipfile.ZipFile(io.BytesIO(merged)).read("content.opf"))
+        _OPF = "{http://www.idpf.org/2007/opf}"
+        mts = {i.get("href"): i.get("media-type")
+               for i in root.iter(_OPF + "item")}
+        self.assertEqual(mts["b0/OEBPS/ch1.xhtml"], "application/xhtml+xml")
+        self.assertEqual(mts["b0/OEBPS/ch2.xhtml"], "application/xhtml+xml")
+        # 散件 stray.html：扩展名原样保留（引用不改名的无损前提），仅 media-type 归一
+        self.assertEqual(mts["b0/OEBPS/stray.html"], "application/xhtml+xml")
+        self.assertNotIn("text/html", set(mts.values()))
+        # 文档字节不动（无损）
+        self.assertEqual(
+            zipfile.ZipFile(io.BytesIO(merged)).read("b0/OEBPS/ch1.xhtml"),
+            ('<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+             "<p>甲-1</p></body></html>").encode("utf-8"))
+        # 出包守门通过
+        lib.validate_output(merged)
+
+    def test_relabeled_warning_logged(self):
+        with self.assertLogs(level="WARNING") as cm:
+            lib.merge_epubs(
+                [{"data": self._html_mt_book("甲"), "title": "甲卷"},
+                 {"data": _make_min_epub(title="乙卷", n_docs=1), "title": "乙卷"}],
+                {"title": "合集", "authors": ["作者"]})
+        self.assertTrue(any("text/html" in m for m in cm.output),
+                        "未记录 text/html 改标告警：%s" % cm.output)
+
+    def test_validate_output_rejects_text_html(self):
+        opf = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<package version="3.0" xmlns="http://www.idpf.org/2007/opf" '
+            'unique-identifier="uid">'
+            '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+            '<dc:identifier id="uid">u</dc:identifier>'
+            "<dc:title>t</dc:title>"
+            '<meta property="dcterms:modified">2026-09-12T00:00:00Z</meta>'
+            "</metadata>"
+            '<manifest><item id="c1" href="ch1.xhtml" media-type="text/html"/></manifest>'
+            "<spine><itemref idref=\"c1\"/></spine></package>")
+        packed = _make_epub({
+            "META-INF/container.xml":
+                b'<?xml version="1.0"?>'
+                b'<container version="1.0" '
+                b'xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+                b'<rootfiles><rootfile full-path="content.opf" '
+                b'media-type="application/oebps-package+xml"/></rootfiles></container>',
+            "content.opf": opf.encode("utf-8"),
+            "ch1.xhtml": b"<html><body><p>x</p></body></html>",
+        })
+        with self.assertRaises(ValueError) as ctx:
+            lib.validate_output(packed)
+        self.assertIn("text/html", str(ctx.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

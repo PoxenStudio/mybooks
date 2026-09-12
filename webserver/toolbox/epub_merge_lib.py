@@ -926,6 +926,16 @@ def _guess_media_type(name: str) -> str:
     return _GUESS_MEDIA_TYPES.get(ext, "application/octet-stream")
 
 
+def _out_media_type(mt: str) -> str:
+    """出包 media-type 归一：text/html 改标 application/xhtml+xml。
+
+    EPUB3 内容文档只允许 application/xhtml+xml（text/html 是 EPUB2 概念，
+    出包 version=3.0 后原样保留会被 epubcheck 判违规）。只改 OPF 描述、
+    不动文档字节（无损红线：内容是否良构 XML 是源书自带属性，不在此修）。
+    """
+    return "application/xhtml+xml" if mt == "text/html" else mt
+
+
 def _locate_opf(entries: dict) -> str:
     """定位 OPF 路径，缺失抛 ValueError（analyze 与 merge 共用）。"""
     container = entries.get("META-INF/container.xml")
@@ -1670,6 +1680,7 @@ def _merge_into(out, sources: list, inputs: list, meta: dict, divider: bool,
 
                 new_spine_docs = []
                 emitted = set()
+                relabeled = 0  # text/html 出包改标 application/xhtml+xml 的文档数
                 for iid in ordered_ids:
                     name, mt = items[iid]
                     real = lower_entries.get(name.lower())
@@ -1701,7 +1712,9 @@ def _merge_into(out, sources: list, inputs: list, meta: dict, divider: bool,
                             warnings))
                     emitted.add(new_name)
                     mid = _next_id()
-                    manifest.append((mid, new_name, mt))
+                    mt_out = _out_media_type(mt)
+                    relabeled += mt_out != mt
+                    manifest.append((mid, new_name, mt_out))
                     spine.append(mid)
                     new_spine_docs.append(new_name)
 
@@ -1720,15 +1733,23 @@ def _merge_into(out, sources: list, inputs: list, meta: dict, divider: bool,
                     if new_name in emitted:
                         continue
                     _emit(real, new_name, mt)
-                    manifest.append((_next_id(), new_name, mt))
+                    mt_out = _out_media_type(mt)
+                    relabeled += mt_out != mt
+                    manifest.append((_next_id(), new_name, mt_out))
                     emitted.add(new_name)
 
                 for name, new_name in loose:
                     if name == "mimetype":
                         continue
-                    _emit(name, new_name, _guess_media_type(name))
-                    manifest.append((_next_id(), new_name,
-                                     _guess_media_type(name)))
+                    guess_mt = _guess_media_type(name)
+                    loose_mt = _out_media_type(guess_mt)
+                    relabeled += loose_mt != guess_mt
+                    _emit(name, new_name, loose_mt)
+                    manifest.append((_next_id(), new_name, loose_mt))
+                if relabeled:
+                    warnings.append(
+                        "[%s] %d 个 text/html 文档已按 EPUB3 规范改标 "
+                        "application/xhtml+xml" % (book_title, relabeled))
 
                 # 分卷页插到该书首篇之前
                 div_name = None
@@ -1805,7 +1826,8 @@ def validate_output(data) -> list:
     :param data: 输出字节（bytes）或文件路径（str/PathLike，避免为校验把整本读进内存）。
     检查：mimetype 首项 STORED / container→OPF 可达 / OPF 可解析 /
     manifest id 唯一 / spine idref 全命中 / manifest href 全存在 /
-    guide 引用存在 / dc:title 非空 / NCX 良构且 playOrder 唯一。
+    无 EPUB3 不允许的 text/html 内容文档 / guide 引用存在 /
+    dc:title 非空 / NCX 良构且 playOrder 唯一。
     href 与 NCX src 按 URI 规则 unquote 后再比对条目名（写包侧已转义）。
     通过返回 warnings（目前恒为空，留扩展）；致命问题抛 ValueError。
     """
@@ -1870,6 +1892,10 @@ def _validate_open_zip(zf) -> list:
         man_href[iid] = href
         if _target(href) not in names:
             raise ValueError("输出 manifest 引用缺失：%s" % href)
+        if item.get("media-type") == "text/html":
+            # EPUB3 内容文档只允许 application/xhtml+xml（出包侧已归一，
+            # 这里守门防回归）
+            raise ValueError("输出含 EPUB3 不允许的 text/html 文档：%s" % href)
 
     spine_el = root.find("./%sspine" % _OPF)
     if spine_el is None:

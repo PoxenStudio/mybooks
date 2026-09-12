@@ -570,10 +570,12 @@ class EpubMergeTool(BaseTool):
             out_path = os.path.join(work_dir, "merged_%d.epub" % int(time.time()))
 
             def _on_book(book_index, book_total):
-                # 75→90 按本细分（此前 75→85 一跳，大书期间进度条长时间不动）
+                # 75→84 按本细分（此前 75→85 一跳，大书期间进度条长时间不动）；
+                # 封顶 84：85 留给 validating，若这里封到 89，最后一本处理完后
+                # validating 又设 85，进度条会肉眼可见地倒退
                 pct = 75 + int(15.0 * (book_index - 1) / max(1, book_total))
                 self.update_task_progress(
-                    task_id, min(pct, 89),
+                    task_id, min(pct, 84),
                     {"status": "running", "stage": "merging",
                      "book_index": book_index, "book_total": book_total})
 
