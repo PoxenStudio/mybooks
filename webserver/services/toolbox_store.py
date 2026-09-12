@@ -2,14 +2,13 @@
 # -*- coding: UTF-8 -*-
 """mybooks.top 工具商店客户端 —— ToolboxStoreClient
 
-对应 document/Toolbox_Dynamic_Design.md 3.4 节。风格对齐
-`webserver.services.book_barn.BookBarnClient`（同一个 `mybooks.top/api/` 调用惯例、同样
-用 `MyBooks-Client` 请求头上报客户端版本、不强制鉴权）。
+对应 document/Toolbox_Dynamic_Design.md 3.4 节。`mybooks.top/toolbox/` 是一个纯静态文件
+服务（结构见 `poxenstudio/toolbox_store` 仓库），没有走 3.4 节最初设想的动态 `/api/toolbox/*`
+接口 —— 商店索引就是一份托管的 `fulllist.json`（`{"tools": [...]}`），"检查更新"直接在这份
+索引里按 `tool_id` 比对 `latest_revision`，不需要单独的查询接口；下载就是普通的静态文件 GET。
 
-mybooks.top 目前还没有实现 `toolbox/*` 这组接口（3.4 节仍是设计草案），所以本客户端从一开
-始就受 `ENABLE_TOOLBOX_STORE` 开关控制（3.4.1 节）：开关为 `False`（默认）时，
-`get_index()`/`check_update()` 不发起任何网络请求，直接返回空结果；`download()` 直接拒绝。
-mybooks.top 一方把接口实现上线后，把这个 settings 项改成 `True` 即可，不需要改代码。
+本客户端仍受 `ENABLE_TOOLBOX_STORE` 开关控制（3.4.1 节）：开关为 `False`（默认）时，
+`get_index()` 不发起任何网络请求，直接返回空结果；`download()` 直接拒绝。
 """
 import hashlib
 import logging
@@ -34,10 +33,9 @@ class ToolboxStoreError(Exception):
 
 
 class ToolboxStoreClient:
-    HOST_BASE = "https://mybooks.top/api/"
-    INDEX_API = "toolbox/index"                  # 可安装工具目录
-    CHECK_UPDATE_API = "toolbox/release/check"    # 检查某个已安装工具是否有新版本
-    DOWNLOAD_API = "toolbox/download"             # 下载指定版本的 zip 包
+    # mybooks.top/toolbox/ 是静态文件服务，fulllist.json 就是完整商店索引，见
+    # poxenstudio/toolbox_store 仓库的发布工具（生成 fulllist.json + logos/*.png）。
+    INDEX_URL = "https://mybooks.top/toolbox/fulllist.json"
 
     def __init__(self):
         self.headers = {"MyBooks-Client": f"MyBooks/{VERSION}"}
@@ -47,42 +45,20 @@ class ToolboxStoreClient:
         return bool(CONF.get("ENABLE_TOOLBOX_STORE", False))
 
     def get_index(self) -> list:
-        """返回商店当前可安装的全部工具列表（3.4 节 `GET toolbox/index`）。
+        """返回商店当前可安装的全部工具列表（`fulllist.json` 的 `tools` 数组）。
 
         `ENABLE_TOOLBOX_STORE=False` 时直接返回空列表，不发起任何网络请求。
         """
         if not self.enabled():
             return []
         try:
-            resp = requests.get(
-                self.HOST_BASE + self.INDEX_API, headers=self.headers, timeout=30, verify=True
-            )
+            resp = requests.get(self.INDEX_URL, headers=self.headers, timeout=30, verify=True)
             resp.raise_for_status()
             tools = resp.json().get("tools", [])
             return tools if isinstance(tools, list) else []
         except Exception as err:
             logging.error("[ToolboxStore] get_index failed: %s", err)
             return []
-
-    def check_update(self, tool_id: str, installed_revision: str) -> dict:
-        """检查某个已安装工具是否有新版本（3.4 节 `GET toolbox/release/check`）。
-
-        `ENABLE_TOOLBOX_STORE=False` 时直接返回 ``{"has_update": False}``，不发起网络请求。
-        """
-        if not self.enabled():
-            return {"has_update": False}
-        try:
-            params = {"tool_id": tool_id, "revision": installed_revision}
-            resp = requests.get(
-                self.HOST_BASE + self.CHECK_UPDATE_API, headers=self.headers,
-                params=params, timeout=30, verify=True,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            return data if isinstance(data, dict) else {"has_update": False}
-        except Exception as err:
-            logging.error("[ToolboxStore] check_update(%s) failed: %s", tool_id, err)
-            return {"has_update": False}
 
     def download(self, download_url: str, expected_sha256: str) -> str:
         """下载 zip 到本地临时文件并校验 sha256（**必须**校验，3.4 节），返回临时文件路径。

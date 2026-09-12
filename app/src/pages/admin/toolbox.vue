@@ -107,38 +107,49 @@
       </v-col>
     </v-row>
 
-    <!-- 工具商店：ENABLE_TOOLBOX_STORE=False 时列表恒为空，展示"暂无可安装工具" -->
-    <v-row class="mt-6 mb-2" align="center" hidden>
-      <v-col>
-        <span class="text-h6 font-weight-bold">{{ $t('toolbox.storeTitle') }}</span>
-        <div class="text-caption grey--text mt-1">{{ $t('toolbox.storeSubtitle') }}</div>
-      </v-col>
-    </v-row>
-    <v-row v-if="storeTools.length === 0" justify="center" class="py-6">
-      <v-col cols="auto" class="text-center grey--text">{{ $t('toolbox.storeEmpty') }}</v-col>
-    </v-row>
-    <v-row v-else>
-      <v-col v-for="entry in storeTools" :key="entry.tool_id" cols="12" md="4">
-        <v-card class="pa-2" rounded="xl" outlined>
-          <v-card-text>
-            <div class="text-subtitle-1 font-weight-bold">{{ entry.name }}</div>
-            <div class="text-body-2 grey--text text--darken-1 mb-2">{{ entry.description }}</div>
-            <div class="d-flex align-center justify-space-between">
-              <v-chip x-small outlined>v{{ entry.latest_revision }}</v-chip>
-              <v-btn
-                x-small
-                color="primary"
-                :loading="busyToolId === entry.tool_id"
-                :disabled="busyToolId === entry.tool_id || (entry.installed && entry.installed_revision === entry.latest_revision)"
-                @click="installFromStore(entry)"
-              >
-                {{ entry.installed ? $t('toolbox.storeUpdate') : $t('toolbox.storeInstall') }}
-              </v-btn>
-            </div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
+    <!-- 工具商店：ENABLE_TOOLBOX_STORE=False 时后端 store_enabled 恒为 false，整块不展示 -->
+    <template v-if="storeEnabled">
+      <v-row class="mt-6 mb-2" align="center">
+        <v-col>
+          <span class="text-h6 font-weight-bold">{{ $t('toolbox.storeTitle') }}</span>
+          <div class="text-caption grey--text mt-1">{{ $t('toolbox.storeSubtitle') }}</div>
+        </v-col>
+      </v-row>
+      <v-row v-if="storeTools.length === 0" justify="center" class="py-6">
+        <v-col cols="auto" class="text-center grey--text">{{ $t('toolbox.storeEmpty') }}</v-col>
+      </v-row>
+      <v-row v-else>
+        <v-col v-for="entry in storeTools" :key="entry.tool_id" cols="12" md="4">
+          <v-card class="pa-2" rounded="xl" outlined>
+            <v-card-text>
+              <div class="d-flex align-center mb-2">
+                <v-avatar size="32" class="mr-2" rounded>
+                  <v-img :src="entry.icon_url" :alt="entry.name">
+                    <template v-slot:placeholder>
+                      <v-icon>mdi-toolbox-outline</v-icon>
+                    </template>
+                  </v-img>
+                </v-avatar>
+                <div class="text-subtitle-1 font-weight-bold">{{ entry.name }}</div>
+              </div>
+              <div class="text-body-2 grey--text text--darken-1 mb-2">{{ entry.description }}</div>
+              <div class="d-flex align-center justify-space-between">
+                <v-chip x-small outlined>v{{ entry.latest_revision }}</v-chip>
+                <v-btn
+                  x-small
+                  color="primary"
+                  :loading="busyToolId === entry.tool_id"
+                  :disabled="busyToolId === entry.tool_id || (entry.installed && entry.installed_revision === entry.latest_revision)"
+                  @click="installFromStore(entry)"
+                >
+                  {{ entry.installed ? $t('toolbox.storeUpdate') : $t('toolbox.storeInstall') }}
+                </v-btn>
+              </div>
+            </v-card-text>
+          </v-card>
+        </v-col>
+      </v-row>
+    </template>
 
     <!-- 本地上传安装（开发者模式） -->
     <AppDialog

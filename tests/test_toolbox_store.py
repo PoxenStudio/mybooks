@@ -2,9 +2,10 @@
 """ToolboxStoreClient 单元测试（M5 milestone）。
 
 覆盖 document/Toolbox_Dynamic_Design.md 3.4 / 3.4.1 节：
-- `ENABLE_TOOLBOX_STORE=False`（默认）时 get_index()/check_update() 不发起任何网络请求，
-  直接返回空结果；download() 直接拒绝。
-- 开启后走真实请求路径（用 mock 替身，不打真实网络），并且 sha256 校验失败时拒绝安装。
+- `ENABLE_TOOLBOX_STORE=False`（默认）时 get_index() 不发起任何网络请求，直接返回空结果；
+  download() 直接拒绝。
+- 开启后走真实请求路径（用 mock 替身，不打真实网络，请求的是 mybooks.top/toolbox/ 静态文件服务
+  的 fulllist.json），并且 sha256 校验失败时拒绝安装。
 """
 import hashlib
 import unittest
@@ -28,15 +29,9 @@ class TestStoreDisabled(unittest.TestCase):
         self.assertEqual(ToolboxStoreClient().get_index(), [])
         mock_get.assert_not_called()
 
-    @patch("requests.get")
-    def test_check_update_returns_false_without_request(self, mock_get):
-        result = ToolboxStoreClient().check_update("demo_tool", "0.1.0")
-        self.assertEqual(result, {"has_update": False})
-        mock_get.assert_not_called()
-
     def test_download_raises_without_request(self):
         with self.assertRaises(ToolboxStoreError):
-            ToolboxStoreClient().download("https://mybooks.top/api/toolbox/download", "deadbeef")
+            ToolboxStoreClient().download("https://mybooks.top/toolbox/files/favorite/demo.zip", "deadbeef")
 
 
 class TestStoreEnabled(unittest.TestCase):
@@ -57,27 +52,16 @@ class TestStoreEnabled(unittest.TestCase):
         tools = ToolboxStoreClient().get_index()
         self.assertEqual(tools, [{"tool_id": "demo_tool", "latest_revision": "0.2.0"}])
         mock_get.assert_called_once()
-        self.assertIn(ToolboxStoreClient.INDEX_API, mock_get.call_args.args[0])
+        self.assertEqual(mock_get.call_args.args[0], ToolboxStoreClient.INDEX_URL)
 
     @patch("requests.get")
     def test_get_index_returns_empty_on_error(self, mock_get):
         mock_get.side_effect = Exception("network down")
         self.assertEqual(ToolboxStoreClient().get_index(), [])
 
-    @patch("requests.get")
-    def test_check_update_forwards_params(self, mock_get):
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {"has_update": True, "latest_revision": "0.3.0"}
-        mock_get.return_value = mock_resp
-
-        result = ToolboxStoreClient().check_update("demo_tool", "0.2.0")
-        self.assertEqual(result["has_update"], True)
-        kwargs = mock_get.call_args.kwargs
-        self.assertEqual(kwargs["params"], {"tool_id": "demo_tool", "revision": "0.2.0"})
-
     def test_download_requires_sha256(self):
         with self.assertRaises(ToolboxStoreError):
-            ToolboxStoreClient().download("https://mybooks.top/api/toolbox/download", "")
+            ToolboxStoreClient().download("https://mybooks.top/toolbox/files/favorite/demo.zip", "")
 
     @patch("requests.get")
     def test_download_verifies_sha256_and_returns_path(self, mock_get):
@@ -90,7 +74,7 @@ class TestStoreEnabled(unittest.TestCase):
         mock_resp.__exit__.return_value = False
         mock_get.return_value = mock_resp
 
-        path = ToolboxStoreClient().download("https://mybooks.top/api/toolbox/download", expected_sha256)
+        path = ToolboxStoreClient().download("https://mybooks.top/toolbox/files/favorite/demo.zip", expected_sha256)
         try:
             with open(path, "rb") as f:
                 self.assertEqual(f.read(), content)
@@ -108,7 +92,7 @@ class TestStoreEnabled(unittest.TestCase):
         mock_get.return_value = mock_resp
 
         with self.assertRaises(ToolboxStoreError):
-            ToolboxStoreClient().download("https://mybooks.top/api/toolbox/download", "0" * 64)
+            ToolboxStoreClient().download("https://mybooks.top/toolbox/files/favorite/demo.zip", "0" * 64)
 
 
 class TestIndexCache(unittest.TestCase):
