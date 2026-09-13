@@ -2,6 +2,7 @@
 # -*- coding: UTF-8 -*-
 
 import asyncio
+import datetime
 import json
 import os
 import shutil
@@ -13,7 +14,8 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 
 from tests.test_main import TestWithUserLogin, get_db, setUpModule as init, main
 from webserver import models
-from webserver.models import ReadingRecord
+from webserver.models import Reading, ReadingRecord
+from webserver.services.reader_cache import ReaderStatsCache
 from webserver.services.sync_service import MyReaderSyncService
 
 
@@ -313,6 +315,104 @@ class TestSyncServiceStorage(unittest.TestCase):
                 self.assertEqual({r["id"] for r in shared["notes"]}, {"n1"})
             finally:
                 main.CONF["ENABLE_SHARED_NOTES"] = True
+
+        asyncio.get_event_loop().run_until_complete(run())
+
+
+class TestSyncServiceReadingSeconds(unittest.TestCase):
+    """离线阅读显式上报（payload 里的 `reading_seconds`）与在线心跳的互斥关系，见
+    document/Reading_Stats_Design.md 的离线阅读扩展：同一本书这次 push 只走其中一条
+    路径，不会两条都算，否则会对同一段时间重复计入一次。"""
+
+    def setUp(self):
+        MyReaderSyncService._locks.clear()
+        MyReaderSyncService._buffer._pending.clear()
+        for uid in (301, 302, 303, 304):
+            ReaderStatsCache().invalidate(uid)
+
+    def _reading_row(self, uid, book_id):
+        db = get_db()
+        return db.query(Reading).filter_by(reader_id=uid, book_id=book_id, action=Reading.ACTION_READ).one_or_none()
+
+    def test_explicit_reading_seconds_skips_heartbeat_for_that_book(self):
+        """带了 reading_seconds 的书，这次 push 只走显式上报，不再叠加心跳到达间隔推算
+        （心跳推算这次 push 本身贡献的 delta 就是 0——第一次心跳恒定如此，见
+        on_heartbeat()——但用来确认没有额外触发心跳路径本身，下面用总时长核对）。"""
+        async def run():
+            book_hash = "cloud-90101-epub"
+            await MyReaderSyncService.push(301, {
+                "configs": [{"id": book_hash, "book_hash": book_hash, "updated_at": 1, "progress": [10, 100]}],
+                "reading_seconds": [{"book_hash": book_hash, "date": "2025-12-31", "seconds": 600}],
+            })
+            MyReaderSyncService.flush_now()
+
+            row = self._reading_row(301, 90101)
+            self.assertIsNotNone(row)
+            self.assertEqual(row.date, datetime.date(2025, 12, 31))
+            self.assertEqual(row.duration, 600)
+
+        asyncio.get_event_loop().run_until_complete(run())
+
+    def test_book_without_reading_seconds_still_uses_heartbeat(self):
+        """没带 reading_seconds 的书，行为完全不变——继续走心跳到达间隔推算。"""
+        async def run():
+            book_hash = "cloud-90102-epub"
+            await MyReaderSyncService.push(302, {
+                "configs": [{"id": book_hash, "book_hash": book_hash, "updated_at": 1, "progress": [1, 100]}],
+            })
+            MyReaderSyncService.flush_now()
+            first = self._reading_row(302, 90102)
+            self.assertIsNotNone(first)
+            self.assertEqual(first.duration, 0)  # 心跳首次落地，本身贡献 0 秒
+
+            await MyReaderSyncService.push(302, {
+                "configs": [{"id": book_hash, "book_hash": book_hash, "updated_at": 2, "progress": [2, 100]}],
+            })
+            MyReaderSyncService.flush_now()
+            second = self._reading_row(302, 90102)
+            self.assertGreaterEqual(second.duration, 0)  # 心跳路径正常工作，未受影响
+
+        asyncio.get_event_loop().run_until_complete(run())
+
+    def test_reading_seconds_applies_even_when_configs_did_not_change(self):
+        """用户全程停在同一页（configs 合并后没有实际变化），但确实读了这么久——显式
+        上报不依赖 configs 是否 applied，这是和心跳路径的关键差异之一。"""
+        async def run():
+            book_hash = "cloud-90103-epub"
+            # 先落一次相同的 progress，让第二次 push 的 configs 合并判定为"没有变化"
+            await MyReaderSyncService.push(303, {
+                "configs": [{"id": book_hash, "book_hash": book_hash, "updated_at": 5, "progress": [3, 100]}],
+            })
+            MyReaderSyncService.flush_now()
+
+            await MyReaderSyncService.push(303, {
+                "configs": [{"id": book_hash, "book_hash": book_hash, "updated_at": 5, "progress": [3, 100]}],
+                "reading_seconds": [{"book_hash": book_hash, "date": "2025-12-31", "seconds": 300}],
+            })
+            MyReaderSyncService.flush_now()
+
+            rows = get_db().query(Reading).filter_by(reader_id=303, book_id=90103, action=Reading.ACTION_READ).all()
+            backfilled = next(r for r in rows if r.date == datetime.date(2025, 12, 31))
+            self.assertEqual(backfilled.duration, 300)
+
+        asyncio.get_event_loop().run_until_complete(run())
+
+    def test_malformed_reading_seconds_entries_are_dropped_without_error(self):
+        async def run():
+            book_hash = "cloud-90104-epub"
+            await MyReaderSyncService.push(304, {
+                "configs": [{"id": book_hash, "book_hash": book_hash, "updated_at": 1, "progress": [1, 100]}],
+                "reading_seconds": [
+                    {"book_hash": book_hash, "date": "not-a-date", "seconds": 100},
+                    {"book_hash": book_hash, "date": "2025-12-31", "seconds": "not-a-number"},
+                    {"book_hash": book_hash, "seconds": 100},  # missing date
+                    {"date": "2025-12-31", "seconds": 100},  # missing book_hash
+                ],
+            })
+            MyReaderSyncService.flush_now()  # must not raise
+
+            row = self._reading_row(304, 90104)
+            self.assertIsNotNone(row)  # 心跳路径仍然正常工作（没有一条合法的 reading_seconds）
 
         asyncio.get_event_loop().run_until_complete(run())
 

@@ -17,6 +17,7 @@ See plan/Social_Reading_Plan.md §5.2/§7 for the full design and the legacy
 
 import asyncio
 import dataclasses
+import datetime
 import json
 import logging
 import os
@@ -352,12 +353,52 @@ class MyReaderSyncService:
             cls._stage(uid, book_hash, kind, book_hash, merged)
         return ([merged] if merged is not None else []), applied_any
 
+    @staticmethod
+    def _extract_progress(book_merged: list) -> Optional[Tuple[int, int]]:
+        if not book_merged:
+            return None
+        raw_progress = book_merged[-1].get("progress")
+        if not (isinstance(raw_progress, (list, tuple)) and len(raw_progress) == 2):
+            return None
+        try:
+            current, total = int(raw_progress[0]), int(raw_progress[1])
+        except (TypeError, ValueError):
+            return None
+        return (current, total) if total > 0 else None
+
+    @staticmethod
+    def _parse_reading_seconds(raw) -> Dict[str, List[Tuple["datetime.date", int]]]:
+        """客户端离线阅读显式上报（见 document/Reading_Stats_Design.md 的离线阅读扩展）：
+        [{"book_hash": ..., "date": "YYYY-MM-DD", "seconds": N}, ...]，一本书一次 push
+        里可以带多天（跨天离线场景）。日期由客户端上报前转换成 UTC，这里不再转换，只
+        做格式/范围校验。"""
+        result: Dict[str, List[Tuple[datetime.date, int]]] = defaultdict(list)
+        for entry in raw or []:
+            if not isinstance(entry, dict):
+                continue
+            book_hash = entry.get("book_hash")
+            date_str = entry.get("date")
+            if not book_hash or not date_str:
+                continue
+            try:
+                date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+                seconds = int(entry.get("seconds"))
+            except (TypeError, ValueError):
+                logging.warning("[sync] drop malformed reading_seconds entry: %r", entry)
+                continue
+            if seconds <= 0:
+                continue
+            result[book_hash].append((date, seconds))
+        return result
+
     @classmethod
     async def push(cls, uid, payload: dict) -> dict:
         result = {}
         changed_scopes = set()
+        reading_seconds_by_book = cls._parse_reading_seconds(payload.get("reading_seconds"))
         async with cls._get_lock(uid):
             db = ReadingRecord._session()
+            configs_progress_by_book: Dict[str, Optional[Tuple[int, int]]] = {}
             for kind in cls.KINDS:
                 records = payload.get(kind) or []
                 if not records:
@@ -374,30 +415,32 @@ class MyReaderSyncService:
                     merged_list.extend(book_merged)
                     if applied:
                         changed_scopes.add((kind, book_hash))
-                        if kind == "configs":
-                            # configs 记录（阅读进度/位置）是"仍在阅读"的心跳信号，见
-                            # document/Reading_Stats_Design.md §3.1；books/notes 的 push 不触发。
+                    if kind == "configs":
+                        # configs 记录（阅读进度/位置）是"仍在阅读"的信号，见
+                        # document/Reading_Stats_Design.md §3.1；books/notes 的 push 不触发。
+                        progress = cls._extract_progress(book_merged)
+                        configs_progress_by_book[book_hash] = progress
+                        # 这次 push 带了这本书的显式时长时，交给下面统一处理，不在这里再
+                        # 走心跳到达间隔推算——否则同一段时间会被两条路径各计一次。
+                        if applied and book_hash not in reading_seconds_by_book:
                             book_id = parse_book_id_from_hash(book_hash)
                             if book_id is not None:
                                 fmt = parse_format_from_hash(book_hash)
-                                progress = None
-                                if book_merged:
-                                    raw_progress = book_merged[-1].get("progress")
-                                    if isinstance(raw_progress, (list, tuple)) and len(raw_progress) == 2:
-                                        # progress=[current,total]，total<=0 视为无效不落进度
-                                        try:
-                                            current, total = int(raw_progress[0]), int(raw_progress[1])
-                                            if total > 0:
-                                                progress = (current, total)
-                                        except (TypeError, ValueError):
-                                            progress = None
-                                    else:
-                                        logging.info(f"  Invalid progress in {book_merged[-1]}")
-                                else:
-                                    logging.info(f"Not merged, cannot update the book reading stats")
                                 ReadingStatsService.heartbeat(uid, book_id, Reading.PROTOCOL_APP, fmt=fmt, progress=progress)
                 if merged_list:
                     result[kind] = merged_list
+
+            # 离线阅读显式上报：与上面的心跳路径互斥（见 _parse_reading_seconds 用法处的
+            # 注释），不依赖这次 push 里 configs 是否有实际变化——用户可能全程停在同一页，
+            # 但确实读了这么久。
+            for book_hash, entries in reading_seconds_by_book.items():
+                book_id = parse_book_id_from_hash(book_hash)
+                if book_id is None:
+                    continue
+                fmt = parse_format_from_hash(book_hash)
+                progress = configs_progress_by_book.get(book_hash)
+                for date, seconds in entries:
+                    ReadingStatsService.report_duration(uid, book_id, Reading.PROTOCOL_APP, date, seconds, fmt=fmt, progress=progress)
         for scope, book_hash in changed_scopes:
             cls.broadcast_changed(uid, scope, book_hash)
         return result

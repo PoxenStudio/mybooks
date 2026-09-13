@@ -85,6 +85,18 @@ class _PendingEvent:
     now_utc: datetime.datetime
 
 
+@dataclass
+class _PendingExplicit:
+    """
+        一条尚未落库的客户端显式上报增量，键为 (reader_id, book_id, date)。
+    """
+
+    duration_delta: int
+    protocol: str
+    last_seen: datetime.datetime
+    start_time: datetime.datetime  # 这段时长的推算起点：last_seen - duration_delta
+
+
 class ReadingWriteBuffer:
     """In-memory buffer for reading heartbeats / download / push events.
 
@@ -94,6 +106,7 @@ class ReadingWriteBuffer:
 
     def __init__(self):
         self._sessions: Dict[Tuple[int, int], _PendingSession] = {}
+        self._explicit: Dict[Tuple[int, int, datetime.date], _PendingExplicit] = {}
         self._events: List[_PendingEvent] = []
         self._reader_seconds_delta: Dict[int, int] = {}
         self._reader_download_delta: Dict[int, int] = {}
@@ -123,6 +136,28 @@ class ReadingWriteBuffer:
             if delta:
                 self._reader_seconds_delta[reader_id] = self._reader_seconds_delta.get(reader_id, 0) + delta
 
+    def on_explicit(
+        self, reader_id: int, book_id: int, protocol: str, date: datetime.date, duration_delta: int, now_utc: datetime.datetime
+    ) -> None:
+        """客户端已经算好了这段时长（覆盖心跳到达间隔看不到的时段，典型场景是离线阅读），
+        直接按 (reader_id, book_id, date) 累加，不做心跳那套间隔推算/新会话判定。"""
+        if duration_delta <= 0:
+            return
+        with self._lock:
+            key = (reader_id, book_id, date)
+            implied_start = now_utc - datetime.timedelta(seconds=duration_delta)
+            pending = self._explicit.get(key)
+            if pending is None:
+                self._explicit[key] = _PendingExplicit(
+                    duration_delta=duration_delta, protocol=protocol, last_seen=now_utc, start_time=implied_start
+                )
+            else:
+                pending.duration_delta += duration_delta
+                pending.last_seen = now_utc
+                pending.protocol = protocol
+                pending.start_time = min(pending.start_time, implied_start)
+            self._reader_seconds_delta[reader_id] = self._reader_seconds_delta.get(reader_id, 0) + duration_delta
+
     def on_event(self, reader_id: int, book_id: int, action: str, protocol: str, now_utc: datetime.datetime) -> None:
         with self._lock:
             self._events.append(_PendingEvent(reader_id, book_id, action, protocol, now_utc))
@@ -134,21 +169,30 @@ class ReadingWriteBuffer:
     def flush(self) -> None:
         with self._lock:
             pending = []  # (reader_id, book_id, date, session_start, duration_delta, last_seen, protocol)
-            visit_check_keys = []  # (reader_id, book_id, date)
+            visit_check_keys = set()  # (reader_id, book_id, date)
             for (reader_id, book_id), s in self._sessions.items():
                 if s.duration_delta or s.dirty:
                     pending.append((reader_id, book_id, s.current_date, s.session_start, s.duration_delta, s.last_seen, s.protocol))
                     if not s.visit_counted:
-                        visit_check_keys.append((reader_id, book_id, s.current_date))
+                        visit_check_keys.add((reader_id, book_id, s.current_date))
             for s in self._sessions.values():
                 s.duration_delta = 0
                 s.dirty = False
+            # 显式上报的条目是一次性的（没有"当前会话"状态要在 flush 后留存），直接整个
+            # 清空 —— 不像 _sessions 那样只清零 duration_delta。
+            explicit_snapshot, self._explicit = self._explicit, {}
+            explicit_pending = [
+                (reader_id, book_id, date, e.start_time, e.duration_delta, e.last_seen, e.protocol)
+                for (reader_id, book_id, date), e in explicit_snapshot.items()
+            ]
+            visit_check_keys.update((reader_id, book_id, date) for reader_id, book_id, date, *_ in explicit_pending)
+            pending_all = pending + explicit_pending
             events_snapshot, self._events = self._events, []
             seconds_delta, self._reader_seconds_delta = self._reader_seconds_delta, {}
             download_delta, self._reader_download_delta = self._reader_download_delta, {}
             push_delta, self._reader_push_delta = self._reader_push_delta, {}
 
-        if not (pending or events_snapshot or seconds_delta or download_delta or push_delta):
+        if not (pending_all or events_snapshot or seconds_delta or download_delta or push_delta):
             return
 
         db = Reading._session()
@@ -171,7 +215,7 @@ class ReadingWriteBuffer:
                 if exists is None:
                     book_visit_delta[book_id] = book_visit_delta.get(book_id, 0) + 1
 
-            for reader_id, book_id, date, session_start, duration_delta, last_seen, protocol in pending:
+            for reader_id, book_id, date, session_start, duration_delta, last_seen, protocol in pending_all:
                 db.execute(
                     text(
                         """
@@ -241,6 +285,16 @@ class ReadingWriteBuffer:
                         session.dirty = True
                     # 否则这一天的 bucket 已经因为跨天/新会话被覆盖，这次失败的增量随之丢弃
                     # （见 document/Reading_Stats_Design.md §11.4，属于已知的、有界的近似误差）
+                for reader_id, book_id, date, start_time, duration_delta, last_seen, protocol in explicit_pending:
+                    key = (reader_id, book_id, date)
+                    existing = self._explicit.get(key)
+                    if existing is None:
+                        self._explicit[key] = _PendingExplicit(
+                            duration_delta=duration_delta, protocol=protocol, last_seen=last_seen, start_time=start_time
+                        )
+                    else:
+                        existing.duration_delta += duration_delta
+                        existing.start_time = min(existing.start_time, start_time)
                 self._events = events_snapshot + self._events
                 for reader_id, delta in seconds_delta.items():
                     self._reader_seconds_delta[reader_id] = self._reader_seconds_delta.get(reader_id, 0) + delta
@@ -486,6 +540,23 @@ class BookFormatStatsBuffer:
             state.touched = True
             logging.debug(f"[Heartbeat] update time to {state.duration_delta} for {book_id} ({reader_id}), fmt:{fmt}")
 
+    def on_explicit(
+        self, reader_id: int, book_id: int, fmt: str, duration_delta: int, progress: Optional[Tuple[int, int]], now_utc: datetime.datetime
+    ) -> None:
+        """客户端已经算好的增量，无条件累加（不做 60 秒间隔判断——那是给"能不能信任
+        这段间隔算作阅读"用的，这里的秒数已经是确定要记的）。"""
+        with self._lock:
+            key = (reader_id, book_id, fmt)
+            state = self._states.get(key)
+            if state is None:
+                self._states[key] = _PendingFormatState(last_seen=now_utc, duration_delta=duration_delta, progress=progress, touched=True)
+                return
+            state.duration_delta += duration_delta
+            state.last_seen = now_utc
+            if progress is not None:
+                state.progress = progress
+            state.touched = True
+
     def flush(self) -> None:
         with self._lock:
             pending = [
@@ -535,6 +606,36 @@ class ReadingStatsService:
         cls._buffer.on_heartbeat(reader_id, book_id, protocol, datetime.datetime.utcnow())
         if fmt:
             cls._format_buffer.on_heartbeat(reader_id, book_id, fmt.lower(), progress, datetime.datetime.utcnow())
+
+    @classmethod
+    def report_duration(
+        cls,
+        reader_id: int,
+        book_id: int,
+        protocol: str,
+        date: datetime.date,
+        duration_seconds: int,
+        fmt: Optional[str] = None,
+        progress: Optional[Tuple[int, int]] = None,
+    ) -> None:
+        """客户端已经自己算好了这段阅读时长（典型场景：离线阅读，心跳到达间隔完全看
+        不到这段时间），直接按增量记账，取代心跳的到达间隔推算。与 heartbeat() 是
+        互斥的两条路径，由调用方（sync_service.push()）按这次 push 有没有带显式时长
+        二选一，同一个 (reader_id, book_id) 不会同时走两条路径——否则会对同一段时间
+        重复计入一次心跳推算 + 一次显式上报（见 document/Reading_Stats_Design.md 的
+        离线阅读扩展）。"""
+        if not ReaderStatsCache().get_allow_statistic(reader_id):
+            return
+        duration_seconds = max(0, min(int(duration_seconds or 0), MANUAL_READING_MAX_SECONDS))
+        if duration_seconds <= 0:
+            return
+        now_utc = datetime.datetime.utcnow()
+        # 客户端上报前已按 §上报前转为 UTC 处理，这里再兜底一次，防止时钟偏差/坏数据
+        # 把时长记到未来的日期上。
+        date = min(date, now_utc.date())
+        cls._buffer.on_explicit(reader_id, book_id, protocol, date, duration_seconds, now_utc)
+        if fmt:
+            cls._format_buffer.on_explicit(reader_id, book_id, fmt.lower(), duration_seconds, progress, now_utc)
 
     @classmethod
     def record_download(cls, reader_id: int, book_id: int, protocol: str) -> None:
