@@ -1336,7 +1336,7 @@
     "author": "作者",
     "publishDate": "发布日期",
     "refresh": "刷新",
-    "installFromZip": "上传 zip 安装",
+    "installFromZip": "上传工具包安装",
     "type": {
       "builtin": "内置",
       "tool": "工具"

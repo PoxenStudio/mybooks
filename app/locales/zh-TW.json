@@ -1328,7 +1328,7 @@
     "author": "作者",
     "publishDate": "發布日期",
     "refresh": "重新整理",
-    "installFromZip": "上傳 zip 安裝",
+    "installFromZip": "上傳 zip/7z 安裝",
     "type": {
       "builtin": "內建",
       "tool": "工具"

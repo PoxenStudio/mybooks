@@ -1334,7 +1334,7 @@
     "author": "Author",
     "publishDate": "Publish Date",
     "refresh": "Refresh",
-    "installFromZip": "Upload zip to install",
+    "installFromZip": "Upload zip/7z to install",
     "type": {
       "builtin": "Built-in",
       "tool": "Tool"
