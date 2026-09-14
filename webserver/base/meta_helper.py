@@ -4,19 +4,22 @@ import re
 from typing import List, Tuple
 
 
-# 姓名前的地区/朝代标记，如 [明]、【美】、（清）、(英)、[唐] 等
-_DYNASTY_REGION_PREFIX = re.compile(r'^[\[【\(（][^\]】\)）]*[\]】\)）]\s*')
+# 姓名前的地区/朝代标记，如 [明]、【美】、（清）、(英)、[唐]、［美］（全角方括号）等
+_DYNASTY_REGION_PREFIX = re.compile(r'^[\[［【\(（][^\]］】\)）]*[\]］】\)）]\s*')
 
 # 姓名前的"原作："类角色前缀，如 原作：面堂兄、原作:面堂兄
 _ORIGINAL_AUTHOR_PREFIX = re.compile(r'^原作\s*[:：]\s*')
 
 # 姓名尾部的作者标识：可选空格/连字符 + 著/编/编著/author/editor；或括号包裹
 # 注意中文后缀允许直接紧贴姓名（如 "温德著"），故使用 \s*
+# "主" 是"主编"被截断后的残留（如 "韦东山 主"），只在前面有空格时才当作角色后缀去除，
+# 避免误伤名字本身以"主"结尾的情况（无空格时不匹配）。
 _AUTHOR_SUFFIX = re.compile(
     r'(?:'
     r'\s*(?:著|编|编著)|\s*[-–]\s*(?:著|编|编著)|'
     r'\s+(?:author|Author|editor|Editor)|\s*[-–]\s*(?:author|Author|editor|Editor)|'
-    r'\s*[\(\（]\s*(?:著|编|编著|author|Author|editor|Editor)\s*[\)\）]'
+    r'\s*[\(\（]\s*(?:著|编|编著|author|Author|editor|Editor)\s*[\)\）]|'
+    r'\s+主'
     r')$'
 )
 
