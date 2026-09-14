@@ -11,7 +11,7 @@ from webserver.plugins.meta.bookbarn_tags import BookBarnTags
 from webserver.services import AsyncService
 from webserver.services.background_service import BackgroundService, BackgroundTask
 from webserver.services.book_search import BookSearch
-from webserver.constants import AUTO_FILL_META
+from webserver.constants import AUTO_FILL_META, CALIBRE_COLUMN_TRANSLATORS
 
 CONF = loader.get_settings()
 
@@ -217,6 +217,10 @@ class AutoFillService(AsyncService):
         if _translators:
             translators = ",".join(_translators)
             self.db.new_api.set_field(CALIBRE_COLUMN_TRANSLATORS, {book_id: translators})
+        # Try to update author info auto
+        if mi.authors and mi.authors[0] not in (u"佚名", u"未知", u"Unknown"):
+            from webserver.services.book_barn import BookBarnService
+            BookBarnService().update_author_async(mi.authors[0], force=False)
         logging.info(_("自动更新书籍 id=[%d] 的信息，title=%s"), book_id, mi.title)
         return True
 
@@ -263,6 +267,6 @@ class AutoFillService(AsyncService):
             tags = api.get_tags(mi.isbn, mi.title, author)
             logging.info(f"bookbarn_tags 返回标签: {tags}")
             return tags.split(",") if tags else None
-        except:
+        except Exception:
             logging.error(_("bookbarn_tags 接口查询 %s 失败"), mi.title)
         return None

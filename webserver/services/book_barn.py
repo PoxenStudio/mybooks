@@ -657,10 +657,10 @@ class BookBarnService(AsyncService):
         logging.info("[BARN] author list check done")
 
     @AsyncService.register_service
-    def update_author_async(self, author_name, admin_uid=None):
-        """管理员手动触发的单作者强制更新，后台线程执行避免阻塞请求"""
-        author = self.sync_author(author_name, force=True)
+    def update_author_async(self, author_name, admin_uid=None, force=True):
+        """单作者信息更新，后台线程执行避免阻塞请求；force=True（默认，管理员手动触发场景）强制联网更新，force=False 时本地已有该作者信息则跳过"""
+        author = self.sync_author(author_name, force=force)
         if admin_uid:
             status = "success" if author else "error"
-            template = _("作者《%(name)s》信息更新成功") if author else _("作者《%(name)s》信息更新失败")
+            template = _("作者 %(name)s 信息更新成功") if author else _("作者 %(name)s 信息更新失败")
             self.add_msg(admin_uid, status, template % {"name": author_name})
