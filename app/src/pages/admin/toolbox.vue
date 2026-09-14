@@ -3,7 +3,7 @@
     <v-row class="mb-3" align="center">
       <v-col>
         <span class="text-h5 font-weight-bold">{{ $t('toolbox.pageTitle') }}</span>
-        <div class="text-caption grey--text mt-1">{{ $t('toolbox.pageSubtitle') }}</div>
+        <div class="text-caption mt-1">{{ $t('toolbox.pageSubtitle') }}</div>
       </v-col>
       <v-col cols="auto">
         <v-btn text @click="fetchAll" :loading="loading">
@@ -27,7 +27,7 @@
 
     <v-row v-else>
       <v-col
-        v-for="tool in tools"
+        v-for="tool in sortedTools"
         :key="tool.id"
         cols="12"
         md="4"
@@ -37,8 +37,19 @@
           rounded="xl"
           outlined
           @click="goToTool(tool)"
-          style="cursor: pointer; border: 2px solid #90CAF9; height: 100%;"
+          style="cursor: pointer; border: 2px solid #90CAF9; height: 100%; position: relative;"
         >
+          <v-btn
+            icon
+            small
+            class="pin-badge"
+            :title="$t(isPinned(tool) ? 'toolbox.unpin' : 'toolbox.pin')"
+            @click.stop="togglePin(tool)"
+          >
+            <v-icon :color="isPinned(tool) ? 'primary' : 'grey'">
+              {{ isPinned(tool) ? 'mdi-pin-outline' : 'mdi-pin-off-outline' }}
+            </v-icon>
+          </v-btn>
           <v-card-text class="d-flex flex-column flex-grow-1">
             <div class="d-flex align-center mb-3">
               <v-avatar size="56" rounded="lg" class="mr-3">
@@ -112,7 +123,7 @@
       <v-row class="mt-6 mb-2" align="center">
         <v-col>
           <span class="text-h6 font-weight-bold">{{ $t('toolbox.storeTitle') }}</span>
-          <div class="text-caption grey--text mt-1">{{ $t('toolbox.storeSubtitle') }}</div>
+          <div class="text-caption mt-1 store-subtitle" v-html="$t('toolbox.storeSubtitle')"></div>
         </v-col>
       </v-row>
       <v-row v-if="storeTools.length === 0" justify="center" class="py-6">
@@ -237,6 +248,8 @@
 </template>
 
 <script>
+const PINNED_TOOLS_KEY = "toolbox_pinned_tools";
+
 export default {
   data: () => ({
     tools: [],
@@ -257,7 +270,18 @@ export default {
     uninstallTarget: null,
     restartDialog: false,
     restarting: false,
+    pinnedIds: [],
   }),
+  computed: {
+    sortedTools() {
+      const pinnedSet = new Set(this.pinnedIds);
+      const pinnedTools = this.pinnedIds
+        .map((id) => this.tools.find((t) => t.id === id))
+        .filter(Boolean);
+      const restTools = this.tools.filter((t) => !pinnedSet.has(t.id));
+      return [...pinnedTools, ...restTools];
+    },
+  },
   head() {
     return { title: this.$t('toolbox.pageTitle') };
   },
@@ -286,7 +310,47 @@ export default {
   created() {
     this.$store.commit("navbar", true);
   },
+  mounted() {
+    this.loadPinned();
+    this.cleanPinned();
+  },
   methods: {
+    isPinned(tool) {
+      return this.pinnedIds.includes(tool.id);
+    },
+    loadPinned() {
+      try {
+        const raw = localStorage.getItem(PINNED_TOOLS_KEY);
+        this.pinnedIds = raw ? JSON.parse(raw) : [];
+      } catch (e) {
+        this.pinnedIds = [];
+      }
+    },
+    savePinned() {
+      try {
+        localStorage.setItem(PINNED_TOOLS_KEY, JSON.stringify(this.pinnedIds));
+      } catch (e) {
+        // localStorage unavailable (private mode, quota, ...): pin order just won't persist.
+      }
+    },
+    // 工具列表会变化（安装/卸载/商店更新），已 pin 但已不在当前列表中的 id 需要清除。
+    cleanPinned() {
+      const validIds = new Set(this.tools.map((t) => t.id));
+      const filtered = this.pinnedIds.filter((id) => validIds.has(id));
+      if (filtered.length !== this.pinnedIds.length) {
+        this.pinnedIds = filtered;
+        this.savePinned();
+      }
+    },
+    togglePin(tool) {
+      const idx = this.pinnedIds.indexOf(tool.id);
+      if (idx >= 0) {
+        this.pinnedIds.splice(idx, 1);
+      } else {
+        this.pinnedIds.unshift(tool.id);
+      }
+      this.savePinned();
+    },
     goToTool(tool) {
       const toolPage = tool.page || tool.id;
       // 统一走 /toolbox/{page}：内置工具（source==='bundled'）有自己构建期就存在的静态页面，
@@ -311,6 +375,7 @@ export default {
         this.devMode = !!listRsp.dev_mode;
         this.storeEnabled = !!listRsp.store_enabled;
         this.storeTools = (storeRsp && storeRsp.err === "ok" && storeRsp.tools) || [];
+        this.cleanPinned();
       } catch (e) {
         this.error = String(e);
       } finally {
@@ -458,6 +523,19 @@ export default {
   position: absolute;
   top: 6px;
   right: 6px;
+}
+/* 工具卡片右上角的置顶按钮 */
+.pin-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 1;
+}
+.store-subtitle >>> a {
+  text-decoration: underline;
+}
+.theme--dark .store-subtitle >>> a {
+  color: yellow
 }
 /* 简介固定为 3 行高度：文字不足时占位保持一致，超出时省略号截断 */
 .tool-desc {

@@ -5,7 +5,7 @@ import logging
 
 from webserver import loader
 from webserver.i18n import _
-from webserver.constants import META_SOURCE_DOUBAN
+from webserver.constants import META_SOURCE_DOUBAN, DEFAULT_ISBN
 from webserver.plugins.meta.base import MetaSourcePlugin
 
 from .api import DoubanBookApi, KEY
@@ -110,9 +110,7 @@ class DoubanMetaPlugin(MetaSourcePlugin):
 
 def has_proper_book(books, title, isbn, publisher=None):
     """检查搜索结果中是否包含合适的图书"""
-    from webserver.plugins.meta import baike
-
-    if not books or not isbn or isbn == baike.BAIKE_ISBN:
+    if not books or not isbn or isbn == DEFAULT_ISBN:
         return False
 
     for b in books:

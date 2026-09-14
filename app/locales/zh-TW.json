@@ -1350,7 +1350,7 @@
     "updateTool": "更新「{name}」",
     "uninstallConfirm": "確定要解除安裝「{name}」嗎？重啟後徹底生效，工具自身的資料不會被清除。",
     "storeTitle": "工具商店",
-    "storeSubtitle": "從 MyBooks 取得可安裝的工具",
+    "storeSubtitle": "從 MyBooks 網站取得可安裝的工具。工具的開發文件參考：<a href=\"https://mybookstop.github.io/docs/manual/tool-development\" target=\"_blank\" rel=\"noopener noreferrer\">開發 MyBooks 工具</a>",
     "storeEmpty": "暫無可安裝工具",
     "storeInstall": "安裝",
     "storeUpdate": "更新",
@@ -1358,7 +1358,9 @@
     "restartRequiredTitle": "需要重啟服務",
     "restartRequiredMessage": "需要重啟服務後刷新頁面才能生效，是否現在重啟？",
     "restartNow": "立即重啟",
-    "restartLater": "稍後重啟"
+    "restartLater": "稍後重啟",
+    "pin": "置頂",
+    "unpin": "取消置頂"
   },
   "toolboxTool": {
     "title": "工具",

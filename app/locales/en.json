@@ -1356,7 +1356,7 @@
     "updateTool": "Update \"{name}\"",
     "uninstallConfirm": "Uninstall \"{name}\"? Takes full effect after restart; the tool's own data is kept.",
     "storeTitle": "Tool Store",
-    "storeSubtitle": "Fetch installable tools from MyBooks",
+    "storeSubtitle": "Fetch installable tools from the MyBooks website. For tool development docs, see <a href=\"https://mybookstop.github.io/docs/manual/tool-development\" target=\"_blank\" rel=\"noopener noreferrer\">Developing MyBooks Tools</a>",
     "storeEmpty": "No installable tools yet",
     "storeInstall": "Install",
     "storeUpdate": "Update",
@@ -1364,7 +1364,9 @@
     "restartRequiredTitle": "Restart Required",
     "restartRequiredMessage": "A restart is required for this to take effect. Restart now?",
     "restartNow": "Restart Now",
-    "restartLater": "Restart Later"
+    "restartLater": "Restart Later",
+    "pin": "Pin",
+    "unpin": "Unpin"
   },
   "toolboxTool": {
     "title": "Tool",
