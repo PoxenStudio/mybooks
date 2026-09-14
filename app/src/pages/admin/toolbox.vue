@@ -216,6 +216,23 @@
     >
       {{ $t('toolbox.uninstallConfirm', { name: uninstallTarget && uninstallTarget.name }) }}
     </AppDialog>
+
+    <!-- 安装/更新完成后：提示需要重启服务才能生效，询问是否现在重启 -->
+    <AppDialog
+      v-model="restartDialog"
+      :persistent="false"
+      type="confirm"
+      :title="$t('toolbox.restartRequiredTitle')"
+      color="orange"
+      confirm-dark
+      max-width="420"
+      :dismiss-label="$t('toolbox.restartLater')"
+      :confirm-text="$t('toolbox.restartNow')"
+      :confirm-loading="restarting"
+      @confirm="doRestartServer"
+    >
+      {{ $t('toolbox.restartRequiredMessage') }}
+    </AppDialog>
   </v-container>
 </template>
 
@@ -238,6 +255,8 @@ export default {
     updating: false,
     uninstallDialog: false,
     uninstallTarget: null,
+    restartDialog: false,
+    restarting: false,
   }),
   head() {
     return { title: this.$t('toolbox.pageTitle') };
@@ -354,6 +373,7 @@ export default {
         this.installDialog = false;
         this.installFile = null;
         await this.fetchAll();
+        this.restartDialog = true;
       } catch (e) {
         this.$alert('error', String(e));
       } finally {
@@ -381,6 +401,7 @@ export default {
         this.updateDialog = false;
         this.updateFile = null;
         await this.fetchAll();
+        this.restartDialog = true;
       } catch (e) {
         this.$alert('error', String(e));
       } finally {
@@ -397,10 +418,27 @@ export default {
         }
         this.$alert('success', rsp.msg);
         await this.fetchAll();
+        this.restartDialog = true;
       } catch (e) {
         this.$alert('error', String(e));
       } finally {
         this.busyToolId = null;
+      }
+    },
+    async doRestartServer() {
+      this.restarting = true;
+      try {
+        const rsp = await this.$backend('/admin/restart', { method: 'POST' });
+        if (rsp.err !== 'ok') {
+          this.$alert('error', rsp.msg || rsp.err);
+          return;
+        }
+        this.$alert('success', rsp.msg);
+        this.restartDialog = false;
+      } catch (e) {
+        this.$alert('error', String(e));
+      } finally {
+        this.restarting = false;
       }
     },
   },

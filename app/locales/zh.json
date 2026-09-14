@@ -1362,7 +1362,11 @@
     "storeEmpty": "暂无可安装工具",
     "storeInstall": "安装",
     "storeUpdate": "更新",
-    "storeFavorite": "精选工具"
+    "storeFavorite": "精选工具",
+    "restartRequiredTitle": "需要重启服务",
+    "restartRequiredMessage": "需要重启服务后刷新页面才能生效，是否现在重启？",
+    "restartNow": "立即重启",
+    "restartLater": "稍后重启"
   },
   "toolboxTool": {
     "title": "工具",
