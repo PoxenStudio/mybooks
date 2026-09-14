@@ -7,6 +7,9 @@ from typing import List, Tuple
 # 姓名前的地区/朝代标记，如 [明]、【美】、（清）、(英)、[唐] 等
 _DYNASTY_REGION_PREFIX = re.compile(r'^[\[【\(（][^\]】\)）]*[\]】\)）]\s*')
 
+# 姓名前的"原作："类角色前缀，如 原作：面堂兄、原作:面堂兄
+_ORIGINAL_AUTHOR_PREFIX = re.compile(r'^原作\s*[:：]\s*')
+
 # 姓名尾部的作者标识：可选空格/连字符 + 著/编/编著/author/editor；或括号包裹
 # 注意中文后缀允许直接紧贴姓名（如 "温德著"），故使用 \s*
 _AUTHOR_SUFFIX = re.compile(
@@ -26,8 +29,8 @@ _TRANSLATOR_SUFFIX = re.compile(
     r')$'
 )
 
-# 多人分隔符：/ 、 , （英文逗号）
-_MULTI_AUTHOR_SEP = re.compile(r'[/、,]')
+# 多人分隔符：/ 、 , ; ；（英文逗号、中英文分号）
+_MULTI_AUTHOR_SEP = re.compile(r'[/、,;；]')
 
 # 末尾的英文译名括号，如（Jean-Michel Frodon）、(John Smith)
 # 内容至少含一个英文字母，允许空格、连字符、·、.、' 等姓名常用符号
@@ -60,8 +63,9 @@ def guess_authors(authors: List[str]) -> Tuple[List[str], List[str]]:
         if not original or original in _ANONYMOUS_MARKERS:
             continue
 
-        # 1. 去除前导的地区/朝代标记
-        name = _DYNASTY_REGION_PREFIX.sub('', original).strip()
+        # 1. 去除前导的"原作："角色前缀，再去除地区/朝代标记
+        name = _ORIGINAL_AUTHOR_PREFIX.sub('', original).strip()
+        name = _DYNASTY_REGION_PREFIX.sub('', name).strip()
         if not name or name in _ANONYMOUS_MARKERS:
             continue
 
@@ -149,6 +153,13 @@ if __name__ == "__main__":
         (["(德)温德著"], ["温德"], [], "半角地区前缀+无空格著"),
         (["陈惠雅（译）"], [], ["陈惠雅"], "全角括号译者"),
         (["陈惠雅(译)"], [], ["陈惠雅"], "半角括号译者"),
+
+        # --- 扩展：分号分隔与"原作："前缀 ---
+        (["李政初；双福"], ["李政初", "双福"], [], "中文分号分割多人"),
+        (["李政初;双福"], ["李政初", "双福"], [], "英文分号分割多人"),
+        (["原作：面堂兄"], ["面堂兄"], [], "原作：前缀"),
+        (["原作:面堂兄"], ["面堂兄"], [], "半角冒号 原作:前缀"),
+        (["原作：面堂兄 著"], ["面堂兄"], [], "原作：前缀+著"),
     ]
     all_pass = True
     for idx, (inp, exp_auth, exp_trans, desc) in enumerate(author_tests, 1):

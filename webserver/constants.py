@@ -14,6 +14,8 @@ CHROME_MOBILE_HEADERS = {
 
 CUSTOM_COVER_IMAGE = "/data/books/logo/default_cover.jpg"
 
+DEFAULT_ISBN = "0000000000001"
+
 CALIBRE_ERROR_FLAG = "<*ERROR*>"
 SUPPORTED_EBOOK_FORMATS = ["azw3", "epub", "mobi", "pdf", "txt", "azw", "docx"]
 SUPPORTED_AUDIO_FORMATS = ['.mp3', ".m4a", ".m4b", ".wav", ".wma", ".opus"]

@@ -11,7 +11,7 @@ from webserver.plugins.meta.bookbarn_tags import BookBarnTags
 from webserver.services import AsyncService
 from webserver.services.background_service import BackgroundService, BackgroundTask
 from webserver.services.book_search import BookSearch
-from webserver.constants import AUTO_FILL_META, CALIBRE_COLUMN_TRANSLATORS
+from webserver.constants import AUTO_FILL_META, CALIBRE_COLUMN_TRANSLATORS, DEFAULT_ISBN
 
 CONF = loader.get_settings()
 
@@ -109,7 +109,7 @@ class AutoFillService(AsyncService):
                     else:
                         refer_mi = BookSearch.search_best_book(mi)
 
-                    if refer_mi and refer_mi.cover_data is not None:
+                    if refer_mi and refer_mi.cover_data is not None and refer_mi.title and refer_mi.title != "验证":
                         # 准备更新数据
                         self.do_fill_tags(book_id, refer_mi, need_commit=False)
                         if len(refer_mi.tags) == 0 and len(mi.tags) == 0:
@@ -196,6 +196,10 @@ class AutoFillService(AsyncService):
             logging.info(_("忽略更新书籍 id=%d : 无法获取信息"), book_id)
             return False
 
+        if refer_mi.isbn and refer_mi.title == "验证":
+            logging.info(_("忽略更新书籍 id=%d : 无效信息"), book_id)
+            return False
+
         if refer_mi.cover_data is None:
             logging.info(_("忽略更新书籍 id=%d : 无法获取封面"), book_id)
             return False
@@ -258,6 +262,9 @@ class AutoFillService(AsyncService):
     def plugin_search_book_tag(self, mi):
         if not mi.isbn and not mi.title and not mi.author:
             logging.info(_("忽略获取标签书籍 id=%d : 无有效数据"), mi.id)
+            return None
+
+        if mi.title and mi.title == "验证":
             return None
 
         api = BookBarnTags(token=CONF.get("BOOKBARN_TOKEN", ""))

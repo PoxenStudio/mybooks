@@ -6,10 +6,9 @@ import requests
 from webserver.i18n import _
 
 from webserver.plugins.meta.douban import str2date
-from webserver.constants import CHROME_MOBILE_HEADERS
+from webserver.constants import CHROME_MOBILE_HEADERS, DEFAULT_ISBN
 from webserver.plugins.meta.baike.baidubaike.baidubaike import Page
 
-BAIKE_ISBN = "0000000000001"
 KEY = "BaiduBaike"
 
 
@@ -51,7 +50,7 @@ class BaiduBaikeApi:
             mi.publisher = info.get(u"连载平台", "")
         mi.authors = [info.get(u"作者", u"佚名")]
         mi.author_sort = mi.authors[0]
-        mi.isbn = info.get("ISBN", BAIKE_ISBN)
+        mi.isbn = info.get("ISBN", DEFAULT_ISBN)
         mi.tags = []
         pd = str2date(info.get(u"出版时间"))
         if pd is None:
