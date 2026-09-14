@@ -89,7 +89,7 @@ class EpubMergeTool(BaseTool):
             "name": "EPUB合并",
             "description": "将多本 EPUB 按指定顺序合并为一本新书（目录拼接、资源去重），原书默认保留",
             "revision": "0.1.0",
-            "author": "You",
+            "author": "黏菌",
             "publish_date": "2026-09-04",
         }
 
