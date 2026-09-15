@@ -30,6 +30,8 @@ from webserver.toolbox.txt_encoding_fixer import TxtEncodingFixerTool
 from webserver.toolbox.chinese_converter_tool import ChineseConverterTool, DIRECTIONS
 from webserver.toolbox.bookbarn_acceptor_tool import BookBarnAcceptorTool
 from webserver.toolbox.epub_beautify import EpubBeautifyTool
+from webserver.toolbox.epub_merge import EpubMergeTool
+from webserver.toolbox import epub_merge_lib
 from webserver.toolbox.utils.styles import TOC_STYLES as EB_TOC_STYLES, list_presets as eb_list_presets
 from webserver.toolbox.utils.epub_beautify_lib import validate_note_mark as eb_validate_note_mark
 from webserver.services.background_service import BackgroundTask
@@ -1356,6 +1358,128 @@ class AdminEpubBeautifyProgress(BaseHandler):
         return {"err": "ok", "data": result}
 
 
+class AdminEpubMergePreview(BaseHandler):
+    @js
+    @is_admin
+    def post(self):
+        data = tornado.escape.json_decode(self.request.body)
+        book_ids = data.get("book_ids")
+        if not isinstance(book_ids, list) or not book_ids:
+            return {"err": "params.missing", "msg": _("请提供书籍ID列表")}
+        try:
+            result = EpubMergeTool().preview(book_ids)
+        except RuntimeError as err:
+            return {"err": "epub_merge.preview_failed", "msg": str(err)}
+        except Exception as err:
+            # 未预期的解析异常不应 500，转为友好业务错误
+            logging.warning("[EpubMergePreview] preview failed: %s", err)
+            return {"err": "epub_merge.preview_failed",
+                    "msg": _("预览失败：%s") % str(err)[:200]}
+        return {"err": "ok", "data": result}
+
+
+class AdminEpubMergeRun(BaseHandler):
+    @js
+    @is_admin
+    def post(self):
+        data = tornado.escape.json_decode(self.request.body)
+        book_ids = data.get("book_ids")
+        # P7：长输入前后端双截断；字符串字段 str() 归一，
+        # 防客户端传 dict/list 导致切片或 strip 抛 500
+        title = str(data.get("title") or "").strip()[:100]
+        authors = data.get("authors") or []
+        description = str(data.get("description") or "")[:50000]
+        isbns = data.get("isbns") or []
+        tags = data.get("tags") or []
+        publisher = str(data.get("publisher") or "").strip()[:200]
+        language = str(data.get("language") or "").strip()
+        # 布尔兼容 string/bool（裸 API 传 "false"/"0" 字符串时 bool() 会误判为 True）
+        divider = epub_merge_lib.coerce_bool(data.get("divider"), True)
+        delete_source = epub_merge_lib.coerce_bool(data.get("delete_source"), False)
+        cover = data.get("cover") or {"type": "first"}
+
+        if not isinstance(book_ids, list) or not (2 <= len(book_ids) <= 20):
+            return {"err": "params.missing", "msg": _("请选择 2–20 本书进行合并")}
+        if not title:
+            return {"err": "params.missing", "msg": _("请填写合集标题")}
+        if not isinstance(authors, list):
+            return {"err": "params.invalid", "msg": _("作者格式不合法")}
+        # `str(None)` 会变成字面 "None"：先判空再 str 归一
+        authors = [s for s in (str(a).strip() if a else "" for a in authors) if s]
+        if not authors:
+            authors = [_("佚名")]
+        # 字符串会 _ordered_unique 被迭代成单字符列表，必须挡在列表层
+        if not isinstance(isbns, list) or not isinstance(tags, list):
+            return {"err": "params.invalid", "msg": _("ISBN / 标签格式不合法")}
+        isbns = [s for s in (str(i).strip() if i else "" for i in isbns) if s]
+        tags = [s for s in (str(t).strip() if t else "" for t in tags) if s]
+        if not isinstance(cover, dict) or not cover.get("type"):
+            return {"err": "params.invalid", "msg": _("封面参数不合法")}
+
+        tool = EpubMergeTool()
+        if tool.is_running():
+            return {"err": "task.running", "msg": _("已有 EPUB 合并任务正在执行，请稍后再试")}
+
+        tool.merge(book_ids, title, authors,
+                   {"description": description, "isbns": isbns, "tags": tags,
+                    "publisher": publisher, "language": language,
+                    "divider": divider, "delete_source": delete_source,
+                    "cover": cover},
+                   self.user_id())
+        return {"err": "ok", "msg": _("EPUB 合并任务已启动，注意查看消息通知中的处理结果")}
+
+
+class AdminEpubMergeProgress(BaseHandler):
+    @js
+    @is_admin
+    def get(self):
+        task = EpubMergeTool.get_last_task()
+        if not task:
+            return {"err": "task.not_found", "msg": _("尚未启动合并任务")}
+
+        progress_data = task.get("progress_data") or {}
+        result = {
+            "status": task.get("status"),
+            "progress": task.get("progress", 0),
+            "stage": progress_data.get("stage", ""),
+            "book_index": progress_data.get("book_index", 0),
+            "book_total": progress_data.get("book_total", 0),
+            "book_id": progress_data.get("book_id", 0),
+            "new_book_id": progress_data.get("new_book_id", 0),
+        }
+
+        if task.get("status") == BackgroundTask.STATUS_FAILED:
+            return {"err": "task.failed", "msg": task.get("error_message") or _("合并失败"), "data": result}
+        if task.get("status") == BackgroundTask.STATUS_COMPLETED:
+            return {"err": "ok", "msg": _("合并已完成"), "data": result}
+        return {"err": "ok", "data": result}
+
+
+class AdminEpubMergeCancel(BaseHandler):
+    @js
+    @is_admin
+    def post(self):
+        if not EpubMergeTool.request_cancel():
+            return {"err": "task.not_found", "msg": _("没有正在执行的合并任务")}
+        return {"err": "ok", "msg": _("已请求取消，将在当前书籍处理完后停止")}
+
+
+class AdminEpubMergeCoverUpload(BaseHandler):
+    @js
+    @is_admin
+    def post(self):
+        if not self.request.files or 'file' not in self.request.files:
+            return {"err": "params.missing", "msg": _("未上传文件")}
+
+        file_meta = self.request.files['file'][0]
+        try:
+            result = EpubMergeTool().save_cover_upload(
+                file_meta['body'], file_meta.get('filename', ''))
+        except (ValueError, RuntimeError) as err:
+            return {"err": "epub_merge.cover_invalid", "msg": str(err)}
+        return {"err": "ok", "data": result}
+
+
 def routes():
     # 动态 import 外部工具 / 被更新覆盖的内置工具，只在这里（进程启动、路由拼接时）跑一次，
     # 对应 document/Toolbox_Dynamic_Design.md 3.3.1 节确认的"重启生效"模型。
@@ -1412,6 +1536,11 @@ def routes():
                 (r"/api/toolbox/epub_beautify/bg_meta", AdminEpubBeautifyBgMeta),
                 (r"/api/toolbox/epub_beautify/bg_raw", AdminEpubBeautifyBgRaw),
                 (r"/api/toolbox/epub_beautify/bg_delete", AdminEpubBeautifyBgDelete),
+                (r"/api/toolbox/epub_merge/preview", AdminEpubMergePreview),
+                (r"/api/toolbox/epub_merge/merge", AdminEpubMergeRun),
+                (r"/api/toolbox/epub_merge/progress", AdminEpubMergeProgress),
+                (r"/api/toolbox/epub_merge/cancel", AdminEpubMergeCancel),
+                (r"/api/toolbox/epub_merge/cover_upload", AdminEpubMergeCoverUpload),
                 (r"/api/toolbox/epub_beautify/texture_raw", AdminEpubBeautifyTextureRaw),
     ] + toolbox_manager.collect_tool_routes() + [
                 # 必须放在整个列表最后：这是个不加区分的单段路径通配（DELETE 卸载），

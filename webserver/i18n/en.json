@@ -523,5 +523,8 @@
   "这本书没有可阅读的电子书格式": "This book has no readable ebook format",
   "不能补录未来的阅读时间": "Cannot backfill reading time for a future date",
   "缺少必填参数：duration_seconds": "Missing required parameter: duration_seconds",
-  "单次阅读时长需在 0~18 小时之间": "Duration must be between 0 and 18 hours"
+  "单次阅读时长需在 0~18 小时之间": "Duration must be between 0 and 18 hours",
+  "无 NCX 目录，合并时改用 EPUB3 导航 / spine 顺序兜底": "No NCX table of contents; falling back to EPUB3 navigation / spine order",
+  "未定位到正文条目": "No spine documents found",
+  "含字体混淆资源，合并时将剔除": "Obfuscated fonts detected; they will be excluded from the merge"
 }
