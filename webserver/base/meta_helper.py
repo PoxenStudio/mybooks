@@ -49,7 +49,7 @@ def normalize_author_name(value: str) -> str:
     """合并连续空白字符为单个空格，并去除首尾空白。"""
     if not value:
         return ''
-    return ' '.join(value.split()).strip()
+    return ' '.join(value.split()).strip().replace('•', '·')
 
 
 def guess_authors(authors: List[str]) -> Tuple[List[str], List[str]]:

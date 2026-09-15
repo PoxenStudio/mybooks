@@ -214,9 +214,9 @@ class AutoFillService(AsyncService):
         refer_mi.title = title
         refer_mi.title_sort = utils.get_title_sort(refer_mi.title)
 
-        _authors, _translators = guess_authors(mi.authors)
-        mi.authors = _authors
+        _authors, _translators = guess_authors(refer_mi.authors)
         mi.smart_update(refer_mi, replace_metadata=True)
+        mi.authors = _authors
         self.db.set_metadata(book_id, mi, ignore_errors=True)
         if _translators:
             translators = ",".join(_translators)
