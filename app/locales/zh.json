@@ -1582,7 +1582,6 @@
     "deleteSourceConfirmTitle": "删除源书确认",
     "deleteSourceConfirmText": "合并成功后将删除所选的源书，删除后无法恢复。确定继续吗？",
     "confirmOk": "确定删除",
-    "confirmCancel": "取消",
     "descriptionLabel": "简介（可改）",
     "restoreDefault": "恢复默认",
     "merging": "合并中...",

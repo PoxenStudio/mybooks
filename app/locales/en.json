@@ -1581,7 +1581,6 @@
     "deleteSourceConfirmTitle": "Delete source books?",
     "deleteSourceConfirmText": "The selected source books will be deleted after a successful merge. This cannot be undone. Continue?",
     "confirmOk": "Delete",
-    "confirmCancel": "Cancel",
     "descriptionLabel": "Description (editable)",
     "restoreDefault": "Restore default",
     "merging": "Merging...",

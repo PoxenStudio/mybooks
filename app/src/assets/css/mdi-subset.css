@@ -282,6 +282,14 @@
   content: "\F0139";
 }
 
+.mdi-chevron-double-down::before {
+  content: "\F013C";
+}
+
+.mdi-chevron-double-up::before {
+  content: "\F013F";
+}
+
 .mdi-chevron-down::before {
   content: "\F0140";
 }

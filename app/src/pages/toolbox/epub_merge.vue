@@ -414,17 +414,20 @@
       </v-col>
     </v-row>
 
-    <v-dialog v-model="deleteSourceDialog" max-width="420">
-      <v-card>
-        <v-card-title class="text-subtitle-1">{{ $t('epubMerge.deleteSourceConfirmTitle') }}</v-card-title>
-        <v-card-text>{{ $t('epubMerge.deleteSourceConfirmText') }}</v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn text @click="cancelDeleteSource">{{ $t('epubMerge.confirmCancel') }}</v-btn>
-          <v-btn text color="error" @click="confirmDeleteSource">{{ $t('epubMerge.confirmOk') }}</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <AppDialog
+      v-model="deleteSourceDialog"
+      :persistent="false"
+      type="confirm"
+      :title="$t('epubMerge.deleteSourceConfirmTitle')"
+      color="deep-orange"
+      confirm-dark
+      max-width="420px"
+      :confirm-text="$t('epubMerge.confirmOk')"
+      @confirm="confirmDeleteSource"
+      @dismiss="cancelDeleteSource"
+    >
+      {{ $t('epubMerge.deleteSourceConfirmText') }}
+    </AppDialog>
   </v-container>
 </template>
 
@@ -757,7 +760,6 @@ export default {
     },
     cancelDeleteSource() {
       this.form.deleteSource = false;
-      this.deleteSourceDialog = false;
     },
     async cancelMerge() {
       this.cancelRequested = true;

@@ -1575,7 +1575,6 @@
     "deleteSourceConfirmTitle": "刪除源書確認",
     "deleteSourceConfirmText": "合併成功後將刪除所選的源書，刪除後無法恢復。確定繼續嗎？",
     "confirmOk": "確定刪除",
-    "confirmCancel": "取消",
     "descriptionLabel": "簡介（可改）",
     "restoreDefault": "恢復默認",
     "merging": "合併中...",
