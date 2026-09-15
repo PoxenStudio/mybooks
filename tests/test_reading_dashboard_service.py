@@ -135,6 +135,34 @@ class TestReadingDashboardService(unittest.TestCase):
             d = datetime.datetime.strptime(w["week_start"], "%Y-%m-%d").date()
             self.assertEqual(d.weekday(), 0)  # Monday
 
+    def test_heatmap_covers_13_weeks_starting_on_monday_through_today(self):
+        today = datetime.datetime.utcnow().date()
+        yesterday = today - datetime.timedelta(days=1)
+        self._add_reading(yesterday, duration=1800)
+
+        stats = svc.get_stats(self.session, self.reader)
+        heatmap = stats["heatmap"]
+        self.assertEqual(heatmap["weeks"], svc.HEATMAP_WEEKS)
+        days = heatmap["days"]
+
+        expected_start = svc._week_start(today) - datetime.timedelta(weeks=svc.HEATMAP_WEEKS - 1)
+        self.assertEqual(days[0]["date"], svc._date_str(expected_start))
+        self.assertEqual(days[-1]["date"], svc._date_str(today))
+        # no future dates beyond today
+        self.assertEqual(len(days), (today - expected_start).days + 1)
+
+        by_date = {d["date"]: d["reading_seconds"] for d in days}
+        self.assertEqual(by_date[svc._date_str(yesterday)], 1800)
+        self.assertEqual(by_date[svc._date_str(today)], 0)
+
+    def test_heatmap_uses_live_today_value_not_stale_cache(self):
+        today = datetime.datetime.utcnow().date()
+        self._add_reading(today, duration=300)
+        stats = svc.get_stats(self.session, self.reader)
+        days = stats["heatmap"]["days"]
+        self.assertEqual(days[-1]["date"], svc._date_str(today))
+        self.assertEqual(days[-1]["reading_seconds"], 300)
+
 
 if __name__ == "__main__":
     unittest.main()

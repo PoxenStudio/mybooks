@@ -26,11 +26,11 @@
                     </div>
                 </div>
 
-                <!-- 近8周阅读时长 -->
+                <!-- 阅读热力图（近13周） -->
                 <div class="stats-card wide">
-                    <div class="stats-card-label">{{ $t('index.readingStats.weeklyReadingTime') }}</div>
-                    <div class="stats-card-body chart-body">
-                        <bar-chart :chart-data="weeklyReadingData" :chart-options="weeklyReadingOptions" :styles="chartCanvasStyle" />
+                    <div class="stats-card-label">{{ $t('index.readingStats.readingHeatmap') }}</div>
+                    <div class="stats-card-body">
+                        <reading-heatmap :days="heatmapDays" compact />
                     </div>
                 </div>
 
@@ -58,10 +58,11 @@
 import BarChart from '~/components/charts/BarChart.vue';
 import LineChart from '~/components/charts/LineChart.vue';
 import DoughnutChart from '~/components/charts/DoughnutChart.vue';
+import ReadingHeatmap from '~/components/ReadingHeatmap.vue';
 
 export default {
     name: 'ReadingStatsBanner',
-    components: { BarChart, LineChart, DoughnutChart },
+    components: { BarChart, LineChart, DoughnutChart, ReadingHeatmap },
     props: {
         uid: { type: [Number, String], default: null },
         showTitle: { type: Boolean, default: true },
@@ -99,16 +100,8 @@ export default {
         weekLabels() {
             return this.weekly.map((w) => w.week_start.slice(5));
         },
-        weeklyReadingData() {
-            return {
-                labels: this.weekLabels,
-                datasets: [{
-                    label: this.$t('index.readingStats.weeklyReadingTime'),
-                    data: this.weekly.map((w) => Math.round((w.reading_seconds / 3600) * 100) / 100),
-                    backgroundColor: 'rgba(33,150,243,0.75)',
-                    borderRadius: 6,
-                }],
-            };
+        heatmapDays() {
+            return (this.stats && this.stats.heatmap && this.stats.heatmap.days) || [];
         },
         weeklyEventsData() {
             return {
@@ -156,17 +149,6 @@ export default {
                 scales: {
                     x: { ticks: { color: '#eee', font: { size: 10 } }, grid: { display: false } },
                     y: { beginAtZero: true, ticks: { color: '#eee', font: { size: 10 }, precision: 0, stepSize: 1 }, grid: { color: 'rgba(255,255,255,0.1)' } },
-                },
-            };
-        },
-        weeklyReadingOptions() {
-            return {
-                maintainAspectRatio: false,
-                responsive: true,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { ticks: { color: '#eee', font: { size: 10 } }, grid: { display: false } },
-                    y: { ticks: { color: '#eee', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.1)' } },
                 },
             };
         },

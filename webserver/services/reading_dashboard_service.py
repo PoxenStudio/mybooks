@@ -26,8 +26,11 @@ from webserver.models import Reader, Reading, ReadingState
 CONF = loader.get_settings()
 
 CACHE_VERSION = 1
-CACHE_RETENTION_DAYS = 63  # 9 weeks
 DISPLAY_WEEKS = 8
+HEATMAP_WEEKS = 13  # 近 3 个月，见 history.vue 的阅读热力图
+# 缓存要覆盖两个消费者里更长的那个（+1 周缓冲，避免自然周边界刚好缺一天）：
+# 周图表用 DISPLAY_WEEKS，热力图用 HEATMAP_WEEKS。
+CACHE_RETENTION_DAYS = (max(DISPLAY_WEEKS, HEATMAP_WEEKS) + 1) * 7
 
 
 def _user_cache_path(uid) -> str:
@@ -197,6 +200,21 @@ def _weekly_buckets(days: Dict[str, Dict], today: datetime.date) -> list:
     return weekly
 
 
+def _heatmap_days(days: Dict[str, Dict], today: datetime.date, weeks: int = HEATMAP_WEEKS) -> list:
+    """近 `weeks` 个自然周（周一起点）的逐日阅读时长，供前端热力图使用。
+    只到今天为止，本周未来的日期不生成（前端按 7 天一列补空格子）。"""
+    start = _week_start(today) - datetime.timedelta(weeks=weeks - 1)
+    result = []
+    d = start
+    while d <= today:
+        bucket = days.get(_date_str(d))
+        result.append(
+            {"date": _date_str(d), "reading_seconds": (bucket or {}).get("reading_seconds", 0)}
+        )
+        d += datetime.timedelta(days=1)
+    return result
+
+
 def _book_status(db, reader_id: int, calibre_db=None) -> Dict[str, int]:
     rows = (
         db.query(ReadingState.read_state, ReadingState.wants, ReadingState.book_id)
@@ -236,5 +254,6 @@ def get_stats(db, reader: Reader, calibre_db=None) -> Optional[Dict]:
             "push_count": reader.push_count or 0,
         },
         "weekly": _weekly_buckets(days, today),
+        "heatmap": {"weeks": HEATMAP_WEEKS, "days": _heatmap_days(days, today)},
         "book_status": _book_status(db, reader.id, calibre_db),
     }
