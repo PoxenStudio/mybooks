@@ -2334,6 +2334,39 @@ class TestNotes(unittest.TestCase):
         self.assertIn('<aside epub:type="footnote" class="mb-notes">', new)
         self.assertIn('href="#df-1"', new)  # 配对信号无损
 
+    def test_aside_single_quoted_class_merged(self):
+        """复审三轮：单引号 class 的 aside（合法 XML 属性写法）合并进原 class，
+        不追加第二个 class 属性——重复属性使整份内容文档非良构（严格解析器
+        整章不可读），与缺 xmlns:epub 声明同一失效级别。"""
+        html = ('<html xmlns="http://www.w3.org/1999/xhtml">'
+                '<body><p>文<a class="footnote" href="#n1">1</a></p>'
+                "<aside id=\"n1\" epub:type='footnote' class='footnote'>"
+                '<p>注</p></aside></body></html>')
+        new, st = lib.mark_notes_in_html(html)
+        self.assertEqual(st['refs'], 1)
+        m = re.search(r'<aside\b[^>]*>', new)
+        self.assertIn('class="footnote mb-notes"', m.group(0))
+        self.assertEqual(len(re.findall(r'class\s*=', m.group(0))), 1)
+        ET.fromstring(new)  # 非良构会在此抛 ParseError
+
+    def test_aside_class_variants_wellformed(self):
+        """双引号/无 class/自闭合 aside 三形态：容器类正确追加，标签保持合法
+        （自闭合不得产出 `/> class=…` 形态的坏标签）。"""
+        base = ('<html xmlns="http://www.w3.org/1999/xhtml">'
+                '<body><p>文<a class="footnote" href="#n1">1</a></p>%s</body></html>')
+        cases = (
+            '<aside epub:type="footnote" class="footnote"><p>注</p></aside>',
+            "<aside epub:type='footnote'><p>注</p></aside>",
+            '<aside epub:type="footnote"/>',
+        )
+        for frag in cases:
+            with self.subTest(frag=frag):
+                new, _ = lib.mark_notes_in_html(base % frag)
+                m = re.search(r'<aside\b[^>]*>', new)
+                self.assertIn('mb-notes', m.group(0))
+                self.assertEqual(len(re.findall(r'class\s*=', m.group(0))), 1)
+                ET.fromstring(new)
+
     def test_idempotent_rerun(self):
         once, _ = lib.mark_notes_in_html(NOTES_CH_B)
         twice, st = lib.mark_notes_in_html(once)
