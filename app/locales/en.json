@@ -1362,7 +1362,7 @@
     "storeUpdate": "Update",
     "storeFavorite": "Featured tool",
     "restartRequiredTitle": "Restart Required",
-    "restartRequiredMessage": "A restart is required for this to take effect. Restart now?",
+    "restartRequiredMessage": "Succeed installed. A restart is required for this to take effect. Restart now?",
     "restartNow": "Restart Now",
     "restartLater": "Restart Later",
     "pin": "Pin",

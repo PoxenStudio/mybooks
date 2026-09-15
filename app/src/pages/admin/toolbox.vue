@@ -118,7 +118,8 @@
       </v-col>
     </v-row>
 
-    <!-- 工具商店：ENABLE_TOOLBOX_STORE=False 时后端 store_enabled 恒为 false，整块不展示 -->
+    <!-- 工具商店：ENABLE_TOOLBOX_STORE=False 时后端 store_enabled 恒为 false，整块不展示。
+         商店索引单独异步加载，不阻塞上面的工具列表渲染。 -->
     <template v-if="storeEnabled">
       <v-row class="mt-6 mb-2" align="center">
         <v-col>
@@ -126,7 +127,10 @@
           <div class="text-caption mt-1 store-subtitle" v-html="$t('toolbox.storeSubtitle')"></div>
         </v-col>
       </v-row>
-      <v-row v-if="storeTools.length === 0" justify="center" class="py-6">
+      <v-row v-if="storeLoading" justify="center" class="py-6">
+        <v-progress-circular indeterminate color="primary" size="32" />
+      </v-row>
+      <v-row v-else-if="storeTools.length === 0" justify="center" class="py-6">
         <v-col cols="auto" class="text-center grey--text">{{ $t('toolbox.storeEmpty') }}</v-col>
       </v-row>
       <v-row v-else>
@@ -258,6 +262,7 @@ export default {
     devMode: false,
     storeEnabled: false,
     storeTools: [],
+    storeLoading: false,
     busyToolId: null,
     installDialog: false,
     installFile: null,
@@ -285,34 +290,15 @@ export default {
   head() {
     return { title: this.$t('toolbox.pageTitle') };
   },
-  async asyncData({ app, res }) {
-    if (res !== undefined) {
-      res.setHeader("Cache-Control", "no-cache");
-    }
-    try {
-      const [listRsp, storeRsp] = await Promise.all([
-        app.$backend("/toolbox/list?include_disabled=1"),
-        app.$backend("/toolbox/store/index"),
-      ]);
-      if (listRsp.err !== "ok") {
-        return { tools: [], error: listRsp.msg || "error" };
-      }
-      return {
-        tools: listRsp.tools || [],
-        devMode: !!listRsp.dev_mode,
-        storeEnabled: !!listRsp.store_enabled,
-        storeTools: (storeRsp && storeRsp.err === "ok" && storeRsp.tools) || [],
-      };
-    } catch (e) {
-      return { tools: [], error: String(e) };
-    }
-  },
   created() {
     this.$store.commit("navbar", true);
   },
   mounted() {
     this.loadPinned();
-    this.cleanPinned();
+    // 页面先渲染出来，工具列表和商店索引各自异步加载、互不阻塞，
+    // 避免像之前 asyncData 那样等两个接口都返回才能进入页面。
+    this.fetchList();
+    this.fetchStore();
   },
   methods: {
     isPinned(tool) {
@@ -359,14 +345,16 @@ export default {
       // 见 document/Toolbox_Dynamic_Design.md 4.3 节。
       this.$router.push(`/toolbox/${toolPage}`);
     },
-    async fetchAll() {
+    // 刷新按钮 / 安装卸载后的重新加载：两块各自独立请求、独立控制自己的 loading，
+    // 但仍返回一个 Promise，方便调用方在需要时 await（比如装完再弹重启提示）。
+    fetchAll() {
+      return Promise.all([this.fetchList(), this.fetchStore()]);
+    },
+    async fetchList() {
       this.loading = true;
       this.error = null;
       try {
-        const [listRsp, storeRsp] = await Promise.all([
-          this.$backend("/toolbox/list?include_disabled=1"),
-          this.$backend("/toolbox/store/index"),
-        ]);
+        const listRsp = await this.$backend("/toolbox/list?include_disabled=1");
         if (listRsp.err !== "ok") {
           this.error = listRsp.msg || listRsp.err;
           return;
@@ -374,12 +362,22 @@ export default {
         this.tools = listRsp.tools || [];
         this.devMode = !!listRsp.dev_mode;
         this.storeEnabled = !!listRsp.store_enabled;
-        this.storeTools = (storeRsp && storeRsp.err === "ok" && storeRsp.tools) || [];
         this.cleanPinned();
       } catch (e) {
         this.error = String(e);
       } finally {
         this.loading = false;
+      }
+    },
+    async fetchStore() {
+      this.storeLoading = true;
+      try {
+        const storeRsp = await this.$backend("/toolbox/store/index");
+        this.storeTools = (storeRsp && storeRsp.err === "ok" && storeRsp.tools) || [];
+      } catch (e) {
+        // 商店索引是锦上添花的区块，加载失败不影响上面的工具列表，静默忽略即可。
+      } finally {
+        this.storeLoading = false;
       }
     },
     async toggleEnabled(tool) {
@@ -434,7 +432,6 @@ export default {
           this.$alert('error', rsp.msg || rsp.err);
           return;
         }
-        this.$alert('success', rsp.msg);
         this.installDialog = false;
         this.installFile = null;
         await this.fetchAll();
@@ -462,7 +459,6 @@ export default {
           this.$alert('error', rsp.msg || rsp.err);
           return;
         }
-        this.$alert('success', rsp.msg);
         this.updateDialog = false;
         this.updateFile = null;
         await this.fetchAll();
@@ -481,7 +477,6 @@ export default {
           this.$alert('error', rsp.msg || rsp.err);
           return;
         }
-        this.$alert('success', rsp.msg);
         await this.fetchAll();
         this.restartDialog = true;
       } catch (e) {

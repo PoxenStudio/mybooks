@@ -1364,7 +1364,7 @@
     "storeUpdate": "更新",
     "storeFavorite": "精选工具",
     "restartRequiredTitle": "需要重启服务",
-    "restartRequiredMessage": "需要重启服务后刷新页面才能生效，是否现在重启？",
+    "restartRequiredMessage": "安装成功，需要重启服务后刷新页面才能生效，是否现在重启？",
     "restartNow": "立即重启",
     "restartLater": "稍后重启",
     "pin": "置顶",
