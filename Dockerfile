@@ -86,6 +86,12 @@ COPY release_notes.txt /var/www/mybooks/app/dist/static/
 COPY thanks_to.txt /var/www/mybooks/app/dist/static/
 
 
+# Install python packages
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir --no-compile -r /tmp/requirements.txt --break-system-packages && \
+    rm -rf /root/.cache /root/.config/pip /tmp/requirements.txt /tmp/pip-* /var/tmp/*
+
+
 RUN rm -f /etc/nginx/conf.d/default.conf /var/www/html -rf && \
     cd /var/www/mybooks/ && \
     ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && \
