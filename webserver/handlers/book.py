@@ -15,6 +15,7 @@ import traceback
 import urllib
 import asyncio
 import threading
+from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
 from webserver.i18n import _
 
@@ -2101,6 +2102,9 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
     @classmethod
     def get_absolute_path(cls, root: str, path: str) -> str:
         return path
+
+    def compute_etag(self) -> Optional[str]:
+        return None
 
 
 class BookNav(ListHandler):
