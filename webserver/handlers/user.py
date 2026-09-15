@@ -464,10 +464,13 @@ class UserMessagesClear(BaseHandler):
             return {"err": "ok"}
         for msg in user.messages:
             # Ensure msg is in the current session to avoid "already attached to session" error
-            msg = self.sqlite_session.merge(msg)
-            msg.unread = False
-            msg.update_time = datetime.datetime.now()
-            msg.save()
+            try:
+                msg = self.sqlite_session.merge(msg)
+                msg.unread = False
+                msg.update_time = datetime.datetime.now()
+                msg.save()
+            except Exception as e:
+                logging.error("Clear message failed: %s", e)
         return {"err": "ok"}
 
 
