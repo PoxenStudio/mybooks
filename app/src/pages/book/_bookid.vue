@@ -337,7 +337,7 @@
                                     <v-icon>mdi-file-document-remove-outline</v-icon>
                                     {{ $t('book.deleteFormat') }}
                                 </v-list-item>
-                                <v-list-item @click="showUploadFormatDialog" :disabled="!hasEBooks">
+                                <v-list-item @click="showUploadFormatDialog" :disabled="book.book_type === this.BOOK_TYPE.PHYSICAL">
                                     <v-icon>mdi-file-upload-outline</v-icon>
                                     {{ $t('book.uploadNewFormat') }}
                                 </v-list-item>
