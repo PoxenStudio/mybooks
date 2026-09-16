@@ -76,8 +76,16 @@ class CatalogExtractService(AsyncService):
     def _extract_epub_toc(self, fpath):
         from ebooklib import epub
 
-        book = epub.read_epub(fpath, {"ignore_ncx": True})
         lines = []
+
+        try:
+            book = epub.read_epub(fpath, {"ignore_ncx": True})
+        except Exception as e:
+            book = None
+            logging.error(f"Failed to load book from {fpath}, error: {e}")
+
+        if not book:
+            return lines
 
         def walk(items, depth):
             for item in items or []:
