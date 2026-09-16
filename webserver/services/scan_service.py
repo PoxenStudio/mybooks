@@ -39,7 +39,7 @@ from sqlalchemy.exc import IntegrityError
 from webserver.i18n import _
 from webserver.base.image_helper import ImageHelper
 from webserver.base.image_generator import ImageGenerator
-from webserver.base.meta_helper import guess_authors
+from webserver.base.meta_helper import guess_authors, guess_tags
 from webserver.services import AsyncService
 from webserver.models import Item, ScanFile, Reader
 from webserver import utils, constants
@@ -439,6 +439,7 @@ class ScanService(AsyncService):
                     if mi.authors is None or len(mi.authors) == 0 or mi.authors[0].lower() == "unknown":
                         mi.authors = [_("佚名")]
 
+        mi.tags = guess_tags(mi.tags)
         row.title = mi.title
         row.author = mi.authors[0] if mi.authors else mi.author_sort
         row.publisher = mi.publisher

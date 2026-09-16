@@ -34,7 +34,7 @@ from webserver.base.formatter import BookFormatter, ReadingStateFormatter
 from webserver.base.image_generator import ImageGenerator
 from webserver.base.image_helper import ImageHelper
 from webserver.base.epub_helper import EpubHelper
-from webserver.base.meta_helper import guess_authors
+from webserver.base.meta_helper import guess_authors, guess_tags
 from webserver.services.autofill import AutoFillService
 from webserver.services.ai_fillinfo import AIFillInfoService
 from webserver.services.catalog import CatalogExtractService
@@ -827,7 +827,7 @@ class BookRefer(BaseHandler):
             else:
                 org_mi.set("publisher", "")
             if org_mi.tags:
-                org_mi.set("tags", [utils.super_strip(t) for t in org_mi.tags])
+                org_mi.set("tags", guess_tags(org_mi.tags))
             else:
                 org_mi.set("tags", [])
             if org_mi.series:
@@ -1003,7 +1003,7 @@ class BookRefer(BaseHandler):
         if not refer_mi:
             return {"err": "plugin.fail", "msg": _("拉取图书信息异常，请重试")}
 
-        _author, _translator = [], []
+        _authors, _translators = [], []
         if only_cover == "yes":
             # just set cover
             if not refer_mi.cover_data:
@@ -1033,8 +1033,8 @@ class BookRefer(BaseHandler):
 
         mi.timestamp = nowf()
         self.calibre_db.set_metadata(book_id, mi, force_changes=True)
-        if _translator:
-            translators = ",".join(_translator)
+        if _translators:
+            translators = ",".join(_translators)
             self.calibre_db_cache.set_field(CALIBRE_COLUMN_TRANSLATORS, {book_id: translators})
         return {"err": "ok"}
 
@@ -2585,6 +2585,7 @@ class BookUpload(BaseHandler):
                     _authors, _translators = guess_authors(mi.authors)
                 else:
                     _authors = guess_authors([utils.super_strip(mi.author_sort)])
+                mi.tags = guess_tags(mi.tags)
                 mi.authors = _authors
 
             if failed:

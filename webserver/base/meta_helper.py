@@ -44,6 +44,25 @@ _ENGLISH_NAME_BRACKET = re.compile(
 # 需要过滤掉的无名氏标记
 _ANONYMOUS_MARKERS = frozenset({'佚名', 'Unknown', 'unknown', '', None})
 
+# 无效 tag：开头为这些词（不区分大小写）
+_INVALID_TAG_PREFIX = re.compile(
+    r'^(?:关注|标题|制作|下载|出版社|http|ftp|mail|isbn)', re.IGNORECASE
+)
+
+# 无效 tag：含有这些内容（不区分大小写）
+_INVALID_TAG_CONTAINS = re.compile(
+    r'(?:\s|公众号|微信|，|www\.|\.com|出品|@|商务印书馆|SANQIU)', re.IGNORECASE
+)
+
+# 无效 tag：结尾为这些词
+_INVALID_TAG_SUFFIX = re.compile(r'(?:制作|印刷)$')
+
+# 无效 tag：纯数字
+_PURE_DIGITS = re.compile(r'^\d+$')
+
+# 无效 tag：开头为(或（，且结尾为)或）
+_WRAPPED_IN_BRACKETS = re.compile(r'^[\(（].*[\)）]$')
+
 
 def normalize_author_name(value: str) -> str:
     """合并连续空白字符为单个空格，并去除首尾空白。"""
@@ -95,6 +114,38 @@ def guess_authors(authors: List[str]) -> Tuple[List[str], List[str]]:
                 target.append(cleaned)
 
     return author_result, translator_result
+
+
+def _is_invalid_tag(tag: str) -> bool:
+    """判断单个 tag 是否为无效标签（广告/推广/网址/纯数字/纯括号包裹等）。"""
+    if not tag:
+        return True
+    if _INVALID_TAG_PREFIX.match(tag):
+        return True
+    if _INVALID_TAG_CONTAINS.search(tag):
+        return True
+    if _INVALID_TAG_SUFFIX.search(tag):
+        return True
+    if _PURE_DIGITS.match(tag):
+        return True
+    if _WRAPPED_IN_BRACKETS.match(tag):
+        return True
+    return False
+
+
+def guess_tags(tags: List[str]) -> List[str]:
+    """清理原始 tags 列表，过滤掉广告/推广类无效标签，返回去重后的有效 tags。"""
+    result: List[str] = []
+    for raw in tags or []:
+        if raw is None:
+            continue
+        tag = str(raw).strip()
+        if not tag or _is_invalid_tag(tag):
+            continue
+        cleaned = ''.join(c for c in tag.strip() if c.isprintable())
+        if cleaned and cleaned not in result:
+            result.append(tag)
+    return result
 
 
 if __name__ == "__main__":
@@ -187,3 +238,58 @@ if __name__ == "__main__":
 
     print(f"\n{'=' * 60}")
     print(f"共 {len(author_tests)} 个测试，{'全部通过 ✓' if all_pass else '存在失败 ✗'}")
+
+    # 测试 guess_tags
+    print("\n" + "=" * 60)
+    print("=== guess_tags ===")
+    tag_tests = [
+        # (输入, 期望输出, 说明)
+        (["小说", "文学"], ["小说", "文学"], "正常 tags 保留"),
+        (["关注公众号"], [], "开头 关注"),
+        (["标题：xxx"], [], "开头 标题"),
+        (["制作组"], [], "开头 制作"),
+        (["下载地址"], [], "开头 下载"),
+        (["出版社信息"], [], "开头 出版社"),
+        (["http://example.com"], [], "开头 http"),
+        (["HTTP://example.com"], [], "开头 http 大写不区分"),
+        (["ftp://xxx"], [], "开头 ftp"),
+        (["mail:xxx@xxx.com"], [], "开头 mail"),
+        (["ISBN 978-x"], [], "开头 isbn 大写不区分"),
+        (["小说 精选"], [], "含空格"),
+        (["扫描公众号获取"], [], "含公众号"),
+        (["加微信xxx"], [], "含微信"),
+        (["小说，文学"], [], "含中文逗号"),
+        (["www.example.com"], [], "含 www."),
+        (["访问xxx.com"], [], "含 .com"),
+        (["xxx出品"], [], "含出品"),
+        (["联系邮箱a@b.com"], [], "含 @"),
+        (["商务印书馆藏书"], [], "含商务印书馆"),
+        (["SANQIU小组"], [], "含 SANQIU"),
+        (["sanqiu小组"], [], "含 sanqiu 大写不区分"),
+        (["独家制作"], [], "结尾 制作"),
+        (["精美印刷"], [], "结尾 印刷"),
+        (["12345"], [], "纯数字"),
+        (["(备注内容)"], [], "半角括号包裹"),
+        (["（备注内容）"], [], "全角括号包裹"),
+        (["小说", "小说"], ["小说"], "去重"),
+        ([""], [], "空字符串过滤"),
+        ([None], [], "None 过滤"),
+        (["  小说  "], ["小说"], "首尾空格清理"),
+        (["历史", "关注公众号", "小说，", "12306", "(x)", "科幻"], ["历史", "科幻"], "混合过滤"),
+    ]
+    all_pass = True
+    for idx, (inp, exp, desc) in enumerate(tag_tests, 1):
+        got = guess_tags(inp)
+        ok = got == exp
+        all_pass = all_pass and ok
+        status = "PASS" if ok else "FAIL"
+        print(f"\n[{status}] #{idx} {desc}")
+        print(f"  输入: {inp}")
+        if not ok:
+            print(f"  期望: {exp}")
+            print(f"  实际: {got}")
+        else:
+            print(f"  结果: {got}  ✓")
+
+    print(f"\n{'=' * 60}")
+    print(f"共 {len(tag_tests)} 个测试，{'全部通过 ✓' if all_pass else '存在失败 ✗'}")
