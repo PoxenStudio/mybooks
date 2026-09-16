@@ -44,6 +44,7 @@ from webserver.services import AsyncService
 from webserver.models import Item, ScanFile, Reader
 from webserver import utils, constants
 from webserver.services.autofill import AutoFillService
+from webserver.services.catalog import CatalogExtractService
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_CATEGORY, CALIBRE_ERROR_FLAG
 from webserver.constants import BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL, CALIBRE_COLUMN_DYNAMIC_COVER, CALIBRE_COLUMN_TRANSLATORS
 from webserver.services.background_service import BackgroundService, BackgroundTask
@@ -772,6 +773,7 @@ class ScanService(AsyncService):
         if importing_imported:
             logging.info("[IMPORT] Starting auto-fill for %d imported books", len(importing_imported))
             AutoFillService().auto_fill_all(importing_imported)
+            CatalogExtractService().extract_batch(user_id, importing_imported)
 
             if CONF.get("SEND_MAIL_FOR_NEW_BOOKS", False):
                 try:

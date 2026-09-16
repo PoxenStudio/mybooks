@@ -2417,6 +2417,7 @@ class BookUpload(BaseHandler):
         self.sqlite_session.commit()
         if CONF.get(AUTO_FILL_META, False):
             AutoFillService().auto_fill(book_id)
+        CatalogExtractService().extract_one(book_id)
 
         if CONF.get("SEND_MAIL_FOR_NEW_BOOKS", False) and mi.title:
             try:
