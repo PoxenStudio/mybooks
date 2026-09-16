@@ -51,7 +51,7 @@ _INVALID_TAG_PREFIX = re.compile(
 
 # 无效 tag：含有这些内容（不区分大小写）
 _INVALID_TAG_CONTAINS = re.compile(
-    r'(?:\s|公众号|微信|，|www\.|\.com|出品|@|商务印书馆|SANQIU)', re.IGNORECASE
+    r'(?:\s|公众号|微信|下载|下載|汇书网|书屋|，|www\.|\.com|出品|@|商务印书馆|SANQIU)', re.IGNORECASE
 )
 
 # 无效 tag：结尾为这些词
@@ -62,6 +62,9 @@ _PURE_DIGITS = re.compile(r'^\d+$')
 
 # 无效 tag：开头为(或（，且结尾为)或）
 _WRAPPED_IN_BRACKETS = re.compile(r'^[\(（].*[\)）]$')
+
+# 分隔符：单个 tag 内混杂多个词，用；或;隔开的，拆成多个独立 tag
+_TAG_SPLIT = re.compile(r'[;；]')
 
 
 def normalize_author_name(value: str) -> str:
@@ -134,17 +137,25 @@ def _is_invalid_tag(tag: str) -> bool:
 
 
 def guess_tags(tags: List[str]) -> List[str]:
-    """清理原始 tags 列表，过滤掉广告/推广类无效标签，返回去重后的有效 tags。"""
+    """清理原始 tags 列表，过滤掉广告/推广类无效标签，返回去重后的有效 tags。
+
+    单个 tag 内如果用；或;混杂了多个词，会先拆成多个独立 tag，再逐个校验；拆分/清理后
+    长度不超过 1 个字符的片段一并丢弃。
+    """
     result: List[str] = []
     for raw in tags or []:
         if raw is None:
             continue
         tag = str(raw).strip()
-        if not tag or _is_invalid_tag(tag):
+        if not tag:
             continue
-        cleaned = ''.join(c for c in tag.strip() if c.isprintable())
-        if cleaned and cleaned not in result:
-            result.append(tag)
+        for part in _TAG_SPLIT.split(tag):
+            part = part.strip()
+            if len(part) <= 1 or _is_invalid_tag(part):
+                continue
+            cleaned = ''.join(c for c in part if c.isprintable())
+            if cleaned and cleaned not in result:
+                result.append(cleaned)
     return result
 
 
