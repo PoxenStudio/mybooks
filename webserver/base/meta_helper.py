@@ -51,7 +51,7 @@ _INVALID_TAG_PREFIX = re.compile(
 
 # 无效 tag：含有这些内容（不区分大小写）
 _INVALID_TAG_CONTAINS = re.compile(
-    r'(?:\s|公众号|微信|下载|下載|汇书网|书屋|，|www\.|\.com|出品|@|商务印书馆|SANQIU)', re.IGNORECASE
+    r'(?:\s|公众号|微信|下载|下載|汇书网|书屋|，|www\.|\.com|出品|@|商务印书馆|SANQIU|VERYCD)', re.IGNORECASE
 )
 
 # 无效 tag：结尾为这些词

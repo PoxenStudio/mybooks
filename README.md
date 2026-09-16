@@ -123,6 +123,9 @@ WebDAV URL地址: `http://<ip or domain>:<port>/books`
 详情见[MyBooks Skill](https://clawhub.ai/poxenstudio/mybooks)。
 旧的[Talebook Skill](https://clawhub.ai/poxenstudio/talebook)。
 
+## 自定义工具扩展书库功能
+详情见[开发 MyBooks 工具](https://mybookstop.github.io/docs/manual/tool-development)。
+
 ## 常见问题
 
 常见问题请参阅[使用指南](document/UserGuide.zh_CN.md)，无法解决的话，提个ISSUE, 或进入公众号私信。
