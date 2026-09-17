@@ -1,5 +1,5 @@
 <template>
-    <v-row v-if="stats" class="reading-stats-banner">
+    <v-row v-if="stats" class="reading-stats-banner" :class="{ 'is-dark': isDark }">
         <v-col cols=12>
             <div class="d-flex align-center mb-2" v-if="showTitle">
                 <p class="ma-0 title">{{ $t('index.readingStats.title') }}</p>
@@ -243,7 +243,7 @@ export default {
     overflow: hidden;
 }
 
-.theme--dark .stats-card {
+.reading-stats-banner.is-dark .stats-card {
     background: rgba(0, 0, 0, 0.82);
     border-color: transparent;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -268,7 +268,7 @@ export default {
     text-overflow: ellipsis;
 }
 
-.theme--dark .stats-card-label {
+.reading-stats-banner.is-dark .stats-card-label {
     color: rgba(255, 255, 255, 0.85);
 }
 
@@ -302,7 +302,7 @@ export default {
     color: rgba(0, 0, 0, 0.87);
 }
 
-.theme--dark .total-hours-circle {
+.reading-stats-banner.is-dark .total-hours-circle {
     background: rgba(33, 150, 243, 0.28);
     color: #ffffff;
 }
@@ -327,7 +327,7 @@ export default {
     color: rgba(0, 0, 0, 0.6);
 }
 
-.theme--dark .total-hours-unit {
+.reading-stats-banner.is-dark .total-hours-unit {
     color: rgba(255, 255, 255, 0.85);
 }
 
