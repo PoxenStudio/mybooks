@@ -37,6 +37,7 @@ import traceback
 from sqlalchemy.exc import IntegrityError
 
 from webserver.i18n import _
+from webserver.base.epub_helper import EpubHelper
 from webserver.base.image_helper import ImageHelper
 from webserver.base.image_generator import ImageGenerator
 from webserver.base.meta_helper import guess_authors, guess_tags
@@ -475,6 +476,11 @@ class ScanService(AsyncService):
                 logging.info("[IMPORT] Importing new book [%s] from %s", repr(mi.title), fpath)
                 dynamic_cover = False
                 mi.title_sort = utils.get_title_sort(mi.title)
+                cover_fmt, cover_data = mi.cover_data
+                if (cover_fmt is None or cover_data is None) and fmt == "epub":
+                    cover_buf = EpubHelper.extract_cover(fpath)
+                    if cover_buf:
+                        mi.cover_data = ("jpeg", cover_buf.read())
                 if CONF.get("USE_DYNAMIC_COVER", False):
                     fmt, data = mi.cover_data
                     if fmt is None or data is None:
@@ -491,8 +497,9 @@ class ScanService(AsyncService):
                 if not mi.languages:
                     mi.languages = CONF.get("DEFAULT_LANGUAGE", constants.DEFAULT_LANGUAGE_CODE)
                 row.book_id = self.db.import_book(mi, [fpath], notify=False, import_hooks=False)
-                if row.book_id is not None and dynamic_cover:
-                    self.db.new_api.set_field(CALIBRE_COLUMN_DYNAMIC_COVER, {row.book_id: 1})
+                if row.book_id is not None:
+                    if dynamic_cover:
+                        self.db.new_api.set_field(CALIBRE_COLUMN_DYNAMIC_COVER, {row.book_id: 1})
                     if _translators:
                         translators = ",".join(_translators)
                         self.db.new_api.set_field(CALIBRE_COLUMN_TRANSLATORS, {row.book_id: translators})

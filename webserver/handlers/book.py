@@ -2386,7 +2386,7 @@ class BookUpload(BaseHandler):
             mi.languages = CONF.get("DEFAULT_LANGUAGE", constants.DEFAULT_LANGUAGE_CODE)
 
         cover_fmt, cover_data = mi.cover_data
-        if (cover_fmt is None or cover_data is None) and fmt == "epub":
+        if (cover_fmt is None or cover_data is None) and fmt.lower() == "epub":
             # Try to extract cover from epub file directly
             epub_fpath = next((p for p in fpaths if p.lower().endswith(".epub")), None)
             if epub_fpath:
@@ -2394,6 +2394,8 @@ class BookUpload(BaseHandler):
                 if cover_buf:
                     mi.cover_data = ("jpeg", cover_buf.read())
                     logging.info("_add_new_book: 从 epub 文件提取封面成功: %s", epub_fpath)
+                else:
+                    logging.warning("_add_new_book: 从 epub 文件提取封面失败: %s", epub_fpath)
 
         if CONF.get("USE_DYNAMIC_COVER", False):
             fmt, cover_data = mi.cover_data

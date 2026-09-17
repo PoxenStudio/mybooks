@@ -237,9 +237,9 @@ class AutoFillService(AsyncService):
     def guess_tags(self, refer_mi, max_count=8):
         ts = []
         for tag in CONF["BOOK_NAV"].replace("=", "/").replace("\n", "/").split("/"):
-            if tag in refer_mi.title or tag in refer_mi.comments:
-                ts.append(tag)
-            elif tag in refer_mi.authors:
+            if (refer_mi.title and tag in refer_mi.title) or \
+               (refer_mi.comments and tag in refer_mi.comments) or \
+               (refer_mi.authors and tag in refer_mi.authors):
                 ts.append(tag)
             if len(ts) > max_count:
                 break

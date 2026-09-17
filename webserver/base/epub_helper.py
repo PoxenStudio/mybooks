@@ -68,9 +68,12 @@ class EpubHelper:
 
         first_image = None
         for filename in file_list:
+            zip_file = Path(filename)
+            if len(zip_file.name) < 6:
+                continue
             lower = filename.lower()
-            stem = Path(lower).stem
-            ext = Path(lower).suffix
+            stem = zip_file.stem
+            ext = zip_file.suffix
             if ext in IMAGE_EXTS:
                 if not first_image:
                     first_image = filename
