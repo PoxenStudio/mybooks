@@ -74,6 +74,15 @@ export default {
         chartCanvasStyle() {
             return { position: 'relative', width: '100%', height: '100%' };
         },
+        isDark() {
+            return this.$vuetify.theme.dark;
+        },
+        chartTickColor() {
+            return this.isDark ? '#eee' : '#333';
+        },
+        chartGridColor() {
+            return this.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+        },
         isLoggedIn() {
             return !!(this.$store.state.user && this.$store.state.user.is_login);
         },
@@ -147,8 +156,8 @@ export default {
                 responsive: true,
                 plugins: { legend: { display: false } },
                 scales: {
-                    x: { ticks: { color: '#eee', font: { size: 10 } }, grid: { display: false } },
-                    y: { beginAtZero: true, ticks: { color: '#eee', font: { size: 10 }, precision: 0, stepSize: 1 }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                    x: { ticks: { color: this.chartTickColor, font: { size: 10 } }, grid: { display: false } },
+                    y: { beginAtZero: true, ticks: { color: this.chartTickColor, font: { size: 10 }, precision: 0, stepSize: 1 }, grid: { color: this.chartGridColor } },
                 },
             };
         },
@@ -156,10 +165,10 @@ export default {
             return {
                 maintainAspectRatio: false,
                 responsive: true,
-                plugins: { legend: { display: true, position: 'left', labels: { color: '#eee', boxWidth: 10, font: { size: 10 } } } },
+                plugins: { legend: { display: true, position: 'left', labels: { color: this.chartTickColor, boxWidth: 10, font: { size: 10 } } } },
                 scales: {
-                    x: { ticks: { color: '#eee', font: { size: 10 } }, grid: { display: false } },
-                    y: { beginAtZero: true, ticks: { color: '#eee', font: { size: 10 }, precision: 0, stepSize: 1 }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                    x: { ticks: { color: this.chartTickColor, font: { size: 10 } }, grid: { display: false } },
+                    y: { beginAtZero: true, ticks: { color: this.chartTickColor, font: { size: 10 }, precision: 0, stepSize: 1 }, grid: { color: this.chartGridColor } },
                 },
             };
         },
@@ -167,7 +176,7 @@ export default {
             return {
                 maintainAspectRatio: false,
                 responsive: true,
-                plugins: { legend: { display: true, position: 'right', labels: { color: '#eee', boxWidth: 10, font: { size: 10 } } } },
+                plugins: { legend: { display: true, position: 'right', labels: { color: this.chartTickColor, boxWidth: 10, font: { size: 10 } } } },
             };
         },
     },
@@ -224,13 +233,20 @@ export default {
     flex: 1 1 155px;
     min-width: 0;
     height: 150px;
-    background: rgba(0, 0, 0, 0.82);
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.08);
     border-radius: 16px;
     padding: 8px 12px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
     display: flex;
     flex-direction: column;
     overflow: hidden;
+}
+
+.theme--dark .stats-card {
+    background: rgba(0, 0, 0, 0.82);
+    border-color: transparent;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .stats-card.wide {
@@ -245,11 +261,15 @@ export default {
 }
 
 .stats-card-label {
-    color: rgba(255, 255, 255, 0.85);
+    color: rgba(0, 0, 0, 0.65);
     font-size: 12px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.theme--dark .stats-card-label {
+    color: rgba(255, 255, 255, 0.85);
 }
 
 .stats-card-body {
@@ -274,11 +294,16 @@ export default {
     width: min(100cqw, 100cqh);
     height: min(100cqw, 100cqh);
     border-radius: 50%;
-    background: rgba(33, 150, 243, 0.28);
+    background: rgba(33, 150, 243, 0.18);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    color: rgba(0, 0, 0, 0.87);
+}
+
+.theme--dark .total-hours-circle {
+    background: rgba(33, 150, 243, 0.28);
     color: #ffffff;
 }
 
@@ -299,6 +324,10 @@ export default {
 .total-hours-unit {
     font-size: 11px;
     margin-top: 2px;
+    color: rgba(0, 0, 0, 0.6);
+}
+
+.theme--dark .total-hours-unit {
     color: rgba(255, 255, 255, 0.85);
 }
 

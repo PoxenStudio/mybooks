@@ -38,7 +38,7 @@
 // 参照 GitHub 热力图的绿色调，但方向按需求反过来——阅读时长越长，颜色越亮越鲜艳，最短档反而
 // 是最不起眼的深绿（在深色卡片背景上仍能辨认），8 小时以上用最明亮的绿色，最扎眼。
 // 两端锚点：最深 rgb(3,58,22)、最亮 rgb(86,211,100)，中间 6 档做线性插值。0 档（没有阅读）颜色见 EMPTY_COLOR。
-const EMPTY_COLOR = '#1F1F1F';
+const EMPTY_COLOR = '#151B23';
 const LEVEL_COLORS = [
     EMPTY_COLOR, // 0：没有阅读，颜色固定为 EMPTY_COLOR
     '#033a16', // 0~15 分钟
