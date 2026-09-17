@@ -17,6 +17,12 @@ export default {
                 this.renderChart(this.chartData, this.chartOptions);
             },
         },
+        chartOptions: {
+            deep: true,
+            handler() {
+                this.renderChart(this.chartData, this.chartOptions);
+            },
+        },
     },
     mounted() {
         this.renderChart(this.chartData, this.chartOptions);
