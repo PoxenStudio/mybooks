@@ -12,6 +12,13 @@ from webserver.i18n import _
 import tornado.escape
 from tornado import web
 from webserver import loader
+from webserver.base.appearance import (
+    APPEARANCE_KEY,
+    is_appearance_too_large,
+    is_client_too_new,
+    normalize_appearance,
+    read_appearance,
+)
 from webserver.services.mail import MailService
 from webserver.services.sync_service import MyReaderSyncService
 from webserver.handlers.base import BaseHandler, auth, js
@@ -142,6 +149,52 @@ class UserUpdate(BaseHandler):
             return {"err": "ok"}
         except Exception:
             return {"err": "db.error", "msg": _("数据库操作异常，请重试")}
+
+
+class UserAppearance(BaseHandler):
+    """保存当前用户的外观设置（顶栏品牌色、侧栏图标配色、深浅色、圆角、背景图案）。
+
+    补丁语义：客户端只提交改动过的键，未提交的键保持原值；未知键与非法值会被丢弃
+    （见 webserver/base/appearance.py 的 normalize_appearance）。设置落在
+    Reader.extra["appearance"]，由 GET /api/user/info 的 user.appearance 下发前端。
+
+    刻意不复用 /api/user/update：那个接口末尾无条件 add_msg("设置已保存")，
+    而外观面板是「点一下色块就存」，走它会往消息中心刷屏。
+    """
+
+    @js
+    @auth
+    def post(self):
+        user = self.current_user
+        try:
+            data = tornado.escape.json_decode(self.request.body)
+        except Exception:
+            return {"err": "params.invalid", "msg": _("参数无效")}
+        if not isinstance(data, dict):
+            return {"err": "params.invalid", "msg": _("参数无效")}
+
+        if is_client_too_new(data):
+            # 老服务端不认识新客户端的键，会静默丢掉；宁可让客户端提示刷新，
+            # 也不要让用户下次读回时以为设置被清空了
+            return {
+                "err": "appearance.version.unsupported",
+                "msg": _("外观设置版本过新，请刷新页面后重试"),
+            }
+
+        if not user.extra:
+            user.extra = {}
+        base = user.extra.get(APPEARANCE_KEY) or {}
+        clean, dropped = normalize_appearance(data, base=base)
+        if is_appearance_too_large(clean):
+            return {"err": "appearance.too_large", "msg": _("外观设置过大")}
+
+        user.extra[APPEARANCE_KEY] = clean
+        try:
+            user.save()
+        except Exception:
+            logging.error("save appearance failed: %s", traceback.format_exc())
+            return {"err": "db.error", "msg": _("数据库操作异常，请重试")}
+        return {"err": "ok", "appearance": clean, "dropped": dropped}
 
 
 class SignUp(BaseHandler):
@@ -552,6 +605,10 @@ class UserInfo(BaseHandler):
             "show_other_annotations", True
         )
         d["share_annotations"] = (user.extra or {}).get("share_annotations", True)
+        # 外观设置（顶栏品牌色 / 侧栏图标配色 / 深浅色等）。用户没保存过时返回 {}，
+        # 前端据此沿用「本地缓存 → 站点默认 sys.theme → 内置默认」的回退顺序；
+        # 保存入口是 POST /api/user/appearance（下方 UserAppearance）。
+        d["appearance"] = read_appearance(user)
         if user.extra:
             d["kindle_email"] = user.extra.get("kindle_email", "")
             # 上次分享到邮箱的收件人（BookSendToMail 入队推送时写入），
@@ -559,6 +616,9 @@ class UserInfo(BaseHandler):
             d["last_share_email"] = user.extra.get("last_share_email", "")
             if detail:
                 for k, v in user.extra.items():
+                    if k == APPEARANCE_KEY:
+                        # 已作为 d["appearance"] 单独下发，不在这里重复一份
+                        continue
                     if k.endswith("_history"):
                         ids = [b["id"] for b in v][:24]
                         books = self.calibre_db.get_data_as_dict(ids=ids)
@@ -1365,6 +1425,7 @@ def routes():
         (r"/api/user/update", UserUpdate),
         (r"/api/user/reset", UserReset),
         (r"/api/user/avatar", UserAvatar),
+        (r"/api/user/appearance", UserAppearance),
         (r"/api/user/active/send", UserSendActive),
         (r"/api/active/(.*)/(.*)", UserActive),
         (r"/api/done/", Done),

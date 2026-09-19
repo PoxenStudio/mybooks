@@ -1,5 +1,5 @@
 <template>
-    <v-menu v-model="menu" :close-on-content-click="false" offset-y bottom left min-width="320" max-width="320">
+    <v-menu v-model="menu" :close-on-content-click="false" offset-y bottom left min-width="336" max-width="336">
         <template v-slot:activator="{ on, attrs }">
             <v-btn icon v-bind="attrs" v-on="on" :title="$t('appearance.title')">
                 <v-icon>mdi-palette-outline</v-icon>
@@ -7,11 +7,11 @@
         </template>
         <v-card class="appearance-menu-card">
             <v-card-title class="subtitle-2 font-weight-bold pb-2 pt-4">{{ $t('appearance.title') }}</v-card-title>
-            <v-card-text>
+            <v-card-text class="appearance-menu-body">
                 <!-- Theme Mode -->
                 <div class="mb-4">
                     <div class="caption text--secondary mb-2">{{ $t('appearance.theme') }}</div>
-                    <v-btn-toggle v-model="settings.darkMode" mandatory dense class="w-100 d-flex" @change="onDarkModeChange">
+                    <v-btn-toggle v-model="darkMode" mandatory dense class="w-100 d-flex">
                         <v-btn :value="false" class="flex-grow-1" small>
                             <v-icon left small>mdi-white-balance-sunny</v-icon> {{ $t('appearance.light') }}
                         </v-btn>
@@ -30,18 +30,60 @@
                             :key="color.value"
                             class="color-swatch"
                             :style="{ backgroundColor: color.value }"
-                            :class="{ 'selected-swatch': settings.accent === color.value }"
-                            @click="selectAccent(color.value)"
+                            :class="{ 'selected-swatch': isSameColor(settings.accent, color.value) }"
+                            @click="update({ accent: color.value })"
                         >
-                            <v-icon v-if="settings.accent === color.value" small color="white" style="text-shadow: 0 1px 2px rgba(0,0,0,0.5);">mdi-check</v-icon>
+                            <v-icon v-if="isSameColor(settings.accent, color.value)" small color="white" style="text-shadow: 0 1px 2px rgba(0,0,0,0.5);">mdi-check</v-icon>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Top bar / brand color -->
+                <div class="mb-4">
+                    <div class="caption text--secondary mb-2">{{ $t('appearance.brandColor') }}</div>
+                    <div class="d-flex flex-wrap" style="gap: 8px;">
+                        <div
+                            v-for="color in brandColors"
+                            :key="color.value"
+                            class="color-swatch"
+                            :style="{ backgroundColor: color.value }"
+                            :class="{ 'selected-swatch': isBrandColorSelected(color.value) }"
+                            :title="color.label ? $t(color.label) : color.value"
+                            @click="update({ brandColor: color.value })"
+                        >
+                            <v-icon v-if="isBrandColorSelected(color.value)" small color="white" style="text-shadow: 0 1px 2px rgba(0,0,0,0.5);">mdi-check</v-icon>
+                        </div>
+                    </div>
+                    <div class="d-flex align-center mt-2" style="gap: 10px;">
+                        <label class="custom-color-field text--secondary">
+                            <input type="color" :value="currentBrandColor" @input="update({ brandColor: $event.target.value })" />
+                            <span>{{ $t('appearance.custom') }}</span>
+                        </label>
+                        <v-btn x-small text @click="update({ brandColor: null })">{{ $t('appearance.restore') }}</v-btn>
+                    </div>
+                    <div v-if="brandIsLight" class="caption text--secondary mt-1">{{ $t('appearance.contrastHint') }}</div>
+                </div>
+
+                <!-- Sidebar icon color -->
+                <div class="mb-4">
+                    <div class="caption text--secondary mb-2">{{ $t('appearance.sidebarIcon') }}</div>
+                    <v-btn-toggle v-model="iconMode" mandatory dense class="w-100 d-flex">
+                        <v-btn v-for="mode in iconModes" :key="mode.value" :value="mode.value" class="flex-grow-1" small>
+                            {{ $t(mode.label) }}
+                        </v-btn>
+                    </v-btn-toggle>
+                    <div v-if="iconMode !== 'multi'" class="d-flex align-center mt-2" style="gap: 10px;">
+                        <label class="custom-color-field text--secondary">
+                            <input type="color" :value="currentIconColor" @input="update({ sidebarIconMode: 'custom', sidebarIconColor: $event.target.value })" />
+                            <span>{{ $t('appearance.iconColor') }}</span>
+                        </label>
                     </div>
                 </div>
 
                 <!-- Radius -->
                 <div class="mb-4">
                     <div class="caption text--secondary mb-2">{{ $t('appearance.radius') }}</div>
-                    <v-btn-toggle v-model="settings.radius" mandatory dense class="w-100 d-flex" @change="applySettings">
+                    <v-btn-toggle v-model="radius" mandatory dense class="w-100 d-flex">
                         <v-btn v-for="r in radiusOptions" :key="r.value" :value="r.value" class="flex-grow-1" small>
                             {{ r.label }}
                         </v-btn>
@@ -59,8 +101,16 @@
                             depressed
                             :color="settings.background === bg.value ? 'primary' : ''"
                             :class="settings.background === bg.value ? 'white--text' : 'bg-name-btn'"
-                            @click="selectBackground(bg.value)"
+                            @click="update({ background: bg.value })"
                         >{{ bg.label }}</v-btn>
+                    </div>
+                </div>
+
+                <!-- Sync actions -->
+                <div class="sync-block mt-3 pt-3">
+                    <div class="d-flex align-center justify-end" style="gap: 4px;">
+                        <v-btn v-if="canUpload" x-small text color="primary" @click="pushToServer">{{ $t('appearance.sync.upload') }}</v-btn>
+                        <v-btn x-small text @click="resetAll">{{ $t('appearance.reset') }}</v-btn>
                     </div>
                 </div>
             </v-card-text>
@@ -69,17 +119,34 @@
 </template>
 
 <script>
+import {
+    BRAND_COLOR_PRESETS,
+    DEFAULT_ACCENT,
+    SIDEBAR_ICON_MODES,
+    isLightBackground,
+    resolveBrandColor,
+    unifiedIconColor,
+} from '~/utils/appearance';
+
+/** 改一下色块就发一次请求太费——合并 600ms 内的连续改动 */
+const SAVE_DEBOUNCE_MS = 600;
+
+const ICON_MODE_LABELS = {
+    multi: 'appearance.iconMulti',
+    theme: 'appearance.iconTheme',
+    custom: 'appearance.iconCustom',
+};
+
 export default {
     name: 'AppearanceMenu',
     data() {
         return {
             menu: false,
-            settings: {
-                darkMode: true, // Default to dark mode
-                accent: '#1976D2', // Vuetify default primary
-                radius: '4px',
-                background: 'default'
-            },
+            syncTimer: null,
+            // 用来丢弃过期响应：只有最后一次请求的结果才算数
+            syncSeq: 0,
+            brandColors: BRAND_COLOR_PRESETS,
+            iconModes: SIDEBAR_ICON_MODES.map((value) => ({ value, label: ICON_MODE_LABELS[value] })),
             accentColors: [
                 { value: '#1976D2', name: 'Blue' },
                 { value: '#E91E63', name: 'Pink' },
@@ -95,10 +162,72 @@ export default {
                 { label: '0.25', value: '4px' },
                 { label: '0.5', value: '8px' },
                 { label: '1.0', value: '16px' },
-            ]
+            ],
         };
     },
     computed: {
+        // 面板不再自己持有外观数据：唯一真值在 store，任何改动都经 update() 落进去
+        settings() {
+            return this.$store.state.appearance;
+        },
+        darkMode: {
+            get() {
+                return this.settings.darkMode;
+            },
+            set(value) {
+                // 切换深浅色时联动背景图案：浅色 → 浅色图2，深色 → 深色图2，
+                // 避免深色主题下还残留一张浅色底图（反之亦然）。
+                this.update({ darkMode: value, background: value ? 'repeat-image-4' : 'repeat-image-2' });
+            },
+        },
+        iconMode: {
+            get() {
+                return this.settings.sidebarIconMode;
+            },
+            set(value) {
+                if (value === 'custom') {
+                    // 切到自定义时给个可用的初始色，避免出现「选了自定义但没有颜色」
+                    const initial = unifiedIconColor({ sidebarIconMode: 'theme', accent: this.settings.accent });
+                    this.update({ sidebarIconMode: value, sidebarIconColor: initial });
+                } else {
+                    this.update({ sidebarIconMode: value });
+                }
+            },
+        },
+        radius: {
+            get() {
+                return this.settings.radius;
+            },
+            set(value) {
+                this.update({ radius: value });
+            },
+        },
+        currentBrandColor() {
+            return resolveBrandColor(this.settings.brandColor);
+        },
+        brandIsLight() {
+            return isLightBackground(this.currentBrandColor);
+        },
+        currentIconColor() {
+            return unifiedIconColor(this.settings) || this.settings.accent || DEFAULT_ACCENT;
+        },
+        isLogin() {
+            return Boolean(this.$store.state.user && this.$store.state.user.is_login);
+        },
+        syncState() {
+            return this.settings.syncState;
+        },
+        /** 归一化后的同步状态：只要「已同步 / 同步中」之外的情况都允许手动上传 */
+        effectiveSyncState() {
+            if (this.syncState === 'saving') return 'saving';
+            if (!this.isLogin) return 'local';
+            if (this.syncState === 'failed') return 'failed';
+            if (this.syncState === 'ok') return 'ok';
+            return 'unsynced';
+        },
+        canUpload() {
+            return this.isLogin && this.effectiveSyncState !== 'ok' && this.effectiveSyncState !== 'saving';
+        },
         bgOptions() {
             return [
                 // Fundamental
@@ -115,77 +244,76 @@ export default {
                 { label: this.$t('appearance.bg.repeatImage1'), value: 'repeat-image-1' },
                 { label: this.$t('appearance.bg.repeatImage2'), value: 'repeat-image-2' },
                 { label: this.$t('appearance.bg.repeatImage3'), value: 'repeat-image-3' },
-                { label: this.$t('appearance.bg.repeatImage4'), value: 'repeat-image-4' }
+                { label: this.$t('appearance.bg.repeatImage4'), value: 'repeat-image-4' },
             ];
-        }
+        },
     },
-    mounted() {
-        this.loadSettings();
-        // Since vuetify instance might be created after our settings, make sure we apply after a small tick
-        this.$nextTick(() => {
-            this.applySettings(false);
-        });
+    beforeDestroy() {
+        if (this.syncTimer) clearTimeout(this.syncTimer);
     },
     methods: {
-        onDarkModeChange() {
-            // 切换主题时自动联动背景图案：浅色 -> 浅色图2，深色 -> 深色图2
-            // （见 appearance.bg.repeatImage2/repeatImage4 的文案），避免深色主题下
-            // 还残留一张浅色背景图（反之亦然）。
-            this.settings.background = this.settings.darkMode ? 'repeat-image-4' : 'repeat-image-2';
-            this.applySettings(true);
+        /** 颜色比较统一按小写：sanitize 会把落库的颜色转小写，预设色板里是大写 */
+        isSameColor(a, b) {
+            return String(a || '').toLowerCase() === String(b || '').toLowerCase();
         },
-        selectAccent(color) {
-            this.settings.accent = color;
-            this.applySettings();
+        isBrandColorSelected(value) {
+            return this.isSameColor(this.currentBrandColor, value);
         },
-        selectBackground(value) {
-            this.settings.background = value;
-            this.applySettings();
+        /** 所有改动的唯一入口：先落 store（立即生效），再排队同步 */
+        update(patch) {
+            this.$store.commit('appearance/setAppearance', patch);
+            this.queueSync();
         },
-        loadSettings() {
-            try {
-                const saved = localStorage.getItem('appearance_settings');
-                if (saved) {
-                    this.settings = { ...this.settings, ...JSON.parse(saved) };
+        queueSync() {
+            if (this.syncTimer) clearTimeout(this.syncTimer);
+            if (!this.isLogin) {
+                this.$store.commit('appearance/setSyncState', 'local');
+                return;
+            }
+            this.$store.commit('appearance/setSyncState', 'saving');
+            this.syncTimer = setTimeout(this.pushToServer, SAVE_DEBOUNCE_MS);
+        },
+        /** 把当前完整设置写到账号（POST /api/user/appearance，见 webserver/handlers/user.py） */
+        pushToServer() {
+            if (this.syncTimer) clearTimeout(this.syncTimer);
+            const seq = ++this.syncSeq;
+            this.$store.commit('appearance/setSyncState', 'saving');
+            return this.$backend('/user/appearance', {
+                method: 'POST',
+                body: JSON.stringify(this.$store.getters['appearance/settings']),
+            }).then((rsp) => {
+                if (seq !== this.syncSeq) return;
+                if (rsp && rsp.err === 'ok') {
+                    this.$store.commit('appearance/markSynced', true);
+                    this.$store.commit('appearance/setSyncState', 'ok');
+                } else if (rsp && rsp.err === 'user.need_login') {
+                    // $backend 已经跳转登录页了，这里只把状态退回「仅本机」
+                    this.$store.commit('appearance/markSynced', false);
+                    this.$store.commit('appearance/setSyncState', 'local');
                 } else {
-                    const siteTheme = localStorage.getItem('site_theme');
-                    if (siteTheme) {
-                        this.settings.darkMode = siteTheme === 'dark';
-                    }
+                    this.$store.commit('appearance/markSynced', false);
+                    this.$store.commit('appearance/setSyncState', 'failed');
                 }
-            } catch (e) {
-                console.error("Could not load appearance settings", e);
-            }
+            }).catch(() => {
+                if (seq !== this.syncSeq) return;
+                this.$store.commit('appearance/markSynced', false);
+                this.$store.commit('appearance/setSyncState', 'failed');
+            });
         },
-        saveSettings() {
-            try {
-                localStorage.setItem('appearance_settings', JSON.stringify(this.settings));
-            } catch (e) {
-                console.error("Could not save appearance settings", e);
-            }
+        resetAll() {
+            this.$store.dispatch('appearance/resetToDefault');
+            this.queueSync();
         },
-        applySettings(save = true) {
-            if (save) {
-                this.saveSettings();
-            }
-
-            // Apply Theme Mode
-            this.$vuetify.theme.dark = this.settings.darkMode;
-            const dotColor = this.settings.darkMode
-                ? 'rgba(255, 255, 255, 0.12)'
-                : 'rgba(0, 0, 0, 0.12)';
-            document.documentElement.style.setProperty('--dot-color', dotColor);
-            document.documentElement.style.setProperty('--primary-color', this.settings.accent);
-            this.$vuetify.theme.themes.light.primary = this.settings.accent;
-            this.$vuetify.theme.themes.dark.primary = this.settings.accent;
-            document.documentElement.style.setProperty('--app-radius', this.settings.radius);
-            document.documentElement.setAttribute('data-bg-pattern', this.settings.background);
-        }
-    }
+    },
 };
 </script>
 
 <style scoped>
+.appearance-menu-body {
+    max-height: 72vh;
+    overflow-y: auto;
+}
+
 .color-swatch {
     width: 24px;
     height: 24px;
@@ -203,6 +331,24 @@ export default {
     box-shadow: 0 0 0 2px var(--v-background-base, #fff), 0 0 0 4px currentColor;
 }
 
+.custom-color-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    font-size: 12px;
+    cursor: pointer;
+}
+.custom-color-field input[type="color"] {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid rgba(128, 128, 128, 0.4);
+    border-radius: 50%;
+    background: none;
+    cursor: pointer;
+}
+
 .bg-name-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -213,5 +359,8 @@ export default {
     padding: 0 2px !important;
     font-size: 10px;
 }
-</style>
 
+.sync-block {
+    border-top: 1px solid rgba(128, 128, 128, 0.25);
+}
+</style>

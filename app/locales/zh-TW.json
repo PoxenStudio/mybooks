@@ -1638,6 +1638,20 @@
   "error_server_starting": "服務正在啟動中，稍後重試",
   "appearance": {
     "title": "外觀設定",
+    "brandColor": "頂欄顏色",
+    "brandDefault": "預設深藍",
+    "custom": "自訂",
+    "restore": "還原預設",
+    "contrastHint": "頂欄為淺色，文字已自動轉為深色",
+    "sidebarIcon": "側欄圖示",
+    "iconMulti": "保持多彩",
+    "iconTheme": "跟隨主色",
+    "iconCustom": "統一自訂",
+    "iconColor": "圖示顏色",
+    "reset": "重設為預設",
+    "sync": {
+      "upload": "儲存至帳號"
+    },
     "theme": "主題模式",
     "light": "淺色",
     "dark": "深色",

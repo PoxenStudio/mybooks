@@ -48,7 +48,9 @@ export default {
   plugins: [
     "~/plugins/mybooks.js",
     "~/plugins/load-plugins.js",
-    "~/plugins/i18n.js"
+    "~/plugins/i18n.js",
+    // 外观设置（顶栏品牌色 / 侧栏图标配色 / 深浅色…）：把 store 状态落到 CSS 变量与 Vuetify 主题
+    { src: "~/plugins/appearance.js", mode: "client" }
   ],
 
   // Auto import components: https://go.nuxtjs.dev/config-components

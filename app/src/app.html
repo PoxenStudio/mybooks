@@ -2,6 +2,50 @@
 <html lang="en">
 
 <head>
+  <script>
+    /* 首帧防闪烁：在样式表生效前，用 localStorage 缓存把外观的 CSS 变量与 data-* 属性落好。
+       逻辑与 app/src/utils/appearance.js 的 applyAppearance() 等价（此处无法 import）。
+       注意：脚本必须同步执行，不能加 defer/async。
+       账号级外观（服务端 user.appearance）会在 AppHeader 拿到 /api/user/info 后覆盖它。 */
+    (function () {
+      var BRAND_FALLBACK = '#003153';
+      var ACCENT_FALLBACK = '#1976D2';
+      var RADIUS_FALLBACK = '4px';
+      var BACKGROUNDS = ['default', 'cross', 'left-diagonal', 'right-diagonal', 'aurora', 'horizon', 'glow', 'mesh', 'repeat-image-1', 'repeat-image-2', 'repeat-image-3', 'repeat-image-4'];
+      var RADII = ['0px', '4px', '8px', '16px'];
+      var HEX = /^#[0-9a-fA-F]{6}$/;
+      function cleanHex(value) { return typeof value === 'string' && HEX.test(value) ? value.toLowerCase() : null; }
+      function isLight(color) {
+        function lin(c) { return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+        var r = lin(parseInt(color.substr(1, 2), 16) / 255);
+        var g = lin(parseInt(color.substr(3, 2), 16) / 255);
+        var b = lin(parseInt(color.substr(5, 2), 16) / 255);
+        return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 0.45;
+      }
+      try {
+        var s = JSON.parse(localStorage.getItem('appearance_settings') || '{}') || {};
+        var root = document.documentElement;
+        var dark = s.darkMode !== false;
+        var brand = cleanHex(s.brandColor) || BRAND_FALLBACK;
+        var accent = cleanHex(s.accent) || ACCENT_FALLBACK;
+        var radius = RADII.indexOf(s.radius) >= 0 ? s.radius : RADIUS_FALLBACK;
+        var pattern = BACKGROUNDS.indexOf(s.background) >= 0 ? s.background : 'default';
+        var iconMode = (s.sidebarIconMode === 'theme' || s.sidebarIconMode === 'custom') ? s.sidebarIconMode : 'multi';
+        var iconColor = iconMode === 'multi' ? null : (cleanHex(s.sidebarIconColor) || accent);
+
+        root.style.setProperty('--app-nav-bg', brand);
+        root.style.setProperty('--app-nav-fg', isLight(brand) ? 'rgba(0, 0, 0, 0.87)' : 'rgba(255, 255, 255, 0.87)');
+        root.style.setProperty('--primary-color', accent);
+        root.style.setProperty('--app-radius', radius);
+        root.style.setProperty('--dot-color', dark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)');
+        if (iconColor) root.style.setProperty('--app-sidebar-icon', iconColor);
+        root.setAttribute('data-sidebar-icon', iconMode);
+        root.setAttribute('data-bg-pattern', pattern);
+        root.setAttribute('data-appearance-dark', dark ? '1' : '0');
+        root.style.backgroundColor = dark ? '#121212' : '';
+      } catch (e) { /* 缓存损坏时静默走默认外观 */ }
+    })();
+  </script>
   {{ HEAD }}
 </head>
 

@@ -2,7 +2,7 @@
     <v-row justify="center" class="fill-center">
         <v-col xs="12" sm="8">
             <v-card v-if="show_login" class="elevation-12 login-card">
-                <v-toolbar dark :color="appBarColor" class="login-toolbar">
+                <v-toolbar :dark="navIsDark" :color="navBgColor" class="login-toolbar">
                     <v-toolbar-title>{{ $t('login.welcome') }}</v-toolbar-title>
                     <v-spacer></v-spacer>
                     <v-btn v-if="$store.state.sys && $store.state.sys.allow && $store.state.sys.allow.register" rounded color="green" to="/signup">{{ $t('login.register') }}</v-btn>
@@ -62,6 +62,8 @@
 </template>
 
 <script>
+import { isLightBackground, resolveBrandColor } from "~/utils/appearance";
+
 export default {
     data: () => ({
         username: "",
@@ -91,12 +93,10 @@ export default {
             // 为body添加login-page类名，应用背景图样式
             document.body.classList.add('login-page');
 
-            // set the theme according to the local storage value
-            const savedTheme = localStorage.getItem('site_theme');
-            if (savedTheme === 'dark') {
-                this.$vuetify.theme.dark = true;
-            } else {
-                this.$vuetify.theme.dark = false;
+            // 深浅色：外观设置（plugins/appearance.js 已在应用启动时按本地缓存设好）
+            // 优先，只有用户从未保存过外观时才退回站点默认 site_theme。
+            if (!localStorage.getItem('appearance_settings')) {
+                this.$vuetify.theme.dark = localStorage.getItem('site_theme') === 'dark';
             }
 
             // 延迟执行focus，确保DOM已渲染
@@ -129,8 +129,11 @@ export default {
             }
             return this.$store.state.sys.socials;
         },
-        appBarColor() {
-            return this.$vuetify.theme.dark ? 'dark' : '#003153';
+        navBgColor() {
+            return resolveBrandColor(this.$store.state.appearance.brandColor);
+        },
+        navIsDark() {
+            return !isLightBackground(this.navBgColor);
         },
     },
     methods: {

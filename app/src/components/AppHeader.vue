@@ -28,7 +28,7 @@
                         >
                             <v-tooltip bottom>
                                 <template v-slot:activator="{ on, attrs }">
-                                    <v-icon v-bind="attrs" v-on="on" :color="item.color || ''" size="24">{{ item.icon }}</v-icon>
+                                    <v-icon v-bind="attrs" v-on="on" :class="iconClass(item)" :color="iconColor(item)" size="24">{{ item.icon }}</v-icon>
                                 </template>
                                 {{ $t(item.text) }}
                             </v-tooltip>
@@ -45,7 +45,7 @@
                             <template v-slot:activator>
                                 <v-list-item dense>
                                     <v-list-item-action class="mt-1 mb-1 mr-2" dense>
-                                        <v-icon class="pa-0 ma-0" :color="item.color || ''">{{ item.icon }}</v-icon>
+                                        <v-icon class="pa-0 ma-0" :class="iconClass(item)" :color="iconColor(item)">{{ item.icon }}</v-icon>
                                     </v-list-item-action>
                                     <v-list-item-content>
                                         <v-list-item-title>{{ $t(item.text) }}</v-list-item-title>
@@ -64,7 +64,7 @@
                             >
                                 <v-list-item-action class="mt-1 mb-1 mr-2" dense>
                                     <img v-if="link.favicon" :src="link.favicon" class="friend-favicon" @error="$event.target.style.display='none'" />
-                                    <v-icon v-else class="pa-0 ma-0" :color="link.color || ''">{{ link.icon }}</v-icon>
+                                    <v-icon v-else class="pa-0 ma-0" :class="iconClass(link)" :color="iconColor(link)">{{ link.icon }}</v-icon>
                                 </v-list-item-action>
                                 <v-list-item-content>
                                     <v-list-item-title>
@@ -79,10 +79,10 @@
                                 <v-row>
                                     <v-col class="pa-0" cols="6" v-for="link in links" :key="'btn-' + link.href">
                                         <v-btn v-if="item.target != ''" text target="_blank" :href="link.href">
-                                            <v-icon v-if="link.icon" :color="link.color || ''" left>{{ link.icon }}</v-icon> {{ $t(link.text) }}
+                                            <v-icon v-if="link.icon" :class="iconClass(link)" :color="iconColor(link)" left>{{ link.icon }}</v-icon> {{ $t(link.text) }}
                                         </v-btn>
                                         <v-btn v-else text :to="link.href">
-                                            <v-icon v-if="link.icon" left :color="link.color || ''">{{ link.icon }}</v-icon> {{ $t(link.text) }}
+                                            <v-icon v-if="link.icon" left :class="iconClass(link)" :color="iconColor(link)">{{ link.icon }}</v-icon> {{ $t(link.text) }}
                                         </v-btn>
                                     </v-col>
                                 </v-row>
@@ -99,12 +99,12 @@
                             @click="item.action ? handleLinkAction(item.action) : undefined"
                         >
                             <v-list-item-action class="mt-1 mb-1 mr-2" dense v-if="!miniVariant">
-                                <v-icon class="pa-0 ma-0" :color="item.color || 'white'">{{ item.icon }}</v-icon>
+                                <v-icon class="pa-0 ma-0" :class="iconClass(item)" :color="iconColor(item, 'white')">{{ item.icon }}</v-icon>
                             </v-list-item-action>
                             <template v-else>
                                 <v-tooltip bottom>
                                     <template v-slot:activator="{ on, attrs }">
-                                        <v-icon v-bind="attrs" v-on="on" :color="item.color || ''" size="24">{{ item.icon }}</v-icon>
+                                        <v-icon v-bind="attrs" v-on="on" :class="iconClass(item)" :color="iconColor(item)" size="24">{{ item.icon }}</v-icon>
                                     </template>
                                     {{ $t(item.text) }}
                                 </v-tooltip>
@@ -136,7 +136,7 @@
             </template>
         </v-navigation-drawer>
 
-        <v-app-bar v-if="$store.state.nav" class="px-0" color="#003153" dense dark app fixed clipped-left extension-height="64">
+        <v-app-bar v-if="$store.state.nav" class="px-0" :class="navIsDark ? 'app-bar--on-dark' : 'app-bar--on-light'" :color="navBgColor" :dark="navIsDark" dense app fixed clipped-left extension-height="64">
             <template v-if="btn_search && $vuetify.breakpoint.xs" #extension>
                 <v-container fluid class="py-2">
                     <v-form @submit.prevent="doSearch">
@@ -426,7 +426,7 @@
             <v-card class="dialog-border d-flex flex-column" style="height: 600px;">
                 <v-card-title class="primary white--text py-3 ai-dialog-title">
                     <div left color="white">
-                        <svg fill="#ffffff" version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="32px" height="32px" viewBox="0 0 256 256" enable-background="new 0 0 256 256" xml:space="preserve" stroke="#ffffff"><g id="bgCarrier" stroke-width="0"></g><g id="tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="iconCarrier"> <path d="M98.6,32.6c24,0,43.4,19.4,43.4,43.4s-19.4,43.6-43.4,43.6s-43.4-19.4-43.4-43.4S74.6,32.6,98.6,32.6z M221.8,215.6h-54.4 l25.4-43.8c5.2-9.2,2-20.8-7-26s-20.6-2-25.8,7l-25.4,43.8l-37.8-64.8C93.2,125,86,121.6,77,121.6c-1.2,0-3.8,0.4-5.2,0.8 c-1.2,0.2-3,0.8-4.4,1.2C31,135.6,2.2,193.8,2.2,254c1,0,87.4,0,109.4,0c-0.8-1.2-1.6-2.2-2.4-3.4L65.4,175c-1.4-2.6-0.4-6,2-7.4 c2.6-1.4,6-0.4,7.4,2l43.4,75c3.2,5.6,9.2,9.4,16.2,9.4h87.4c10.6,0,19-8.6,19-19C241,224,232.2,215.6,221.8,215.6z M203.613,29.883 v-6.156l-6.453-1.09c-0.477-2.109-1.309-4.086-2.43-5.863l3.793-5.332l-4.355-4.355l-5.332,3.793 c-1.773-1.121-3.75-1.949-5.863-2.43L181.887,2h-6.16l-1.086,6.449c-2.113,0.48-4.09,1.309-5.863,2.43l-5.332-3.793l-4.355,4.355 l3.793,5.332c-1.121,1.777-1.953,3.754-2.43,5.863L154,23.727v6.156l6.453,1.086c0.477,2.113,1.309,4.09,2.43,5.867l-3.793,5.332 l4.355,4.352l5.332-3.793c1.773,1.121,3.75,1.953,5.863,2.43l1.086,6.453h6.16l1.086-6.453c2.113-0.477,4.09-1.309,5.863-2.43 l5.332,3.793l4.355-4.352l-3.793-5.332c1.121-1.777,1.953-3.754,2.43-5.867L203.613,29.883z M178.805,36.594 c-5.402,0-9.785-4.383-9.785-9.789s4.383-9.789,9.785-9.789c5.406,0,9.789,4.383,9.789,9.789S184.211,36.594,178.805,36.594z M246.48,65.19l7.52-4.667l-3.154-7.707l-8.635,1.943c-1.629-2.327-3.659-4.397-6.043-6.096l2.017-8.616l-7.68-3.22l-4.73,7.479 c-2.883-0.509-5.782-0.505-8.584-0.035l-4.668-7.52l-7.707,3.154l1.943,8.635c-2.327,1.629-4.397,3.659-6.096,6.043l-8.616-2.017 l-3.22,7.68l7.479,4.73c-0.509,2.883-0.505,5.782-0.035,8.584l-7.52,4.668l3.154,7.707l8.635-1.943 c1.629,2.327,3.659,4.397,6.043,6.096l-2.017,8.616l7.68,3.22l4.73-7.479c2.883,0.509,5.782,0.505,8.584,0.035l4.668,7.52 l7.707-3.154l-1.943-8.635c2.327-1.629,4.397-3.659,6.096-6.043l8.616,2.017l3.22-7.68l-7.479-4.73 C246.953,70.891,246.95,67.992,246.48,65.19z M233.584,74.493c-2.827,6.743-10.584,9.918-17.327,7.091 c-6.743-2.827-9.918-10.584-7.091-17.327s10.584-9.918,17.327-7.091C233.236,59.993,236.41,67.75,233.584,74.493z"></path></g></svg>
+                        <svg fill="currentColor" version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="32px" height="32px" viewBox="0 0 256 256" enable-background="new 0 0 256 256" xml:space="preserve" stroke="currentColor"><g id="bgCarrier" stroke-width="0"></g><g id="tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="iconCarrier"> <path d="M98.6,32.6c24,0,43.4,19.4,43.4,43.4s-19.4,43.6-43.4,43.6s-43.4-19.4-43.4-43.4S74.6,32.6,98.6,32.6z M221.8,215.6h-54.4 l25.4-43.8c5.2-9.2,2-20.8-7-26s-20.6-2-25.8,7l-25.4,43.8l-37.8-64.8C93.2,125,86,121.6,77,121.6c-1.2,0-3.8,0.4-5.2,0.8 c-1.2,0.2-3,0.8-4.4,1.2C31,135.6,2.2,193.8,2.2,254c1,0,87.4,0,109.4,0c-0.8-1.2-1.6-2.2-2.4-3.4L65.4,175c-1.4-2.6-0.4-6,2-7.4 c2.6-1.4,6-0.4,7.4,2l43.4,75c3.2,5.6,9.2,9.4,16.2,9.4h87.4c10.6,0,19-8.6,19-19C241,224,232.2,215.6,221.8,215.6z M203.613,29.883 v-6.156l-6.453-1.09c-0.477-2.109-1.309-4.086-2.43-5.863l3.793-5.332l-4.355-4.355l-5.332,3.793 c-1.773-1.121-3.75-1.949-5.863-2.43L181.887,2h-6.16l-1.086,6.449c-2.113,0.48-4.09,1.309-5.863,2.43l-5.332-3.793l-4.355,4.355 l3.793,5.332c-1.121,1.777-1.953,3.754-2.43,5.863L154,23.727v6.156l6.453,1.086c0.477,2.113,1.309,4.09,2.43,5.867l-3.793,5.332 l4.355,4.352l5.332-3.793c1.773,1.121,3.75,1.953,5.863,2.43l1.086,6.453h6.16l1.086-6.453c2.113-0.477,4.09-1.309,5.863-2.43 l5.332,3.793l4.355-4.352l-3.793-5.332c1.121-1.777,1.953-3.754,2.43-5.867L203.613,29.883z M178.805,36.594 c-5.402,0-9.785-4.383-9.785-9.789s4.383-9.789,9.785-9.789c5.406,0,9.789,4.383,9.789,9.789S184.211,36.594,178.805,36.594z M246.48,65.19l7.52-4.667l-3.154-7.707l-8.635,1.943c-1.629-2.327-3.659-4.397-6.043-6.096l2.017-8.616l-7.68-3.22l-4.73,7.479 c-2.883-0.509-5.782-0.505-8.584-0.035l-4.668-7.52l-7.707,3.154l1.943,8.635c-2.327,1.629-4.397,3.659-6.096,6.043l-8.616-2.017 l-3.22,7.68l7.479,4.73c-0.509,2.883-0.505,5.782-0.035,8.584l-7.52,4.668l3.154,7.707l8.635-1.943 c1.629,2.327,3.659,4.397,6.043,6.096l-2.017,8.616l7.68,3.22l4.73-7.479c2.883,0.509,5.782,0.505,8.584,0.035l4.668,7.52 l7.707-3.154l-1.943-8.635c2.327-1.629,4.397-3.659,6.096-6.043l8.616,2.017l3.22-7.68l-7.479-4.73 C246.953,70.891,246.95,67.992,246.48,65.19z M233.584,74.493c-2.827,6.743-10.584,9.918-17.327,7.091 c-6.743-2.827-9.918-10.584-7.091-17.327s10.584-9.918,17.327-7.091C233.236,59.993,236.41,67.75,233.584,74.493z"></path></g></svg>
                     </div>
                     <v-spacer></v-spacer>
                     <v-btn icon dark @click="closeAi">
@@ -503,6 +503,7 @@
 
 <script>
 import AppearanceMenu from "~/components/AppearanceMenu.vue";
+import { isLightBackground, resolveBrandColor, unifiedIconColor } from "~/utils/appearance";
 
 export default {
     components: { AppearanceMenu },
@@ -587,8 +588,24 @@ export default {
     };
     },
     computed: {
+        appearanceSettings() {
+            return this.$store.state.appearance;
+        },
+        /** 顶栏品牌色：默认 #003153（与改造前一致），可在外观面板自定义 */
+        navBgColor() {
+            return resolveBrandColor(this.appearanceSettings.brandColor);
+        },
+        /** 顶栏是否按「深色底」渲染：品牌色偏亮时自动转深色字，避免白字看不清 */
+        navIsDark() {
+            return !isLightBackground(this.navBgColor);
+        },
+        /** 侧栏图标是否处于「统一着色」模式（此时颜色由 --app-sidebar-icon 驱动） */
+        unifiedIconActive() {
+            return Boolean(unifiedIconColor(this.appearanceSettings));
+        },
         appBarColor() {
-            return this.$vuetify.theme.dark ? 'dark' : '#003153';
+            // 对话框/工具条沿用顶栏品牌色；深色主题下保持原来的 'dark'
+            return this.$vuetify.theme.dark ? 'dark' : this.navBgColor;
         },
         drawerColor() {
             return this.$vuetify.theme.dark ? 'dark' : '#F7FAF7';
@@ -753,6 +770,12 @@ export default {
                     this.$vuetify.theme.dark = rsp.sys.theme === 'dark';
                 }
             }
+            if (process.client) {
+                // 账号级外观设置（GET /api/user/info 的 user.appearance）优先于站点默认与本地缓存。
+                // 服务端返回 {} 表示「这个账号还没保存过外观」，此时保持本地缓存/站点默认不动，
+                // 只把同步状态标成「尚未上传」——绝不擅自把本机设置写进账号。
+                this.$store.dispatch("appearance/applyFromServer", rsp.user && rsp.user.appearance);
+            }
             if (rsp.sys.footer === '') {
                 rsp.sys.footer = this.$t('appHeader.defaultFooter');
                 this.$store.commit("set_footer", rsp.sys.footer);
@@ -787,6 +810,24 @@ export default {
     methods: {
         isExternalLink(url) {
             return url && (url.startsWith('http://') || url.startsWith('https://'));
+        },
+        /**
+         * 侧栏/列表图标颜色。
+         * 「保持多彩」（默认）时返回各项原本写死的 item.color；「统一着色」时返回 null，
+         * 由 iconClass() 挂上的 .app-icon-unified 用 CSS 变量统一上色
+         * （刻意不走 Vuetify 的 color prop，免得依赖它对 CSS 变量/hex 的解析行为）。
+         */
+        iconColor(item, fallback) {
+            const fallbackColor = fallback === undefined ? '' : fallback;
+            if (this.unifiedIconActive && !this.isLoginEntry(item)) return null;
+            return (item && item.color) || fallbackColor;
+        },
+        iconClass(item) {
+            return this.unifiedIconActive && !this.isLoginEntry(item) ? 'app-icon-unified' : '';
+        },
+        /** 「登录」入口是刻意的高亮样式（.login-button 青绿底白字），不参与统一着色 */
+        isLoginEntry(item) {
+            return Boolean(item) && item.text === 'appHeader.please_login';
         },
         getDefaultAvatar() {
             if (process.client) {
@@ -1422,8 +1463,16 @@ export default {
 }
 
 .v-application .primary.ai-dialog-title {
-    background-color: #003153 !important;
-    border-color: #003153 !important;
+    background-color: var(--app-nav-bg, #003153) !important;
+    border-color: var(--app-nav-bg, #003153) !important;
+    /* 顶栏品牌色换成浅色时，标题文字要跟着转深色，否则白字看不见 */
+    color: var(--app-nav-fg, rgba(255, 255, 255, 0.87)) !important;
+}
+
+/* 侧栏图标的「统一着色」模式：颜色由 --app-sidebar-icon 驱动
+   （见 app/src/utils/appearance.js 的 applyAppearance / unifiedIconColor） */
+.app-navigation-drawer .app-icon-unified {
+    color: var(--app-sidebar-icon, currentColor) !important;
 }
 </style>
 
@@ -1458,6 +1507,14 @@ export default {
 .theme--dark .desktop-search-field :deep(.v-input__slot),
 .theme--dark .mobile-search-field :deep(.v-input__slot) {
     border-color: rgba(255, 255, 255, 0.35) !important;
+}
+
+/* 顶栏品牌色为浅色时（.app-bar--on-light）：solo-inverted 搜索框未聚焦是浅底，
+   原来的白描边在浅底上看不见，改成深描边；聚焦后底色转深，继续沿用上面的白描边。
+   用 :not() 排除聚焦态，否则同为 4 级特异性时会靠源顺序把我的规则错误地套到聚焦态上。 */
+.app-bar--on-light .desktop-search-field:not(.v-input--is-focused) :deep(.v-input__slot),
+.app-bar--on-light .mobile-search-field:not(.v-input--is-focused) :deep(.v-input__slot) {
+    border-color: rgba(0, 0, 0, 0.35) !important;
 }
 
 @keyframes blink {
