@@ -1644,6 +1644,20 @@
   "error_server_starting": "Service is starting, please try again later",
   "appearance": {
     "title": "APPEARANCE",
+    "brandColor": "Header color",
+    "brandDefault": "Default navy",
+    "custom": "Custom",
+    "restore": "Restore default",
+    "contrastHint": "Light header detected — text switched to dark automatically",
+    "sidebarIcon": "Sidebar icons",
+    "iconMulti": "Keep multicolor",
+    "iconTheme": "Follow primary",
+    "iconCustom": "Unified custom",
+    "iconColor": "Icon color",
+    "reset": "Reset to default",
+    "sync": {
+      "upload": "Save to account"
+    },
     "theme": "Theme",
     "light": "Light",
     "dark": "Dark",

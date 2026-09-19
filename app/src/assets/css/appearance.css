@@ -20,11 +20,19 @@
    Background Patterns
    Applied directly to .v-application so they render
    on top of Vuetify's background-color.
-   --dot-color and --primary-color are set by JS.
+
+   以下变量由 JS 写（见 app/src/utils/appearance.js 的 applyAppearance）：
+     --dot-color / --primary-color / --app-radius / --app-sidebar-icon
+     --app-nav-bg / --app-nav-fg（顶栏品牌色与前景色）
+   首帧由 app/src/app.html 的内联脚本先落一遍，避免闪烁。
    ===================================================== */
 :root {
     --dot-color: rgba(128, 128, 128, 0.18);
     --primary-color: #1976D2;
+    /* 顶栏/品牌面：默认值与改造前的硬编码 #003153 一致，保证默认外观零变化 */
+    --app-nav-bg: #003153;
+    --app-nav-fg: rgba(255, 255, 255, 0.87);
+    --app-radius: 4px;
 }
 
 /* ── Fundamental ──────────────────────────────────── */

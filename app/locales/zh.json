@@ -1645,6 +1645,20 @@
   "error_server_starting": "服务正在启动中，稍后重试",
   "appearance": {
     "title": "外观设置",
+    "brandColor": "顶栏颜色",
+    "brandDefault": "默认深蓝",
+    "custom": "自定义",
+    "restore": "恢复默认",
+    "contrastHint": "顶栏为浅色，文字已自动转为深色",
+    "sidebarIcon": "侧栏图标",
+    "iconMulti": "保持多彩",
+    "iconTheme": "跟随主色",
+    "iconCustom": "统一自定义",
+    "iconColor": "图标颜色",
+    "reset": "重置为默认",
+    "sync": {
+      "upload": "保存到账号"
+    },
     "theme": "主题模式",
     "light": "浅色",
     "dark": "深色",

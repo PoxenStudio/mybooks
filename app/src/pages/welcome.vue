@@ -49,13 +49,11 @@ export default {
     },
     created() {
         this.$store.commit('navbar', false);
-        if (process.client) {
-            const savedTheme = localStorage.getItem('site_theme');
-            if (savedTheme === 'dark') {
-                this.$vuetify.theme.dark = true;
-            } else {
-                this.$vuetify.theme.dark = false;
-            }
+        if (process.client && !localStorage.getItem('appearance_settings')) {
+            // 用户保存过外观时（本地缓存 / 账号下发都会写这个缓存）以它为准，
+            // 不能被站点默认顶掉 —— 外观设置是账号级的，优先级更高。
+            // 同样走 store 的 mutation，避免 store 与 $vuetify.theme.dark 两个真值源。
+            this.$store.commit('appearance/adoptSiteTheme', localStorage.getItem('site_theme'));
         }
         if ( this.err == 'free' ) {
             this.$router.push(this.$route.query.next || "/");

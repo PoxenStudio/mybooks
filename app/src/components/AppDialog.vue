@@ -9,11 +9,14 @@
     >
         <v-card :class="cardClass" style="border-radius:16px 16px 0px 0px !important">
             <template v-if="type !== 'progress'">
-                <v-toolbar flat dense dark :color="color" :class="toolbarClass" style="border-radius:16px 16px 0px 0px !important">
+                <!-- Vuetify 的 dark/light 是三态：dark=true 强制白字、light=true 强制深字，都不传才继承根主题。
+                     默认（lightHeader=false）等价于原来的裸 dark 属性，行为不变；传了浅色自定义色（如浅色品牌色）
+                     的调用方需要传 light-header，否则白字会落在浅底上。 -->
+                <v-toolbar flat dense :dark="!lightHeader" :light="lightHeader" :color="color" :class="toolbarClass" style="border-radius:16px 16px 0px 0px !important">
                     <v-icon v-if="icon" class="mr-2">{{ icon }}</v-icon>
                     <v-toolbar-title>{{ title }}</v-toolbar-title>
                     <v-spacer></v-spacer>
-                    <v-btn v-if="dismissIcon" icon dark :disabled="dismissDisabled" @click="onDismiss">
+                    <v-btn v-if="dismissIcon" icon :dark="!lightHeader" :light="lightHeader" :disabled="dismissDisabled" @click="onDismiss">
                         <v-icon>mdi-close</v-icon>
                     </v-btn>
                     <v-btn v-else text :disabled="dismissDisabled" @click="onDismiss">
@@ -71,6 +74,9 @@ export default {
             validator: (v) => ['action', 'confirm', 'progress'].includes(v),
         },
         color: { type: String, default: 'primary' },
+        // 外壳 toolbar 的前景配色：默认走「深色底 / 白字」（与原实现一致）。
+        // 传自定义浅色（例如外观设置里用户选的浅色品牌色）时必须置 true，否则白字落在浅底上看不见。
+        lightHeader: { type: Boolean, default: false },
         width: { type: [String, Number], default: undefined },
         maxWidth: { type: [String, Number], default: 500 },
         persistent: { type: Boolean, default: true },
