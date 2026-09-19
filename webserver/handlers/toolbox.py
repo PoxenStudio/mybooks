@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
+import asyncio
 import logging
 import os
 import re
@@ -194,10 +195,11 @@ class AdminToolStoreIndex(BaseHandler):
 
     @js
     @is_admin
-    def get(self):
+    async def get(self):
         force = self.get_argument("refresh", "") == "1"
         tools = []
-        for entry in get_cached_index(force=force):
+        index = await asyncio.get_event_loop().run_in_executor(None, get_cached_index, force)
+        for entry in index:
             tool_id = entry.get("tool_id")
             record = toolbox_manager.InstalledTool.get(tool_id) if tool_id else None
             data = dict(entry)
