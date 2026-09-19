@@ -78,6 +78,26 @@ def tool_root() -> str:
     return root
 
 
+def _move_dir(src: str, dst: str) -> None:
+    """优先 rename, 失败就全目录拷贝。
+    """
+    success = False
+    try:
+        os.rename(src, dst)
+        success = True
+    except OSError:
+        pass
+    if success:
+        return
+    for root, dirs, files in os.walk(src):
+        rel = os.path.relpath(root, src)
+        out_dir = dst if rel == "." else os.path.join(dst, rel)
+        os.makedirs(out_dir, exist_ok=True)
+        for name in files:
+            shutil.copyfile(os.path.join(root, name), os.path.join(out_dir, name))
+    shutil.rmtree(src, ignore_errors=True)
+
+
 def _tool_dir(tool_id: str) -> str:
     return os.path.join(tool_root(), tool_id)
 
@@ -251,7 +271,7 @@ def install_from_zip(
         target_dir = _tool_dir(tool_id)
         if os.path.isdir(target_dir):
             shutil.rmtree(target_dir)
-        shutil.move(tmp_dir, target_dir)
+        _move_dir(tmp_dir, target_dir)
         moved = True
 
         now = datetime.datetime.now()
