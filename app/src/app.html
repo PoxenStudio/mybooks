@@ -20,12 +20,19 @@
         var r = lin(parseInt(color.substr(1, 2), 16) / 255);
         var g = lin(parseInt(color.substr(3, 2), 16) / 255);
         var b = lin(parseInt(color.substr(5, 2), 16) / 255);
-        return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 0.45;
+        /* 0.179 = 白字/黑字对比度相等的相对亮度分界点，
+           与 app/src/utils/appearance.js 的 isLightBackground() 必须保持一致 */
+        return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 0.179;
       }
       try {
         var s = JSON.parse(localStorage.getItem('appearance_settings') || '{}') || {};
         var root = document.documentElement;
-        var dark = s.darkMode !== false;
+        /* 深浅色的回退顺序必须与 AppHeader 里 /user/info 的处理一致：
+             本地缓存（= 用户自己保存过的外观） → 站点默认 site_theme → 内置默认（深色）
+           只有缓存里存在布尔 darkMode 时才算「用户选过」；否则按站点默认走 ——
+           把「没有缓存」当成深色会让浅色站点首帧先黑一下再翻回来（反而制造闪烁）。 */
+        var siteTheme = localStorage.getItem('site_theme');
+        var dark = typeof s.darkMode === 'boolean' ? s.darkMode : siteTheme !== 'light';
         var brand = cleanHex(s.brandColor) || BRAND_FALLBACK;
         var accent = cleanHex(s.accent) || ACCENT_FALLBACK;
         var radius = RADII.indexOf(s.radius) >= 0 ? s.radius : RADIUS_FALLBACK;

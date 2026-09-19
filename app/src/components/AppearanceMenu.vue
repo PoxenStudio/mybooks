@@ -293,6 +293,11 @@ export default {
                 } else {
                     this.$store.commit('appearance/markSynced', false);
                     this.$store.commit('appearance/setSyncState', 'failed');
+                    // $backend 只对 not_installed / not_invited / user.need_login / exception
+                    // 这几种 err 做提示，外观自己的错误码（appearance.version.unsupported、
+                    // appearance.too_large、params.invalid…）会静默变成一个"失败"状态，
+                    // 这里显式抛给用户，否则服务端写的提示语等于白写。
+                    if (rsp && rsp.msg) this.$alert('error', rsp.msg);
                 }
             }).catch(() => {
                 if (seq !== this.syncSeq) return;

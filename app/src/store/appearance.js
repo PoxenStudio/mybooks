@@ -41,6 +41,17 @@ export const mutations = {
     replaceAppearance(state, settings) {
         Object.assign(state, settingsOf(sanitize(settings, defaults())));
     },
+    /**
+     * 采用站点默认深浅色（管理员设置的 sys.theme），由 AppHeader 在
+     * 「本机没有外观缓存」时调用，**不**写 localStorage 缓存（缓存语义见 plugins/appearance.js）。
+     *
+     * 为什么要走 mutation 而不是像以前那样直接改 $vuetify.theme.dark：
+     * 深浅色的运行时真值在 store，只改 Vuetify 会让两者长期不一致 —— 面板的选中态会错位，
+     * 而且用户之后动任何一项外观都会触发 applyAppearance()，用 store 里的旧值把整站主题盖回去。
+     */
+    adoptSiteTheme(state, dark) {
+        state.darkMode = Boolean(dark);
+    },
     setSyncState(state, value) {
         state.syncState = value;
     },

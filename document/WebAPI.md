@@ -188,12 +188,23 @@
     "avatar": "reader.svg",
     "is_admin": true,
     "show_home_recommendations": false,
-    "show_other_annotations": false
+    "show_other_annotations": false,
+    "appearance": {
+      "v": 1,
+      "darkMode": true,
+      "brandColor": null,
+      "accent": "#1976D2",
+      "radius": "4px",
+      "background": "default",
+      "sidebarIconMode": "multi",
+      "sidebarIconColor": null
+    }
   }
 }
 ```
 未登录时返回基础系统信息，用户信息中is_login为false，登录时会返回完整用户信息。
 sys中为基础系统信息，title为网站标题, books为在库书籍数量，version为当前系统版本。其中upgrable代表是否有升级版本，如果为有值且与version不同代表有可升级版本。sys/allow下的book_review表示是否允许用户评论，physical_books代表是否支持实体书，upload代表是否允许上传。
+user.appearance为外观设置（顶栏品牌色、侧栏图标配色、深浅色、圆角、背景图案），用户从未保存过时为空对象`{}`，由前端沿用「本地缓存 → 站点默认sys.theme → 内置默认」的回退顺序，保存入口见 1.9。
 
 
 ### 1.6 更新用户资料
@@ -263,7 +274,52 @@ sys中为基础系统信息，title为网站标题, books为在库书籍数量�
 }
 ```
 
-### 1.9 发送激活邮件
+### 1.9 保存外观设置
+
+- **路径**：`/api/user/appearance`
+- **方法**：POST
+- **认证**：需要登录
+- **说明**：补丁语义 —— 只提交改动过的键，未提交的键保持原值；未知键与非法值一律丢弃（不会用空值覆盖已有的合法值）。
+  设置落在 `Reader.extra["appearance"]`，由 `/api/user/info` 的 `user.appearance`（见 1.5）下发前端。
+  客户端声明的 `v` 比服务端新时返回 `appearance.version.unsupported`：老服务端不认识新客户端的键、会静默丢弃，宁可让客户端提示用户刷新。
+- **参数**（JSON）：
+  - `darkMode` (boolean, 可选): 深浅色主题
+  - `accent` (string, 可选): 主色，`#RRGGBB`
+  - `brandColor` (string|null, 可选): 顶栏品牌色，`#RRGGBB`；传 `null` 表示回到内置默认深蓝
+  - `radius` (string, 可选): 圆角，`0px` / `4px` / `8px` / `16px`
+  - `background` (string, 可选): 背景图案，见下方枚举
+  - `sidebarIconMode` (string, 可选): 侧栏图标配色，`multi`（保持多彩，默认）/ `theme`（跟随主色）/ `custom`（统一自定义）
+  - `sidebarIconColor` (string|null, 可选): `sidebarIconMode=custom` 时使用的图标色
+- **请求示例**:
+```json
+{
+  "darkMode": false,
+  "brandColor": "#4c1d95",
+  "sidebarIconMode": "theme"
+}
+```
+- **响应示例**：
+
+```json
+{
+  "err": "ok",
+  "appearance": {
+    "v": 1,
+    "darkMode": false,
+    "brandColor": "#4c1d95",
+    "accent": "#1976D2",
+    "radius": "4px",
+    "background": "default",
+    "sidebarIconMode": "theme",
+    "sidebarIconColor": null
+  },
+  "dropped": []
+}
+```
+- **错误码**：`params.invalid`（请求体不是合法 JSON 对象）、`appearance.version.unsupported`、`appearance.too_large`。
+- `background` 枚举：`default`、`cross`、`left-diagonal`、`right-diagonal`、`aurora`、`horizon`、`glow`、`mesh`、`repeat-image-1` ~ `repeat-image-4`。
+
+### 1.10 发送激活邮件
 
 - **路径**：`/api/user/active/send`
 - **方法**：GET/POST
@@ -277,7 +333,7 @@ sys中为基础系统信息，title为网站标题, books为在库书籍数量�
 }
 ```
 
-### 1.10 激活账户
+### 1.11 激活账户
 
 - **路径**：`/api/active/<username>/<code>`
 - **方法**：GET/POST
@@ -287,7 +343,7 @@ sys中为基础系统信息，title为网站标题, books为在库书籍数量�
   - `code` (path, 必填): 激活码
 - **响应**：302重定向到激活成功页面
 
-### 1.11 管理员创建用户
+### 1.12 管理员创建用户
 
 - **路径**：`/api/user/new`
 - **方法**：POST
@@ -306,7 +362,7 @@ sys中为基础系统信息，title为网站标题, books为在库书籍数量�
 }
 ```
 
-### 1.12 OAuth登录完成回调
+### 1.13 OAuth登录完成回调
 
 - **路径**：`/api/done/`
 - **方法**：GET

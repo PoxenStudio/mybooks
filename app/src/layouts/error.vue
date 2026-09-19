@@ -28,7 +28,8 @@ export default {
   },
   created() {
     //this.$store.commit("puremode", true);
-    if (process.client) {
+    // 只有从未保存过外观的用户才按站点默认走；否则会把账号级/本地保存的深浅色顶掉
+    if (process.client && !localStorage.getItem("appearance_settings")) {
       this.$vuetify.theme.dark = localStorage.getItem("site_theme") === "dark";
     }
   },

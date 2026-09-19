@@ -10,8 +10,13 @@
 
 import { applyAppearance, writeCache } from '~/utils/appearance';
 
-// 只有这两个 mutation 会改变渲染结果；同步状态（appearance/setSyncState 等）不触发重算
-const APPLY_MUTATIONS = ['appearance/setAppearance', 'appearance/replaceAppearance'];
+// 会改变渲染结果的 mutation（需要重算 CSS 变量与 Vuetify 主题）；
+// setSyncState / markSynced 之类的纯状态变更不在此列
+const APPLY_MUTATIONS = ['appearance/setAppearance', 'appearance/replaceAppearance', 'appearance/adoptSiteTheme'];
+// 需要写 localStorage 缓存的 mutation：缓存的语义是「用户自己保存过的外观」，
+// 站点默认（adoptSiteTheme）不算 —— 否则用户会被永久钉在当时的站点默认上，
+// 管理员之后改 site_theme 就再也跟不动了。
+const CACHE_MUTATIONS = ['appearance/setAppearance', 'appearance/replaceAppearance'];
 
 export default ({ store, app }) => {
     if (!process.client) return;
@@ -29,10 +34,14 @@ export default ({ store, app }) => {
     };
 
     store.subscribe((mutation) => {
-        if (APPLY_MUTATIONS.indexOf(mutation.type) < 0) return;
-        // 状态 → localStorage 缓存（首帧脚本下次读它）
-        writeCache(store.state.appearance);
-        apply();
+        const type = mutation.type;
+        if (CACHE_MUTATIONS.indexOf(type) >= 0) {
+            // 状态 → localStorage 缓存（app/src/app.html 的首帧脚本下次读它）
+            writeCache(store.state.appearance);
+        }
+        if (APPLY_MUTATIONS.indexOf(type) >= 0) {
+            apply();
+        }
     });
 
     // 缓存 → state → CSS 变量 / Vuetify 主题

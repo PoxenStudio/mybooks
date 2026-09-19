@@ -543,6 +543,8 @@ class UserInfo(BaseHandler):
             "email": "",
             "kindle_email": "",
             "extra": {},
+            # 未登录 / 访客也返回空外观，保证前端 rsp.user.appearance 恒为对象
+            "appearance": {},
         }
 
         if not user:
@@ -556,6 +558,7 @@ class UserInfo(BaseHandler):
                     "username": _("访客"),
                     "email": "",
                     "extra": {},
+                    "appearance": {},
                     "create_time": "",
                     "podcast_token": "",
                 }
