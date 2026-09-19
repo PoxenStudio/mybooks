@@ -8,12 +8,15 @@
     python -m pytest tests/test_user_appearance.py -q
     python tests/test_user_appearance.py
 """
+import io
 import json
 import os
+import re
 import sys
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+sys.path.insert(0, ROOT)
 
 from webserver.base.appearance import (  # noqa: E402
     ALLOWED_BACKGROUNDS,
@@ -100,6 +103,23 @@ class TestColorValidation(unittest.TestCase):
         clean, dropped = normalize_appearance({"accent": "#" + "a" * 5000})
         self.assertEqual(clean, {})
         self.assertEqual(dropped, ["accent"])
+
+    def test_accent_rejects_null_and_empty(self):
+        # accent（主色）没有「回到默认」这个语义：它有写死的内置默认值，前端 sanitize
+        # 也只接受合法 hex。若沿用 _clean_color 把 null 存进来，user.appearance 会变成
+        # 「非空」，而前端正是用「非空」判断这个账号保存过外观 —— 于是一个
+        # {"accent": null} 就能让内置默认（深色）顶掉站点默认主题。
+        for value in (None, ""):
+            clean, dropped = normalize_appearance({"accent": value}, base={"accent": "#111111"})
+            self.assertEqual(dropped, ["accent"])
+            self.assertEqual(clean["accent"], "#111111")  # 保留基线值，不被 null 顶掉
+
+    def test_brand_color_still_accepts_null(self):
+        # brandColor / sidebarIconColor 的 null 是「用内置默认」，属合法输入（与前端一致）
+        clean, dropped = normalize_appearance({"brandColor": None, "sidebarIconColor": ""})
+        self.assertEqual(dropped, [])
+        self.assertIsNone(clean["brandColor"])
+        self.assertIsNone(clean["sidebarIconColor"])
 
 
 class TestEnumValidation(unittest.TestCase):
@@ -253,6 +273,96 @@ class TestReadAppearance(unittest.TestCase):
         stored = {"darkMode": True, "brandColor": "red", "radius": "8px", "junk": 1}
         clean = read_appearance(FakeUser({APPEARANCE_KEY: stored}))
         self.assertEqual(clean, {"darkMode": True, "radius": "8px", "v": APPEARANCE_VERSION})
+
+
+class TestDirtyBase(unittest.TestCase):
+    """写入路径传进来的 base 是库里的原始值，可能是脏数据（手工改库 / 历史残留）。
+
+    dict("junk") / dict(123) 会直接抛 ValueError/TypeError，而 /api/user/appearance
+    的 POST 正是把 user.extra["appearance"] 当 base 传进来的 —— 一旦抛异常，
+    handlers/base.py 的 @js 会把整个 traceback 塞进 msg 回吐给客户端。
+    """
+
+    def test_non_dict_base_is_ignored(self):
+        for base in ("junk", 123, ["a"], [["a", "b"]], True):
+            clean, dropped = normalize_appearance({"darkMode": False}, base=base)
+            self.assertEqual(clean, {"darkMode": False, "v": APPEARANCE_VERSION}, msg=repr(base))
+            self.assertEqual(dropped, [], msg=repr(base))
+
+    def test_non_dict_base_with_non_dict_raw(self):
+        clean, dropped = normalize_appearance("junk", base="junk")
+        self.assertEqual(clean, {})
+        self.assertEqual(dropped, ["<payload>"])
+
+    def test_dirty_base_values_are_revalidated(self):
+        # 走写入路径时 base 会先被 normalize 清洗（见 UserAppearance.post）：
+        # 非法值与未知键都不该被带进下一次落库
+        base = {"darkMode": True, "brandColor": "red", "radius": "8px", "junk": 1}
+        cleaned_base = normalize_appearance(base)[0]
+        clean, _ = normalize_appearance({"accent": "#123456"}, base=cleaned_base)
+        self.assertEqual(
+            clean,
+            {"darkMode": True, "radius": "8px", "accent": "#123456", "v": APPEARANCE_VERSION},
+        )
+
+
+class TestFrontendIntegrationGuards(unittest.TestCase):
+    """前后端有若干「必须保持一致」的复制品（白名单、schema 版本、对比度阈值）。
+
+    这些地方没有编译期检查，出问题只会表现为「某个设置怎么选都不生效」这种难查的现象，
+    所以在这里用最便宜的方式钉住。
+    """
+
+    @staticmethod
+    def _read(relpath):
+        with io.open(os.path.join(ROOT, relpath), encoding="utf-8") as fp:
+            return fp.read()
+
+    def test_app_html_background_and_radius_lists_match_backend(self):
+        html = self._read("app/src/app.html")
+
+        def js_list(name):
+            match = re.search(r"var %s = \[([^\]]*)\];" % name, html)
+            self.assertIsNotNone(match, msg="app/src/app.html 里找不到 %s" % name)
+            return {item.strip().strip("'\"") for item in match.group(1).split(",") if item.strip()}
+
+        self.assertEqual(js_list("BACKGROUNDS"), set(ALLOWED_BACKGROUNDS))
+        self.assertEqual(js_list("RADII"), set(ALLOWED_RADII))
+
+    def test_client_schema_version_matches_backend(self):
+        utils = self._read("app/src/utils/appearance.js")
+        match = re.search(r"export const SCHEMA_VERSION = (\d+);", utils)
+        self.assertIsNotNone(match)
+        # 客户端 v 比服务端新时会被拒绝（appearance.version.unsupported），别让两边漂移
+        self.assertEqual(int(match.group(1)), APPEARANCE_VERSION)
+
+    def test_contrast_threshold_matches_inline_script(self):
+        utils = self._read("app/src/utils/appearance.js")
+        html = self._read("app/src/app.html")
+        # 首帧脚本里有一份同步实现，阈值必须一致，否则刷新瞬间会闪一下
+        self.assertIn("0.179", utils)
+        self.assertIn("0.179", html)
+
+    def test_inline_script_uses_same_site_theme_predicate(self):
+        html = self._read("app/src/app.html")
+        # 「不等于 light 就算深色」——与 utils/appearance.js 的 siteThemeIsDark() 同判据
+        self.assertIn("siteTheme !== 'light'", html)
+
+
+class TestBackendErrorMessagesAreTranslated(unittest.TestCase):
+    """新加的后端文案必须同时进 en / zh-TW 目录，否则 en 用户会看到中文报错。"""
+
+    MESSAGES = ("外观设置版本过新，请刷新页面后重试", "外观设置过大")
+
+    def test_catalogues_cover_appearance_errors(self):
+        for name in ("en", "zh-TW"):
+            with io.open(
+                os.path.join(ROOT, "webserver", "i18n", "%s.json" % name), encoding="utf-8"
+            ) as fp:
+                catalog = json.load(fp)
+            for message in self.MESSAGES:
+                self.assertIn(message, catalog, msg="%s.json 缺少 %s" % (name, message))
+                self.assertTrue(catalog[message].strip(), msg="%s.json 的 %s 是空翻译" % (name, message))
 
 
 if __name__ == "__main__":

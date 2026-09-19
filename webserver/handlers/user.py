@@ -152,11 +152,17 @@ class UserUpdate(BaseHandler):
 
 
 class UserAppearance(BaseHandler):
-    """保存当前用户的外观设置（顶栏品牌色、侧栏图标配色、深浅色、圆角、背景图案）。
+    """当前用户的外观设置（顶栏品牌色、侧栏图标配色、深浅色、圆角、背景图案）。
 
-    补丁语义：客户端只提交改动过的键，未提交的键保持原值；未知键与非法值会被丢弃
-    （见 webserver/base/appearance.py 的 normalize_appearance）。设置落在
+    POST 保存（补丁语义）：客户端只提交改动过的键，未提交的键保持原值；未知键与非法值
+    会被丢弃（见 webserver/base/appearance.py 的 normalize_appearance）。设置落在
     Reader.extra["appearance"]，由 GET /api/user/info 的 user.appearance 下发前端。
+    客户端提交完整对象也合法（幂等）。
+
+    DELETE 清空：删掉账号里的外观设置，回到「从未保存过」的状态 —— 前端随之重新采用
+    「本地缓存 → 站点默认 sys.theme → 内置默认」的回退顺序。外观面板的「重置为默认」
+    走这里，而不是 POST 一份内置默认值：否则会把站点默认永久顶掉（站点默认只在
+    「本机没有外观缓存」时才生效）。
 
     刻意不复用 /api/user/update：那个接口末尾无条件 add_msg("设置已保存")，
     而外观面板是「点一下色块就存」，走它会往消息中心刷屏。
@@ -181,9 +187,13 @@ class UserAppearance(BaseHandler):
                 "msg": _("外观设置版本过新，请刷新页面后重试"),
             }
 
-        if not user.extra:
+        if not isinstance(user.extra, dict):
+            # Reader.extra 是 JSON 列，手工改库 / 历史脏数据可能是非 dict 值（None/字符串/数组）；
+            # 一律换成干净的 dict，避免 .get() 抛 AttributeError 把 traceback 回吐给客户端。
             user.extra = {}
-        base = user.extra.get(APPEARANCE_KEY) or {}
+        # 用 normalize_appearance 清洗基线，而不是直接把库里的原始值当 base：
+        # 脏数据（非 dict、非法值、历史遗留的未知键）在这里一并被降级/丢弃。
+        base = normalize_appearance(user.extra.get(APPEARANCE_KEY))[0]
         clean, dropped = normalize_appearance(data, base=base)
         if is_appearance_too_large(clean):
             return {"err": "appearance.too_large", "msg": _("外观设置过大")}
@@ -195,6 +205,23 @@ class UserAppearance(BaseHandler):
             logging.error("save appearance failed: %s", traceback.format_exc())
             return {"err": "db.error", "msg": _("数据库操作异常，请重试")}
         return {"err": "ok", "appearance": clean, "dropped": dropped}
+
+    @js
+    @auth
+    def delete(self):
+        user = self.current_user
+        if isinstance(user.extra, dict) and APPEARANCE_KEY in user.extra:
+            # 必须用 del 而不是 dict.pop()：pop 走的是 dict 的 C 实现，
+            # 不会触发 MutableDict.__delitem__ 的 changed()，改动不会被 flush 到库里。
+            del user.extra[APPEARANCE_KEY]
+            try:
+                user.save()
+            except Exception:
+                logging.error(
+                    "clear appearance failed: %s", traceback.format_exc()
+                )
+                return {"err": "db.error", "msg": _("数据库操作异常，请重试")}
+        return {"err": "ok", "appearance": {}}
 
 
 class SignUp(BaseHandler):

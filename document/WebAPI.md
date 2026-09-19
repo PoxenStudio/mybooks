@@ -274,17 +274,18 @@ user.appearance为外观设置（顶栏品牌色、侧栏图标配色、深浅�
 }
 ```
 
-### 1.9 保存外观设置
+### 1.9 保存 / 清空外观设置
 
 - **路径**：`/api/user/appearance`
-- **方法**：POST
+- **方法**：POST（保存）、DELETE（清空）
 - **认证**：需要登录
 - **说明**：补丁语义 —— 只提交改动过的键，未提交的键保持原值；未知键与非法值一律丢弃（不会用空值覆盖已有的合法值）。
+  提交**完整对象**同样合法（幂等），前端就是把当前完整设置整份提交的。
   设置落在 `Reader.extra["appearance"]`，由 `/api/user/info` 的 `user.appearance`（见 1.5）下发前端。
   客户端声明的 `v` 比服务端新时返回 `appearance.version.unsupported`：老服务端不认识新客户端的键、会静默丢弃，宁可让客户端提示用户刷新。
 - **参数**（JSON）：
   - `darkMode` (boolean, 可选): 深浅色主题
-  - `accent` (string, 可选): 主色，`#RRGGBB`
+  - `accent` (string, 可选): 主色，`#RRGGBB`（不接受 `null`：主色有内置默认值，前端也只接受合法 hex）
   - `brandColor` (string|null, 可选): 顶栏品牌色，`#RRGGBB`；传 `null` 表示回到内置默认深蓝
   - `radius` (string, 可选): 圆角，`0px` / `4px` / `8px` / `16px`
   - `background` (string, 可选): 背景图案，见下方枚举
@@ -316,7 +317,12 @@ user.appearance为外观设置（顶栏品牌色、侧栏图标配色、深浅�
   "dropped": []
 }
 ```
-- **错误码**：`params.invalid`（请求体不是合法 JSON 对象）、`appearance.version.unsupported`、`appearance.too_large`。
+- **清空（DELETE）**：删掉该账号已保存的外观设置，响应 `{"err": "ok", "appearance": {}}`。
+  用于外观面板的「重置为默认」—— 语义是回到「从未保存过」，前端随即重新采用
+  「本地缓存 → 站点默认 `sys.theme` → 内置默认」的回退顺序。
+  刻意不做成「提交一份内置默认值」：那会把管理员设置的站点默认永久顶掉（站点默认只在本机没有
+  外观缓存时才生效）。
+- **错误码**：`params.invalid`（请求体不是合法 JSON 对象）、`appearance.version.unsupported`、`appearance.too_large`、`db.error`。
 - `background` 枚举：`default`、`cross`、`left-diagonal`、`right-diagonal`、`aurora`、`horizon`、`glow`、`mesh`、`repeat-image-1` ~ `repeat-image-4`。
 
 ### 1.10 发送激活邮件

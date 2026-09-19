@@ -11,11 +11,18 @@
 import { applyAppearance, writeCache } from '~/utils/appearance';
 
 // 会改变渲染结果的 mutation（需要重算 CSS 变量与 Vuetify 主题）；
-// setSyncState / markSynced 之类的纯状态变更不在此列
-const APPLY_MUTATIONS = ['appearance/setAppearance', 'appearance/replaceAppearance', 'appearance/adoptSiteTheme'];
+// setSyncState / markSynced / setSiteTheme 之类的纯状态变更不在此列
+const APPLY_MUTATIONS = [
+    'appearance/setAppearance',
+    'appearance/replaceAppearance',
+    'appearance/adoptSiteTheme',
+    // 重置为默认：要重新落地 CSS 变量，但**不能**写缓存（见下面的 CACHE_MUTATIONS）
+    'appearance/resetAppearance',
+];
 // 需要写 localStorage 缓存的 mutation：缓存的语义是「用户自己保存过的外观」，
-// 站点默认（adoptSiteTheme）不算 —— 否则用户会被永久钉在当时的站点默认上，
-// 管理员之后改 site_theme 就再也跟不动了。
+// 站点默认（adoptSiteTheme）与重置（resetAppearance）都不算 —— 前者会让用户被永久钉在
+// 当时的站点默认上、管理员之后改 site_theme 就再也跟不动了；后者的目的正是**清掉**缓存、
+// 让「站点默认」重新生效。
 const CACHE_MUTATIONS = ['appearance/setAppearance', 'appearance/replaceAppearance'];
 
 export default ({ store, app }) => {

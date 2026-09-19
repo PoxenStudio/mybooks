@@ -98,6 +98,19 @@ def _clean_color(value):
     return INVALID
 
 
+def _clean_color_required(value):
+    """与 _clean_color 相同，但不接受 null/空串。
+
+    accent（主色）没有「回到默认」这个语义 —— 它有写死的内置默认值，前端 sanitize()
+    也只接受合法 hex。这里如果沿用 _clean_color，一个 {"accent": null} 就能让
+    user.appearance 变成「非空」，而前端正是用「非空」判断这个账号是否保存过外观，
+    于是会拿内置默认（深色）去覆盖站点默认主题。
+    """
+    if isinstance(value, str) and HEX_COLOR_PATTERN.match(value):
+        return value.lower()
+    return INVALID
+
+
 def _enum_validator(allowed):
     def clean(value):
         if isinstance(value, str) and value in allowed:
@@ -110,7 +123,7 @@ def _enum_validator(allowed):
 _VALIDATORS = {
     "darkMode": _clean_bool,
     "brandColor": _clean_color,
-    "accent": _clean_color,
+    "accent": _clean_color_required,
     "radius": _enum_validator(ALLOWED_RADII),
     "background": _enum_validator(ALLOWED_BACKGROUNDS),
     "sidebarIconMode": _enum_validator(ALLOWED_SIDEBAR_ICON_MODES),
@@ -123,6 +136,8 @@ def normalize_appearance(raw, base=None):
 
     :param raw:  客户端上传的补丁；读取历史值时传已落库的 dict。
     :param base: 合并基线（已保存的设置）。None/{} 表示「只保留 raw 里合法的键」。
+                 非 dict（手工改库 / 早期版本残留的脏值）按 {} 处理，不抛异常 ——
+                 与 read_appearance() 的宽容策略保持一致。
     :return: ``(clean, dropped)`` —— ``clean`` 是可直接落库的 dict，
              ``dropped`` 是被丢弃的键名列表（未知键或非法值）。
 
@@ -131,6 +146,11 @@ def normalize_appearance(raw, base=None):
     * 版本号 ``v`` 由服务端统一盖章，不接受客户端指定。
     * 结果为空 dict 表示「用户没有保存过任何外观设置」。
     """
+    if not isinstance(base, dict):
+        # 注意：base 是上一轮 normalize 的结果，正常一定是 dict；
+        # dict("junk") / dict(123) 会直接抛 ValueError/TypeError，
+        # 而 /api/user/appearance 的写入路径正是把库里的原始值当 base 传进来的。
+        base = None
     clean = dict(base or {})
     if raw is None:
         return clean, []

@@ -222,6 +222,8 @@
   "搜索结果": "Search results",
   "搜索": "Search",
   "数据库操作异常，请重试": "Database operation failed. Please try again",
+  "外观设置版本过新，请刷新页面后重试": "Appearance settings are from a newer version. Please refresh the page and try again",
+  "外观设置过大": "Appearance settings are too large",
   "数据库错误：%s": "Database error: %s",
   "文件hash不能为空": "File hash cannot be empty",
   "文件上传处理失败：%s": "Failed to process file upload: %s",

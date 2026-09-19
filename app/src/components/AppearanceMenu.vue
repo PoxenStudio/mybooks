@@ -29,9 +29,15 @@
                             v-for="color in accentColors"
                             :key="color.value"
                             class="color-swatch"
+                            role="button"
+                            tabindex="0"
+                            :aria-label="color.value"
+                            :aria-pressed="isSameColor(settings.accent, color.value) ? 'true' : 'false'"
                             :style="{ backgroundColor: color.value }"
                             :class="{ 'selected-swatch': isSameColor(settings.accent, color.value) }"
                             @click="update({ accent: color.value })"
+                            @keydown.enter.prevent="update({ accent: color.value })"
+                            @keydown.space.prevent="update({ accent: color.value })"
                         >
                             <v-icon v-if="isSameColor(settings.accent, color.value)" small color="white" style="text-shadow: 0 1px 2px rgba(0,0,0,0.5);">mdi-check</v-icon>
                         </div>
@@ -46,10 +52,16 @@
                             v-for="color in brandColors"
                             :key="color.value"
                             class="color-swatch"
+                            role="button"
+                            tabindex="0"
+                            :aria-label="color.label ? $t(color.label) : color.value"
+                            :aria-pressed="isBrandColorSelected(color.value) ? 'true' : 'false'"
                             :style="{ backgroundColor: color.value }"
                             :class="{ 'selected-swatch': isBrandColorSelected(color.value) }"
                             :title="color.label ? $t(color.label) : color.value"
                             @click="update({ brandColor: color.value })"
+                            @keydown.enter.prevent="update({ brandColor: color.value })"
+                            @keydown.space.prevent="update({ brandColor: color.value })"
                         >
                             <v-icon v-if="isBrandColorSelected(color.value)" small color="white" style="text-shadow: 0 1px 2px rgba(0,0,0,0.5);">mdi-check</v-icon>
                         </div>
@@ -249,7 +261,15 @@ export default {
         },
     },
     beforeDestroy() {
-        if (this.syncTimer) clearTimeout(this.syncTimer);
+        // 防抖窗口内被销毁（例如刚改完就跳到 /login、/logout、/welcome：这些页面用的是别的
+        // layout，AppHeader 会被卸载）时，直接丢掉定时器会让最后一次改动永远不上传，
+        // 而且 syncState 会永远停在 'saving' —— canUpload 恒为 false，「保存到账号」按钮
+        // 从此不会再出现。所以这里改为立即补发一次，而不是清掉了事。
+        if (this.syncTimer) {
+            clearTimeout(this.syncTimer);
+            this.syncTimer = null;
+            this.pushToServer();
+        }
     },
     methods: {
         /** 颜色比较统一按小写：sanitize 会把落库的颜色转小写，预设色板里是大写 */
@@ -273,19 +293,21 @@ export default {
             this.$store.commit('appearance/setSyncState', 'saving');
             this.syncTimer = setTimeout(this.pushToServer, SAVE_DEBOUNCE_MS);
         },
-        /** 把当前完整设置写到账号（POST /api/user/appearance，见 webserver/handlers/user.py） */
-        pushToServer() {
-            if (this.syncTimer) clearTimeout(this.syncTimer);
+        /**
+         * 所有外观请求的统一出口：乐观置为「同步中」，并丢弃过期响应（只有最后一次请求算数）。
+         * 成功分支交给调用方，失败/未登录的分支在这里统一收口。
+         */
+        send(request, onSuccess) {
+            if (this.syncTimer) {
+                clearTimeout(this.syncTimer);
+                this.syncTimer = null;
+            }
             const seq = ++this.syncSeq;
             this.$store.commit('appearance/setSyncState', 'saving');
-            return this.$backend('/user/appearance', {
-                method: 'POST',
-                body: JSON.stringify(this.$store.getters['appearance/settings']),
-            }).then((rsp) => {
+            return request().then((rsp) => {
                 if (seq !== this.syncSeq) return;
                 if (rsp && rsp.err === 'ok') {
-                    this.$store.commit('appearance/markSynced', true);
-                    this.$store.commit('appearance/setSyncState', 'ok');
+                    onSuccess(rsp);
                 } else if (rsp && rsp.err === 'user.need_login') {
                     // $backend 已经跳转登录页了，这里只把状态退回「仅本机」
                     this.$store.commit('appearance/markSynced', false);
@@ -305,9 +327,50 @@ export default {
                 this.$store.commit('appearance/setSyncState', 'failed');
             });
         },
+        /** 把当前完整设置写到账号（POST /api/user/appearance，见 webserver/handlers/user.py） */
+        pushToServer() {
+            return this.send(
+                () => this.$backend('/user/appearance', {
+                    method: 'POST',
+                    body: JSON.stringify(this.$store.getters['appearance/settings']),
+                }),
+                (rsp) => {
+                    // 服务端会把归一化后的完整设置回传（它可能丢掉了某些键）。以它为准，
+                    // 客户端与服务端就不会长期停在两份不同的值上（白名单漂移时尤其明显）。
+                    if (rsp.appearance && typeof rsp.appearance === 'object' && !Array.isArray(rsp.appearance)) {
+                        this.$store.commit('appearance/replaceAppearance', rsp.appearance);
+                    }
+                    this.$store.commit('appearance/markSynced', true);
+                    this.$store.commit('appearance/setSyncState', 'ok');
+                },
+            );
+        },
+        /** 删掉账号里的外观设置（DELETE /api/user/appearance），让站点默认重新生效 */
+        clearOnServer() {
+            return this.send(
+                () => this.$backend('/user/appearance', { method: 'DELETE' }),
+                () => {
+                    // 账号里已经没有外观设置了 —— 状态回到「尚未上传」，
+                    // 面板会重新显示「保存到账号」，用户可以再决定要不要存一套。
+                    this.$store.commit('appearance/markSynced', false);
+                    this.$store.commit('appearance/setSyncState', 'unsynced');
+                },
+            );
+        },
+        /**
+         * 「重置为默认」= 回到「从未保存过外观」：本机清缓存 + 账号侧删掉设置。
+         *
+         * 刻意**不是**「提交一份内置默认值」：那样会把站点默认（sys.theme，管理员全站设置）
+         * 永久顶掉 —— 站点默认只在本机没有外观缓存时生效，而提交会把缓存和账号都填满。
+         * 副作用是浅色站点上点一下重置就整站翻成深色，且再也跟不动管理员后来的调整。
+         */
         resetAll() {
             this.$store.dispatch('appearance/resetToDefault');
-            this.queueSync();
+            if (this.isLogin) {
+                this.clearOnServer();
+            } else {
+                this.$store.commit('appearance/setSyncState', 'local');
+            }
         },
     },
 };
@@ -331,6 +394,11 @@ export default {
 }
 .color-swatch:hover {
     transform: scale(1.1);
+}
+/* 色块是 role=button 的 div（与既有 accent 色块一致），键盘聚焦时需要有可见的焦点环 */
+.color-swatch:focus-visible {
+    outline: 2px solid var(--primary-color, #1976D2);
+    outline-offset: 2px;
 }
 .selected-swatch {
     box-shadow: 0 0 0 2px var(--v-background-base, #fff), 0 0 0 4px currentColor;

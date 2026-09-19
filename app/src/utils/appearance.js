@@ -169,6 +169,18 @@ export function navForeground(color) {
     return isLightBackground(color) ? 'rgba(0, 0, 0, 0.87)' : 'rgba(255, 255, 255, 0.87)';
 }
 
+/**
+ * 站点默认深浅色（sys.theme / localStorage['site_theme']）→ 布尔。
+ *
+ * 判据是「不等于 'light' 就算深色」，即站点没设置过时回落到内置默认（深色）。
+ * app/src/app.html 的首帧内联脚本、AppHeader / login / welcome / error 全部走这一条，
+ * 之前有的用 `!== 'light'`、有的用 `=== 'dark'`，首次访问（site_theme 还没落盘）时
+ * 两者结论相反，会白白闪一下。
+ */
+export function siteThemeIsDark(theme) {
+    return theme !== 'light';
+}
+
 export function readCache() {
     if (typeof localStorage === 'undefined') return null;
     try {
@@ -188,6 +200,22 @@ export function writeCache(settings) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(settingsOf(settings)));
     } catch (e) {
         // 隐私模式等写不进去：外观本次仍然生效，只是刷新后回到默认
+    }
+}
+
+/**
+ * 删掉本机缓存，使这个浏览器回到「从未保存过外观」的状态。
+ *
+ * 缓存的有无本身就是语义的一部分：AppHeader / login / welcome / error 都只在本机
+ * **没有**缓存时才采用站点默认 sys.theme。「重置为默认」必须真正删掉它，否则用户会被
+ * 永久钉死在重置那一刻的内置默认上，管理员之后改站点默认也跟不动。
+ */
+export function removeCache() {
+    if (typeof localStorage === 'undefined') return;
+    try {
+        localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+        // 与 writeCache 同理：删不掉就当作没缓存过，不影响本次渲染
     }
 }
 

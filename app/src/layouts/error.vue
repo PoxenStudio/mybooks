@@ -28,9 +28,10 @@ export default {
   },
   created() {
     //this.$store.commit("puremode", true);
-    // 只有从未保存过外观的用户才按站点默认走；否则会把账号级/本地保存的深浅色顶掉
+    // 只有从未保存过外观的用户才按站点默认走；否则会把账号级/本地保存的深浅色顶掉。
+    // 走 store 的 mutation（而不是直接改 $vuetify.theme.dark），避免出现第二个真值源。
     if (process.client && !localStorage.getItem("appearance_settings")) {
-      this.$vuetify.theme.dark = localStorage.getItem("site_theme") === "dark";
+      this.$store.commit("appearance/adoptSiteTheme", localStorage.getItem("site_theme"));
     }
   },
 
