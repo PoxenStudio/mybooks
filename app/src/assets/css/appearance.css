@@ -12,6 +12,12 @@
     border-radius: var(--app-radius, 4px) !important;
 }
 
+/* 顶栏固定直角，不随圆角设置变化（选择器权重高于上面的 .v-sheet 规则） */
+.v-application .v-sheet.v-app-bar,
+.v-application .v-sheet.v-toolbar.v-app-bar {
+    border-radius: 0 !important;
+}
+
 .v-application .v-text-field--outlined fieldset {
     border-radius: var(--app-radius, 4px) !important;
 }
