@@ -578,7 +578,7 @@
     "social_network_login": "Login via Social Account",
     "friend_links": "Links",
     "book_tags": "Book Category",
-    "book_tags_description": "Configure the preset categories on the 'Groups' page. When adding a book, if the book title or author name appears in the following categories, the corresponding tag will be automatically added.",
+    "book_tags_description": "Configure the preset categories on the 'Groups' page. Drag to adjust the showing order in Tags",
     "book_nav": "Category Navigation",
     "book_nav_duplicate_error": "Duplicate category names: {names}. Please fix them before saving.",
     "email_service": "EMail",

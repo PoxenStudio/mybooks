@@ -766,7 +766,7 @@
     "smtp_encryption": "SMTP 安全性",
     "test_email": "測試郵件",
     "book_tags": "書籍分類",
-    "book_tags_description": "設定自訂書籍分類，每行一個分類。或以 \"分類=標籤\" 的形式設定分類對應的標籤。例如：\n分類=標籤 1/標籤 2，對應分類的標籤會在標籤分類中分組顯示。",
+    "book_tags_description": "以標籤設定自訂書籍分類，對應分類的標籤會在標籤分類中分組顯示，拖動可以調整在標簽中的顯示順序。",
     "book_nav": "分類導覽",
     "book_nav_duplicate_error": "分類名稱重複：{names}，請修改後再儲存",
     "friend_links": "友情連結",

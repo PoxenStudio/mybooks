@@ -153,89 +153,11 @@
                   </template>
                 </v-select>
               </template>
-              <div
+              <book-nav-editor
                 v-else-if="f.type === 'book_nav'"
                 :key="f.key + '-book_nav'"
-              >
-                <v-alert v-if="bookNavDuplicateNames.length" type="error" dense text>
-                  {{
-                    $t("settings.book_nav_duplicate_error", {
-                      names: bookNavDuplicateNames.join("、"),
-                    })
-                  }}
-                </v-alert>
-                <v-card
-                  outlined
-                  class="mb-2 book-nav-card"
-                  v-for="(cat, idx) in bookNavList"
-                  :key="'book-nav-' + idx"
-                >
-                  <v-card-title class="py-1 pr-2">
-                    <v-text-field
-                      v-model="cat.name"
-                      solo
-                      flat
-                      dense
-                      hide-details
-                      class="book-nav-name-field"
-                      :error="isBookNavNameDuplicate(cat.name)"
-                      :placeholder="$t('settings.name')"
-                      @focus="cat.expanded = true"
-                    ></v-text-field>
-                    <v-spacer></v-spacer>
-                    <v-btn icon small @click="removeBookNavCategory(idx)">
-                      <v-icon small>mdi-delete</v-icon>
-                    </v-btn>
-                    <v-btn icon @click="cat.expanded = !cat.expanded">
-                      <v-icon>{{
-                        cat.expanded ? "mdi-chevron-up" : "mdi-chevron-down"
-                      }}</v-icon>
-                    </v-btn>
-                  </v-card-title>
-                  <v-expand-transition>
-                    <v-card-text v-show="cat.expanded" class="pt-0">
-                      <v-chip
-                        v-for="(tag, tIdx) in cat.tags"
-                        :key="tag + '-' + tIdx"
-                        class="ma-1"
-                        color="#003153"
-                        style="color: #fff"
-                        close
-                        close-icon="mdi-close"
-                        @click:close="removeBookNavTag(idx, tIdx)"
-                      >
-                        {{ tag }}
-                      </v-chip>
-                      <v-chip
-                        v-if="!cat.addingTag"
-                        class="ma-1"
-                        color="#003153"
-                        style="color: #fff; cursor: pointer"
-                        @click="startAddBookNavTag(idx)"
-                      >
-                        <v-icon small color="white">mdi-plus</v-icon>
-                      </v-chip>
-                      <v-text-field
-                        v-else
-                        v-model="cat.newTag"
-                        dense
-                        hide-details
-                        autofocus
-                        class="book-nav-tag-input ma-1"
-                        @keyup.enter="confirmAddBookNavTag(idx)"
-                        @blur="confirmAddBookNavTag(idx)"
-                      ></v-text-field>
-                    </v-card-text>
-                  </v-expand-transition>
-                </v-card>
-                <v-row>
-                  <v-col align="center">
-                    <v-btn color="primary" @click="addBookNavCategory"
-                      ><v-icon>mdi-plus</v-icon>{{ $t("settings.add") }}</v-btn
-                    >
-                  </v-col>
-                </v-row>
-              </div>
+                v-model="bookNavList"
+              ></book-nav-editor>
               <v-text-field
                 v-else-if="f.type === 'number'"
                 v-model.number="settings[f.key]"
@@ -895,12 +817,14 @@
 <script>
 import SSLManager from "~/components/SSLManager.vue";
 import ReadingRangeDialog from "~/components/ReadingRangeDialog.vue";
+import BookNavEditor, { createCategory } from "~/components/BookNavEditor.vue";
 import { languageOptions } from "~/utils/languageCodes";
 
 export default {
   components: {
     "ssl-manager": SSLManager,
     "reading-range-dialog": ReadingRangeDialog,
+    "book-nav-editor": BookNavEditor,
   },
   created() {
     // 为body添加settings-page类名，应用背景图样式
@@ -1825,13 +1749,7 @@ export default {
             .map((t) => t.trim())
             .filter((t) => t !== "");
         }
-        list.push({
-          name: name.trim(),
-          tags,
-          expanded: false,
-          addingTag: false,
-          newTag: "",
-        });
+        list.push(createCategory(name.trim(), tags));
       });
       return list;
     },
@@ -1840,40 +1758,6 @@ export default {
         .filter((cat) => (cat.name || "").trim() !== "")
         .map((cat) => `${cat.name.trim()}=${(cat.tags || []).join("/")}`)
         .join("\n");
-    },
-    addBookNavCategory() {
-      this.bookNavList.push({
-        name: "",
-        tags: [],
-        expanded: true,
-        addingTag: false,
-        newTag: "",
-      });
-    },
-    removeBookNavCategory(idx) {
-      this.bookNavList.splice(idx, 1);
-    },
-    removeBookNavTag(catIdx, tagIdx) {
-      this.bookNavList[catIdx].tags.splice(tagIdx, 1);
-    },
-    startAddBookNavTag(catIdx) {
-      const cat = this.bookNavList[catIdx];
-      cat.newTag = "";
-      cat.addingTag = true;
-    },
-    confirmAddBookNavTag(catIdx) {
-      const cat = this.bookNavList[catIdx];
-      const tag = (cat.newTag || "").trim();
-      if (tag && !cat.tags.includes(tag)) {
-        cat.tags.push(tag);
-      }
-      cat.newTag = "";
-      cat.addingTag = false;
-    },
-    isBookNavNameDuplicate(name) {
-      const trimmed = (name || "").trim();
-      if (!trimmed) return false;
-      return this.bookNavDuplicateNames.includes(trimmed);
     },
     saveSettings: function () {
       if (this.bookNavDuplicateNames.length > 0) {
@@ -2192,23 +2076,6 @@ export default {
 .settings-hint-btn .v-btn__content,
 .settings-hint-btn .v-btn__content * {
   color: #ffffff !important;
-}
-
-.book-nav-card .book-nav-name-field {
-  font-size: 1.1rem;
-  font-weight: 500;
-}
-
-.book-nav-card .book-nav-name-field .v-input__slot {
-  padding: 0 !important;
-  box-shadow: none !important;
-  background: transparent !important;
-}
-
-.book-nav-tag-input {
-  display: inline-block;
-  width: 120px;
-  vertical-align: middle;
 }
 
 .thanks-heart-icon {
