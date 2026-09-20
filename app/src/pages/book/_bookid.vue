@@ -970,7 +970,7 @@
         outlined
         dense
         show-size
-        accept="image/png,image/jpeg"
+        accept="image/png,image/jpeg,image/webp"
         prepend-icon="mdi-file-image"
         :error-messages="cover_error"
       ></v-file-input>
@@ -3017,7 +3017,7 @@ export default {
             return;
           }
           const type = file.type;
-          if (type !== 'image/jpeg' && type !== 'image/png') {
+          if (type !== 'image/jpeg' && type !== 'image/png' && type !== 'image/webp') {
             this.cover_error = this.$t('book.coverTypeInvalid');
             return;
           }

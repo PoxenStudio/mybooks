@@ -1075,6 +1075,14 @@ class BookCover(BaseHandler):
         ext = os.path.splitext(fileinfo['filename'])[1].lower().lstrip('.')
         if not ext and 'content_type' in fileinfo:
             ext = fileinfo['content_type'].split('/')[-1]
+        if ext == 'webp' or img_data[:4] == b'RIFF' and img_data[8:12] == b'WEBP':
+            # Calibre/Qt 不一定带 webp 插件，统一转成 jpeg 再保存
+            from calibre.utils.img import image_from_data, image_to_data
+            try:
+                img_data = image_to_data(image_from_data(img_data), fmt='jpeg')
+            except Exception:
+                return {"err": "params.cover.invalid", "msg": _("封面图片格式无效")}
+            ext = 'jpeg'
         mi.cover_data = (ext or None, img_data)
         mi.timestamp = nowf()
 
