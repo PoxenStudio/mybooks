@@ -420,6 +420,19 @@ export default {
     border-radius: 50%;
     background: none;
     cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+}
+.custom-color-field input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+.custom-color-field input[type="color"]::-webkit-color-swatch {
+    border: none;
+    border-radius: 50%;
+}
+.custom-color-field input[type="color"]::-moz-color-swatch {
+    border: none;
+    border-radius: 50%;
 }
 
 .bg-name-grid {
