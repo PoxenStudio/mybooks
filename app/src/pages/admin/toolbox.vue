@@ -135,7 +135,7 @@
       </v-row>
       <v-row v-else>
         <v-col v-for="entry in storeTools" :key="entry.tool_id" cols="12" md="4">
-          <v-card class="pa-2" rounded="xl" outlined style="position: relative;">
+          <v-card class="pa-2 fill-height" rounded="xl" outlined style="position: relative;">
             <v-icon
               v-if="entry.favorite"
               class="store-favorite-badge"
@@ -155,9 +155,22 @@
                 </v-avatar>
                 <div class="text-subtitle-1 font-weight-bold">{{ entry.name }}</div>
               </div>
-              <div class="text-body-2 grey--text text--darken-1 mb-2">{{ entry.description }}</div>
+              <div class="tool-desc text-body-2 grey--text text--darken-1 mb-2">{{ entry.description }}</div>
               <div class="d-flex align-center justify-space-between">
-                <v-chip x-small outlined>v{{ entry.latest_revision }}</v-chip>
+                <div class="d-flex align-center">
+                  <v-btn
+                    v-if="entry.repo_url"
+                    icon
+                    x-small
+                    class="ml-1"
+                    :href="entry.repo_url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <v-icon small>mdi-link</v-icon>
+                  </v-btn>
+                  <v-chip x-small outlined>v{{ entry.latest_revision }}</v-chip>
+                </div>
                 <v-btn
                   x-small
                   color="primary"
