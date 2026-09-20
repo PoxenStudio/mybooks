@@ -21,7 +21,7 @@
   |---|---|---|
   | 中性操作 | `primary` | 常规功能对话框（主题色，footer 文字自动白，不用管） |
   | 新建/新增 | `green` + `confirm-dark` | 添加实体书、添加设备等（`green` 是 Material 调色板色，不是主题色，footer 按钮必须补 `confirm-dark`，见下方说明） |
-  | 文件类操作 | `blue darken-4` + `confirm-dark` | 对话框专用，视觉上接近站点品牌深蓝 `#003153`；app bar/布局等站点品牌元素仍用原始 `#003153`，不受影响。`blue darken-4` 同样不是主题色，footer 必须补 `confirm-dark` |
+  | 文件类操作 | `blue darken-4` + `confirm-dark` | 对话框专用，视觉上接近站点品牌深蓝 `#003153`；app bar/布局等站点品牌元素走 `--app-nav-bg`（默认 `#003153`，可由外观设置改成任意品牌色），与对话框这里的固定色互不影响。`blue darken-4` 同样不是主题色，footer 必须补 `confirm-dark` |
   | 提示/中性确认 | `primary` 或 `info` | 无风险但需要用户确认（都是主题色，footer 文字自动白，不用管） |
   | 有损/谨慎确认 | `orange` + `confirm-dark` | 会修改/清理数据但可恢复或影响有限（`orange` 不是主题色） |
   | 破坏性确认 | `deep-orange` + `confirm-dark` | 删除等不可逆操作（不用 `error`，容易被误读成"出错了"；`deep-orange` 也不是主题色） |
