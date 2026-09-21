@@ -697,7 +697,7 @@
                                         </v-autocomplete>
                                     </v-card>
                                 </v-menu>
-                                <v-menu offset-y :close-on-content-click="false" v-model="folderMenu" @input="onFolderMenuToggle">
+                                <v-menu v-if="folderEnabled" offset-y :close-on-content-click="false" v-model="folderMenu" @input="onFolderMenuToggle">
                                     <template v-slot:activator="{ on, attrs }">
                                         <v-chip rounded smallF color="amber darken-3" class="black--text" v-bind="attrs" v-on="on">
                                             <v-icon>mdi-folder-outline</v-icon>
@@ -1434,6 +1434,9 @@ export default {
         BookListQuickAddMenu,
     },
     computed: {
+        folderEnabled() {
+            return !!this.$store.state.sys?.allow?.folder;
+        },
         showUserInfo() {
             return this.$store.state.showUserInfo === true;
         },

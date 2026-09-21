@@ -70,7 +70,7 @@
                                 </v-list-item-icon>
                                 <v-list-item-title>{{ $t('admin.books.aiUpdate') }}</v-list-item-title>
                             </v-list-item>
-                            <v-list-item @click="showFolderBatchDialog" :disabled="books_selected.length === 0">
+                            <v-list-item v-if="allowFolder" @click="showFolderBatchDialog" :disabled="books_selected.length === 0">
                                 <v-list-item-icon>
                                     <v-icon>mdi-folder-outline</v-icon>
                                 </v-list-item-icon>
@@ -737,6 +737,9 @@ export default {
         },
     },
     computed: {
+        allowFolder() {
+            return !!this.$store.state.sys?.allow?.folder;
+        },
         allowPhysicalBooks() {
             return !!(this.$store.state.sys && this.$store.state.sys.allow && this.$store.state.sys.allow.physical_books);
         },
@@ -810,7 +813,7 @@ export default {
                 { text: this.$t('admin.books.header.title'), sortable: true, value: "title" },
                 { text: this.$t('admin.books.header.author'), sortable: true, value: "author", width: "100px" },
                 { text: this.$t('admin.books.header.category'), sortable: false, value: "category", width: "80px" },
-                { text: this.$t('folder.header'), sortable: false, value: "folder", width: "100px" },
+                ...(this.allowFolder ? [{ text: this.$t('folder.header'), sortable: false, value: "folder", width: "100px" }] : []),
                 { text: this.$t('admin.books.header.language'), sortable: false, value: "language", width: "60px" },
                 { text: this.$t('admin.books.header.series'), sortable: false, value: "series", width: "80px" },
                 { text: this.$t('admin.books.header.rating'), sortable: false, value: "rating", width: "60px" },

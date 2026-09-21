@@ -1102,6 +1102,12 @@ export default {
               }
             ]
           },
+          {
+            icon: "mdi-folder-multiple-outline",
+            key: "ENABLE_FOLDER_BROWSE",
+            label: "settings.enable_folder_browse",
+            type: "checkbox",
+          },
         ]
       },
       {

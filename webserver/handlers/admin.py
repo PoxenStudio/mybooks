@@ -542,6 +542,7 @@ class AdminSettings(BaseHandler):
             "site_icon",
             "ENABLE_BOOKBARN",
             "ENABLE_PHYSICAL_BOOKS",
+            "ENABLE_FOLDER_BROWSE",
             "ENABLE_BOOKS_TYPE_CONVERT_DIRECT",
             "BOOKBARN_COLLECTION_HOUR",
             "BOOKBARN_TOKEN",

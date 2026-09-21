@@ -69,6 +69,7 @@ settings = {
     "USE_BOOKBARN_PROXY": False,
     "BOOK2AUDIO_PROXY": "",
     "ENABLE_PHYSICAL_BOOKS": True,
+    "ENABLE_FOLDER_BROWSE": False,
     "ALLOW_GUEST_UPLOAD": False,
     "AI_ENABLED": False,
     "AI_MODEL": "deepseek-chat",

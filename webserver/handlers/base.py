@@ -1286,6 +1286,7 @@ class BaseHandler(web.RequestHandler):
                 "push": CONF["ALLOW_GUEST_PUSH"],
                 "read": CONF["ALLOW_GUEST_READ"],
                 "physical_books": CONF.get("ENABLE_PHYSICAL_BOOKS", True),
+                "folder": CONF.get("ENABLE_FOLDER_BROWSE", False),
                 "download_quota": CONF.get("ENABLE_DOWNLOAD_QUOTA", False),
                 "upload": CONF.get("ALLOW_GUEST_UPLOAD", False),
                 "sync": CONF.get("ENABLE_DATA_SYNC", False),
