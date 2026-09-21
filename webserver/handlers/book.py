@@ -48,7 +48,7 @@ from webserver.services.reading_stats_service import ManualReadingService, Readi
 from webserver.services.scan_service import ScanService, SCAN_EXT
 from webserver.services.download_quota_service import DownloadQuotaService
 from webserver.services.book_review_service import BookReviewService
-from webserver.plugins.meta import douban, youshu, douban_v2
+from webserver.plugins.meta import douban, douban_v2
 from webserver.plugins.meta.bookbarn_tags import BookBarnTags
 from webserver.plugins.parser.txt import get_content_encoding
 from webserver.handlers.audio import AudioUtils
@@ -973,7 +973,7 @@ class BookRefer(BaseHandler):
             return {"err": "params.conflict", "msg": _("参数冲突")}
 
         refer_mi = None
-        if provider_key in (douban.KEY, youshu.KEY):
+        if provider_key == douban.KEY:
             try:
                 refer_mi = self.plugin_get_book_meta(provider_key, provider_value, mi)
                 if not refer_mi:

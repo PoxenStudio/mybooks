@@ -16,14 +16,13 @@ from webserver.constants import META_SELECTED_SOURCES
 from webserver.plugins.meta.douban import DoubanMetaPlugin, has_proper_book
 from webserver.plugins.meta.douban_v2 import DoubanV2MetaPlugin
 from webserver.plugins.meta.baike import BaikeMetaPlugin
-from webserver.plugins.meta.youshu import YoushuMetaPlugin
 from webserver.plugins.meta.calibre import CalibreMetaPlugin
 from webserver.plugins.meta.xhsd import XhsdMetaPlugin
 from webserver.plugins.meta.neodb import NeodbMetaPlugin
 from webserver.plugins.meta.ujxsw import UjxswMetaPlugin
 
 CONF = loader.get_settings()
-_PLUGIN_CLASSES = [DoubanMetaPlugin, BaikeMetaPlugin, CalibreMetaPlugin, YoushuMetaPlugin, DoubanV2MetaPlugin, NeodbMetaPlugin, UjxswMetaPlugin]
+_PLUGIN_CLASSES = [DoubanMetaPlugin, DoubanV2MetaPlugin, BaikeMetaPlugin, CalibreMetaPlugin, NeodbMetaPlugin, UjxswMetaPlugin]
 _PROVIDER_PLUGIN_CLASSES = _PLUGIN_CLASSES + [XhsdMetaPlugin]  # XhsdMetaPlugin 不参与聚合搜索但需要 provider 路由
 
 
