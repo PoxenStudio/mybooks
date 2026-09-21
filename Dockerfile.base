@@ -21,7 +21,7 @@ RUN set -ex; \
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
-        gettext gosu procps nginx calibre calibre-bin supervisor \
+        gettext gosu procps logrotate nginx calibre calibre-bin supervisor \
         fonts-lato fonts-wqy-microhei ffmpeg libzbar0 python3-pip nodejs; \
     pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/; \
     useradd -u 990 -U -d /var/www/mybooks -s /bin/false mybooks; \

@@ -76,6 +76,7 @@ COPY third-party/foliate-js/ /var/www/mybooks/third-party/foliate-js/
 RUN cd /var/www/mybooks/webserver/services/cfi_gen && npm ci --omit=dev
 COPY conf/nginx/ssl.* /data/books/ssl/
 COPY conf/nginx/mybooks.conf /etc/nginx/conf.d/
+COPY conf/logrotate/mybooks-nginx /etc/logrotate.d/
 COPY conf/supervisor/mybooks.conf /etc/supervisor/conf.d/
 COPY --from=builder /app-static/ /var/www/mybooks/app/
 COPY --from=builder /app-static/dist/logo/ /data/books/logo/
@@ -87,9 +88,9 @@ COPY thanks_to.txt /var/www/mybooks/app/dist/static/
 
 
 # Install python packages
-COPY requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir --no-compile -r /tmp/requirements.txt --break-system-packages && \
-    rm -rf /root/.cache /root/.config/pip /tmp/requirements.txt /tmp/pip-* /var/tmp/*
+# COPY requirements.txt /tmp/requirements.txt
+# RUN pip install --no-cache-dir --no-compile -r /tmp/requirements.txt --break-system-packages && \
+#     rm -rf /root/.cache /root/.config/pip /tmp/requirements.txt /tmp/pip-* /var/tmp/*
 
 
 RUN rm -f /etc/nginx/conf.d/default.conf /var/www/html -rf && \
