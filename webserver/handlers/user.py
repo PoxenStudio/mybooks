@@ -168,10 +168,19 @@ class UserAppearance(BaseHandler):
     而外观面板是「点一下色块就存」，走它会往消息中心刷屏。
     """
 
+    def _writable_user(self):
+        """把当前用户合并进「save() 所用」的线程级 session。
+
+        current_user 是 BaseHandler.initialize 里那个 session 加载的，而 @js 处理函数可能跑在别的
+        线程，Reader.save() 用的是当前线程的 scoped session；两者不同就会抛
+        "Object is already attached to session"。外观面板连点色块时并发请求最容易撞上。
+        """
+        return self.settings["ScopedSession"]().merge(self.current_user)
+
     @js
     @auth
     def post(self):
-        user = self.current_user
+        user = self._writable_user()
         try:
             data = tornado.escape.json_decode(self.request.body)
         except Exception:
@@ -209,7 +218,7 @@ class UserAppearance(BaseHandler):
     @js
     @auth
     def delete(self):
-        user = self.current_user
+        user = self._writable_user()
         if isinstance(user.extra, dict) and APPEARANCE_KEY in user.extra:
             # 必须用 del 而不是 dict.pop()：pop 走的是 dict 的 C 实现，
             # 不会触发 MutableDict.__delitem__ 的 changed()，改动不会被 flush 到库里。
