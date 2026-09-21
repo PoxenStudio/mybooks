@@ -36,7 +36,7 @@ class TestFolderHandlers(TestWithUserLogin):
         self.set_folder(2, "文学")
         tree = self.tree()
         self.assertEqual(tree["文学"]["count"], 2)
-        self.assertEqual(tree["文学"]["children"], [{"name": "小说", "count": 1}])
+        self.assertEqual(tree["文学"]["children"], [{"name": "小说", "count": 1, "children": []}])
         self.assertEqual(self.json("/api/folders")["root_count"], len(BIDS) - 2)
 
     def test_invalid(self):
@@ -67,7 +67,7 @@ class TestFolderHandlers(TestWithUserLogin):
         tree = self.tree()
         self.assertNotIn("文学", tree)
         self.assertEqual(tree["读物"]["count"], 2)
-        self.assertEqual(tree["读物"]["children"], [{"name": "小说", "count": 1}])
+        self.assertEqual(tree["读物"]["children"], [{"name": "小说", "count": 1, "children": []}])
 
     def test_rename_merge_needs_confirm(self):
         self.set_folder(1, "文学")

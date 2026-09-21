@@ -17,7 +17,7 @@ CANDIDATE_MIN_TAG_COUNT = 2
 
 
 def _invalid_folder():
-    return {"err": "params.folder.invalid", "msg": _("目录名无效：每级 1-24 个字符，不含标点，最多两级")}
+    return {"err": "params.folder.invalid", "msg": _("目录名无效：每级 1-%d 个字符，不含标点，最多 %d 级") % (fh.MAX_SEGMENT_LEN, fh.MAX_DEPTH)}
 
 
 class BookFolder(BaseHandler):
@@ -73,11 +73,11 @@ class FolderList(BaseHandler):
     @js
     def get(self):
         if not self.current_user:
-            return {"err": "ok", "folders": [], "root_count": 0}
+            return {"err": "ok", "folders": [], "root_count": 0, "max_depth": fh.MAX_DEPTH}
         with self.db_lock:
             counts = fh.folder_counts(self.calibre_db_cache)
             total = len(self.calibre_db_cache.all_book_ids())
-        return {"err": "ok", "folders": fh.build_tree(counts), "root_count": max(0, total - sum(counts.values()))}
+        return {"err": "ok", "folders": fh.build_tree(counts), "root_count": max(0, total - sum(counts.values())), "max_depth": fh.MAX_DEPTH}
 
 
 class FolderBooks(ListHandler):
@@ -146,20 +146,17 @@ class FolderCandidates(BaseHandler):
     def get(self):
         try:
             level = int(self.get_argument("level", "1"))
-            parent = fh.normalize_segment(self.get_argument("parent")) if level == 2 else ""
-        except (ValueError, tornado.web.MissingArgumentError):
+            parent = fh.normalize_folder(self.get_argument("parent", ""))
+        except ValueError:
             return _invalid_folder()
-        if level not in (1, 2):
+        parent_parts = fh.split_folder(parent)
+        if not 1 <= level <= fh.MAX_DEPTH or len(parent_parts) != level - 1:
             return _invalid_folder()
         q = self.get_argument("q", "").strip().lower()
 
         with self.db_lock:
             counts = fh.folder_counts(self.calibre_db_cache)
-        tree = fh.build_tree(counts)
-        if level == 1:
-            existing = [(n["name"], n["count"]) for n in tree]
-        else:
-            existing = [(c["name"], c["count"]) for n in tree if n["name"] == parent for c in n["children"]]
+        existing = [(n["name"], n["count"]) for n in fh.find_children(fh.build_tree(counts), parent_parts)]
         items = [{"name": n, "count": c, "source": "folder"} for n, c in existing]
         seen = {n for n, _c in existing}
 
@@ -174,7 +171,7 @@ class FolderCandidates(BaseHandler):
                 items.append({"name": name, "count": t["count"], "source": "tag"})
         if q:
             items = [i for i in items if q in i["name"].lower()]
-        return {"err": "ok", "items": items[:CANDIDATE_LIMIT]}
+        return {"err": "ok", "items": items[:CANDIDATE_LIMIT], "max_depth": fh.MAX_DEPTH}
 
 
 def routes():

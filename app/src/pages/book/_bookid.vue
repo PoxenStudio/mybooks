@@ -696,6 +696,21 @@
                                             </template>
                                         </v-autocomplete>
                                     </v-card>
+                                </v-menu>
+                                <v-menu offset-y :close-on-content-click="false" v-model="folderMenu" @input="onFolderMenuToggle">
+                                    <template v-slot:activator="{ on, attrs }">
+                                        <v-chip rounded smallF color="amber darken-3" class="white--text" v-bind="attrs" v-on="on">
+                                            <v-icon>mdi-folder-outline</v-icon>
+                                            {{ $t('folder.label') }} : {{ book.folder || $t('folder.unset') }}
+                                            <v-icon color="white" class="ml-1">mdi-pencil</v-icon>
+                                        </v-chip>
+                                    </template>
+                                    <v-card class="pa-3" style="min-width: 300px; max-width: 420px;">
+                                        <FolderEditor v-if="folderMenu" v-model="folderDraft" dense autofocus @valid-change="folderValid = $event" />
+                                        <div class="d-flex justify-center mt-3">
+                                            <v-btn color="primary" small :disabled="!folderValid" :loading="folderSaving" @click="saveFolder">{{ $t('folder.save') }}</v-btn>
+                                        </div>
+                                    </v-card>
                                 </v-menu><v-menu offset-y>
                                     <template v-slot:activator="{ on, attrs }">
                                         <v-chip rounded smallF color="#003153" class="white--text" v-bind="attrs" v-on="on" :disabled="categories.length === 0">
@@ -1803,6 +1818,10 @@ export default {
         categories: [],
         categoryMenu: false,
         categorySelect: null,
+        folderMenu: false,
+        folderDraft: '',
+        folderValid: true,
+        folderSaving: false,
         book: {id: 0, title: "", files: [], tags: [], pubdate: "", state: {favorite: 0, wants: 0, read_state: 0}},
         audios: {count: 0, files: [], status: "ok"},
         suggestionBooks: [],
@@ -3266,6 +3285,34 @@ export default {
             } catch (error) {
                 console.error('更新分类失败:', error);
                 this.$alert('error', this.$t('message.networkError'));
+            }
+        },
+
+        onFolderMenuToggle(opened) {
+            if (opened) {
+                this.folderDraft = this.book.folder || '';
+            }
+        },
+
+        async saveFolder() {
+            this.folderSaving = true;
+            try {
+                const response = await this.$backend(`/book/${this.book.id}/folder`, {
+                    method: 'POST',
+                    body: JSON.stringify({ folder: this.folderDraft }),
+                });
+                if (response.err === 'ok') {
+                    this.book.folder = this.folderDraft;
+                    this.folderMenu = false;
+                    this.$alert('success', this.$t('folder.updated'));
+                } else {
+                    this.$alert('error', response.msg || this.$t('folder.invalid'));
+                }
+            } catch (error) {
+                console.error('更新目录失败:', error);
+                this.$alert('error', this.$t('message.networkError'));
+            } finally {
+                this.folderSaving = false;
             }
         },
 

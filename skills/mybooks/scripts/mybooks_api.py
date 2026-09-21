@@ -500,6 +500,68 @@ class MyBooksAPI:
         """Get all custom categories and book counts."""
         return self._call_with_auto_relogin("GET", "/api/categories")
 
+    def list_folders(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Get the folder tree (at most two levels) with book counts."""
+        return self._call_with_auto_relogin("GET", "/api/folders")
+
+    def search_by_folder(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        List books directly inside a folder.
+
+        Args:
+            path (str, optional): Folder path such as "文学" or "文学.小说"; empty means root
+            num (int, optional): Results per page (default: 20)
+            page (int, optional): Page number (default: 1)
+        """
+        path = urllib.parse.quote(args.get("path", ""))
+        num = args.get("num", 20)
+        start = (args.get("page", 1) - 1) * num
+        return self._call_with_auto_relogin(
+            "GET",
+            f"/api/folder/books?path={path}&size={num}&start={start}"
+        )
+
+    def set_folder(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Set the folder of one book, or of many books (admin only).
+
+        Args:
+            book_id (int, optional): Book ID for a single book
+            book_ids (array, optional): Book IDs for a batch
+            folder (str, required): Folder path such as "文学.小说"; "" or "清除" moves out of any folder
+        """
+        if "folder" not in args:
+            return {"status": "error", "message": "folder is required"}
+        if args.get("book_ids"):
+            return self._call_with_auto_relogin(
+                "POST", "/api/book/folder",
+                json={"ids": args["book_ids"], "folder": args["folder"]}
+            )
+        book_id = args.get("book_id")
+        if not book_id:
+            return {"status": "error", "message": "book_id or book_ids is required"}
+        return self._call_with_auto_relogin(
+            "POST", f"/api/book/{book_id}/folder", json={"folder": args["folder"]}
+        )
+
+    def rename_folder(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Rename the last segment of a folder (admin only). If the target already
+        exists the server answers folder.exists without changing anything; merging
+        is irreversible and only happens when merge is true.
+
+        Args:
+            path (str, required): Existing folder path
+            name (str, required): New name of the last segment
+            merge (bool, optional): Confirm merging into an existing folder (default: false)
+        """
+        if not args.get("path") or not args.get("name"):
+            return {"status": "error", "message": "path and name are required"}
+        return self._call_with_auto_relogin(
+            "POST", "/api/folder/rename",
+            json={"path": args["path"], "name": args["name"], "merge": bool(args.get("merge", False))}
+        )
+
     def list_authors(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """
         Get all authors and book counts.
@@ -1192,7 +1254,8 @@ class MyBooksAPI:
         if tool_method is None or not callable(tool_method):
             available_tools = [
                 "get_user_info", "library_stats", "reading_stats",
-                "search_books", "search_by_category", "get_book", "edit_book",
+                "search_books", "search_by_category", "list_folders", "search_by_folder",
+                "set_folder", "rename_folder", "get_book", "edit_book",
                 "get_notes", "push_notes", "clear_imported_notes",
                 "book_fill", "save_meta_to_file", "mailto", "send_to_device", "categories",
                 "list_authors", "get_author_books", "book_upload",

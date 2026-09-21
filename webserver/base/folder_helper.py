@@ -51,21 +51,29 @@ def top_level_count(counts):
 
 
 def build_tree(counts):
-    """Build [{name, count, children}] from direct counts; count includes sub-folders."""
-    top = {}
+    """Build nested [{name, count, children}] from direct counts; count includes sub-folders."""
+    root = {"children": {}}
     for value, n in counts.items():
         parts = split_folder(value)
         if not parts or n <= 0:
             continue
-        node = top.setdefault(parts[0], {"name": parts[0], "count": 0, "children": {}})
-        node["count"] += n
-        if len(parts) > 1:
-            child = node["children"].setdefault(parts[1], {"name": parts[1], "count": 0})
-            child["count"] += n
-    return [
-        {"name": n["name"], "count": n["count"], "children": sorted(n["children"].values(), key=lambda c: c["name"])}
-        for n in sorted(top.values(), key=lambda n: n["name"])
-    ]
+        node = root
+        for part in parts:
+            node = node["children"].setdefault(part, {"name": part, "count": 0, "children": {}})
+            node["count"] += n
+
+    def finish(children):
+        return [{"name": c["name"], "count": c["count"], "children": finish(c["children"])} for _, c in sorted(children.items())]
+
+    return finish(root["children"])
+
+
+def find_children(tree, parent_parts):
+    """Return the child nodes under the folder given as a list of segments."""
+    nodes = tree
+    for part in parent_parts:
+        nodes = next((n["children"] for n in nodes if n["name"] == part), [])
+    return nodes
 
 
 def plan_rename(values, path, name):

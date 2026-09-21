@@ -526,6 +526,22 @@
   content: "\F023D";
 }
 
+.mdi-folder::before {
+  content: "\F024B";
+}
+
+.mdi-folder-edit-outline::before {
+  content: "\F0DCE";
+}
+
+.mdi-folder-multiple-outline::before {
+  content: "\F0255";
+}
+
+.mdi-folder-outline::before {
+  content: "\F0256";
+}
+
 .mdi-format-align-bottom::before {
   content: "\F0753";
 }

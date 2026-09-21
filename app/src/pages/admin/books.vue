@@ -70,6 +70,12 @@
                                 </v-list-item-icon>
                                 <v-list-item-title>{{ $t('admin.books.aiUpdate') }}</v-list-item-title>
                             </v-list-item>
+                            <v-list-item @click="showFolderBatchDialog" :disabled="books_selected.length === 0">
+                                <v-list-item-icon>
+                                    <v-icon>mdi-folder-outline</v-icon>
+                                </v-list-item-icon>
+                                <v-list-item-title>{{ $t('folder.batchSet') }}</v-list-item-title>
+                            </v-list-item>
                             <v-list-item @click="showExchangeTypeDialog" :disabled="books_selected.length === 0">
                                 <v-list-item-icon>
                                     <v-icon>mdi-swap-horizontal</v-icon>
@@ -326,6 +332,17 @@
                 </v-edit-dialog>
             </template>
 
+            <template v-slot:item.folder="{ item }">
+                <v-edit-dialog large :return-value.sync="item.folder" @save="saveFolder(item)" :save-text="$t('admin.books.save')" :cancel-text="$t('admin.books.cancel')">
+                    <span v-if="item.folder != null">{{ item.folder || '-' }}</span>
+                    <span v-else> - </span>
+                    <template v-slot:input>
+                        <div class="mt-4 text-h6">{{ $t('folder.edit') }}</div>
+                        <FolderEditor v-model="item.folder" dense autofocus style="min-width: 280px;" />
+                    </template>
+                </v-edit-dialog>
+            </template>
+
             <template v-slot:item.language="{ item }">
                 <v-edit-dialog large :return-value.sync="item.languages" @save="save(item, 'languages')" :save-text="$t('admin.books.save')" :cancel-text="$t('admin.books.cancel')">
                     <span v-if="item.languages != null">{{ languageOptions.find(l => l.code === item.languages)?.name || item.languages }}</span>
@@ -479,6 +496,23 @@
             <p> {{ $t('admin.books.reminder.rule2') }} </p>
             <p> {{ $t('admin.books.reminder.rule3') }} </p>
             <p> {{ $t('admin.books.reminder.estimate', { minutes: auto_fill_mins }) }} </p>
+        </AppDialog>
+
+        <!-- 批量设置目录 -->
+        <AppDialog
+            v-model="folder_batch_dialog"
+            type="action"
+            :title="$t('folder.batchSet')"
+            icon="mdi-folder-outline"
+            color="primary"
+            width="480"
+            :confirm-text="$t('folder.save')"
+            :confirm-loading="folder_batch_saving"
+            :confirm-disabled="!folder_batch_valid"
+            @confirm="setFolderBatch"
+        >
+            <p>{{ $t('folder.batchHint', { count: books_selected.length }) }}</p>
+            <FolderEditor v-if="folder_batch_dialog" v-model="folder_batch_value" @valid-change="folder_batch_valid = $event" />
         </AppDialog>
 
         <!-- 图书类型互转确认对话框 -->
@@ -644,6 +678,10 @@ export default {
         clear_invalid_items_dialog: false,
         delete_book_dialog: false,
         delete_selected_books_dialog: false,
+        folder_batch_dialog: false,
+        folder_batch_value: '',
+        folder_batch_valid: true,
+        folder_batch_saving: false,
         book_pending_delete: null,
         adding_book: false,
         jumpPage: 1,
@@ -772,6 +810,7 @@ export default {
                 { text: this.$t('admin.books.header.title'), sortable: true, value: "title" },
                 { text: this.$t('admin.books.header.author'), sortable: true, value: "author", width: "100px" },
                 { text: this.$t('admin.books.header.category'), sortable: false, value: "category", width: "80px" },
+                { text: this.$t('folder.header'), sortable: false, value: "folder", width: "100px" },
                 { text: this.$t('admin.books.header.language'), sortable: false, value: "language", width: "60px" },
                 { text: this.$t('admin.books.header.series'), sortable: false, value: "series", width: "80px" },
                 { text: this.$t('admin.books.header.rating'), sortable: false, value: "rating", width: "60px" },
@@ -887,6 +926,39 @@ export default {
 
         showDialogAutoFile() {
             this.meta_dialog = true;
+        },
+
+        showFolderBatchDialog() {
+            this.folder_batch_value = '';
+            this.folder_batch_dialog = true;
+        },
+
+        saveFolder(book) {
+            this.$backend(`/book/${book.id}/folder`, {
+                method: 'POST',
+                body: JSON.stringify({ folder: book.folder || '' }),
+            }).then((rsp) => {
+                if (rsp.err !== 'ok') {
+                    this.$alert('error', rsp.msg || this.$t('folder.invalid'));
+                    this.getDataFromApi();
+                }
+            });
+        },
+
+        setFolderBatch() {
+            this.folder_batch_saving = true;
+            this.$backend('/book/folder', {
+                method: 'POST',
+                body: JSON.stringify({ ids: this.books_selected.map((book) => book.id), folder: this.folder_batch_value }),
+            }).then((rsp) => {
+                if (this.handleApiResponse(rsp)) {
+                    this.folder_batch_dialog = false;
+                    this.books_selected = [];
+                    this.getDataFromApi();
+                }
+            }).finally(() => {
+                this.folder_batch_saving = false;
+            });
         },
 
         showExchangeTypeDialog() {

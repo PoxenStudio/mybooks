@@ -27,7 +27,7 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 ## 权限与网络声明
 
 - **网络访问（必需）**：本 skill 是 MyBooks 服务器的 REST 客户端，所有工具都通过 HTTP(S) 访问**且仅访问**用户自己配置的 `MYBOOKS_HOST`，不连接任何其他地址，无遥测、无第三方回传。
-- **会修改数据的工具**：`edit_book`、`push_notes`(`dry_run:false`)、`clear_imported_notes`、`book_fill`、`save_meta_to_file`、`book_upload`、`book_add_by_isbn`、`wants`/`favorite`/`reading`/`read_done`、`set_reading_time`、`delete_reading_time`、书单的创建/修改/删除/增删书/点赞、以及全部 `tts_*` 写操作。删除类工具（`delete_booklist`、`delete_reading_time`）脚本内强制 `confirm:true` 两步确认。
+- **会修改数据的工具**：`edit_book`、`set_folder`、`rename_folder`、`push_notes`(`dry_run:false`)、`clear_imported_notes`、`book_fill`、`save_meta_to_file`、`book_upload`、`book_add_by_isbn`、`wants`/`favorite`/`reading`/`read_done`、`set_reading_time`、`delete_reading_time`、书单的创建/修改/删除/增删书/点赞、以及全部 `tts_*` 写操作。删除类工具（`delete_booklist`、`delete_reading_time`）脚本内强制 `confirm:true` 两步确认。
 - **本地文件读取**：仅 `book_upload`（限电子书扩展名 epub/mobi/azw/azw3/pdf/txt/lrf/rtf/djvu/docx）和 `tts_clone_upload`（限 mp3/wav，≤7MB）会读取用户明确给出路径的文件并上传到 `MYBOOKS_HOST`；agent **不得**自行挑选文件上传。
 - **本地文件写入**：仅 `tts_clone_audio` 的 `save_to`（必须 `.wav` 结尾，且不覆盖已存在文件）。
 - **凭据**：见下方"认证方式"。
@@ -198,6 +198,88 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 **执行脚本**：
 ```bash
 <skill-installation-path>/scripts/mybooks_api.py search_by_category '{"category":"科幻"}'
+```
+
+---
+
+### `list_folders` — 查看目录树
+
+**使用场景**：查看书库的"目录"（层级有上限，当前为两级，如 `文学.小说`）及各目录书籍数量；未设置目录的书在根目录 `/`
+
+**参数**：无
+
+**执行脚本**：
+```bash
+<skill-installation-path>/scripts/mybooks_api.py list_folders '{}'
+```
+
+**响应示例**（`count` 含子目录，`root_count` 为未设置目录的书）：
+```json
+{
+  "err": "ok",
+  "folders": [
+    { "name": "文学", "count": 12, "children": [{ "name": "小说", "count": 8 }] }
+  ],
+  "root_count": 5,
+  "max_depth": 2
+}
+```
+
+---
+
+### `search_by_folder` — 按目录查询书籍
+
+**使用场景**：查看某个目录下**直属**的书（不含子目录的书）；`path` 为空表示根目录
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `path` | string | ❌ | `""` | 目录路径，用 `.` 连接，如 `"文学"`、`"文学.小说"` |
+| `num` | int | ❌ | 20 | 每页数量 |
+| `page` | int | ❌ | 1 | 页码，从 1 开始 |
+
+**执行脚本**：
+```bash
+<skill-installation-path>/scripts/mybooks_api.py search_by_folder '{"path":"文学.小说"}'
+```
+
+---
+
+### `set_folder` — 设置书籍目录
+
+**使用场景**：把一本或多本书放进某个目录。单本需管理员或书籍所有者；批量（`book_ids`）仅管理员
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `book_id` | int | 二选一 | 单本书 ID |
+| `book_ids` | array | 二选一 | 批量书籍 ID 列表 |
+| `folder` | string | ✅ | 目录路径，层级数以 `list_folders` 返回的 `max_depth` 为准（当前为 2），每级 1–24 字符、不含标点，如 `"文学.小说"`；传 `""`/`"清除"`/`"clear"` 移出目录 |
+
+**执行脚本**：
+```bash
+<skill-installation-path>/scripts/mybooks_api.py set_folder '{"book_id":42,"folder":"文学.小说"}'
+```
+
+---
+
+### `rename_folder` — 重命名目录
+
+**使用场景**：修改目录的最后一段名称（仅管理员），子目录随之改名，如 `文学` → `读物` 后 `文学.小说` 变为 `读物.小说`
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `path` | string | ✅ | 现有目录路径 |
+| `name` | string | ✅ | 新的末段名称（1–24 字符、不含标点和 `.`） |
+| `merge` | bool | ❌ | 默认 `false`。目标目录已存在时服务端返回 `folder.exists`（附 `count`、`target`）且**不修改任何数据**；合并**不可撤回**，必须先向用户说明并获得确认，再带 `"merge":true` 重发 |
+
+**执行脚本**：
+```bash
+<skill-installation-path>/scripts/mybooks_api.py rename_folder '{"path":"文学.小说","name":"故事"}'
 ```
 
 ---
@@ -1455,6 +1537,9 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 │
 ├─ "找 XX 分类下的书"
 │   → search_by_category
+│
+├─ "XX 目录下有什么书" / "书库有哪些目录"
+│   → search_by_folder / list_folders
 │
 ├─ "查看书籍详情"
 │   → get_book
