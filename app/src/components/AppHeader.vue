@@ -8,7 +8,6 @@
             :width="240"
             :mini-variant-width="64"
             :mini-variant="miniVariant"
-            :color="drawerColor"
             :clipped="$vuetify.breakpoint.lgAndUp"
             class="app-navigation-drawer"
             @mouseenter="handleMouseEnter"
@@ -623,9 +622,6 @@ export default {
         dialogHeaderLight() {
             return !this.$vuetify.theme.dark && !this.navIsDark;
         },
-        drawerColor() {
-            return this.$vuetify.theme.dark ? 'dark' : '#F7FAF7';
-        },
         isAiFeatureEnabled() {
             if (process.client) {
                 return localStorage.getItem('aiEnabled') === 'true';
@@ -1200,6 +1196,15 @@ export default {
 
 .v-application .v-navigation-drawer.app-navigation-drawer {
     border-radius: 10px !important;
+}
+
+/* 抽屉背景由 <html data-appearance-dark> 驱动（app.html 首帧同步写入，applyAppearance 后续维护），
+   不依赖组件挂载时 $vuetify.theme.dark 的取值时机，刷新后不会停在浅色 */
+html[data-appearance-dark="0"] .v-application .v-navigation-drawer.app-navigation-drawer {
+    background-color: #F7FAF7 !important;
+}
+html[data-appearance-dark="1"] .v-application .v-navigation-drawer.app-navigation-drawer {
+    background-color: #1e1e1e !important;
 }
 
 .theme--dark .app-navigation-drawer {

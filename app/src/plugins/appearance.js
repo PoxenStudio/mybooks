@@ -25,17 +25,21 @@ const APPLY_MUTATIONS = [
 // 让「站点默认」重新生效。
 const CACHE_MUTATIONS = ['appearance/setAppearance', 'appearance/replaceAppearance'];
 
-export default ({ store, app }) => {
+export default (ctx) => {
+    const { store, app } = ctx;
     if (!process.client) return;
 
-    const apply = () => applyAppearance(store.state.appearance, app.$vuetify);
+    // @nuxtjs/vuetify 把实例放在 ctx.$vuetify（= app.vuetify.framework），app.$vuetify 并不存在；
+    // 取错会让 theme.dark 永远不被写入，组件停在浅色而 CSS 变量/背景图案却已切到深色。
+    const getVuetify = () => ctx.$vuetify || (app.vuetify && app.vuetify.framework) || null;
+    const apply = () => applyAppearance(store.state.appearance, getVuetify());
 
     // CSS 变量部分不依赖 Vuetify，可立即生效；但 theme.dark / theme.primary 需要实例就绪。
     // @nuxtjs/vuetify 正常会先于本插件注入，这里仍做几次短重试兜底，避免深色主题下
     // 首屏停在浅色（那会让文字颜色错到下一次 mutation 才被纠正）。
     const applyWhenReady = (attempt) => {
         apply();
-        if (!app.$vuetify && attempt < 5) {
+        if (!getVuetify() && attempt < 5) {
             setTimeout(() => applyWhenReady(attempt + 1), 50);
         }
     };
