@@ -234,7 +234,7 @@
             <v-card v-if="!dialog_refer">
                 <v-toolbar flat dense>
                     <!-- back -->
-                    <v-btn v-if="!tiny" icon small fab @click="$router.back()">
+                    <v-btn v-if="!tiny && canGoBack" icon small fab @click="$router.back()">
                         <v-icon>mdi-arrow-left-circle</v-icon>
                     </v-btn>
                     <!-- download -->
@@ -1796,6 +1796,8 @@ export default {
         }
     },
     data: () => ({
+        // 新窗口打开时没有历史记录可后退，此时隐藏后退按钮（mounted 里赋值）
+        canGoBack: true,
         err: "",
         msg: "",
         categories: [],
@@ -1974,6 +1976,7 @@ export default {
         }
     },
     async mounted() {
+        this.canGoBack = window.history.length > 1;
         // 异步加载推荐图书
         this.loadSuggestionBooks();
         this.loadSameNameBooks();
