@@ -702,11 +702,11 @@ export default {
             // 管理员配置的侧边栏显示项，为空表示全部显示
             const showItem = (key) => !this.sys.sidebar_items || this.sys.sidebar_items.length === 0 || this.sys.sidebar_items.includes(key);
             const navLinks = [
+                ...(showItem("folders") ? [{ icon: "mdi-folder-multiple-outline", href: "/folder", text: "appHeader.folders", count: this.sys.folders, color: "amber darken-2" }] : []),
                 ...(showItem("audiobooks") ? [{ icon: "mdi-headphones", href: "/audiobooks", text: "appHeader.audioBooks", count: this.sys.audiobooks, color: "purple"}] : []),
                 ...(showItem("printbooks") && this.sys.allow.physical_books ? [{ icon: "mdi-bookshelf", href: "/printbooks", text: "appHeader.physicalBooks", count: this.sys.physicals, color: "orange"}] : []),
                 { icon: "mdi-account-group", href: "/author", text: "appHeader.authors", count: this.sys.authors, color: "blue darken-1"},
-                { icon: "mdi-shape-plus", href: "/categories", text: "appHeader.categoryBrowse", count: this.sys.categories, color: "green" },
-                ...(showItem("folders") ? [{ icon: "mdi-folder-multiple-outline", href: "/folder", text: "appHeader.folders", count: this.sys.folders, color: "amber darken-2" }] : []),
+                ...(showItem("categories") ? [{ icon: "mdi-shape-plus", href: "/categories", text: "appHeader.categoryBrowse", count: this.sys.categories, color: "green" }] : []),
                 ...(showItem("tags") ? [{ icon: "mdi-tag-heart", href: "/tag", text: "appHeader.tags", count: this.sys.tags, color: "deep-orange"}] : []),
                 ...(showItem("publishers") ? [{ icon: "mdi-home-group", href: "/publisher", text: "appHeader.publishers", count: this.sys.publishers, color: "blue darken-2"}] : []),
                 ...(showItem("series") ? [{ icon: "mdi-library-shelves", href: "/series", text: "appHeader.series", count: this.sys.series, color: "blue darken-2"}] : []),

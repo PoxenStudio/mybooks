@@ -746,6 +746,10 @@
   content: "\F0601";
 }
 
+.mdi-page-layout-sidebar-left::before {
+  content: "\F06FD";
+}
+
 .mdi-palette-outline::before {
   content: "\F0E0C";
 }

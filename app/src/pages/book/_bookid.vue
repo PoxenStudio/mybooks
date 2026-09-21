@@ -699,7 +699,7 @@
                                 </v-menu>
                                 <v-menu offset-y :close-on-content-click="false" v-model="folderMenu" @input="onFolderMenuToggle">
                                     <template v-slot:activator="{ on, attrs }">
-                                        <v-chip rounded smallF color="amber darken-3" class="white--text" v-bind="attrs" v-on="on">
+                                        <v-chip rounded smallF color="amber darken-3" class="black--text" v-bind="attrs" v-on="on">
                                             <v-icon>mdi-folder-outline</v-icon>
                                             {{ $t('folder.label') }} : {{ book.folder || $t('folder.unset') }}
                                             <v-icon color="white" class="ml-1">mdi-pencil</v-icon>

@@ -29,7 +29,6 @@
                 small
                 label
                 class="mr-1 mb-1"
-                :color="item.source === 'folder' ? 'amber lighten-4' : undefined"
                 @click="pick(item.name)"
             >
                 <v-icon v-if="item.source === 'folder'" left small>mdi-folder</v-icon>

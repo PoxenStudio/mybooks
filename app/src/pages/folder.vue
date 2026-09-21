@@ -2,16 +2,15 @@
   <div>
     <v-row>
       <v-col cols="12" class="d-flex align-center flex-wrap">
-        <v-chip :outlined="!!path" color="amber darken-3" :dark="!path" class="mr-1" @click="goTo('')">
+        <v-chip :color="path ? '#003153' : 'amber darken-3'" dark class="mr-1" @click="goTo('')">
           <v-icon>mdi-home</v-icon>
         </v-chip>
         <template v-for="(crumb, idx) in crumbs">
           <v-icon :key="'sep' + idx" small>mdi-chevron-right</v-icon>
           <v-chip
             :key="crumb.path"
-            :outlined="idx < crumbs.length - 1"
-            color="amber darken-3"
-            :dark="idx === crumbs.length - 1"
+            :color="idx === crumbs.length - 1 ? 'amber darken-3' : '#003153'"
+            dark
             class="mx-1"
             @click="goTo(crumb.path)"
           >
@@ -28,14 +27,12 @@
         <v-chip
           v-for="item in subFolders"
           :key="item.name"
-          large
           label
-          outlined
-          color="amber darken-3"
+          dark
           class="mr-2 mb-2"
           @click="goTo(childPath(item.name))"
         >
-          <v-icon left>mdi-folder</v-icon>
+          <v-icon left color="amber darken-3">mdi-folder</v-icon>
           {{ item.name }}
           <span class="ml-2 grey--text">{{ item.count }}</span>
         </v-chip>
@@ -179,6 +176,12 @@ export default {
       this.tree = rsp.err === "ok" ? rsp.folders : [];
     },
     async loadBooks() {
+      if (!this.path) {
+        this.books = [];
+        this.total = 0;
+        this.loaded = true;
+        return;
+      }
       const query = new URLSearchParams({ path: this.path, start: this.$route.query.start || 0, size: this.pageSize });
       const rsp = await this.$backend(`/folder/books?${query}`);
       if (rsp.err !== "ok") {

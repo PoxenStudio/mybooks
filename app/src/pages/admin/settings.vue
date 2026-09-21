@@ -976,6 +976,7 @@ export default {
               { value: "printbooks", text: "appHeader.physicalBooks" },
               { value: "publishers", text: "appHeader.publishers" },
               { value: "folders", text: "appHeader.folders" },
+              { value: "categories", text: "nav.categories" },
               { value: "tags", text: "appHeader.tags" },
               { value: "series", text: "appHeader.series" },
               { value: "languages", text: "appHeader.languages" },

@@ -453,6 +453,9 @@ class AdminSettings(BaseHandler):
         if CONF.get("DEFAULT_PAGE_SIZE", -1) == -1:
             CONF["DEFAULT_PAGE_SIZE"] = 60  # 默认每页显示60本书
 
+        if not CONF.get("SIDEBAR_ITEMS", []):
+            CONF["SIDEBAR_ITEMS"] = ["audiobooks", "printbooks", "publishers", "folders", "tags", "series", "languages", "rating", "memo"]
+
         CONF["site_icon"] = "favicon_0"  # default icon, means use current favicon.ico
         CONF["META_ALL_SOURCES"] = BookSearch.all_sources()
 
