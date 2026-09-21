@@ -76,6 +76,20 @@ def find_children(tree, parent_parts):
     return nodes
 
 
+def candidate_names(tree, parent_parts):
+    """Suggest folder names for the level after parent_parts: its children, else every name used at that level."""
+    nodes = find_children(tree, parent_parts)
+    if not nodes:
+        level_nodes = tree
+        for _ in parent_parts:
+            level_nodes = [c for n in level_nodes for c in n["children"]]
+        nodes = level_nodes
+    merged = {}
+    for n in nodes:
+        merged[n["name"]] = merged.get(n["name"], 0) + n["count"]
+    return sorted(merged.items(), key=lambda kv: (-kv[1], kv[0]))
+
+
 def plan_rename(values, path, name):
     """Return {old value: new value} for path and its sub-folders after renaming its last segment."""
     parts = path.split(FOLDER_SEP)

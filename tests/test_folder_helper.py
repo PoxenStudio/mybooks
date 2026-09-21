@@ -52,6 +52,22 @@ class TestTree(unittest.TestCase):
         self.assertEqual(fh.top_level_count({"a": 1, "a.b": 1, "c": 0, "d.e": 2}), 2)
 
 
+class TestCandidateNames(unittest.TestCase):
+    def setUp(self):
+        self.tree = fh.build_tree({"文学.小说": 3, "文学.诗歌": 1, "科技.小说": 2, "科技.数学": 5, "历史": 1})
+
+    def test_level1_only_existing_top_folders(self):
+        self.assertEqual([n for n, _c in fh.candidate_names(self.tree, [])], ["科技", "文学", "历史"])
+
+    def test_existing_parent_lists_its_children(self):
+        self.assertEqual(fh.candidate_names(self.tree, ["文学"]), [("小说", 3), ("诗歌", 1)])
+
+    def test_missing_or_leaf_parent_falls_back_to_all_level2_names(self):
+        expected = [("小说", 5), ("数学", 5), ("诗歌", 1)]
+        self.assertEqual(fh.candidate_names(self.tree, ["新目录"]), expected)
+        self.assertEqual(fh.candidate_names(self.tree, ["历史"]), expected)
+
+
 class TestPlanRename(unittest.TestCase):
     def test_leaf(self):
         self.assertEqual(fh.plan_rename(["文学", "文学.小说", "文学.诗歌"], "文学.小说", "故事"), {"文学.小说": "文学.故事"})

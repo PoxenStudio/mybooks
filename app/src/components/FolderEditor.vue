@@ -31,7 +31,7 @@
                 class="mr-1 mb-1"
                 @click="pick(item.name)"
             >
-                <v-icon v-if="item.source === 'folder'" left small>mdi-folder</v-icon>
+                <v-icon left small>mdi-folder</v-icon>
                 {{ item.name }}
             </v-chip>
         </div>

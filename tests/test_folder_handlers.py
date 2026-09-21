@@ -92,7 +92,7 @@ class TestFolderHandlers(TestWithUserLogin):
     def test_candidates(self):
         self.set_folder(1, "文学.小说")
         d = self.json("/api/folder/candidates?level=1")
-        self.assertIn({"name": "文学", "count": 1, "source": "folder"}, d["items"])
+        self.assertIn({"name": "文学", "count": 1}, d["items"])
         d = self.json("/api/folder/candidates?level=2&parent=文学")
-        self.assertEqual(d["items"][0], {"name": "小说", "count": 1, "source": "folder"})
+        self.assertEqual(d["items"][0], {"name": "小说", "count": 1})
         self.assertEqual(self.json("/api/folder/candidates?level=1&q=zzzz")["items"], [])

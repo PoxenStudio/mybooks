@@ -12,8 +12,7 @@ from webserver.constants import CALIBRE_COLUMN_FOLDER, COLUMN_FOLDER
 from webserver.handlers.base import BaseHandler, ListHandler, auth, js
 from webserver.i18n import _
 
-CANDIDATE_LIMIT = 30
-CANDIDATE_MIN_TAG_COUNT = 2
+CANDIDATE_LIMIT = 100
 
 
 def _invalid_folder():
@@ -156,19 +155,7 @@ class FolderCandidates(BaseHandler):
 
         with self.db_lock:
             counts = fh.folder_counts(self.calibre_db_cache)
-        existing = [(n["name"], n["count"]) for n in fh.find_children(fh.build_tree(counts), parent_parts)]
-        items = [{"name": n, "count": c, "source": "folder"} for n, c in existing]
-        seen = {n for n, _c in existing}
-
-        tags = sorted(self.get_category_with_count("tag"), key=lambda t: -t["count"])
-        for t in tags:
-            try:
-                name = fh.normalize_segment(t["name"])
-            except ValueError:
-                continue
-            if t["count"] >= CANDIDATE_MIN_TAG_COUNT and name not in seen:
-                seen.add(name)
-                items.append({"name": name, "count": t["count"], "source": "tag"})
+        items = [{"name": n, "count": c} for n, c in fh.candidate_names(fh.build_tree(counts), parent_parts)]
         if q:
             items = [i for i in items if q in i["name"].lower()]
         return {"err": "ok", "items": items[:CANDIDATE_LIMIT], "max_depth": fh.MAX_DEPTH}
