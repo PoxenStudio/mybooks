@@ -706,7 +706,7 @@ export default {
                 ...(showItem("printbooks") && this.sys.allow.physical_books ? [{ icon: "mdi-bookshelf", href: "/printbooks", text: "appHeader.physicalBooks", count: this.sys.physicals, color: "orange"}] : []),
                 { icon: "mdi-account-group", href: "/author", text: "appHeader.authors", count: this.sys.authors, color: "blue darken-1"},
                 { icon: "mdi-shape-plus", href: "/categories", text: "appHeader.categoryBrowse", count: this.sys.categories, color: "green" },
-                { icon: "mdi-folder-multiple-outline", href: "/folder", text: "appHeader.folders", count: this.sys.folders, color: "amber darken-2" },
+                ...(showItem("folders") ? [{ icon: "mdi-folder-multiple-outline", href: "/folder", text: "appHeader.folders", count: this.sys.folders, color: "amber darken-2" }] : []),
                 ...(showItem("tags") ? [{ icon: "mdi-tag-heart", href: "/tag", text: "appHeader.tags", count: this.sys.tags, color: "deep-orange"}] : []),
                 ...(showItem("publishers") ? [{ icon: "mdi-home-group", href: "/publisher", text: "appHeader.publishers", count: this.sys.publishers, color: "blue darken-2"}] : []),
                 ...(showItem("series") ? [{ icon: "mdi-library-shelves", href: "/series", text: "appHeader.series", count: this.sys.series, color: "blue darken-2"}] : []),
