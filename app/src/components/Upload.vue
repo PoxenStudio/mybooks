@@ -77,12 +77,31 @@
             confirm-color="green"
             confirm-dark
             :confirm-loading="adding_book"
-            :confirm-disabled="!isValidIsbn"
+            :confirm-disabled="!canConfirmAdd"
             @dismiss="cancelAddBook"
             @confirm="confirmAddBook"
         >
+                    <v-radio-group v-model="addMode" row hide-details class="mt-0 mb-4">
+                        <v-radio :label="$t('upload.modeIsbn')" value="isbn" color="green"></v-radio>
+                        <v-radio :label="$t('upload.modeManual')" value="manual" color="green"></v-radio>
+                    </v-radio-group>
+                    <template v-if="addMode === 'manual'">
+                        <p class="body-1">{{ $t('upload.addManualDesc') }}</p>
+                        <v-text-field key="manual-title" ref="manualTitleField" v-model="manualTitle" :label="$t('upload.titleLabel')" outlined
+                            maxlength="100" counter :rules="manualTitleRules"
+                            @keyup.enter="confirmAddBook"></v-text-field>
+                        <v-text-field key="manual-isbn" v-model="isbn" :label="$t('upload.isbnOptionalLabel')" outlined
+                            maxlength="17" :rules="manualIsbnRules" @keyup.enter="confirmAddBook">
+                            <template v-slot:prepend-inner><v-icon>mdi-barcode</v-icon></template>
+                        </v-text-field>
+                        <v-text-field key="manual-author" v-model="manualAuthor" :label="$t('upload.authorOptionalLabel')" outlined
+                            maxlength="64" counter :hint="$t('upload.authorHint')" persistent-hint :rules="manualAuthorRules"
+                            @keyup.enter="confirmAddBook"></v-text-field>
+                    </template>
+                    <template v-else>
                     <p class="body-1">{{ $t('upload.addPhysicalBookDesc') }}</p>
                     <v-text-field
+                        key="isbn-field"
                         ref="isbnField"
                         v-model="isbn"
                         :label="$t('upload.isbnLabel')"
@@ -93,7 +112,6 @@
                         maxlength="17"
                         :hint="$t('upload.isbnHint')"
                         persistent-hint
-                        autofocus
                         @keyup.enter="confirmAddBook"
                         @input="clearValidationCache"
                     >
@@ -120,6 +138,8 @@
                             </v-tooltip>
                         </template>
                     </v-text-field>
+
+                    </template>
 
                     <!-- 隐藏的文件输入框 -->
                     <input
@@ -157,6 +177,9 @@ export default {
         isbn_dialog: false,
         adding_book: false,
         isbn: "",
+        addMode: "isbn", // isbn | manual
+        manualTitle: "",
+        manualAuthor: "",
         continueAdding: false,
         // 条形码识别相关
         recognizing_barcode: false,
@@ -179,6 +202,24 @@ export default {
         showUploadButtons() {
             // 在音频播放器页面隐藏上传按钮
             return !this.$route.path.startsWith('/audio/');
+        },
+        manualIsbnRules() {
+            return [v => !v || /^([0-9]{9}[0-9Xx]|[0-9]{13})$/.test(v.replace(/[-\s]/g, '')) || this.$t('upload.invalidIsbn')];
+        },
+        manualTitleRules() {
+            return [v => !v || (v.length <= 100 && !/['\p{Cc}]/u.test(v)) || this.$t('upload.invalidTitle')];
+        },
+        manualAuthorRules() {
+            return [v => !v || (v.length <= 64 && !/['\p{Cc}]/u.test(v)) || this.$t('upload.invalidAuthor')];
+        },
+        canConfirmAdd() {
+            if (this.addMode === 'manual') {
+                const v = this.isbn.replace(/[-\s]/g, '');
+                const t = this.manualTitle.trim();
+                const a = this.manualAuthor.trim();
+                return !!t && t.length <= 100 && a.length <= 64 && !/['"\p{Cc}]/u.test(t + a) && (!v || /^([0-9]{9}[0-9Xx]|[0-9]{13})$/.test(v));
+            }
+            return this.isValidIsbn;
         },
         isValidIsbn() {
             // Vue 的 computed 本身已按 this.isbn 做依赖缓存，不需要手动缓存
@@ -207,11 +248,36 @@ export default {
                 this.ebooks = [];
             }
         },
+        // 添加实体书对话框：dialog 过渡完成后再聚焦对应字段，避免 Vuetify 的
+        // setLabelWidth() 在元素尚未稳定时测量出错误宽度，导致浮动标签位置偏移。
+        isbn_dialog(val) {
+            if (val) {
+                this.$nextTick(() => {
+                    setTimeout(() => this.focusAddBookField(), 250);
+                });
+            }
+        },
+        addMode() {
+            if (this.isbn_dialog) {
+                this.$nextTick(() => {
+                    setTimeout(() => this.focusAddBookField(), 150);
+                });
+            }
+        },
     },
     created() {
         this.buildDebouncedIsbnRules();
     },
     methods: {
+        // 根据当前模式聚焦对应的输入框。延迟调用是为了避开 dialog 的进入过渡，
+        // 让 Vuetify 的 setLabelWidth() 在元素稳定后再测量，避免浮动标签位置偏移。
+        focusAddBookField() {
+            if (this.addMode === 'manual') {
+                this.$refs.manualTitleField && this.$refs.manualTitleField.focus();
+            } else {
+                this.$refs.isbnField && this.$refs.isbnField.focus();
+            }
+        },
         // 构建防抖验证规则（原来放在 computed 里"只构建一次"，会在计算过程中
         // 给 shouldValidate 赋值触发 vue/no-side-effects-in-computed-properties；
         // 挪到普通方法里，在 created() 里建一次，需要重置时显式调用即可）。
@@ -449,6 +515,9 @@ export default {
         cancelAddBook() {
             this.isbn_dialog = false;
             this.isbn = "";
+            this.manualTitle = "";
+            this.manualAuthor = "";
+            this.addMode = "isbn";
             this.continueAdding = false; // 重置checkbox状态
             // 重置验证状态
             this.showValidationErrors = false;
@@ -457,6 +526,10 @@ export default {
         },
 
         confirmAddBook() {
+            if (this.addMode === 'manual') {
+                this.confirmAddManual();
+                return;
+            }
             // 触发验证显示
             this.showValidationErrors = true;
             this.shouldValidate = true;
@@ -518,6 +591,44 @@ export default {
                         this.continueAdding = false;
                     }
                 });
+            });
+        },
+
+        confirmAddManual() {
+            if (!this.canConfirmAdd || this.adding_book) {
+                return;
+            }
+            this.adding_book = true;
+            this.$backend("/book/add/manual", {
+                method: "POST",
+                body: JSON.stringify({
+                    title: this.manualTitle.trim(),
+                    author: this.manualAuthor.trim(),
+                    isbn: this.isbn.replace(/[-\s]/g, ''),
+                }),
+            })
+            .then((rsp) => {
+                if (rsp.err != "ok") {
+                    this.$alert("error", rsp.msg);
+                    return;
+                }
+                this.isbn_dialog = false;
+                if (this.continueAdding) {
+                    this.$router.push(`/book/${rsp.book_id}?continue_adding=true`);
+                } else {
+                    this.$alert("success", rsp.msg || this.$t('upload.addSuccess'));
+                    this.$router.push(`/book/${rsp.book_id}`);
+                }
+                this.isbn = "";
+                this.manualTitle = "";
+                this.manualAuthor = "";
+            })
+            .catch((error) => {
+                const msg = error.message ? this.$t('upload.addBookError') + ": " + error.message : this.$t('upload.addBookError');
+                this.$alert("error", msg);
+            })
+            .finally(() => {
+                this.adding_book = false;
             });
         },
 
@@ -596,3 +707,13 @@ export default {
 
 }
 </script>
+
+<style scoped>
+/* Vuetify 的 outlined text-field 在聚焦时会给 fieldset > legend 设置 width
+   来制造"缺口"效果，浮动标签就放在缺口里。这个 width 由 setLabelWidth() 计算，
+   如果在 dialog 过渡期间测量（element 尚未稳定），结果会是 0，缺口就消失了。
+   这里给 legend 加一个最小宽度，作为时序竞态下的安全网。 */
+::v-deep .v-text-field--outlined > .v-input__control > .v-input__slot > fieldset > legend {
+    min-width: 48px;
+}
+</style>

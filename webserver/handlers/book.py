@@ -2376,6 +2376,69 @@ class BookAddByISBN(BaseHandler):
             return {"err": "internal", "msg": _("查询ISBN失败，请在系统设置中配置互联网信息源中插件地址。如http://douban-rs-api:80/。")}
 
 
+# 直接录入书名/作者/ISBN添加实体图书（ISBN、作者可选），添加后强制刮削
+class BookAddManual(BaseHandler):
+    @js
+    @auth
+    def post(self):
+        if not self.current_user.can_upload():
+            return {"err": "permission", "msg": _("无权操作")}
+        data = tornado.escape.json_decode(self.request.body)
+        title = (data.get("title") or "").strip()
+        author = (data.get("author") or "").strip()
+        isbn = re.sub(r"[-\s]", "", (data.get("isbn") or "")).upper()
+        if not title:
+            return {"err": "params.invalid", "msg": _("请输入书名")}
+        if len(title) > 100 or len(author) > 64:
+            return {"err": "params.invalid", "msg": _("书名或作者过长")}
+        if re.search(r"['\"\x00-\x1f\x7f]", title + author):
+            return {"err": "params.invalid", "msg": _("书名或作者包含非法字符")}
+        authors = [a.strip() for a in re.split(r"[,，]", author) if a.strip()]
+        if isbn and not re.match(r"^([0-9]{9}[0-9X]|[0-9]{13})$", isbn):
+            return {"err": "params.invalid", "msg": _("无效的ISBN号")}
+
+        if isbn and self.find_phy_books_by_isbn(isbn):
+            return {"err": "book.duplicate", "msg": _("该ISBN对应的图书已存在")}
+
+        try:
+            from calibre.ebooks.metadata.book.base import Metadata
+            from calibre.utils.date import now as nowf
+
+            mi = Metadata(title, authors if authors else [_("佚名")])
+            if isbn:
+                mi.isbn = isbn
+            mi.title_sort = utils.get_title_sort(title)
+            mi.timestamp = nowf()
+
+            book_id = self.calibre_db.create_book_entry(mi)
+            if book_id is None:
+                return {"err": "book.duplicate", "msg": _("该图书已存在或创建失败")}
+
+            try:
+                self.calibre_db_cache.set_field(CALIBRE_COLUMN_BOOK_TYPE, {book_id: BOOK_TYPE_PHYSICAL})
+                self.calibre_db_cache.set_field(CALIBRE_COLUMN_PHY_COUNT, {book_id: 1})
+                BaseHandler._physical_books_count_cache_time = 0
+            except Exception as e:
+                logging.error(f"Failed to set custom fields for book ID {book_id}: {e}")
+
+            item = Item()
+            item.book_id = book_id
+            item.collector_id = self.user_id()
+            item.book_type = BOOK_TYPE_PHYSICAL
+            item.book_count = 1
+            self.sqlite_session.add(item)
+            self.sqlite_session.commit()
+
+            # 直接录入的信息很少，添加后强制刮削补全。
+            # auto_fill 是同步调用（网络刮削约数秒），这里改走异步服务，不阻塞请求
+            AutoFillService().auto_fill_all([book_id], force=True, qpm=600)
+            return {"err": "ok", "msg": _("图书添加成功"), "book_id": book_id}
+        except Exception as e:
+            logging.error("Failed to add book manually: %s", e)
+            logging.error(traceback.format_exc())
+            return {"err": "internal", "msg": _("添加图书失败")}
+
+
 class BookUpload(BaseHandler):
     @classmethod
     def convert(cls, s):
@@ -4149,6 +4212,7 @@ def routes():
         (r"/api/soledbooks", BookSoled),
         (r"/api/book/nav", BookNav),
         (r"/api/book/add", BookAddByISBN),
+        (r"/api/book/add/manual", BookAddManual),
         (r"/api/book/upload", BookUpload),
         (r"/api/book/upload/chunk", BookUploadChunk),
         (r"/api/book/upload/batch", BookUploadBatch),
