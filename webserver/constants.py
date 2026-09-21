@@ -25,6 +25,9 @@ SUPPORTED_SUBTITLE_FORMATS = ['.srt', '.vtt']
 COLUMN_CATEGORY = "category"
 CALIBRE_COLUMN_CATEGORY = "#category"
 
+COLUMN_FOLDER = "folder"
+CALIBRE_COLUMN_FOLDER = "#folder"
+
 # 书籍来源
 COLUMN_BOOK_TYPE = "book_type"
 CALIBRE_COLUMN_BOOK_TYPE = "#book_type"

@@ -27,7 +27,7 @@ from webserver.services import AsyncService
 from webserver.services.book_barn import BookBarnService
 from webserver.services.item_sync import ItemSyncService
 from webserver.services.resource_service import ResourceService
-from webserver.constants import COLUMN_CATEGORY, COLUMN_PHY_COUNT, COLUMN_BOOK_TYPE, COLUMN_TRANSLATORS
+from webserver.constants import COLUMN_CATEGORY, COLUMN_FOLDER, COLUMN_PHY_COUNT, COLUMN_BOOK_TYPE, COLUMN_TRANSLATORS
 from webserver.constants import COLUMN_EXT_LINK, CUSTOM_COVER_IMAGE, COLUMN_DYNAMIC_COVER
 from webserver.constants import COLUMN_LOCATION, COLUMN_CATALOG
 from webserver.version import VERSION
@@ -331,6 +331,7 @@ def make_app():
             logging.warning(f"Failed to disable FTS: {e}")
 
         added_category = add_meta_in_calibre(cache, COLUMN_CATEGORY, "Book Category", "text")
+        _ = add_meta_in_calibre(cache, COLUMN_FOLDER, "Book Folder", "text")
         added_phy_count = add_meta_in_calibre(cache, COLUMN_PHY_COUNT, "Physical Book Count", "int")
         added_source = add_meta_in_calibre(cache, COLUMN_BOOK_TYPE, "Book Type", "int")
         added_location = add_meta_in_calibre(cache, COLUMN_LOCATION, "Location", "text")
@@ -411,7 +412,7 @@ def make_app():
     # Assemble routes carefully:
     # WebDAV must come before files.routes() because files has a catch-all (r"/(.*)")
     # We need to get routes from handlers module without files, add webdav, then add files
-    from webserver.handlers import assistant, mcp, admin, barcode, scan, opds, book, book_review, booklist, user, meta, audio, toolbox, sync, tts
+    from webserver.handlers import assistant, mcp, admin, barcode, scan, opds, book, book_review, booklist, user, meta, audio, toolbox, sync, tts, folder
 
     app_routes = []
     app_routes += social_routes.SOCIAL_AUTH_ROUTES
@@ -430,6 +431,7 @@ def make_app():
     app_routes += toolbox.routes()
     app_routes += sync.routes()
     app_routes += tts.routes()
+    app_routes += folder.routes()
 
     # Podcast routes are always registered; each handler calls check_podcast_enabled()
     # at request time, so toggling ENABLE_PODCAST_SERVICE takes effect without restart.

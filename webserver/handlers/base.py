@@ -989,6 +989,13 @@ class BaseHandler(web.RequestHandler):
                 )
             return cached
 
+    def get_folder_count(self):
+        """Return the number of distinct top-level folders in #folder."""
+        from webserver.base.folder_helper import folder_counts, top_level_count
+
+        with self.db_lock:
+            return top_level_count(folder_counts(self.calibre_db_cache))
+
     def get_custom_category_count(self):
         """Return the number of distinct values in the custom #category column."""
         from webserver.constants import CALIBRE_COLUMN_CATEGORY
@@ -1250,6 +1257,7 @@ class BaseHandler(web.RequestHandler):
             "publishers": len(db.all_publishers()),
             "series": len(db.all_series()),
             "categories": self.get_custom_category_count(),
+            "folders": self.get_folder_count(),
             "physicals": physical_book_cnt,
             "mtime": db.last_modified().strftime("%Y-%m-%d"),
             "users": count_all_users,
@@ -1302,6 +1310,9 @@ class ListHandler(BaseHandler):
         ids = set(self.calibre_db.get_books_for_category(category, item_id)) if item_id else set()
         if extra_ids:
             ids |= set(extra_ids)
+        return self.load_books_by_ids(ids, max_count)
+
+    def load_books_by_ids(self, ids, max_count=0):
         if not ids:
             return []
 

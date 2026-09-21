@@ -3,7 +3,7 @@
 import datetime
 from webserver.i18n import _
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT
-from webserver.constants import CALIBRE_COLUMN_EXT_LINK, CALIBRE_COLUMN_CATEGORY
+from webserver.constants import CALIBRE_COLUMN_EXT_LINK, CALIBRE_COLUMN_CATEGORY, CALIBRE_COLUMN_FOLDER
 from webserver.constants import CALIBRE_COLUMN_TRANSLATORS
 from webserver.constants import BOOK_TYPE_EBOOK, CALIBRE_COLUMN_DYNAMIC_COVER
 from webserver.constants import CALIBRE_COLUMN_LOCATION, BOOK_TYPE_PHYSICAL
@@ -88,6 +88,7 @@ class SimpleBookFormatter:
             "book_count": self.book.get("book_count", book_count),
             "state": self.book.get("state", {}),
             'category': category,
+            'folder': self.val(CALIBRE_COLUMN_FOLDER, '').strip(),
             'ext_link': ext_link,
             'files': self.get_files(),
             'dynamic_cover': dynamic_cover,
