@@ -48,6 +48,29 @@
                   <v-icon :color="f.color">{{ f.icon }}</v-icon>
                 </template>
               </v-checkbox>
+              <div
+                v-else-if="f.type === 'checkbox_list'"
+                :key="f.key + '-checkbox_list'"
+                class="mb-2"
+              >
+                <div class="d-flex align-center mt-2">
+                  <v-icon class="mr-2" :color="f.color">{{ f.icon }}</v-icon>
+                  <span class="text-body-1">{{ $t(f.label) }}</span>
+                </div>
+                <div v-if="f.tips" class="text-caption grey--text ml-8">{{ $t(f.tips) }}</div>
+                <div class="pl-8">
+                  <v-checkbox
+                    v-for="opt in f.items"
+                    :key="f.key + '-' + opt.value"
+                    v-model="settings[f.key]"
+                    :value="opt.value"
+                    :label="$t(opt.text)"
+                    dense
+                    hide-details
+                    class="mt-0"
+                  ></v-checkbox>
+                </div>
+              </div>
               <v-textarea
                 outlined
                 v-else-if="f.type === 'textarea'"
@@ -941,6 +964,23 @@ export default {
             key: "HIDE_PROJECT_LINKS",
             label: "settings.hide_project_link_in_footer",
             type: "checkbox",
+          },
+          {
+            icon: "mdi-page-layout-sidebar-left",
+            key: "SIDEBAR_ITEMS",
+            label: "settings.sidebar_items",
+            type: "checkbox_list",
+            tips: "settings.sidebar_items_tips",
+            items: [
+              { value: "audiobooks", text: "appHeader.audioBooks" },
+              { value: "printbooks", text: "appHeader.physicalBooks" },
+              { value: "publishers", text: "appHeader.publishers" },
+              { value: "tags", text: "appHeader.tags" },
+              { value: "series", text: "appHeader.series" },
+              { value: "languages", text: "appHeader.languages" },
+              { value: "rating", text: "appHeader.rating" },
+              { value: "memo", text: "appHeader.memo" },
+            ],
           },
         ],
         groups: [

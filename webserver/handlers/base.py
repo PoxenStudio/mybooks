@@ -1290,6 +1290,7 @@ class BaseHandler(web.RequestHandler):
             "aiEnabled": CONF.get("AI_ENABLED", False),
             "standalone": CONF.get("STANDALONE", False),
             "hide_project_links": CONF.get("HIDE_PROJECT_LINKS", False),
+            "sidebar_items": CONF.get("SIDEBAR_ITEMS", []),
             "invited_enabled": self.need_invited(),
             "showUserInfo": CONF.get("ENABLE_AUTHOR_INFO", False),
         }

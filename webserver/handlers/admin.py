@@ -502,6 +502,7 @@ class AdminSettings(BaseHandler):
             "FOOTER",
             "FOOTER_WATERMARK",
             "HIDE_PROJECT_LINKS",
+            "SIDEBAR_ITEMS",
             "HEADER",
             "INVITE_CODE",
             "INVITE_MESSAGE",

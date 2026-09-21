@@ -735,6 +735,8 @@
     "site_footer": "网站脚注",
     "footer_watermark": "脚注水印",
     "hide_project_link_in_footer": "隐藏脚注中的项目链接",
+    "sidebar_items": "侧边栏显示项目",
+    "sidebar_items_tips": "勾选表示在侧边栏显示，全部不勾选表示全部显示",
     "private_library_mode": "开启私人图书馆模式",
     "access_code": "访问码",
     "invite_message": "提示语",

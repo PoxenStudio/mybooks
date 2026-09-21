@@ -479,6 +479,8 @@
     "site_footer": "Site Footer",
     "footer_watermark": "Footer Watermark",
     "hide_project_link_in_footer": "Hide Project Links in Footer",
+    "sidebar_items": "Sidebar Items",
+    "sidebar_items_tips": "Checked items are shown in the sidebar; leave all unchecked to show everything",
     "private_library_mode": "Enable Private Library Mode",
     "access_code": "Access Code",
     "invite_message": "Invite Message",

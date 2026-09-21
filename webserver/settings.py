@@ -199,6 +199,7 @@ settings = {
     'FOOTER': '',
     'FOOTER_WATERMARK': 'PoxenStudio/MyBooks',
     'HIDE_PROJECT_LINKS': False,
+    'SIDEBAR_ITEMS': [],                # 侧边栏显示的项目，空表示全部显示
 
     'FRIENDS': [],
     'SOCIALS': [],

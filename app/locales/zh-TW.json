@@ -729,6 +729,8 @@
     "site_footer": "網站頁尾",
     "footer_watermark": "頁尾浮水印",
     "hide_project_link_in_footer": "隱藏頁尾的項目連結",
+    "sidebar_items": "側邊欄顯示項目",
+    "sidebar_items_tips": "勾選表示在側邊欄顯示，全部不勾選表示全部顯示",
     "private_library_mode": "開啟私人圖書館模式",
     "access_code": "存取碼",
     "invite_message": "提示語",
