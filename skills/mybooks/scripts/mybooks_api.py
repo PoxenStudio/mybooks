@@ -675,6 +675,186 @@ class MyBooksAPI:
         )
 
     # ========================================================================
+    # Manual reading time (v4.3.0+)
+    # ========================================================================
+
+    def get_reading_time(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Get the manual reading-time entry (and reference totals) of a book on a date.
+
+        Args:
+            book_id (int, required): Book ID
+            date (str, required): YYYY-MM-DD
+        """
+        book_id = args.get("book_id")
+        date = args.get("date")
+        if not book_id or not date:
+            return {"status": "error", "message": "book_id and date are required"}
+        return self._call_with_auto_relogin("GET", f"/api/book/{book_id}/reading_time", params={"date": date})
+
+    def set_reading_time(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Add or overwrite the manual reading-time entry of a book on a date.
+
+        Args:
+            book_id (int, required): Book ID
+            date (str, required): YYYY-MM-DD, must not be in the future
+            duration_seconds (int, required): 0~64800 (18h); overwrites that day's manual entry
+            start_time (str, optional): free-form start time text
+            end_time (str, optional): free-form end time text
+        """
+        book_id = args.get("book_id")
+        if not book_id or not args.get("date") or args.get("duration_seconds") is None:
+            return {"status": "error", "message": "book_id, date and duration_seconds are required"}
+        body = {k: v for k, v in args.items() if k != "book_id"}
+        return self._call_with_auto_relogin("POST", f"/api/book/{book_id}/reading_time", json=body)
+
+    def delete_reading_time(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Delete the manual reading-time entry of a book on a date.
+
+        Args:
+            book_id (int, required): Book ID
+            date (str, required): YYYY-MM-DD
+        """
+        book_id = args.get("book_id")
+        date = args.get("date")
+        if not book_id or not date:
+            return {"status": "error", "message": "book_id and date are required"}
+        return self._call_with_auto_relogin("DELETE", f"/api/book/{book_id}/reading_time", params={"date": date})
+
+    # ========================================================================
+    # Booklist Tool Methods (v4.3.0+)
+    # ========================================================================
+
+    def list_my_booklists(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """List the current user's own booklists."""
+        return self._call_with_auto_relogin("GET", "/api/booklists/mine")
+
+    def list_public_booklists(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        List public booklists.
+
+        Args:
+            page (int, optional): default 1
+            page_size (int, optional): default 20, max 50
+        """
+        params = {k: args[k] for k in ("page", "page_size") if k in args}
+        return self._call_with_auto_relogin("GET", "/api/booklists/public", params=params)
+
+    def list_liked_booklists(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """List booklists liked by the current user."""
+        return self._call_with_auto_relogin("GET", "/api/booklists/liked")
+
+    def get_booklist(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Get a booklist with its books.
+
+        Args:
+            booklist_id (int, required): Booklist ID
+            order (str, optional): desc (default) / asc, by time added
+            page (int, optional): default 1
+            page_size (int, optional): default 24, max 60
+        """
+        booklist_id = args.get("booklist_id")
+        if not booklist_id:
+            return {"status": "error", "message": "booklist_id is required"}
+        params = {k: args[k] for k in ("order", "page", "page_size") if k in args}
+        return self._call_with_auto_relogin("GET", f"/api/booklist/{booklist_id}", params=params)
+
+    def create_booklist(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Create a booklist.
+
+        Args:
+            name (str, required): Booklist name
+            description (str, optional): up to 500 chars
+            color (str, optional): Booklist color
+            is_public (bool, optional): default false
+        """
+        if not args.get("name"):
+            return {"status": "error", "message": "name is required"}
+        return self._call_with_auto_relogin("POST", "/api/booklist/create", json=args)
+
+    def update_booklist(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Update a booklist (owner or admin). Only the fields passed are changed.
+
+        Args:
+            booklist_id (int, required): Booklist ID
+            name / description / color / is_public (optional)
+        """
+        booklist_id = args.get("booklist_id")
+        if not booklist_id:
+            return {"status": "error", "message": "booklist_id is required"}
+        body = {k: v for k, v in args.items() if k != "booklist_id"}
+        return self._call_with_auto_relogin("POST", f"/api/booklist/{booklist_id}/update", json=body)
+
+    def delete_booklist(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Delete a booklist (owner or admin). The books themselves are not deleted.
+
+        Args:
+            booklist_id (int, required): Booklist ID
+        """
+        booklist_id = args.get("booklist_id")
+        if not booklist_id:
+            return {"status": "error", "message": "booklist_id is required"}
+        return self._call_with_auto_relogin("POST", f"/api/booklist/{booklist_id}/delete", json={})
+
+    def booklist_add_books(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Add books to a booklist (owner or admin).
+
+        Args:
+            booklist_id (int, required): Booklist ID
+            book_ids (array, required): Book IDs (a single book_id is also accepted)
+        """
+        booklist_id = args.get("booklist_id")
+        if not booklist_id:
+            return {"status": "error", "message": "booklist_id is required"}
+        body = {k: v for k, v in args.items() if k in ("book_ids", "book_id")}
+        return self._call_with_auto_relogin("POST", f"/api/booklist/{booklist_id}/books/add", json=body)
+
+    def booklist_remove_book(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Remove one book from a booklist (owner or admin).
+
+        Args:
+            booklist_id (int, required): Booklist ID
+            book_id (int, required): Book ID
+        """
+        booklist_id = args.get("booklist_id")
+        book_id = args.get("book_id")
+        if not booklist_id or not book_id:
+            return {"status": "error", "message": "booklist_id and book_id are required"}
+        return self._call_with_auto_relogin("POST", f"/api/booklist/{booklist_id}/books/remove", json={"book_id": book_id})
+
+    def like_booklist(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Toggle like on a booklist.
+
+        Args:
+            booklist_id (int, required): Booklist ID
+        """
+        booklist_id = args.get("booklist_id")
+        if not booklist_id:
+            return {"status": "error", "message": "booklist_id is required"}
+        return self._call_with_auto_relogin("POST", f"/api/booklist/{booklist_id}/like", json={})
+
+    def get_book_booklists(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        List the current user's booklists, marking which already contain the book.
+
+        Args:
+            book_id (int, required): Book ID
+        """
+        book_id = args.get("book_id")
+        if not book_id:
+            return {"status": "error", "message": "book_id is required"}
+        return self._call_with_auto_relogin("GET", f"/api/book/{book_id}/booklists")
+
+    # ========================================================================
     # TTS Tool Methods (MiMo TTS audiobook, admin only)
     # ========================================================================
 
@@ -953,6 +1133,10 @@ class MyBooksAPI:
                 "book_add_by_isbn", "wants", "list_wants", "favorite",
                 "list_favorites", "reading", "list_reading", "read_done",
                 "list_read_done", "get_book_reading_stats", "update_book_reading_stats",
+                "get_reading_time", "set_reading_time", "delete_reading_time",
+                "list_my_booklists", "list_public_booklists", "list_liked_booklists",
+                "get_booklist", "create_booklist", "update_booklist", "delete_booklist",
+                "booklist_add_books", "booklist_remove_book", "like_booklist", "get_book_booklists",
                 "tts_save_config", "tts_test_connection",
                 "tts_convert", "tts_progress", "tts_clone_upload", "tts_clone_list",
                 "tts_clone_delete", "tts_clone_audio", "tts_prompt_list",

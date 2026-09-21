@@ -3,7 +3,7 @@ name: mybooks
 homepage: https://www.mybooks.top
 allowed-tools: Bash(python3:*)
 metadata: {"clawdbot":{},"openclaw":{"requires":{"bins":["python3"],"env":["MYBOOKS_HOST","MYBOOKS_USER","MYBOOKS_PASSWORD"]}}}
-description: "MyBooks是个人书库管理系统，提供电子书及实体书管理，包括存储、分类、搜索和元数据管理功能。你可以帮助用户：查询书库统计信息和阅读统计,搜索/浏览书籍,获取书籍详情,更新书籍元数据（书名、作者、标签、分类、简介等）,自动联网填充书籍信息,发送书籍到邮箱或阅读器设备,上传电子书或通过ISBN添加实体书,管理阅读状态（想读/在读/已读/收藏）,查询/手动更新某本书分格式的阅读时长与进度,查看作者信息和分类信息,导入第三方阅读App的划线与想法（如微信读书，需配合微信读书 skill 读取原始数据）,以及MiMo TTS有声书功能（配置TTS API、EPUB转有声书、查询转换进度、克隆音色与语音提示词管理，需管理员权限）等"
+description: "MyBooks是个人书库管理系统，提供电子书及实体书管理，包括存储、分类、搜索和元数据管理功能。你可以帮助用户：查询书库统计信息和阅读统计,搜索/浏览书籍,获取书籍详情,更新书籍元数据（书名、作者、标签、分类、简介等）,自动联网填充书籍信息,发送书籍到邮箱或阅读器设备,上传电子书或通过ISBN添加实体书,管理阅读状态（想读/在读/已读/收藏）,查询/手动更新某本书分格式的阅读时长与进度,按日期补录/修改/删除阅读时间（v4.3.0+）,管理书单（创建/浏览/加书/移书/点赞，v4.3.0+）,查看作者信息和分类信息,导入第三方阅读App的划线与想法（如微信读书，需配合微信读书 skill 读取原始数据）,以及MiMo TTS有声书功能（配置TTS API、EPUB转有声书、查询转换进度、克隆音色与语音提示词管理，需管理员权限）等"
 ---
 
 # MyBooks
@@ -959,6 +959,111 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 
 ---
 
+### `get_reading_time` / `set_reading_time` / `delete_reading_time` — 按日期补录阅读时间
+
+> **版本要求：MyBooks v4.3.0+**（旧版本服务端没有 `/api/book/<id>/reading_time`，调用会 404）。
+
+**使用场景**：某天读了书但没有通过 MyReader/网页阅读器自动计时（纸质书、其他 App 等），按**日期**补录一条手工阅读记录。每本书每天最多一条手工记录：再次 `set_reading_time` 同一天是**覆盖**（不是累加），差值会同步到当日阅读统计、该书分格式累计时长和用户总阅读时长。与 `update_book_reading_stats`（按格式累加时长/进度）不同，这里是按天的"覆盖式"记录。
+
+**限制**：书籍必须有电子书格式（记录会挂到已有的阅读格式，否则挂到可用格式之一）；日期不能晚于今天；`duration_seconds` 范围 0~64800（18 小时）。均需登录，只影响当前用户自己的数据。
+
+**参数**：
+
+| 工具 | 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| 三个都有 | `book_id` | int | ✅ | 书籍 ID |
+| 三个都有 | `date` | string | ✅ | 日期，格式 `YYYY-MM-DD` |
+| `set_reading_time` | `duration_seconds` | int | ✅ | 当天该书的阅读总秒数（覆盖原手工记录） |
+| `set_reading_time` | `start_time` | string | ❌ | 开始时间（文本，如 `"20:30"`） |
+| `set_reading_time` | `end_time` | string | ❌ | 结束时间（文本） |
+
+**执行脚本**：
+```bash
+# 查询某天的手工记录及参考数据（自动记录的秒数、手工秒数、该书总时长）
+<skill-installation-path>/scripts/mybooks_api.py get_reading_time '{"book_id":42,"date":"2026-09-20"}'
+
+# 补录（或覆盖）：当天读了 45 分钟
+<skill-installation-path>/scripts/mybooks_api.py set_reading_time '{"book_id":42,"date":"2026-09-20","duration_seconds":2700,"start_time":"20:30","end_time":"21:15"}'
+
+# 删除当天的手工记录（同步回退统计）
+<skill-installation-path>/scripts/mybooks_api.py delete_reading_time '{"book_id":42,"date":"2026-09-20"}'
+```
+
+**响应示例**：
+```json
+// get_reading_time
+{ "err": "ok", "entry": { "date": "2026-09-20", "duration_seconds": 2700, "format": "epub" }, "date_recorded_seconds": 600, "manual_recorded_seconds": 2700, "book_total_seconds": 8121 }
+// set_reading_time
+{ "err": "ok", "entry": { "date": "2026-09-20", "duration_seconds": 2700, "format": "epub" } }
+// delete_reading_time
+{ "err": "ok", "deleted": true }
+```
+`entry` 为 `null` 表示该日没有手工记录；`deleted:false` 表示本来就没有可删的记录。`entry` 的具体字段以服务端返回为准。
+
+**常见错误**：
+| `err` 值 | 含义 |
+|----------|------|
+| `"params.invalid"` | 日期格式错误/是未来日期、缺少或超出范围的 `duration_seconds`、书籍没有可阅读的电子书格式 |
+| `"params.book.invalid"` | 书籍不存在 |
+
+---
+
+## 书单工具列表
+
+> **版本要求：MyBooks v4.3.0+**（旧版本没有 `/api/booklist*` 接口）。书单（booklist）是用户自建的书籍集合，每人数量有上限，可设为公开供他人浏览、点赞。
+
+**权限规则**：浏览公开书单不需登录；创建/修改/删除书单、增删书籍、点赞需要登录，其中修改/删除/增删书籍仅限书单所有者或管理员；私有书单仅所有者/管理员可看，且不能点赞。
+
+**书单对象**（各接口 `booklist(s)` 里的元素）主要字段：`id`、`name`、`description`、`color`、`is_public`、`is_sticky`、`view_count`、`like_count`、`book_count`、`create_time`、`update_time`、`owner`（`id`/`username`/`avatar`）、`is_owner`、`liked_by_me`；列表接口另带 `cover_books`（最多 12 本的封面卡片）。
+
+| 工具 | 说明 | 参数 |
+|------|------|------|
+| `list_my_booklists` | 我的书单（需登录） | 无 |
+| `list_public_booklists` | 公开书单，分页 | `page`（默认 1）、`page_size`（默认 20，最大 50） |
+| `list_liked_booklists` | 我点赞过的书单（需登录） | 无 |
+| `get_booklist` | 书单详情 + 分页书籍（`books`、`books_total`） | `booklist_id`（必填）、`order`（`desc` 默认/`asc`，按加入时间）、`page`、`page_size`（默认 24，最大 60） |
+| `create_booklist` | 新建书单 | `name`（必填）、`description`（≤500 字）、`color`、`is_public`（默认 false） |
+| `update_booklist` | 修改书单，只改传入的字段 | `booklist_id`（必填）、`name`/`description`/`color`/`is_public` |
+| `delete_booklist` | 删除书单（**不会删除书籍本身**，删除前先跟用户确认） | `booklist_id`（必填） |
+| `booklist_add_books` | 批量加书（不存在的书自动忽略） | `booklist_id`（必填）、`book_ids`（数组，必填） |
+| `booklist_remove_book` | 移出一本书 | `booklist_id`、`book_id`（均必填） |
+| `like_booklist` | 点赞/取消点赞（切换） | `booklist_id`（必填） |
+| `get_book_booklists` | 我的书单里哪些已包含某本书（`contains_book`） | `book_id`（必填） |
+
+**执行脚本**：
+```bash
+<skill-installation-path>/scripts/mybooks_api.py list_my_booklists '{}'
+<skill-installation-path>/scripts/mybooks_api.py create_booklist '{"name":"2026 科幻必读","description":"年度科幻","is_public":true}'
+<skill-installation-path>/scripts/mybooks_api.py booklist_add_books '{"booklist_id":7,"book_ids":[42,43]}'
+<skill-installation-path>/scripts/mybooks_api.py get_booklist '{"booklist_id":7,"page":1}'
+<skill-installation-path>/scripts/mybooks_api.py booklist_remove_book '{"booklist_id":7,"book_id":43}'
+```
+
+**响应示例**（`get_booklist`）：
+```json
+{
+  "err": "ok",
+  "booklist": {
+    "id": 7, "name": "2026 科幻必读", "is_public": true, "book_count": 2, "like_count": 3,
+    "is_owner": true, "liked_by_me": false,
+    "books": [ { "book_id": 42, "title": "三体", "img": "...", "thumb": "...", "href": "/book/42" } ],
+    "books_total": 2, "page": 1, "page_size": 24
+  }
+}
+```
+写操作响应：`create_booklist`/`update_booklist` 返回 `booklist` + `msg`；`booklist_add_books` 返回 `added`、`book_count`；`booklist_remove_book` 返回 `book_count`；`like_booklist` 返回 `liked`（当前是否已点赞）。
+
+**常见错误**：
+| `err` 值 | 含义 |
+|----------|------|
+| `"booklist.not_found"` | 书单不存在 |
+| `"booklist.limit_exceeded"` | 已达每人书单数量上限 |
+| `"permission.denied"` | 无权限（非所有者/管理员，或私有书单） |
+| `"params.invalid"` | 参数错误（名称为空、未指定书籍、书不在书单中等） |
+| `"params.book.invalid"` | `booklist_add_books` 中的书籍全部不存在 |
+
+---
+
 ## TTS 有声书工具列表（MiMo TTS，需管理员权限）
 
 > 将 EPUB 电子书转换为有声书。所有 TTS 接口均需要**管理员权限**。
@@ -1380,6 +1485,14 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 │
 ├─ "帮我补记这本书的阅读时长" / "标记这本书 XX 格式已读完"（无自动心跳的场景）
 │   → update_book_reading_stats
+│
+├─ "补录某天的阅读时间" / "昨天晚上读了 45 分钟没记上"（v4.3.0+）
+│   → set_reading_time（按日期覆盖）；查看用 get_reading_time；撤销用 delete_reading_time
+│
+├─ "我有哪些书单？" / "把这本书加到《XX》书单" / "新建一个书单"（v4.3.0+）
+│   → list_my_booklists / booklist_add_books / create_booklist
+│   → 看书单里的书：get_booklist；浏览大家的公开书单：list_public_booklists
+│   → 这本书已经在哪些书单里：get_book_booklists
 │
 └─ "有哪些分类？" / "XX 作者有哪些书？"
     → categories / list_authors / get_author_books
