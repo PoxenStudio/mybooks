@@ -25,6 +25,7 @@ import json
 import os
 import sys
 import base64
+import ipaddress
 import urllib.parse
 import urllib3
 from typing import Any, Dict
@@ -40,6 +41,10 @@ REQUIRED_ENV_VARS = ["MYBOOKS_HOST", "MYBOOKS_USER", "MYBOOKS_PASSWORD"]
 
 API_TTS_PREFIX = "/api/toolbox/mimo_tts"
 
+# book_upload only reads files with these extensions (blocks sending arbitrary
+# local files such as ~/.ssh/id_rsa or .env to the server)
+EBOOK_UPLOAD_EXTS = {"epub", "mobi", "azw", "azw3", "pdf", "txt", "lrf", "rtf", "djvu", "docx"}
+
 ERROR_MESSAGES = {
     "env_missing": {
         "status": "error",
@@ -50,6 +55,36 @@ ERROR_MESSAGES = {
         "message": "MYBOOKS_USER or MYBOOKS_PASSWORD is not set. Authentication is required."
     }
 }
+
+
+def validate_host(host: str) -> str:
+    """
+    Validate MYBOOKS_HOST before any credential is sent to it.
+
+    - Must be an http(s) URL with a hostname and no embedded userinfo.
+    - Plain http is only accepted for loopback / private-LAN / *.local hosts
+      (the typical self-hosted setup); anything else must use https, unless
+      MYBOOKS_ALLOW_INSECURE_HTTP=true is set explicitly.
+
+    Returns the normalized base URL, or exits with an error.
+    """
+    parsed = urllib.parse.urlparse(host.strip())
+    if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
+        print(json.dumps({"status": "error", "message": "MYBOOKS_HOST must be like http(s)://host[:port] without embedded credentials."}), file=sys.stderr)
+        sys.exit(1)
+
+    if parsed.scheme == "http" and os.environ.get("MYBOOKS_ALLOW_INSECURE_HTTP", "false").lower() not in ("true", "1", "yes"):
+        name = parsed.hostname
+        try:
+            ip = ipaddress.ip_address(name)
+            local = ip.is_loopback or ip.is_private or ip.is_link_local
+        except ValueError:
+            local = name == "localhost" or name.endswith(".local")
+        if not local:
+            print(json.dumps({"status": "error", "message": "Refusing to send credentials over plain http to a non-local host. Use https, or set MYBOOKS_ALLOW_INSECURE_HTTP=true to override."}), file=sys.stderr)
+            sys.exit(1)
+
+    return f"{parsed.scheme}://{parsed.netloc}{parsed.path}".rstrip("/")
 
 
 # ============================================================================
@@ -68,7 +103,7 @@ class MyBooksAPI:
             username: Login username
             password: Login password
         """
-        self.host = host.rstrip('/')
+        self.host = validate_host(host)
         self.username = username
         self.password = password
         self.session_cookies = {}
@@ -89,16 +124,16 @@ class MyBooksAPI:
     def sign_in(self) -> None:
         """Authenticate with the server and store session cookies."""
         url = f"{self.host}/api/user/sign_in"
-        # Use form-encoded data (not JSON) as required by the server
-        data = f"username={self.username}&password={self.password}"
+        # Form-encoded (not JSON) as required by the server; requests url-encodes the values
+        data = {"username": self.username, "password": self.password}
 
         try:
             resp = self.requests.post(
                 url,
                 data=data,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
                 timeout=30,
-                verify=self.verify_ssl
+                verify=self.verify_ssl,
+                allow_redirects=False  # never forward credentials to a redirect target
             )
             resp.raise_for_status()
             result = resp.json()
@@ -510,6 +545,10 @@ class MyBooksAPI:
         if not os.path.isfile(file_path):
             return {"status": "error", "message": f"File not found: {file_path}"}
 
+        ext = os.path.splitext(file_path)[1].lower().lstrip('.')
+        if ext not in EBOOK_UPLOAD_EXTS:
+            return {"status": "error", "message": f"Unsupported file type '.{ext}'. Allowed: {', '.join(sorted(EBOOK_UPLOAD_EXTS))}"}
+
         try:
             with open(file_path, 'rb') as f:
                 files = {'ebook': f}
@@ -716,11 +755,21 @@ class MyBooksAPI:
         Args:
             book_id (int, required): Book ID
             date (str, required): YYYY-MM-DD
+            confirm (bool, optional): must be true to actually delete; otherwise
+                the current entry is returned as a preview and nothing is deleted
         """
         book_id = args.get("book_id")
         date = args.get("date")
         if not book_id or not date:
             return {"status": "error", "message": "book_id and date are required"}
+        if args.get("confirm") is not True:
+            preview = self._call_with_auto_relogin("GET", f"/api/book/{book_id}/reading_time", params={"date": date})
+            return {
+                "err": "confirm.required",
+                "msg": "Nothing deleted. Show this entry to the user and, only after they explicitly agree, call again with \"confirm\": true.",
+                "entry": preview.get("entry"),
+                "preview_err": preview.get("err"),
+            }
         return self._call_with_auto_relogin("DELETE", f"/api/book/{book_id}/reading_time", params={"date": date})
 
     # ========================================================================
@@ -794,12 +843,25 @@ class MyBooksAPI:
         """
         Delete a booklist (owner or admin). The books themselves are not deleted.
 
+        Two-step, enforced in code: without confirm=true nothing is deleted and a
+        preview of the target is returned instead.
+
         Args:
             booklist_id (int, required): Booklist ID
+            confirm (bool, optional): must be true to actually delete
         """
         booklist_id = args.get("booklist_id")
         if not booklist_id:
             return {"status": "error", "message": "booklist_id is required"}
+        if args.get("confirm") is not True:
+            preview = self._call_with_auto_relogin("GET", f"/api/booklist/{booklist_id}", params={"page_size": 1})
+            info = preview.get("booklist") or {}
+            return {
+                "err": "confirm.required",
+                "msg": "Nothing deleted. Show this booklist to the user and, only after they explicitly agree, call again with \"confirm\": true.",
+                "booklist": {k: info.get(k) for k in ("id", "name", "book_count", "is_public", "like_count", "is_owner")},
+                "preview_err": preview.get("err"),
+            }
         return self._call_with_auto_relogin("POST", f"/api/booklist/{booklist_id}/delete", json={})
 
     def booklist_add_books(self, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -1038,6 +1100,10 @@ class MyBooksAPI:
             content = resp.content
 
             if save_to:
+                if not save_to.lower().endswith(".wav"):
+                    return {"status": "error", "message": "save_to must end with .wav"}
+                if os.path.exists(save_to):
+                    return {"status": "error", "message": f"Refusing to overwrite existing file: {save_to}"}
                 with open(save_to, 'wb') as f:
                     f.write(content)
                 return {

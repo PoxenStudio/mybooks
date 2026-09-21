@@ -2,7 +2,7 @@
 name: mybooks
 homepage: https://www.mybooks.top
 allowed-tools: Bash(python3:*)
-metadata: {"clawdbot":{},"openclaw":{"requires":{"bins":["python3"],"env":["MYBOOKS_HOST","MYBOOKS_USER","MYBOOKS_PASSWORD"]}}}
+metadata: {"clawdbot":{},"openclaw":{"requires":{"bins":["python3"],"env":["MYBOOKS_HOST","MYBOOKS_USER","MYBOOKS_PASSWORD"]},"permissions":{"network":{"required":true,"scope":"user-configured MYBOOKS_HOST only","protocols":["http","https"]},"filesystem":{"read":"only when uploading: ebook files (book_upload) and mp3/wav samples (tts_clone_upload) at paths the user gives","write":"only tts_clone_audio save_to (.wav, never overwrites)"}}}}
 description: "MyBooks是个人书库管理系统，提供电子书及实体书管理，包括存储、分类、搜索和元数据管理功能。你可以帮助用户：查询书库统计信息和阅读统计,搜索/浏览书籍,获取书籍详情,更新书籍元数据（书名、作者、标签、分类、简介等）,自动联网填充书籍信息,发送书籍到邮箱或阅读器设备,上传电子书或通过ISBN添加实体书,管理阅读状态（想读/在读/已读/收藏）,查询/手动更新某本书分格式的阅读时长与进度,按日期补录/修改/删除阅读时间（v4.3.0+）,管理书单（创建/浏览/加书/移书/点赞，v4.3.0+）,查看作者信息和分类信息,导入第三方阅读App的划线与想法（如微信读书，需配合微信读书 skill 读取原始数据）,以及MiMo TTS有声书功能（配置TTS API、EPUB转有声书、查询转换进度、克隆音色与语音提示词管理，需管理员权限）等"
 ---
 
@@ -15,12 +15,22 @@ export MYBOOKS_HOST="http://127.0.0.1:8082"
 export MYBOOKS_USER="admin"
 export MYBOOKS_PASSWORD="your_password"
 export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为 false
+# 明文 http 仅允许回环/内网地址（如 192.168.x.x）；公网地址必须用 https
+# 确需对非内网地址使用明文 http 时：export MYBOOKS_ALLOW_INSECURE_HTTP="true"
 
 然后按如下方式执行：
 <skill-installation-path>/scripts/mybooks_api.py <tool-name> '<json-args>'
 ```
 
 > **安全提示**：请勿将凭据写入共享或全局配置文件（如 `~/.openclaw/.env`），以避免凭据被其他 agent 或进程意外读取。建议通过会话级环境变量或专用密钥管理工具传入凭据。
+
+## 权限与网络声明
+
+- **网络访问（必需）**：本 skill 是 MyBooks 服务器的 REST 客户端，所有工具都通过 HTTP(S) 访问**且仅访问**用户自己配置的 `MYBOOKS_HOST`，不连接任何其他地址，无遥测、无第三方回传。
+- **会修改数据的工具**：`edit_book`、`push_notes`(`dry_run:false`)、`clear_imported_notes`、`book_fill`、`save_meta_to_file`、`book_upload`、`book_add_by_isbn`、`wants`/`favorite`/`reading`/`read_done`、`set_reading_time`、`delete_reading_time`、书单的创建/修改/删除/增删书/点赞、以及全部 `tts_*` 写操作。删除类工具（`delete_booklist`、`delete_reading_time`）脚本内强制 `confirm:true` 两步确认。
+- **本地文件读取**：仅 `book_upload`（限电子书扩展名 epub/mobi/azw/azw3/pdf/txt/lrf/rtf/djvu/docx）和 `tts_clone_upload`（限 mp3/wav，≤7MB）会读取用户明确给出路径的文件并上传到 `MYBOOKS_HOST`；agent **不得**自行挑选文件上传。
+- **本地文件写入**：仅 `tts_clone_audio` 的 `save_to`（必须 `.wav` 结尾，且不覆盖已存在文件）。
+- **凭据**：见下方"认证方式"。
 
 ## 通用响应格式与认证方式
 
@@ -56,6 +66,7 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 - 脚本通过 `MYBOOKS_USER` / `MYBOOKS_PASSWORD` 环境变量自动调用 `/api/user/sign_in` 完成登录
 - 服务端通过 **Secure Cookie**（`user_id` + `lt`）维持会话
 - 若响应中出现 `err=user.need_login`，脚本会自动重新登录后重试一次；仍失败则报错退出
+- **凭据去向说明**：`MYBOOKS_USER` / `MYBOOKS_PASSWORD` **只会**以表单形式 POST 到用户自己配置的 `MYBOOKS_HOST` 的 `/api/user/sign_in`，不会发往任何其他地址；登录请求不跟随重定向；`MYBOOKS_HOST` 必须是 `http(s)://host[:port]` 且不含内嵌账号密码，对非内网地址要求 https
 - **必须**在调用前配置 `MYBOOKS_HOST`、`MYBOOKS_USER`、`MYBOOKS_PASSWORD` 三个环境变量，否则脚本直接报错退出
 
 ---
@@ -976,6 +987,7 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 | `set_reading_time` | `duration_seconds` | int | ✅ | 当天该书的阅读总秒数（覆盖原手工记录） |
 | `set_reading_time` | `start_time` | string | ❌ | 开始时间（文本，如 `"20:30"`） |
 | `set_reading_time` | `end_time` | string | ❌ | 结束时间（文本） |
+| `delete_reading_time` | `confirm` | bool | 删除时必填 | 必须为 `true` 才会真正删除，否则只返回预览 |
 
 **执行脚本**：
 ```bash
@@ -987,6 +999,8 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 
 # 删除当天的手工记录（同步回退统计）
 <skill-installation-path>/scripts/mybooks_api.py delete_reading_time '{"book_id":42,"date":"2026-09-20"}'
+# ↑ 不带 confirm 只返回待删记录预览（err:"confirm.required"），不会删除；用户明确同意后加 "confirm":true 才真正删除
+<skill-installation-path>/scripts/mybooks_api.py delete_reading_time '{"book_id":42,"date":"2026-09-20","confirm":true}'
 ```
 
 **响应示例**：
@@ -1024,7 +1038,7 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 | `get_booklist` | 书单详情 + 分页书籍（`books`、`books_total`） | `booklist_id`（必填）、`order`（`desc` 默认/`asc`，按加入时间）、`page`、`page_size`（默认 24，最大 60） |
 | `create_booklist` | 新建书单 | `name`（必填）、`description`（≤500 字）、`color`、`is_public`（默认 false） |
 | `update_booklist` | 修改书单，只改传入的字段 | `booklist_id`（必填）、`name`/`description`/`color`/`is_public` |
-| `delete_booklist` | 删除书单（**不会删除书籍本身**，删除前先跟用户确认） | `booklist_id`（必填） |
+| `delete_booklist` | 删除书单（**不会删除书籍本身**）。脚本强制两步确认：不带 `confirm:true` 时**不会删除**，只返回 `err:"confirm.required"` 和书单预览（名称/书数量）；须把预览给用户看，用户明确同意后再带 `"confirm":true` 重新调用 | `booklist_id`（必填）、`confirm`（真正删除时必须为 `true`） |
 | `booklist_add_books` | 批量加书（不存在的书自动忽略） | `booklist_id`（必填）、`book_ids`（数组，必填） |
 | `booklist_remove_book` | 移出一本书 | `booklist_id`、`book_id`（均必填） |
 | `like_booklist` | 点赞/取消点赞（切换） | `booklist_id`（必填） |
@@ -1037,6 +1051,10 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 <skill-installation-path>/scripts/mybooks_api.py booklist_add_books '{"booklist_id":7,"book_ids":[42,43]}'
 <skill-installation-path>/scripts/mybooks_api.py get_booklist '{"booklist_id":7,"page":1}'
 <skill-installation-path>/scripts/mybooks_api.py booklist_remove_book '{"booklist_id":7,"book_id":43}'
+# 删除书单：第一次调用只返回预览，不会删除
+<skill-installation-path>/scripts/mybooks_api.py delete_booklist '{"booklist_id":7}'
+# 用户明确同意后才带 confirm
+<skill-installation-path>/scripts/mybooks_api.py delete_booklist '{"booklist_id":7,"confirm":true}'
 ```
 
 **响应示例**（`get_booklist`）：
@@ -1056,6 +1074,7 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 **常见错误**：
 | `err` 值 | 含义 |
 |----------|------|
+| `"confirm.required"` | 删除类操作缺少 `confirm:true`，未执行任何删除，仅返回预览 |
 | `"booklist.not_found"` | 书单不存在 |
 | `"booklist.limit_exceeded"` | 已达每人书单数量上限 |
 | `"permission.denied"` | 无权限（非所有者/管理员，或私有书单） |
