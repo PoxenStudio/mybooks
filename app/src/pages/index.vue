@@ -4,7 +4,9 @@
     <v-row v-if="libraryStats" class="library-stats-bar">
         <v-col cols="12">
             <div class="stats-container">
-                <div class="stats-title"></div>
+                <v-btn icon x-small dark class="stats-toggle" :title="showDetail ? $t('index.detailHideDetail') : $t('index.detailShowDetail')" @click="showDetail = !showDetail">
+                    <v-icon>{{ showDetail ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
+                </v-btn>
                 <div class="stats-content">
                     <div class="stat-group">
                         <span class="stat-label">{{ $t('index.totalBooks') }}:</span>
@@ -34,6 +36,8 @@
             </div>
         </v-col>
     </v-row>
+
+    <library-overview v-if="libraryStats && showDetail" :allow-physical-books="allowPhysicalBooks"></library-overview>
 
     <div class="reading-stats-banner-wrapper" v-show="readingStatsHasData">
         <reading-stats-banner :show-title="false" @has-stats="onReadingStatsHasData"></reading-stats-banner>
@@ -237,6 +241,7 @@
 <script>
 import BookCards from "~/components/BookCards.vue";
 import ReadingStatsBanner from "~/components/ReadingStatsBanner.vue";
+import LibraryOverview from "~/components/LibraryOverview.vue";
 import BookListCard from "~/components/BookListCard.vue";
 import HomeSectionCard from "~/components/HomeSectionCard.vue";
 export default {
@@ -244,6 +249,7 @@ export default {
     components: {
         BookCards,
         ReadingStatsBanner,
+        LibraryOverview,
         BookListCard,
         HomeSectionCard,
     },
@@ -493,6 +499,7 @@ export default {
         reading_books: [],
         readingStatsHasData: false,
         libraryStats: null,
+        showDetail: false,
         releaseNotesDialog: false,
         releaseNotesContent: '',
         countdown: 10,
@@ -540,11 +547,8 @@ export default {
     gap: 16px;
 }
 
-.stats-title {
-    font-size: 18px;
-    font-weight: bold;
-    color: #ffffff;
-    min-width: 100px;
+.stats-toggle {
+    margin-left: 8px;
 }
 
 .stats-content {

@@ -1583,6 +1583,88 @@ class AdminStamp(BaseHandler):
             )
 
 
+class LibraryStatsDetail(BaseHandler):
+    """书库概览看板：按 kind 分块返回，前端各区域独立异步加载。"""
+
+    _cache = {}
+    _ttl = {"size": 600, "monthly": 60, "tags": 60, "categories": 60}
+
+    def _dir_size(self):
+        path = self.calibre_db_cache.backend.library_path
+        total = 0
+        for root, _dirs, files in os.walk(path):
+            for f in files:
+                try:
+                    total += os.path.getsize(os.path.join(root, f))
+                except OSError:
+                    pass
+        return total
+
+    def _monthly(self):
+        year_month = func.strftime("%Y-%m", Item.create_time)
+        rows = (
+            self.sqlite_session.query(
+                year_month, Item.book_type, func.count(Item.book_id), func.sum(Item.book_count)
+            )
+            .filter(Item.create_time.isnot(None))
+            .group_by(year_month, Item.book_type)
+            .all()
+        )
+        data = {}
+        for ym, book_type, cnt, phys in rows:
+            d = data.setdefault(ym, {"month": ym, "ebook": 0, "physical": 0})
+            if book_type == 1:
+                d["physical"] += int(phys or 0)
+            else:
+                d["ebook"] += int(cnt or 0)
+        return sorted(data.values(), key=lambda x: x["month"], reverse=True)
+
+    def _tags(self, limit=50):
+        tags = self.all_tags_with_count()
+        items = sorted(tags.items(), key=lambda kv: kv[1], reverse=True)[:limit]
+        return [{"name": k, "count": v} for k, v in items]
+
+    def _categories(self):
+        from webserver.constants import CALIBRE_COLUMN_CATEGORY
+
+        total = len(self.calibre_db_cache.all_book_ids())
+        fm = self.calibre_db.field_metadata
+        result = []
+        categorized = 0
+        if CALIBRE_COLUMN_CATEGORY in fm:
+            n = fm[CALIBRE_COLUMN_CATEGORY]["colnum"]
+            sql = (
+                f"SELECT v.value, count(distinct l.book) FROM custom_column_{n} v "
+                f"JOIN books_custom_column_{n}_link l ON l.value = v.id "
+                "GROUP BY v.id ORDER BY 2 DESC"
+            )
+            with self.db_lock:
+                rows = self.calibre_db_cache.backend.conn.get(sql)
+            for name, cnt in rows:
+                result.append({"name": name, "count": cnt})
+                categorized += cnt
+        uncategorized = max(total - categorized, 0)
+        return {"items": result, "uncategorized": uncategorized}
+
+    @js
+    async def get(self, kind):
+        if kind not in self._ttl:
+            return {"err": "params.invalid", "msg": "unknown kind"}
+        cached = LibraryStatsDetail._cache.get(kind)
+        if cached and time.time() - cached[0] < self._ttl[kind]:
+            return {"err": "ok", "data": cached[1]}
+        if kind == "size":
+            data = await tornado.ioloop.IOLoop.current().run_in_executor(None, self._dir_size)
+        elif kind == "monthly":
+            data = self._monthly()
+        elif kind == "tags":
+            data = self._tags()
+        else:
+            data = self._categories()
+        LibraryStatsDetail._cache[kind] = (time.time(), data)
+        return {"err": "ok", "data": data}
+
+
 class LibraryStats(BaseHandler):
     _cache_data = None
     _cache_time = 0
@@ -1880,6 +1962,7 @@ def routes():
         (r"/api/admin/restart", AdminRestartServer),
         (r"/api/admin/stamp", AdminStamp),
         (r"/api/library/stats", LibraryStats),
+        (r"/api/library/stats/(size|monthly|tags|categories)", LibraryStatsDetail),
         (r"/api/admin/syslog", AdminSyslog),
         (r"/api/admin/book/update_all_meta", AdminUpdateAllMeta),
         (r"/api/admin/book/update_all_dynamic_cover", AdminUpdateDynamicCover),

@@ -406,6 +406,10 @@
   content: "\F01A4";
 }
 
+.mdi-database-outline::before {
+  content: "\F1632";
+}
+
 .mdi-database-remove-outline::before {
   content: "\F1635";
 }
