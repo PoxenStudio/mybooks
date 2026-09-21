@@ -1159,6 +1159,7 @@
             accept=".epub,.mobi,.azw,.azw3,.pdf,.txt"
             prepend-icon="mdi-file-document"
         ></v-file-input>
+        <v-checkbox v-model="upload_format_force" :label="$t('book.forceReplaceFormat')" dense hide-details class="mt-0"></v-checkbox>
         <v-alert type="info" text dense class="mt-4">
             {{ $t('book.supportedFormatsUpload') }}
         </v-alert>
@@ -1886,6 +1887,7 @@ export default {
         // 上传新格式对话框
         dialog_upload_format: false,
         upload_format_file: null,
+        upload_format_force: false,
         uploading_format: false,
         // 添加实体书对话框
         isbn_dialog: false,
@@ -2711,6 +2713,7 @@ export default {
         },
         showUploadFormatDialog() {
             this.upload_format_file = null;
+            this.upload_format_force = false;
             this.dialog_upload_format = true;
         },
         async confirmUploadFormat() {
@@ -2724,8 +2727,11 @@ export default {
                 const data = new FormData();
                 data.append("ebook", this.upload_format_file);
                 data.append("bid", this.book.id);
+                if (this.upload_format_force) {
+                    data.append("force", "1");
+                }
 
-                const rsp = await this.$backend("/book/upload?bid=" + this.book.id, {
+                const rsp = await this.$backend("/book/upload?bid=" + this.book.id + (this.upload_format_force ? "&force=1" : ""), {
                     method: 'POST',
                     body: data
                 });

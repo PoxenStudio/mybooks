@@ -894,6 +894,7 @@
     "uploadNewFormatDesc": "Add a new format file to the current book",
     "selectFile": "Select File",
     "supportedFormatsUpload": "Supported formats: EPUB, MOBI, AZW, AZW3, PDF, TXT",
+    "forceReplaceFormat": "Force replace existing format",
     "upload": "Upload",
     "selectFileToUpload": "Please select a file to upload",
     "formatAlreadyExists": "This format file already exists",

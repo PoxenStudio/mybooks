@@ -660,6 +660,7 @@
     "uploadNewFormatDesc": "為當前書籍添加新的格式檔案",
     "selectFile": "選擇檔案",
     "supportedFormatsUpload": "支援的格式: EPUB, MOBI, AZW, AZW3, PDF, TXT",
+    "forceReplaceFormat": "強制取代已存在的格式",
     "upload": "上傳",
     "selectFileToUpload": "請選擇要上傳的檔案",
     "formatAlreadyExists": "該格式檔案已存在",

@@ -2523,7 +2523,7 @@ class BookUpload(BaseHandler):
         p = self.request.files["ebook"][0]
         return (p["filename"], p["body"])
 
-    def _add_format_to_existing_book(self, book_id, update_metadata=True):
+    def _add_format_to_existing_book(self, book_id, update_metadata=True, force=False):
         """向已存在的书籍添加新格式文件"""
         book = self.get_book(book_id, raise_exception=False)
         if not book:
@@ -2551,7 +2551,7 @@ class BookUpload(BaseHandler):
         if fmt not in SUPPORTED_EBOOK_FORMATS:
             return {"err": "params.format.unsupported", "msg": _("不支持的书籍格式: %s" % fmt)}
 
-        if f"fmt_{fmt}" in book:
+        if f"fmt_{fmt}" in book and not force:
             return {
                 "err": "format.already_exists",
                 "msg": _("书籍已存在 %s 格式") % fmt.upper(),
@@ -2608,7 +2608,8 @@ class BookUpload(BaseHandler):
         target_book_id = self.get_argument("bid", None)
         update_metadata = self.get_argument("update_meta", 1)
         if target_book_id:
-            return self._add_format_to_existing_book(int(target_book_id), update_metadata == 1)
+            force = str(self.get_argument("force", "0")).lower() in ("1", "true")
+            return self._add_format_to_existing_book(int(target_book_id), update_metadata == 1, force)
 
         name, data = self.get_upload_file()
         if name is None:
