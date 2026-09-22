@@ -224,8 +224,7 @@ class CalibreAPI(_NamespaceBase):
                 即为这里的 `label`），如 `CALIBRE_COLUMN_CATEGORY`("#category")、
                 `CALIBRE_COLUMN_FOLDER`("#folder")、`CALIBRE_COLUMN_BOOK_TYPE`("#book_type")、
                 `CALIBRE_COLUMN_PHY_COUNT`("#book_count")、`CALIBRE_COLUMN_EXT_LINK`("#ext_link")、
-                `CALIBRE_COLUMN_LOCATION`("#location")、`CALIBRE_COLUMN_DYNAMIC_COVER`
-                ("#dynamic_cover")、`CALIBRE_COLUMN_TRANSLATORS`("#translators")、
+                `CALIBRE_COLUMN_LOCATION`("#location")、`CALIBRE_COLUMN_TRANSLATORS`("#translators")、
                 `CALIBRE_COLUMN_CATALOG`("#catalog")。
 
         Returns:
@@ -242,8 +241,7 @@ class CalibreAPI(_NamespaceBase):
                 这里的 `label`），如 `CALIBRE_COLUMN_CATEGORY`("#category")、
                 `CALIBRE_COLUMN_FOLDER`("#folder")、`CALIBRE_COLUMN_BOOK_TYPE`("#book_type")、
                 `CALIBRE_COLUMN_PHY_COUNT`("#book_count")、`CALIBRE_COLUMN_EXT_LINK`("#ext_link")、
-                `CALIBRE_COLUMN_LOCATION`("#location")、`CALIBRE_COLUMN_DYNAMIC_COVER`
-                ("#dynamic_cover")、`CALIBRE_COLUMN_TRANSLATORS`("#translators")、
+                `CALIBRE_COLUMN_LOCATION`("#location")、`CALIBRE_COLUMN_TRANSLATORS`("#translators")、
                 `CALIBRE_COLUMN_CATALOG`("#catalog")。
             values: `{book_id: value}`，一次性写入多本书。
         """
