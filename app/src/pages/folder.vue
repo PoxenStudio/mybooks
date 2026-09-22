@@ -28,7 +28,6 @@
           v-for="item in subFolders"
           :key="item.name"
           label
-          dark
           class="mr-2 mb-2"
           @click="goTo(childPath(item.name))"
         >
