@@ -7,7 +7,7 @@
                 <v-btn icon x-small dark class="stats-toggle" :title="showDetail ? $t('index.detailHideDetail') : $t('index.detailShowDetail')" @click="showDetail = !showDetail">
                     <v-icon>{{ showDetail ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
                 </v-btn>
-                <div class="stats-content" @click="showDetail = !showDetail">
+                <div class="stats-content">
                     <div class="stat-group">
                         <span class="stat-label">{{ $t('index.totalBooks') }}:</span>
                         <span class="stat-value">{{ libraryStats.total_books }}</span>
@@ -558,7 +558,6 @@ export default {
     gap: 12px;
     flex: 1;
     justify-content: flex-end;
-    cursor: pointer;
 }
 
 .stat-group {
