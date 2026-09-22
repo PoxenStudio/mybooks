@@ -2571,7 +2571,7 @@ class BookUpload(BaseHandler):
 
         logging.info(f"Save format file to [{fpath}]")
         try:
-            self.calibre_db.add_format(book_id, fmt.upper(), fpath, True)
+            self.calibre_db.add_format(book_id, fmt.upper(), fpath, index_is_id=True, replace=force)
             logging.info(f"Successfully added {fmt.upper()} format to book {book_id}")
 
             try:
