@@ -104,7 +104,16 @@ class CalibreAPI(_NamespaceBase):
     """Calibre 书库访问。"""
 
     def search_books(self, query: str, max_results: int = 20, include_comments: bool = False) -> List[dict]:
-        """按 Calibre 搜索语法查询书籍，返回 dict 列表（含 id/title/authors/formats 等字段）。"""
+        """按 Calibre 搜索语法查询书籍。
+
+        Args:
+            query: Calibre 搜索表达式（如 `tag:小说`）。
+            max_results: 最多返回的书籍数。
+            include_comments: 是否在结果里带上简介字段。
+
+        Returns:
+            dict 列表，含 id/title/authors/formats 等字段。
+        """
         ids = list(self._owner.db.new_api.search(query))[:max_results]
         if not ids:
             return []
@@ -123,7 +132,17 @@ class CalibreAPI(_NamespaceBase):
         return Metadata(title, authors or [_("未知作者")])
 
     def get_metadata(self, book_id: int, get_cover: bool = False, cover_as_data: bool = False) -> BookMetadata:
-        """返回指定书籍的元数据对象（类型见 `BookMetadata`）；`get_cover`/`cover_as_data` 透传给 Calibre。"""
+        """返回指定书籍的元数据对象。
+
+        Args:
+            book_id: 书籍 id。
+            get_cover: 是否附带封面（返回对象上会带封面路径/数据，取决于 `cover_as_data`）。
+            cover_as_data: 为 True 时封面以内存字节形式返回，而不是磁盘路径；仅在
+                `get_cover=True` 时有意义。
+
+        Returns:
+            `BookMetadata`（类型契约见该类 docstring；运行时是原生 Calibre `Metadata`）。
+        """
         if not get_cover and not cover_as_data:
             return self._owner.get_book_metadata(book_id)
         return self._owner.db.get_metadata(
@@ -131,45 +150,124 @@ class CalibreAPI(_NamespaceBase):
         )
 
     def set_metadata(self, book_id: int, mi: BookMetadata, force_changes: bool = True) -> None:
-        """写回书籍元数据。"""
+        """写回书籍元数据。
+
+        Args:
+            book_id: 书籍 id。
+            mi: 新的元数据对象，通常是 `get_metadata`/`new_metadata` 得到的实例改好字段后传回。
+            force_changes: 是否强制写入未显式标记为"已修改"的字段（对齐 Calibre 原生
+                `set_metadata` 的同名参数）；默认 True，保证调用方直接改属性即可生效。
+        """
         self._owner.db.set_metadata(book_id, mi, force_changes=force_changes)
 
     def get_data_as_dict(self, ids: List[int]) -> List[dict]:
-        """按 book_id 列表批量返回书籍 dict（含 available_formats/title 等字段）。"""
+        """按 book_id 列表批量返回书籍 dict。
+
+        Args:
+            ids: 书籍 id 列表。
+
+        Returns:
+            dict 列表，含 available_formats/title 等字段，顺序与 `ids` 无关。
+        """
         return self._owner.db.get_data_as_dict(ids=ids)
 
     def cover(self, book_id: int) -> Optional[bytes]:
-        """返回书籍封面的原始字节，没有封面时返回 None。"""
+        """返回书籍封面的原始字节。
+
+        Args:
+            book_id: 书籍 id。
+
+        Returns:
+            封面图片的原始字节；没有封面时返回 None。
+        """
         return self._owner.db.cover(book_id, index_is_id=True)
 
     def set_cover(self, book_id: int, cover: bytes) -> None:
-        """设置书籍封面。"""
+        """设置书籍封面。
+
+        Args:
+            book_id: 书籍 id。
+            cover: 封面图片的原始字节（如 JPEG/PNG 数据）。
+        """
         self._owner.db.set_cover(book_id, cover)
 
     def import_book(self, mi: BookMetadata, formats: List[str]) -> Optional[int]:
-        """将本地格式文件与给定元数据一并入库，返回新书的 book_id。"""
+        """将本地格式文件与给定元数据一并入库。
+
+        Args:
+            mi: 新书的元数据，通常由 `new_metadata` 构造。
+            formats: 本地格式文件的绝对路径列表（如 `["/tmp/x.epub"]`）。
+
+        Returns:
+            新书的 book_id；入库失败时返回 None。
+        """
         return self._owner.db.import_book(mi, formats)
 
     def search_ids(self, query: str) -> List[int]:
-        """按 Calibre 搜索语法查询书籍，返回排序后的 book_id 列表（不取详情）。"""
+        """按 Calibre 搜索语法查询书籍，只取 id，不取详情。
+
+        Args:
+            query: Calibre 搜索表达式。
+
+        Returns:
+            排序后的 book_id 列表。
+        """
         return sorted(self._owner.db.new_api.search(query))
 
     def get_custom(self, book_id: int, label: str):
-        """读取自定义列的值。"""
+        """读取单本书某个自定义列的值。
+
+        Args:
+            book_id: 书籍 id。
+            label: 自定义列名，不带 `#` 前缀（如 `"book_type"`）；系统内已有的自定义列
+                参见 `webserver/constants.py` 里的 `CALIBRE_COLUMN_*` 常量（去掉 `#` 前缀
+                即为这里的 `label`），如 `CALIBRE_COLUMN_CATEGORY`("#category")、
+                `CALIBRE_COLUMN_FOLDER`("#folder")、`CALIBRE_COLUMN_BOOK_TYPE`("#book_type")、
+                `CALIBRE_COLUMN_PHY_COUNT`("#book_count")、`CALIBRE_COLUMN_EXT_LINK`("#ext_link")、
+                `CALIBRE_COLUMN_LOCATION`("#location")、`CALIBRE_COLUMN_DYNAMIC_COVER`
+                ("#dynamic_cover")、`CALIBRE_COLUMN_TRANSLATORS`("#translators")、
+                `CALIBRE_COLUMN_CATALOG`("#catalog")。
+
+        Returns:
+            该列在该书上的值，类型取决于列本身（文本/数字/布尔/列表等）。
+        """
         return self._owner.db.get_custom(book_id, label=label, index_is_id=True)
 
     def set_custom(self, label: str, values: dict) -> None:
-        """批量写入自定义列的值，`values` 为 `{book_id: value}`。"""
+        """批量写入自定义列的值。
+
+        Args:
+            label: 自定义列名，不带 `#` 前缀；系统内已有的自定义列参见
+                `webserver/constants.py` 里的 `CALIBRE_COLUMN_*` 常量（去掉 `#` 前缀即为
+                这里的 `label`），如 `CALIBRE_COLUMN_CATEGORY`("#category")、
+                `CALIBRE_COLUMN_FOLDER`("#folder")、`CALIBRE_COLUMN_BOOK_TYPE`("#book_type")、
+                `CALIBRE_COLUMN_PHY_COUNT`("#book_count")、`CALIBRE_COLUMN_EXT_LINK`("#ext_link")、
+                `CALIBRE_COLUMN_LOCATION`("#location")、`CALIBRE_COLUMN_DYNAMIC_COVER`
+                ("#dynamic_cover")、`CALIBRE_COLUMN_TRANSLATORS`("#translators")、
+                `CALIBRE_COLUMN_CATALOG`("#catalog")。
+            values: `{book_id: value}`，一次性写入多本书。
+        """
         self._owner.db.new_api.set_field(label, values)
 
     def remove_formats(self, values: dict) -> None:
-        """批量删除格式文件，`values` 为 `{book_id: [fmt, ...]}`。"""
+        """批量删除格式文件。
+
+        Args:
+            values: `{book_id: [fmt, ...]}`，fmt 为格式名（如 `"EPUB"`）。
+        """
         self._owner.db.new_api.remove_formats(values)
 
     def set_language(self, book_id: int, language: str) -> None:
+        """设置书籍语言。
+
+        Args:
+            book_id: 书籍 id。
+            language: 语言代码（如 `"zho"`/`"eng"`，ISO 639-2/B）。
+        """
         self._owner.set_book_language(book_id, language)
 
     def all_book_ids(self) -> List[int]:
+        """返回书库中所有书籍的 id 列表。"""
         return self._owner.get_all_book_ids()
 
     def import_file(
@@ -181,20 +279,64 @@ class CalibreAPI(_NamespaceBase):
         *,
         delete_after_import: bool = True,
     ) -> int:
+        """将磁盘上的一个文件作为新书导入书库。
+
+        Args:
+            user_id: 发起导入的用户 id（用于记录/权限相关上下文）。
+            file_path: 待导入文件的绝对路径。
+            title: 书名。
+            authors: 作者列表。
+            delete_after_import: 导入成功后是否删除原始文件，默认 True。
+
+        Returns:
+            新书的 book_id。
+        """
         return self._owner.import_file(
             user_id, file_path, title, authors, delete_after_import=delete_after_import
         )
 
     def merge_formats(self, source_book_id: int, target_book_id: int) -> list:
+        """把源书的格式文件合并进目标书（合并后源书里对应格式被移动，不再重复保留）。
+
+        Args:
+            source_book_id: 源书 book_id。
+            target_book_id: 目标书 book_id。
+
+        Returns:
+            实际合并过去的格式名列表。
+        """
         return self._owner.merge_book_formats(source_book_id, target_book_id)
 
-    def add_format(self, book_id: int, fmt: str, file_path: str) -> None:
-        self._owner.db.add_format(book_id, fmt, file_path, index_is_id=True)
+    def add_format(self, book_id: int, fmt: str, file_path: str, replace: bool = True) -> None:
+        """给书籍添加一个格式文件。
+
+        Args:
+            book_id: 书籍 id。
+            fmt: 格式名（如 `"EPUB"`），大小写不敏感，Calibre 内部会统一处理。
+            file_path: 本地格式文件的绝对路径。
+            replace: 该书已存在同名格式时是否替换，默认 True；传 False 时若已存在同格式则
+                不做任何修改（对应 Calibre 原生 `add_format` 的同名参数）。
+        """
+        self._owner.db.add_format(book_id, fmt, file_path, index_is_id=True, replace=replace)
 
     def format_abspath(self, book_id: int, fmt: str) -> Optional[str]:
+        """返回某本书某个格式文件在磁盘上的绝对路径。
+
+        Args:
+            book_id: 书籍 id。
+            fmt: 格式名（如 `"EPUB"`）。
+
+        Returns:
+            绝对路径；该格式不存在时返回 None。
+        """
         return self._owner.db.format_abspath(book_id, fmt, index_is_id=True)
 
     def delete_book(self, book_id: int) -> None:
+        """从书库中删除一本书（含其所有格式文件）。
+
+        Args:
+            book_id: 书籍 id。
+        """
         self._owner.delete_book_by_id(book_id)
 
 
@@ -202,6 +344,14 @@ class AppDBAPI(_NamespaceBase):
     """应用数据库访问（Reader / Item），不暴露裸的 SQLAlchemy Session。"""
 
     def get_item_by_book_id(self, book_id: int) -> Optional[dict]:
+        """按 book_id 查找对应的 `Item` 记录（应用侧对每本 Calibre 书籍的附加信息，如入库人）。
+
+        Args:
+            book_id: Calibre 书籍 id。
+
+        Returns:
+            `{"id", "book_id", "collector_id"}`；不存在时返回 None。
+        """
         from webserver.models import Item
 
         item = self._owner.session.query(Item).filter(Item.book_id == book_id).first()
@@ -214,6 +364,15 @@ class AppDBAPI(_NamespaceBase):
         }
 
     def create_item(self, book_id: int, collector_id: int) -> dict:
+        """为一本书创建 `Item` 记录（登记入库人），并持久化。
+
+        Args:
+            book_id: Calibre 书籍 id。
+            collector_id: 入库人（`Reader`）的用户 id。
+
+        Returns:
+            新建记录的 `{"id", "book_id", "collector_id"}`。
+        """
         from webserver.models import Item
 
         item = Item()
@@ -223,6 +382,11 @@ class AppDBAPI(_NamespaceBase):
         return {"id": item.id, "book_id": item.book_id, "collector_id": item.collector_id}
 
     def delete_item_by_book_id(self, book_id: int) -> None:
+        """删除某本书对应的 `Item` 记录（不存在时静默跳过）。
+
+        Args:
+            book_id: Calibre 书籍 id。
+        """
         from webserver.models import Item
 
         item = self._owner.session.query(Item).filter(Item.book_id == book_id).first()
@@ -231,6 +395,14 @@ class AppDBAPI(_NamespaceBase):
             self._owner.session.commit()
 
     def get_reader(self, user_id: int) -> Optional[dict]:
+        """按用户 id 查找 `Reader`（应用用户账号）。
+
+        Args:
+            user_id: 用户 id。
+
+        Returns:
+            `{"id", "username", "name", "admin"}`；不存在时返回 None。
+        """
         from webserver.models import Reader
 
         reader = self._owner.session.query(Reader).filter(Reader.id == user_id).first()
@@ -248,14 +420,35 @@ class TasksAPI(_NamespaceBase):
     """后台任务生命周期，转发给 `BaseTool` 现有实现（不改变行为）。"""
 
     def create_task(self, progress_data: Optional[dict] = None) -> int:
+        """创建一个后台任务记录，供前端轮询进度。
+
+        Args:
+            progress_data: 任务的初始自定义数据（如描述、总数），可为 None。
+
+        Returns:
+            新建任务的 task_id。
+        """
         return self._owner.create_task(progress_data=progress_data)
 
     def update_progress(
         self, task_id: int, progress: int, progress_data: Optional[dict] = None
     ) -> None:
+        """更新任务进度。
+
+        Args:
+            task_id: `create_task` 返回的任务 id。
+            progress: 进度百分比（0-100）。
+            progress_data: 本次一并更新的自定义数据，可为 None（不更新）。
+        """
         self._owner.update_task_progress(task_id, progress, progress_data=progress_data)
 
     def complete_task(self, task_id: int, error_message: Optional[str] = None) -> None:
+        """标记任务结束。
+
+        Args:
+            task_id: `create_task` 返回的任务 id。
+            error_message: 失败原因；为 None 时视为成功完成。
+        """
         self._owner.complete_task(task_id, error_message=error_message)
 
     def make_progress_callback(
@@ -264,6 +457,18 @@ class TasksAPI(_NamespaceBase):
         progress_data_factory: Optional[Callable[[int], dict]] = None,
         outer_callback: Optional[Callable[[int], None]] = None,
     ) -> Callable[[int], None]:
+        """构造一个 `(progress: int) -> None` 回调，内部自动调用 `update_progress`。
+
+        便于把进度上报接进那些只接受单参数回调的循环/子调用里。
+
+        Args:
+            task_id: `create_task` 返回的任务 id。
+            progress_data_factory: 可选，按当前 progress 生成本次的 progress_data。
+            outer_callback: 可选，在更新进度之后再额外调用一次的回调（如日志/中止检查）。
+
+        Returns:
+            可直接传给循环体使用的回调函数。
+        """
         return self._owner.make_progress_callback(
             task_id,
             progress_data_factory=progress_data_factory,
@@ -275,7 +480,14 @@ class MessagesAPI(_NamespaceBase):
     """站内消息（`Message` 模型封装），供工具在后台任务之外再发一条持久化通知。"""
 
     def send_message(self, user_id: int, msg: str, status: str = "info") -> None:
-        """给用户发一条站内信，等同于 `AsyncService.add_msg` 的逻辑。"""
+        """给用户发一条站内信，等同于 `AsyncService.add_msg` 的逻辑；发送前会先清理该用户
+        同内容的旧消息（避免重复刷屏）。
+
+        Args:
+            user_id: 接收消息的用户 id；为假值（0/None）时直接跳过，不发送。
+            msg: 消息正文。
+            status: 消息级别，如 `"info"`/`"warning"`/`"error"`，默认 `"info"`。
+        """
         from webserver.models import Message
 
         if not user_id:
@@ -285,6 +497,16 @@ class MessagesAPI(_NamespaceBase):
         m.save()
 
     def cleanup_messages(self, user_id: int, msg_content: str, days: int = 31) -> int:
+        """删除用户 `days` 天前发送过的同内容旧消息。
+
+        Args:
+            user_id: 用户 id。
+            msg_content: 要匹配清理的消息正文。
+            days: 保留天数，早于该天数的同内容消息会被删除，默认 31。
+
+        Returns:
+            实际删除的消息条数。
+        """
         from webserver.models import Message
 
         return Message.cleanup_messages(user_id, msg_content, days=days)
@@ -296,17 +518,37 @@ class StorageAPI(_NamespaceBase):
     CONFIG_FILENAME = "config.json"
 
     def get_work_dir(self, unique_key: Optional[str] = None) -> str:
+        """获取（并按需创建）该工具专属的临时工作目录。
+
+        Args:
+            unique_key: 可选的区分键（如任务 id），传入时每个 key 对应独立的子目录，避免
+                并发任务互相覆盖文件；不传则返回工具共享的工作目录。
+
+        Returns:
+            工作目录的绝对路径。
+        """
         return self._owner.get_work_dir(unique_key)
 
     def cleanup_work_dir(self, work_dir: str) -> None:
+        """删除 `get_work_dir` 创建的工作目录及其内容。
+
+        Args:
+            work_dir: `get_work_dir` 返回的目录路径。
+        """
         self._owner.cleanup_work_dir(work_dir)
 
     def _config_path(self) -> str:
+        """返回该工具持久配置文件（`config.json`）的绝对路径，目录不存在时自动创建。"""
         tool_dir = os.path.join(self._owner.TOOL_DATA_ROOT, self._owner.tool_id())
         os.makedirs(tool_dir, exist_ok=True)
         return os.path.join(tool_dir, self.CONFIG_FILENAME)
 
     def get_config(self) -> dict:
+        """读取该工具的持久配置（`config.json`），文件不存在或读取失败时返回空 dict。
+
+        Returns:
+            配置内容。
+        """
         path = self._config_path()
         if not os.path.exists(path):
             return {}
@@ -318,6 +560,14 @@ class StorageAPI(_NamespaceBase):
             return {}
 
     def set_config(self, data: dict) -> None:
+        """整份覆盖写入该工具的持久配置（`config.json`）。
+
+        Args:
+            data: 要保存的配置内容，会以 JSON（UTF-8，缩进 2）整体覆盖旧文件。
+
+        Raises:
+            RuntimeError: 写入失败时抛出（原始异常作为 `__cause__`）。
+        """
         path = self._config_path()
         try:
             with open(path, "w", encoding="utf-8") as f:
@@ -345,7 +595,15 @@ class SettingsAPI(_NamespaceBase):
     }
 
     def get(self, key: str, default=None):
-        """读取一项白名单内的系统配置；不在白名单内的 key 直接返回 default，不抛异常。"""
+        """读取一项白名单内的系统配置。
+
+        Args:
+            key: 配置项 key，必须在 `ALLOWED_KEYS` 中登记过。
+            default: 该 key 不在白名单内，或合并后的 `CONF` 里没有这项时的兜底返回值。
+
+        Returns:
+            配置值；不在白名单内的 key 直接返回 `default`，不抛异常（会记一条 warning 日志）。
+        """
         if key not in self.ALLOWED_KEYS:
             logging.warning("[CoreAPI.settings] Key %r not in ALLOWED_KEYS, returning default", key)
             return default
@@ -356,22 +614,50 @@ class UtilsAPI(_NamespaceBase):
     """通用文本/日期处理，纯函数转发给 `webserver/utils.py`，不依赖宿主 `BaseTool` 的状态。"""
 
     def strip(self, s: str) -> str:
-        """去除首尾空白，并过滤掉其余不可打印字符，转发 `webserver.utils.super_strip`。"""
+        """去除首尾空白，并过滤掉其余不可打印字符，转发 `webserver.utils.super_strip`。
+
+        Args:
+            s: 待处理的字符串。
+
+        Returns:
+            处理后的字符串。
+        """
         from webserver.utils import super_strip
         return super_strip(s)
 
     def get_title_sort(self, title: str) -> str:
-        """把书名转成用于排序的 ASCII 小写形式，转发 `webserver.utils.get_title_sort`。"""
+        """把书名转成用于排序的 ASCII 小写形式，转发 `webserver.utils.get_title_sort`。
+
+        Args:
+            title: 原始书名。
+
+        Returns:
+            用于排序比较的规范化字符串。
+        """
         from webserver.utils import get_title_sort
         return get_title_sort(title)
 
     def guess_title_author_from_filename(self, name: str):
-        """从"《书名》作者：xxx"这类文件名里拆出 `(title, author)`。"""
+        """从"《书名》作者：xxx"这类文件名里拆出 `(title, author)`。
+
+        Args:
+            name: 文件名（不含目录，可含或不含扩展名）。
+
+        Returns:
+            `(title, author)` 二元组；猜不出的部分为 None。
+        """
         from webserver.utils import guess_title_author_from_filename
         return guess_title_author_from_filename(name)
 
     def parse_date(self, date_str: str):
-        """按常见格式（含中文"年月日"）解析日期字符串，失败返回 `None`。"""
+        """按常见格式（含中文"年月日"）解析日期字符串。
+
+        Args:
+            date_str: 日期字符串，如 `"2024-01-01"`、`"2024年1月1日"`。
+
+        Returns:
+            解析成功返回 `datetime.date`/`datetime.datetime`；失败返回 None。
+        """
         from webserver.utils import parse_date
         return parse_date(date_str)
 
