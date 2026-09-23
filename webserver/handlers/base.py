@@ -17,11 +17,11 @@ from tornado import web
 
 from webserver.i18n import _, choose_language, set_language
 from webserver import loader, utils
+from webserver.base.book_data_cascade import cascade_delete_book_data
 from webserver.base.formatter import BookFormatter
 from webserver.base.global_state import get_global_state
 from webserver.services.resource_service import ResourceService
-from webserver.services.book_review_service import BookReviewService
-from webserver.models import BookReadingStats, BookReview, Item, ManualReadingLog, Message, Reader, Reading, ReadingRecord, ReadingState
+from webserver.models import Item, Message, Reader
 from webserver import constants
 from webserver.version import VERSION
 from webserver.constants import UPGRABLE_REVISION
@@ -839,22 +839,7 @@ class BaseHandler(web.RequestHandler):
 
     @staticmethod
     def cascade_delete_book_data(db, book_id: int, commit: bool = True) -> None:
-        """书籍被删除/下架时级联清理所有关联数据：Item（收藏/待读等标记）、评价、共读同步
-        记录、阅读状态（收藏/在读/待读）、手工补录的阅读时长记录，以及阅读时长统计
-        （Reading 按天分桶 / BookReadingStats 按格式累计）。
-
-        commit=False 供调用方把这次级联清理并入自己的事务，此时清理是否落盘由调用方负责。
-        """
-        db.query(Item).filter(Item.book_id == book_id).delete(synchronize_session=False)
-        db.query(BookReview).filter(BookReview.book_id == book_id).delete(synchronize_session=False)
-        db.query(ReadingRecord).filter(ReadingRecord.book_id == book_id).delete(synchronize_session=False)
-        db.query(ReadingState).filter(ReadingState.book_id == book_id).delete(synchronize_session=False)
-        db.query(ManualReadingLog).filter(ManualReadingLog.book_id == book_id).delete(synchronize_session=False)
-        db.query(Reading).filter(Reading.book_id == book_id).delete(synchronize_session=False)
-        db.query(BookReadingStats).filter(BookReadingStats.book_id == book_id).delete(synchronize_session=False)
-        if commit:
-            db.commit()
-        BookReviewService.invalidate_stats(book_id)
+        cascade_delete_book_data(db, book_id, commit=commit)
 
     def delete_book(self, book_id, book_title):
         result = True

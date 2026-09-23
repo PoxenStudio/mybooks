@@ -15,6 +15,7 @@ import shutil
 from typing import Callable, List, Optional
 
 from webserver.i18n import _
+from webserver.base.book_data_cascade import cascade_delete_book_data
 from webserver.models import Item
 from webserver.services import AsyncService
 from webserver.services.background_service import BackgroundService, BackgroundTask
@@ -292,19 +293,29 @@ class BaseTool(AsyncService):
         return added
 
     def delete_book_by_id(self, book_id: int) -> None:
-        """从 Calibre 书库及 Item 表中删除指定书籍。
+        """从 Calibre 书库删除指定书籍，并清理应用侧的关联数据与有声书音频目录，
+        清理范围与宿主删除路径（BaseHandler.delete_book）一致。
 
         :param book_id: 要删除的书籍 ID。
         :raises RuntimeError: 删除失败时抛出。
         """
+        # 延迟导入：handlers.audio 依赖 handlers.base，避免工具箱模块加载时产生循环导入
+        from webserver.handlers.audio import AudioUtils
+
         try:
-            item = self.session.query(Item).filter(Item.book_id == book_id).first()
-            if item:
-                self.session.delete(item)
-                self.session.commit()
+            AudioUtils.clear_audio(book_id)
         except Exception as err:
             logging.warning(
-                "[%s] Failed to delete Item for book_id=%d: %s",
+                "[%s] Failed to clear audio for book_id=%d: %s",
+                self.__class__.__name__, book_id, err,
+            )
+        try:
+            cascade_delete_book_data(self.session, book_id, commit=False)
+            self.session.commit()
+        except Exception as err:
+            self.session.rollback()
+            logging.warning(
+                "[%s] Failed to delete related data for book_id=%d: %s",
                 self.__class__.__name__, book_id, err,
             )
         try:

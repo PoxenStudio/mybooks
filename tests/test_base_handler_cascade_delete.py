@@ -2,13 +2,14 @@
 
 import datetime
 import unittest
+from unittest.mock import MagicMock, patch
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 
 from webserver import models
 from webserver.handlers.base import BaseHandler
-from webserver.models import BookReadingStats, BookReview, Item, ManualReadingLog, Reader, Reading, ReadingRecord, ReadingState
+from webserver.models import BookList, BookListBook, BookReadingStats, BookReview, Item, ManualReadingLog, Reader, Reading, ReadingRecord, ReadingState
 
 
 class TestCascadeDeleteBookData(unittest.TestCase):
@@ -38,6 +39,13 @@ class TestCascadeDeleteBookData(unittest.TestCase):
         ))
         self.session.add(Reading(1, 100, Reading.ACTION_READ, Reading.PROTOCOL_APP, start_time=now, duration=300, date=now.date()))
         self.session.add(BookReadingStats(reader_id=1, book_id=100, format="epub", total_seconds=900, create_time=now, update_time=now))
+        booklist = BookList(reader_id=1, name="bl")
+        booklist.book_count = 2
+        self.session.add(booklist)
+        self.session.flush()
+        self.booklist_id = booklist.id
+        self.session.add(BookListBook(booklist_id=booklist.id, book_id=100))
+        self.session.add(BookListBook(booklist_id=booklist.id, book_id=200))
         self.session.commit()
 
     def tearDown(self):
@@ -53,6 +61,31 @@ class TestCascadeDeleteBookData(unittest.TestCase):
         self.assertEqual(self.session.query(ManualReadingLog).filter_by(book_id=100).count(), 0)
         self.assertEqual(self.session.query(Reading).filter_by(book_id=100).count(), 0)
         self.assertEqual(self.session.query(BookReadingStats).filter_by(book_id=100).count(), 0)
+        self.assertEqual(self.session.query(BookListBook).filter_by(book_id=100).count(), 0)
+
+    def test_booklist_count_is_decremented(self):
+        BaseHandler.cascade_delete_book_data(self.session, 100)
+
+        booklist = self.session.query(BookList).get(self.booklist_id)
+        self.assertEqual(booklist.book_count, 1)
+        self.assertEqual(self.session.query(BookListBook).filter_by(booklist_id=self.booklist_id).count(), 1)
+
+    def test_toolbox_delete_book_by_id_uses_same_cascade(self):
+        from webserver.toolbox.base_tool import BaseTool
+
+        tool = BaseTool.__new__(BaseTool)
+        tool.session = self.session
+        tool.db = MagicMock()
+        with patch("webserver.handlers.audio.AudioUtils.clear_audio") as clear_audio:
+            BaseTool.delete_book_by_id(tool, 100)
+
+        clear_audio.assert_called_once_with(100)
+        tool.db.delete_book.assert_called_once_with(100)
+        self.assertEqual(self.session.query(Item).filter_by(book_id=100).count(), 0)
+        self.assertEqual(self.session.query(ReadingState).filter_by(book_id=100).count(), 0)
+        self.assertEqual(self.session.query(BookReview).filter_by(book_id=100).count(), 0)
+        self.assertEqual(self.session.query(BookListBook).filter_by(book_id=100).count(), 0)
+        self.assertEqual(self.session.query(BookList).get(self.booklist_id).book_count, 1)
 
     def test_commit_false_lets_caller_control_the_transaction(self):
         BaseHandler.cascade_delete_book_data(self.session, 100, commit=False)
