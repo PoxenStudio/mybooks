@@ -1586,7 +1586,10 @@ class AdminStamp(BaseHandler):
 class LibraryStatsDetail(BaseHandler):
     """书库概览看板：按 kind 分块返回，前端各区域独立异步加载。"""
 
+    # 缓存的是与用户无关的全量数据（标签的阅读范围过滤在返回前按请求做），
+    # 否则未登录/受限用户的空结果会被缓存下来，其他用户在 TTL 内都看到空数据。
     _cache = {}
+    _refreshing = set()
     _ttl = {"size": 600, "monthly": 60, "tags": 60, "categories": 60}
 
     def _dir_size(self):
@@ -1619,8 +1622,8 @@ class LibraryStatsDetail(BaseHandler):
                 d["ebook"] += int(cnt or 0)
         return sorted(data.values(), key=lambda x: x["month"], reverse=True)
 
-    def _tags(self, limit=50):
-        tags = self.all_tags_with_count()
+    def _tags_output(self, tags, limit=50):
+        tags = self.filter_tags_by_read_range(tags)
         items = sorted(tags.items(), key=lambda kv: kv[1], reverse=True)[:limit]
         return [{"name": k, "count": v} for k, v in items]
 
@@ -1646,23 +1649,56 @@ class LibraryStatsDetail(BaseHandler):
         uncategorized = max(total - categorized, 0)
         return {"items": result, "uncategorized": uncategorized}
 
+    async def _compute(self, kind):
+        if kind == "size":
+            return await tornado.ioloop.IOLoop.current().run_in_executor(None, self._dir_size)
+        if kind == "monthly":
+            return self._monthly()
+        if kind == "tags":
+            return self.query_all_tags_with_count()
+        return self._categories()
+
+    async def _refresh(self, kind):
+        """重新计算并写入缓存；失败时保留旧缓存。同一 kind 同时只刷新一次。"""
+        LibraryStatsDetail._refreshing.add(kind)
+        try:
+            data = await self._compute(kind)
+            LibraryStatsDetail._cache[kind] = (time.time(), data)
+            return data
+        finally:
+            LibraryStatsDetail._refreshing.discard(kind)
+
+    async def _background_refresh(self, kind):
+        try:
+            await self._refresh(kind)
+        except Exception as e:
+            logging.error("LibraryStatsDetail refresh %s failed: %s", kind, e)
+        finally:
+            # 请求结束时 session 已 close，这里后台刷新可能重新用到它，用完再关一次
+            self.sqlite_session.close()
+
+    def _output(self, kind, data):
+        if kind == "tags":
+            data = self._tags_output(data)
+        return {"err": "ok", "data": data}
+
     @js
     async def get(self, kind):
         if kind not in self._ttl:
             return {"err": "params.invalid", "msg": "unknown kind"}
         cached = LibraryStatsDetail._cache.get(kind)
-        if cached and time.time() - cached[0] < self._ttl[kind]:
-            return {"err": "ok", "data": cached[1]}
-        if kind == "size":
-            data = await tornado.ioloop.IOLoop.current().run_in_executor(None, self._dir_size)
-        elif kind == "monthly":
-            data = self._monthly()
-        elif kind == "tags":
-            data = self._tags()
-        else:
-            data = self._categories()
-        LibraryStatsDetail._cache[kind] = (time.time(), data)
-        return {"err": "ok", "data": data}
+        if cached:
+            # 过期时先返回旧数据，后台刷新（stale-while-revalidate）
+            if time.time() - cached[0] >= self._ttl[kind] and kind not in LibraryStatsDetail._refreshing:
+                LibraryStatsDetail._refreshing.add(kind)
+                tornado.ioloop.IOLoop.current().spawn_callback(self._background_refresh, kind)
+            return self._output(kind, cached[1])
+        try:
+            data = await self._refresh(kind)
+        except Exception as e:
+            logging.error("LibraryStatsDetail compute %s failed: %s", kind, e)
+            return {"err": "stats.failed", "msg": str(e)}
+        return self._output(kind, data)
 
 
 class LibraryStats(BaseHandler):

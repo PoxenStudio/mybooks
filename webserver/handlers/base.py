@@ -930,16 +930,25 @@ class BaseHandler(web.RequestHandler):
             tag: count for tag, count in tags.items() if tag not in limit_tags
         }  # 黑名单
 
-    def all_tags_with_count(self):
+    def query_all_tags_with_count(self):
+        """全库标签计数，不做阅读范围过滤；查询失败直接抛异常。"""
         sql = """SELECT tags.name, count(distinct book) as count
         FROM tags left join books_tags_link on tags.id = books_tags_link.tag
         group by tags.id order by count desc"""
+        with self.db_lock:
+            return dict(
+                (i[0], i[1]) for i in self.calibre_db_cache.backend.conn.get(sql)
+            )
+
+    def filter_tags_by_read_range(self, tags):
+        if CONF.get(constants.ALLOW_READ_RANGE_SETTING, False):
+            return self._filter_tags(tags)
+        return tags
+
+    def all_tags_with_count(self):
         cache_key = "all_tags_with_count"
         try:
-            with self.db_lock:
-                tags = dict(
-                    (i[0], i[1]) for i in self.calibre_db_cache.backend.conn.get(sql)
-                )
+            tags = self.query_all_tags_with_count()
             BaseHandler._query_fallback_cache[cache_key] = tags
         except Exception as e:
             tags = BaseHandler._query_fallback_cache.get(cache_key, {})
@@ -950,9 +959,7 @@ class BaseHandler(web.RequestHandler):
                 )
 
         # 过滤掉不在当前用户阅读范围的标签
-        if CONF.get(constants.ALLOW_READ_RANGE_SETTING, False):
-            tags = self._filter_tags(tags)
-        return tags
+        return self.filter_tags_by_read_range(tags)
 
     def get_category_with_count(self, field):
         table = field if field in ["series"] else field + "s"
