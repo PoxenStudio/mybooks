@@ -771,6 +771,7 @@
     "setBookInfoAndImage": "Set book information and image",
     "setBookInfoOnly": "Set book information only",
     "setBookImageOnly": "Set book image only",
+    "setAuthorAndCommentsOnly": "Set author and description only",
     "editBookInfo": "Edit metadata",
     "updateInfoFromInternet": "Update meta via internet",
     "noNeedCrop": "Cover does not need cropping",

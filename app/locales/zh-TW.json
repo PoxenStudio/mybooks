@@ -537,6 +537,7 @@
     "setBookInfoAndImage": "設定書籍資訊及圖片",
     "setBookInfoOnly": "僅設定書籍資訊",
     "setBookImageOnly": "僅設定書籍圖片",
+    "setAuthorAndCommentsOnly": "僅設定作者及簡介",
     "editBookInfo": "編輯書籍資訊",
     "updateInfoFromInternet": "聯網更新資訊",
     "noNeedCrop": "封面无需裁剪",

@@ -540,6 +540,7 @@
     "setBookInfoAndImage": "设置书籍信息及图片",
     "setBookInfoOnly": "仅设置书籍信息",
     "setBookImageOnly": "仅设置书籍图片",
+    "setAuthorAndCommentsOnly": "仅设置作者及简介",
     "editBookInfo": "编辑书籍信息",
     "updateInfoFromInternet": "联网更新信息",
     "noNeedCrop": "封面无需裁剪",

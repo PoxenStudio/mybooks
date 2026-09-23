@@ -945,6 +945,7 @@ class BookRefer(BaseHandler):
         provider_value = self.get_argument("provider_value", "")
         only_meta = self.get_argument("only_meta", "")
         only_cover = self.get_argument("only_cover", "")
+        only_author_comments = self.get_argument("only_author_comments", "")
         metadata = self.get_argument("metadata", "")
         if metadata:
             try:
@@ -969,7 +970,7 @@ class BookRefer(BaseHandler):
             return {"err": "params.provider_key.invalid", "msg": _("请求参数错误")}
         if not provider_value:
             return {"err": "params.provider_key.invalid", "msg": _("请求参数错误")}
-        if only_meta == "yes" and only_cover == "yes":
+        if [only_meta, only_cover, only_author_comments].count("yes") > 1:
             return {"err": "params.conflict", "msg": _("参数冲突")}
 
         refer_mi = None
@@ -991,7 +992,7 @@ class BookRefer(BaseHandler):
                 refer_mi = self.plugin_get_book_meta(provider_key, provider_value, metadata)
             if not refer_mi:
                 refer_mi = self._convert_to_metadata(metadata) if metadata else mi
-            if only_meta != "yes":
+            if only_meta != "yes" and only_author_comments != "yes":
                 try:
                     cover_url = metadata.get("cover_url") if metadata else None
                     logging.debug(f"[Metadata] Try to get cover {cover_url}")
@@ -1009,6 +1010,20 @@ class BookRefer(BaseHandler):
             if not refer_mi.cover_data:
                 return {"err": "plugin.no_cover", "msg": _("未找到封面信息")}
             mi.cover_data = refer_mi.cover_data
+        elif only_author_comments == "yes":
+            # just set authors and comments
+            if refer_mi.authors:
+                _authors, _translators = guess_authors(refer_mi.authors)
+            elif refer_mi.author_sort:
+                _authors, _translators = guess_authors([refer_mi.author_sort])
+            if _authors:
+                mi.authors = _authors
+                if refer_mi.author_sort:
+                    mi.author_sort = refer_mi.author_sort
+            if refer_mi.comments:
+                mi.comments = refer_mi.comments
+            if not _authors and not refer_mi.comments:
+                return {"err": "plugin.no_result", "msg": _("未找到作者及简介信息")}
         else:
             if only_meta == "yes":
                 refer_mi.cover_data = None

@@ -165,11 +165,11 @@
 
             <v-card v-if="dialog_refer">
                 <v-toolbar flat dense dark color="primary">
-                    {{ $t('book.syncBookInfo') }}
+                    <v-toolbar-title>{{ $t('book.syncBookInfo') }}</v-toolbar-title>
                     <v-spacer></v-spacer>
-                    <v-btn @click="dialog_refer = false" color="green">{{ $t('common.cancel') }}</v-btn>
+                    <v-btn text :disabled="!!referSettingId" @click="dialog_refer = false">{{ $t('common.cancel') }}</v-btn>
                 </v-toolbar>
-                <v-card-text xclass="pt-3 px-3 px-sm-3">
+                <v-card-text class="pt-4">
                     <p class="py-6 text-center" v-if="refer_books_loading">
                         <v-progress-circular indeterminate color="primary"></v-progress-circular>
                     </p>
@@ -201,11 +201,11 @@
                                     </v-chip
                                     >
                                     <v-spacer></v-spacer>
-                                    <v-menu offset-y right :disabled="book.title === 'BLOCKED'">
+                                    <v-menu offset-y right :disabled="book.title === 'BLOCKED' || !!referSettingId">
                                         <template v-slot:activator="{ on }">
                                             <v-btn color="primary" small rounded v-on="on"
-                                                   :disabled="book.title === 'BLOCKED'"
-                                                   :loading="refer_books_setting_btn_loading">
+                                                   :disabled="book.title === 'BLOCKED' || (!!referSettingId && referSettingId !== referBookId(book))"
+                                                   :loading="referSettingId === referBookId(book)">
                                                 <v-icon small>mdi-check</v-icon>
                                                 {{ $t('common.set') }}
                                             </v-btn>
@@ -221,6 +221,10 @@
                                             <v-list-item
                                                 @click="setRefer(book, { only_cover: 'yes' })">
                                                 <v-list-item-title>{{ $t('book.setBookImageOnly') }}</v-list-item-title>
+                                            </v-list-item>
+                                            <v-list-item
+                                                @click="setRefer(book, { only_author_comments: 'yes' })">
+                                                <v-list-item-title>{{ $t('book.setAuthorAndCommentsOnly') }}</v-list-item-title>
                                             </v-list-item>
                                         </v-list>
                                     </v-menu>
@@ -1947,7 +1951,7 @@ export default {
         cover_file: null,
         cover_error: '',
         refer_books_loading: false,
-        refer_books_setting_btn_loading:false,
+        referSettingId: null,
         refer_books: [],
         epub2audio_processing: false,
         voice_name: "", // 语音名称，将从localStorage加载
@@ -2395,13 +2399,16 @@ export default {
                     this.refer_books_loading = false;
                 });
         },
+        referBookId(book) {
+            return `${book.provider_key}:${book.provider_value}`;
+        },
         setRefer(book, opt) {
             // 防止多次重复点击
-            if(this.refer_books_setting_btn_loading) return;
+            if (this.referSettingId) return;
             const providerKey = book.provider_key
             const providerValue = book.provider_value
-            // 显示加载条提示
-            this.refer_books_setting_btn_loading = true;
+            // 只有被点击的那条显示 loading，其它条目的"设置"按钮置灰
+            this.referSettingId = this.referBookId(book);
             var data = new URLSearchParams(opt);
             data.append("provider_key", providerKey);
             data.append("provider_value", providerValue);
@@ -2420,8 +2427,7 @@ export default {
                 }
                 this.init(this.$route);
             }).finally(()=>{
-               //关闭加载条提示
-               this.refer_books_setting_btn_loading = false;
+               this.referSettingId = null;
             });
         },
         resetRefer() {
