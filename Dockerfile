@@ -93,7 +93,9 @@ COPY thanks_to.txt /var/www/mybooks/app/dist/static/
 #     rm -rf /root/.cache /root/.config/pip /tmp/requirements.txt /tmp/pip-* /var/tmp/*
 
 
-RUN rm -f /etc/nginx/conf.d/default.conf /var/www/html -rf && \
+# logrotate 会忽略 group/other 可写的配置文件，构建机 umask 为 002 时 COPY 进来是 0664
+RUN chmod 644 /etc/logrotate.d/mybooks-nginx && \
+    rm -f /etc/nginx/conf.d/default.conf /var/www/html -rf && \
     cd /var/www/mybooks/ && \
     ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && \
     echo ${TZ} > /etc/timezone && \
