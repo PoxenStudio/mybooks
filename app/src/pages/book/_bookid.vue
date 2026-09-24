@@ -405,7 +405,7 @@
                                     <v-icon>mdi-email-send</v-icon>
                                     {{ $t('book.shareToEmail') }}
                                 </v-list-item>
-                                <v-list-item @click="generateShareCard" :disabled="hasEBooks">
+                                <v-list-item @click="generateShareCard" :disabled="!hasEBooks">
                                     <v-icon>mdi-card-bulleted-outline</v-icon>
                                     {{ $t('book.generateShareCard') }}
                                 </v-list-item>
