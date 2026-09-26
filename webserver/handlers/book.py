@@ -48,6 +48,7 @@ from webserver.services.reading_stats_service import ManualReadingService, Readi
 from webserver.services.scan_service import ScanService, SCAN_EXT
 from webserver.services.download_quota_service import DownloadQuotaService
 from webserver.services.book_review_service import BookReviewService
+from webserver.recommend import RecommendContext
 from webserver.plugins.meta import douban, douban_v2
 from webserver.plugins.meta.bookbarn_tags import BookBarnTags
 from webserver.plugins.parser.txt import get_content_encoding
@@ -107,6 +108,34 @@ class Index(BaseHandler):
             result.append(book_data)
         return result
 
+    def _legacy_home_ids(self, ids, cnt_random, cnt_recent):
+        random_ids = random.sample(ids, min(cnt_random, len(ids)))
+        ids = sorted(ids, reverse=True)
+        new_ids = random.sample(ids[0:600], min(cnt_recent, len(ids[0:600])))
+        return sorted(random_ids, reverse=True), sorted(new_ids, reverse=True)
+
+    def _recommend_home_ids(self, cnt_random, cnt_recent, exclude_ids):
+        if not CONF.get("RECOMMEND_ENABLE", True) or self.get_argument("personalized", "1") == "0":
+            return None
+        service = self.settings.get("recommend")
+        if service is None:
+            return None
+        ctx = RecommendContext(
+            reader_id=self.user_id() or None,
+            is_visible=lambda f: self.is_book_visible({"tags": f.tags, CALIBRE_COLUMN_CATEGORY: f.category}),
+            exclude_ids=frozenset(exclude_ids),
+        )
+        try:
+            result = service.home(ctx, cnt_random, cnt_recent)
+        except Exception:
+            logging.exception("[recommend] home recommendation failed, fall back to legacy")
+            return None
+        return (result.random_ids, result.new_ids) if result else None
+
+    def _books_in_order(self, ids):
+        books = {b["id"]: b for b in self.get_books(ids=ids)}
+        return [books[i] for i in ids if i in books]
+
     @js
     def get(self):
         """首页显示随机书籍和最近添加的书籍"""
@@ -127,14 +156,11 @@ class Index(BaseHandler):
 
         cnt_recent = min(cnt_recent, len(ids))
         cnt_random = min(cnt_random, len(ids))
-        random_ids = random.sample(ids, min(cnt_random, len(ids)))
-        random_books = [b for b in self.get_books(ids=random_ids)]
-        random_books.sort(key=lambda x: x["id"], reverse=True)
-
-        ids.sort(reverse=True)
-        new_ids = random.sample(ids[0:600], min(cnt_recent, len(ids)))
-        new_books = [b for b in self.get_books(ids=new_ids)]
-        new_books.sort(key=lambda x: x["id"], reverse=True)
+        social_books = self._social_recommend_books()
+        home_ids = self._recommend_home_ids(cnt_random, cnt_recent, [b["id"] for b in social_books])
+        random_ids, new_ids = home_ids or self._legacy_home_ids(ids, cnt_random, cnt_recent)
+        random_books = self._books_in_order(random_ids)
+        new_books = self._books_in_order(new_ids)
 
         return {
             "err": "ok",
@@ -142,7 +168,7 @@ class Index(BaseHandler):
             "new_books_count": len(new_books),
             "random_books": [self.fmt(b) for b in random_books],
             "new_books": [self.fmt(b) for b in new_books],
-            "social_recommend_books": self._social_recommend_books(),
+            "social_recommend_books": social_books,
         }
 
 

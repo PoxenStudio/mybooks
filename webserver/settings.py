@@ -79,6 +79,14 @@ settings = {
     "AI_ALLOW_SET_CATEGORY": True,
     "MAIN_PAGE_RANDOM_COUNT": 12,
     "MAIN_PAGE_RECENT_COUNT": 12,
+    "RECOMMEND_ENABLE": True,                 # 首页推荐引擎总开关，关闭即回到旧的随机逻辑
+    "RECOMMEND_FEATURE_TTL": 300,             # 书籍特征索引刷新周期（秒）
+    "RECOMMEND_NEW_DAYS": 30,                 # 新书窗口（天），书不够时自动扩大到 90/180 天
+    "RECOMMEND_NEW_BY": "timestamp",          # timestamp | id
+    "RECOMMEND_NEW_HALF_LIFE_DAYS": 7,
+    "RECOMMEND_DIVERSITY": 0.3,               # MMR 多样性惩罚系数
+    "RECOMMEND_MAX_PER_AUTHOR": 2,
+    "RECOMMEND_MAX_PER_SERIES": 2,
     "DEFAULT_PAGE_SIZE": 60,
     "ENABLE_AUDIO_CONVERSION_LOG": False,
     "ENABLE_AUDIO_SUBTITLE": True,
