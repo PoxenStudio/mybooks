@@ -20,6 +20,10 @@ DEFAULT_WEIGHTS = {
     "new_co": 0.05,
     "new_series_next": 0.20,
     "new_social_proof": 0.05,
+    "similar_content": 0.55,
+    "similar_co": 0.30,
+    "similar_quality": 0.10,
+    "similar_popularity": 0.05,
 }
 
 
@@ -55,6 +59,11 @@ class RecommendConfig:
     co_min_secs: int = 600
     co_neighbors: int = 30
     co_max_books_per_reader: int = 1000
+    similar_pool: int = 60
+    similar_max_tag_books: int = 2000
+    similar_max_per_author: int = 3
+    similar_max_per_series: int = 3
+    similar_cache_size: int = 1000
     w_random_sim: float = DEFAULT_WEIGHTS["random_sim"]
     w_random_co: float = DEFAULT_WEIGHTS["random_co"]
     w_random_wants: float = DEFAULT_WEIGHTS["random_wants"]
@@ -66,6 +75,10 @@ class RecommendConfig:
     w_new_co: float = DEFAULT_WEIGHTS["new_co"]
     w_new_series_next: float = DEFAULT_WEIGHTS["new_series_next"]
     w_new_social_proof: float = DEFAULT_WEIGHTS["new_social_proof"]
+    w_similar_content: float = DEFAULT_WEIGHTS["similar_content"]
+    w_similar_co: float = DEFAULT_WEIGHTS["similar_co"]
+    w_similar_quality: float = DEFAULT_WEIGHTS["similar_quality"]
+    w_similar_popularity: float = DEFAULT_WEIGHTS["similar_popularity"]
 
     @classmethod
     def from_conf(cls, conf: Mapping) -> "RecommendConfig":
@@ -101,6 +114,11 @@ class RecommendConfig:
             co_min_secs=int(conf.get("RECOMMEND_CO_MIN_SECS", cls.co_min_secs)),
             co_neighbors=int(conf.get("RECOMMEND_CO_NEIGHBORS", cls.co_neighbors)),
             co_max_books_per_reader=int(conf.get("RECOMMEND_CO_MAX_BOOKS_PER_READER", cls.co_max_books_per_reader)),
+            similar_pool=int(conf.get("RECOMMEND_SIMILAR_POOL", cls.similar_pool)),
+            similar_max_tag_books=int(conf.get("RECOMMEND_SIMILAR_MAX_TAG_BOOKS", cls.similar_max_tag_books)),
+            similar_max_per_author=int(conf.get("RECOMMEND_SIMILAR_MAX_PER_AUTHOR", cls.similar_max_per_author)),
+            similar_max_per_series=int(conf.get("RECOMMEND_SIMILAR_MAX_PER_SERIES", cls.similar_max_per_series)),
+            similar_cache_size=int(conf.get("RECOMMEND_SIMILAR_CACHE_SIZE", cls.similar_cache_size)),
             w_random_sim=float(weights["random_sim"]),
             w_random_co=float(weights["random_co"]),
             w_random_wants=float(weights["random_wants"]),
@@ -112,4 +130,8 @@ class RecommendConfig:
             w_new_co=float(weights["new_co"]),
             w_new_series_next=float(weights["new_series_next"]),
             w_new_social_proof=float(weights["new_social_proof"]),
+            w_similar_content=float(weights["similar_content"]),
+            w_similar_co=float(weights["similar_co"]),
+            w_similar_quality=float(weights["similar_quality"]),
+            w_similar_popularity=float(weights["similar_popularity"]),
         )

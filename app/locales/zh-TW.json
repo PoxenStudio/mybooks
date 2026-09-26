@@ -627,7 +627,15 @@
     "location": "位置",
     "chooseVoice": "選擇聲音",
     "recommendedBooks": "其它書籍",
-    "recommendedBooksDesc": "根據當前圖書的標籤和作者推薦",
+    "recommendedBooksDesc": "根據內容相似度和其他讀者的閱讀推薦",
+    "similarReason": {
+      "series_next": "「{value}」系列下一冊",
+      "same_series": "同系列「{value}」",
+      "same_author": "同一作者：{value}",
+      "same_tag": "相同標籤：{value}",
+      "co_read": "讀過本書的人也讀了",
+      "same_publisher": "同出版社"
+    },
     "sameNameBooks": "同名書籍",
     "cancel": "取消",
     "recommend": "推薦",

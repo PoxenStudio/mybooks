@@ -106,6 +106,11 @@ def run(books: int, readers: int, per_reader: int, requests: int) -> None:
         p95 = samples[int(len(samples) * 0.95) - 1]
         print("E  %-6s request p50 / p95     %7.1f / %.1f ms" % (label, statistics.median(samples), p95))
 
+    _, ms = timed(lambda: service.similar(1, RecommendContext(reader_id=None, now=NOW), 12))
+    print("S  related books, first (pool)   %7.0f ms" % ms)
+    samples = sorted(timed(lambda: service.similar(1, RecommendContext(reader_id=None, now=NOW, rng=random.Random(i)), 12))[1] for i in range(requests))
+    print("S  related books p50 / p95       %7.1f / %.1f ms" % (statistics.median(samples), samples[int(len(samples) * 0.95) - 1]))
+
     service.invalidate_reader(1)
     _, ms = timed(lambda: service.home(RecommendContext(reader_id=1, now=NOW), 12, 12))
     print("C  reader after invalidation     %7.0f ms (stale pool, rebuild in background)" % ms)

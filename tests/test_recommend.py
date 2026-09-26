@@ -24,6 +24,7 @@ from webserver.recommend.features import InvertedIndex
 from webserver.recommend.profile import BookSignal, SeriesNextScorer, SimilarityScorer, WantsScorer, book_weight, build_profile
 from webserver.recommend.recommenders import NewBooksRecommender, SampledRecommender, weighted_sample
 from webserver.recommend.scoring import FreshnessScorer, QualityScorer, Reason, WeightedScorer
+from webserver.recommend.similar import normalize_title
 from webserver.recommend.snapshot import BackgroundSnapshot
 
 NOW = datetime.datetime(2026, 9, 1)
@@ -682,6 +683,85 @@ class TestRefresh(unittest.TestCase):
         shuffled = {tuple(service.home(ctx(reader_id=None, rng=random.Random(seed), shuffle=True), 0, 12).new_ids) for seed in range(5)}
         self.assertEqual(len(fixed), 1)
         self.assertGreater(len(shuffled), 1)
+
+
+def titled(book_id, title, authors=("x",), tags=(), series=None, series_index=0.0, publisher=None):
+    return BookFeatures(book_id=book_id, title=title, authors=tuple(authors), tags=tuple(tags), series=series, series_index=series_index, publisher=publisher)
+
+
+class TestRelatedBooks(unittest.TestCase):
+    def service(self, *books, crowd=None):
+        filler = [titled(1000 + i, "filler%d" % i, authors=("f%d" % i,), tags=("小说",)) for i in range(40)]
+        features = library(*books, *filler)
+        service = RecommendService(StaticSource(features), RecommendConfig, StaticCrowd(crowd) if crowd else None)
+        service.index.refresh()
+        if service.crowd:
+            service.crowd.refresh()
+            service.coread.refresh()
+        return service
+
+    def pool(self, service, book_id):
+        config = service.config_loader()
+        crowd, coread = service._crowd_snapshots(config)
+        return service._related_pool(service.index.snapshot().books[book_id], service.index.snapshot(), crowd, coread, config)
+
+    def test_rare_tag_beats_generic_tag(self):
+        service = self.service(
+            titled(1, "源", tags=("小说", "硬科幻")),
+            titled(2, "稀有", authors=("b",), tags=("硬科幻",)),
+            titled(3, "泛泛", authors=("c",), tags=("小说",)),
+        )
+        ranked = [r.book.book_id for r in self.pool(service, 1)]
+        self.assertLess(ranked.index(2), ranked.index(3))
+        self.assertEqual(self.pool(service, 1)[0].reason, Reason("same_tag", "硬科幻"))
+
+    def test_series_next_and_same_title_editions(self):
+        service = self.service(
+            titled(1, "三体", authors=("刘慈欣",), series="三体", series_index=1),
+            titled(2, "三体Ⅱ", authors=("刘慈欣",), series="三体", series_index=2),
+            titled(3, "三体Ⅲ", authors=("刘慈欣",), series="三体", series_index=3),
+            titled(4, "三 体", authors=("刘慈欣",)),
+            titled(5, "三体", authors=("别人",), tags=("小说",)),
+        )
+        pool = self.pool(service, 1)
+        ids = [r.book.book_id for r in pool]
+        self.assertEqual(ids[0], 2)
+        self.assertEqual(pool[0].reason, Reason("series_next", "三体"))
+        self.assertEqual({r.book.book_id: r.reason.type for r in pool}[3], "same_series")
+        self.assertNotIn(4, ids)
+        self.assertEqual(normalize_title("三 体"), normalize_title("三体"))
+
+    def test_unknown_author_is_not_a_link(self):
+        service = self.service(titled(1, "a", authors=("佚名",)), titled(2, "b", authors=("佚名",)))
+        self.assertNotIn(2, [r.book.book_id for r in self.pool(service, 1)])
+
+    def test_co_read_neighbors(self):
+        crowd = CrowdData([engagement(r, b, finished=True) for r in (1, 2, 3) for b in (1, 9)])
+        service = self.service(titled(1, "a"), titled(9, "z", authors=("q",)), crowd=crowd)
+        pool = self.pool(service, 1)
+        self.assertEqual(pool[0].book.book_id, 9)
+        self.assertEqual(pool[0].reason, Reason("co_read"))
+
+    def test_similar_respects_visibility_caps_and_varies(self):
+        books = [titled(1, "src", authors=("A",), tags=("t",))] + [titled(i, "b%d" % i, authors=("A",) if i < 20 else ("o%d" % i,), tags=("t",)) for i in range(2, 60)]
+        service = self.service(*books)
+        results = [service.similar(1, ctx(reader_id=None, rng=random.Random(seed), is_visible=lambda b: b.book_id != 2), 12) for seed in range(10)]
+        for result in results:
+            self.assertEqual(len(result.ids), 12)
+            self.assertNotIn(2, result.ids)
+            self.assertNotIn(1, result.ids)
+            self.assertLessEqual(sum(1 for i in result.ids if i < 20), 3)
+        self.assertGreater(len({tuple(r.ids) for r in results}), 1)
+
+    def test_not_ready_or_unknown_book(self):
+        service = self.service(titled(1, "a"))
+        self.assertIsNone(service.similar(12345, ctx(reader_id=None), 12))
+        service.index.snapshot = lambda: None
+        self.assertIsNone(service.similar(1, ctx(reader_id=None), 12))
+
+    def test_pool_is_cached_per_book(self):
+        service = self.service(titled(1, "a", tags=("t",)), titled(2, "b", tags=("t",)))
+        self.assertIs(self.pool(service, 1), self.pool(service, 1))
 
 
 if __name__ == "__main__":

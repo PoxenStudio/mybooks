@@ -932,6 +932,9 @@
                             <div class="text-caption grey--text mt-1 text-truncate">
                                 {{ book.author }}
                             </div>
+                            <div v-if="similarReasonText(book)" class="text-caption primary--text text-truncate">
+                                {{ similarReasonText(book) }}
+                            </div>
                         </template>
                     </book-cards>
                 </v-card-text>
@@ -3203,6 +3206,13 @@ export default {
                 // 清空文件输入框，允许重复选择同一文件
                 event.target.value = '';
             });
+        },
+        similarReasonText(book) {
+            const reason = book.reason;
+            if (!reason || !this.$te('book.similarReason.' + reason.type)) {
+                return '';
+            }
+            return this.$t('book.similarReason.' + reason.type, { value: reason.value });
         },
         async loadSuggestionBooks() {
             if (!this.book || !this.book.id) return;

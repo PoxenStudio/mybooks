@@ -855,6 +855,10 @@ class BaseHandler(web.RequestHandler):
         if service is not None and self.user_id():
             service.invalidate_reader(self.user_id())
 
+    def is_features_visible(self, features) -> bool:
+        """Reading-range check for a recommendation BookFeatures."""
+        return self.is_book_visible({"tags": features.tags, constants.CALIBRE_COLUMN_CATEGORY: features.category})
+
     def is_book_visible(self, book) -> bool:
         """Reading-range visibility of a book dict (needs "tags" and the category column) for the current user."""
         if not CONF.get(constants.ALLOW_READ_RANGE_SETTING, False):

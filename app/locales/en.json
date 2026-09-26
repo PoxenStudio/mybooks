@@ -863,7 +863,15 @@
     "location": "Location",
     "chooseVoice": "Choose voice",
     "recommendedBooks": "Others",
-    "recommendedBooksDesc": "Recommended based on tags and authors",
+    "recommendedBooksDesc": "Based on content similarity and what other readers read",
+    "similarReason": {
+      "series_next": "Next in the {value} series",
+      "same_series": "Also in the {value} series",
+      "same_author": "Also by {value}",
+      "same_tag": "Also tagged {value}",
+      "co_read": "Readers of this book also read",
+      "same_publisher": "Same publisher"
+    },
     "sameNameBooks": "Same Name Books",
     "cancel": "Cancel",
     "recommend": "Recommend",
