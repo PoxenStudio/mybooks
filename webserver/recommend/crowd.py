@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
+"""
+Crowd signals aggregated from other readers' reading, downloads, favorites and finishes.
+@author: PoxenStudio, 2026
+"""
 
 import datetime
 import math
@@ -21,6 +25,7 @@ class Engagement:
     favorite: bool = False
     finished: bool = False
     started: bool = False
+    rating: Optional[int] = None
     last_active: Optional[datetime.datetime] = None
 
 

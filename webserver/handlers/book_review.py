@@ -88,6 +88,7 @@ class BookReviewHandler(BaseHandler):
         comment = (data.get("comment") or "").strip()
 
         row = BookReviewService.upsert(self.sqlite_session, int(id), self.user_id(), rating, comment)
+        self.invalidate_recommendation()
         logging.info("[book_review] user %s reviewed book %s: rating=%s", self.user_id(), id, rating)
         return {"err": "ok", "review": _serialize_review(self.site_url, row, self.current_user), "msg": _("评价已提交")}
 
@@ -95,6 +96,7 @@ class BookReviewHandler(BaseHandler):
     @auth
     def delete(self, id):
         ok = BookReviewService.soft_delete(self.sqlite_session, int(id), self.user_id())
+        self.invalidate_recommendation()
         if not ok:
             return {"err": "params.invalid", "msg": _("没有可删除的评价")}
         return {"err": "ok", "msg": _("已删除")}

@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
+"""
+Book feature snapshot loaded from the Calibre library.
+@author: PoxenStudio, 2026
+"""
 
 import datetime
+import math
+from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, Optional, Protocol, Tuple
+from typing import Dict, List, Optional, Protocol, Tuple
 
 from webserver.constants import CALIBRE_COLUMN_CATEGORY
 from webserver.recommend.snapshot import BackgroundSnapshot
@@ -12,6 +18,7 @@ from webserver.recommend.snapshot import BackgroundSnapshot
 @dataclass(frozen=True)
 class BookFeatures:
     book_id: int
+    title: str = ""
     authors: Tuple[str, ...] = ()
     series: Optional[str] = None
     series_index: float = 0.0
@@ -45,6 +52,7 @@ class CalibreFeatureSource:
 
     def load(self) -> Dict[int, BookFeatures]:
         ids = self.cache.all_book_ids()
+        title = self._field("title", ids)
         authors = self._field("authors", ids)
         series = self._field("series", ids)
         series_index = self._field("series_index", ids)
@@ -57,6 +65,7 @@ class CalibreFeatureSource:
         return {
             bid: BookFeatures(
                 book_id=bid,
+                title=title.get(bid) or "",
                 authors=tuple(authors.get(bid) or ()),
                 series=series.get(bid) or None,
                 series_index=float(series_index.get(bid) or 0),
@@ -77,6 +86,39 @@ def _naive_utc(ts: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
     return ts.astimezone(datetime.timezone.utc).replace(tzinfo=None)
 
 
-class FeatureIndex(BackgroundSnapshot[Dict[int, BookFeatures]]):
+INDEXED_DIMENSIONS = ("author", "series", "tag", "publisher")
+
+
+def feature_keys(book: BookFeatures) -> List[Tuple[str, str, float]]:
+    """(dimension, key, share) pairs; tags share 1/sqrt(n) so heavily tagged books do not dominate a profile."""
+    keys = [("author", a, 1.0) for a in book.authors]
+    if book.series:
+        keys.append(("series", book.series, 1.0))
+    keys += [("tag", t, 1.0 / math.sqrt(len(book.tags))) for t in book.tags]
+    if book.publisher:
+        keys.append(("publisher", book.publisher, 1.0))
+    keys += [("language", lang, 1.0) for lang in book.languages]
+    return keys
+
+
+class InvertedIndex:
+    def __init__(self, features: Dict[int, BookFeatures]):
+        self.postings: Dict[str, Dict[str, List[int]]] = {d: defaultdict(list) for d in INDEXED_DIMENSIONS}
+        for book in features.values():
+            for dim, key, _ in feature_keys(book):
+                if dim in self.postings:
+                    self.postings[dim][key].append(book.book_id)
+
+    def books_with(self, dim: str, key: str) -> List[int]:
+        return self.postings.get(dim, {}).get(key, [])
+
+
+class Library:
+    def __init__(self, books: Dict[int, BookFeatures]):
+        self.books = books
+        self.inverted = InvertedIndex(books)
+
+
+class FeatureIndex(BackgroundSnapshot[Library]):
     def __init__(self, source: FeatureSource, ttl_seconds: float = 300):
-        super().__init__(source.load, ttl_seconds, "features")
+        super().__init__(lambda: Library(source.load()), ttl_seconds, "features")
