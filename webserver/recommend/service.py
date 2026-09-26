@@ -39,6 +39,13 @@ SCORE_CACHE_SIZE = 8
 Components = List[Tuple[Scorer, float]]
 
 
+def _pick_avoiding(pick: Callable[[RecommendContext], List[int]], ctx: RecommendContext, n: int) -> List[int]:
+    picked = pick(ctx.avoiding())
+    if len(picked) < n and ctx.avoid_ids:
+        picked += [i for i in pick(ctx.excluding(picked)) if i not in picked][:n - len(picked)]
+    return picked
+
+
 @dataclass
 class HomeResult:
     random_ids: List[int]
@@ -127,12 +134,13 @@ class RecommendService:
         pool = self._pool_state(ctx, library, crowd, coread, view, profile_state, n_random, n_new, config)
         personal_ctx = ctx.excluding(profile.excluded) if profile else ctx
 
-        new_ids = NewBooksRecommender(config, pool.new_scorer).pick(pool.new_pool, personal_ctx, n_new)
+        new_books = NewBooksRecommender(config, pool.new_scorer)
+        new_ids = _pick_avoiding(lambda c: new_books.pick(pool.new_pool, c, n_new), personal_ctx, n_new)
         sampler = SampledRecommender(config, pool.random_scorer)
-        random_ids = sampler.pick(pool.random_pool, library.books, library.ids, personal_ctx.excluding(new_ids), n_random)
+        random_ids = _pick_avoiding(lambda c: sampler.pick(pool.random_pool, library.books, library.ids, c, n_random), personal_ctx.excluding(new_ids), n_random)
         if profile and len(random_ids) < n_random and profile.finished:
             relaxed = ctx.excluding(profile.reading | profile.disliked | frozenset(new_ids))
-            random_ids = sampler.recommend(library.books, relaxed, n_random)
+            random_ids = _pick_avoiding(lambda c: sampler.recommend(library.books, c, n_random), relaxed, n_random)
 
         reasons: Dict[int, Reason] = {}
         for ids, scorer in ((new_ids, pool.new_scorer), (random_ids, pool.random_scorer)):

@@ -7,7 +7,7 @@ Per-request recommendation context: reader, visibility, exclusions, clock and se
 
 import datetime
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Callable, FrozenSet, Optional
 
 from webserver.recommend.features import BookFeatures
@@ -29,9 +29,15 @@ class RecommendContext:
     exclude_ids: FrozenSet[int] = frozenset()
     now: datetime.datetime = field(default_factory=utc_now)
     rng: random.Random = field(default_factory=random.Random)
+    avoid_ids: FrozenSet[int] = frozenset()
+    shuffle: bool = False
 
     def accepts(self, book: BookFeatures) -> bool:
         return book.book_id not in self.exclude_ids and self.is_visible(book)
 
     def excluding(self, ids) -> "RecommendContext":
-        return RecommendContext(self.reader_id, self.is_visible, self.exclude_ids | frozenset(ids), self.now, self.rng)
+        return replace(self, exclude_ids=self.exclude_ids | frozenset(ids))
+
+    def avoiding(self) -> "RecommendContext":
+        """Hard-exclude the soft `avoid_ids`, e.g. books already on screen when the user asks for another batch."""
+        return replace(self, exclude_ids=self.exclude_ids | self.avoid_ids, avoid_ids=frozenset())
