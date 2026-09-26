@@ -3531,7 +3531,7 @@ class BookTxtParser(BaseHandler):
 
 class BookSuggestion(ListHandler):
     def _related_books(self, book_id):
-        """Books from the recommendation engine with their reasons, or None to fall back to the tag/author lookup."""
+        """Books from the recommendation engine with their reasons; None or [] falls back to the tag/author lookup."""
         service = self.settings.get("recommend")
         if service is None or not CONF.get("RECOMMEND_ENABLE", True):
             return None
@@ -3555,35 +3555,35 @@ class BookSuggestion(ListHandler):
             formatted.append(data)
         return formatted
 
+    def _tag_author_books(self, book):
+        """Original lookup: one random tag, or the first author; also the fallback when the engine finds nothing."""
+        tags = book.get("tags", [])
+        similar_books, reason = [], None
+        if tags:
+            random_tag = random.choice(tags)
+            similar_books = [b for b in self.get_item_books("tags", random_tag, max_count=SUGGESTION_COUNT + 1) if b["id"] != book["id"]]
+            reason = {"type": "same_tag", "value": random_tag}
+
+        if not similar_books:
+            authors = book.get("authors", [])
+            if authors and authors[0] not in ("佚名", "Unknown"):
+                similar_books = [b for b in self.get_item_books("authors", authors[0], max_count=SUGGESTION_COUNT + 1) if b["id"] != book["id"]]
+                reason = {"type": "same_author", "value": authors[0]}
+        result = []
+        for b in similar_books[:SUGGESTION_COUNT]:
+            data = self.fmt(b)
+            if reason:
+                data["reason"] = reason
+            result.append(data)
+        return result
+
     @js
     def get(self, id):
         book = self.get_book(id, raise_exception=False)
         if not book:
             return {"err": "params.book.invalid", "msg": _("书籍已不存在")}
-
-        related = self._related_books(book["id"])
-        if related is not None:
-            return {"err": "ok", "msg": _("推荐成功"), "books": related}
-
-        tags = book.get("tags", [])
-        similar_books = []
-
-        if tags:
-            random_tag = random.choice(tags)
-            similar_books = self.get_item_books("tags", random_tag, max_count=12)
-
-        if not similar_books:
-            # 如果没有标签或没有找到匹配的书籍，则使用作者查询
-            authors = book.get("authors", [])
-            if authors and authors[0] not in ("佚名", "Unknown"):
-                similar_books = self.get_item_books("authors", authors[0], max_count=12)
-        # 移除结果中的当前书籍
-        similar_books = [b for b in similar_books if b["id"] != book["id"]]
-        return {
-            "err": "ok",
-            "msg": _("推荐成功"),
-            "books": [self.fmt(b) for b in similar_books]
-        }
+        books = self._related_books(book["id"]) or self._tag_author_books(book)
+        return {"err": "ok", "msg": _("推荐成功"), "books": books}
 
 
 class BookSendToDevice(BaseHandler):
