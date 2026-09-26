@@ -46,9 +46,12 @@ class NewBooksRecommender:
         return scored[:min(n * POOL_FACTOR, n + MAX_POOL_EXTRA)]
 
     def pick(self, pool: Sequence[Scored], ctx: RecommendContext, n: int) -> List[int]:
+        """Top of the pool by default; a weighted random draw from it when ctx.shuffle asks for another batch."""
         if n <= 0:
             return []
         candidates = [(b, s) for b, s in pool if ctx.accepts(b)]
+        if ctx.shuffle:
+            candidates = weighted_sample(candidates, max(n, len(candidates) // 2), self.config.temperature, ctx.rng)
         picked = mmr_rerank(candidates, n, self.config.diversity, self.config.max_per_author, self.config.max_per_series)
         return [b.book_id for b in picked]
 

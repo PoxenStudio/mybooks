@@ -653,5 +653,36 @@ class TestPools(unittest.TestCase):
         self.assertEqual(set(self.service._pools), {0, 1})
 
 
+class TestRefresh(unittest.TestCase):
+    def service(self, count):
+        features = library(*[book(i, days_ago=i, authors=("a%d" % i,)) for i in range(1, count + 1)])
+        service = RecommendService(StaticSource(features), RecommendConfig)
+        service.index.refresh()
+        return service
+
+    def test_refresh_avoids_books_on_screen(self):
+        service = self.service(500)
+        first = service.home(ctx(reader_id=None), 12, 12)
+        shown = frozenset(first.random_ids + first.new_ids)
+        second = service.home(ctx(reader_id=None, rng=random.Random(99), avoid_ids=shown, shuffle=True), 12, 12)
+        self.assertEqual((len(second.random_ids), len(second.new_ids)), (12, 12))
+        self.assertFalse(shown & set(second.random_ids + second.new_ids))
+        self.assertFalse(set(second.random_ids) & set(second.new_ids))
+
+    def test_small_library_falls_back_to_shown_books(self):
+        service = self.service(20)
+        shown = frozenset(range(1, 21))
+        result = service.home(ctx(reader_id=None, avoid_ids=shown, shuffle=True), 8, 8)
+        self.assertEqual((len(result.random_ids), len(result.new_ids)), (8, 8))
+        self.assertFalse(set(result.random_ids) & set(result.new_ids))
+
+    def test_new_books_shuffle_only_on_refresh(self):
+        service = self.service(500)
+        fixed = {tuple(service.home(ctx(reader_id=None, rng=random.Random(seed)), 0, 12).new_ids) for seed in range(5)}
+        shuffled = {tuple(service.home(ctx(reader_id=None, rng=random.Random(seed), shuffle=True), 0, 12).new_ids) for seed in range(5)}
+        self.assertEqual(len(fixed), 1)
+        self.assertGreater(len(shuffled), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

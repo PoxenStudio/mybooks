@@ -67,6 +67,9 @@ from webserver.constants import CALIBRE_COLUMN_TRANSLATORS, COLUMN_TRANSLATORS
 CONF = loader.get_settings()
 
 
+MAX_SHOWN_IDS = 500
+
+
 class Index(BaseHandler):
     def fmt(self, b):
         return BookFormatter(self, b).format()
@@ -121,6 +124,11 @@ class Index(BaseHandler):
             return str(time.time_ns())
         return home_seed(reader_id, utc_now(), RecommendConfig.from_conf(CONF).seed_bucket_minutes)
 
+    def _shown_ids(self):
+        """Books already on screen (`exclude=1,2,3`), avoided by the next batch when possible."""
+        ids = [int(p) for p in self.get_argument("exclude", "").split(",") if p.strip().isdigit()]
+        return frozenset(ids[:MAX_SHOWN_IDS])
+
     def _recommend_home_ids(self, cnt_random, cnt_recent, exclude_ids, seed, reader_id):
         if not CONF.get("RECOMMEND_ENABLE", True) or self.get_argument("personalized", "1") == "0":
             return None
@@ -132,6 +140,8 @@ class Index(BaseHandler):
             is_visible=lambda f: self.is_book_visible({"tags": f.tags, CALIBRE_COLUMN_CATEGORY: f.category}),
             exclude_ids=frozenset(exclude_ids),
             rng=random.Random(seed),
+            avoid_ids=self._shown_ids(),
+            shuffle=self.get_argument("refresh", "0") == "1",
         )
         try:
             result = service.home(ctx, cnt_random, cnt_recent)

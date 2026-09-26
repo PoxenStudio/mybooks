@@ -168,7 +168,7 @@
                 @drag-end="onSectionDragEnd"
             >
                 <template #header-extra>
-                    <v-icon color="primary" class="ml-1 refresh-icon" @click="refreshBooks('all')">mdi-refresh</v-icon>
+                    <v-icon color="primary" class="ml-1 refresh-icon" @click="refreshBooks('random')">mdi-refresh</v-icon>
                 </template>
                 <v-row>
                     <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="(book,idx) in get_random_books" :key="'rec'+idx+book.id" class="book-card">
@@ -206,7 +206,7 @@
                 @drag-end="onSectionDragEnd"
             >
                 <template #header-extra>
-                    <v-icon color="primary" class="ml-1 refresh-icon" @click="refreshBooks('all')">mdi-refresh</v-icon>
+                    <v-icon color="primary" class="ml-1 refresh-icon" @click="refreshBooks('new')">mdi-refresh</v-icon>
                 </template>
                 <v-row>
                     <v-col cols="12">
@@ -362,12 +362,16 @@ export default {
             }
             return this.$t('index.reason.' + reason.type, { value: reason.value });
         },
-        refreshBooks() {
-            this.$backend('/index?refresh=1').then( rsp => {
-                if (rsp.err === 'ok') {
-                    this.random_books = rsp.random_books || [];
+        refreshBooks(section) {
+            const shown = this.random_books.concat(this.new_books).map(b => b.id);
+            this.$backend('/index?refresh=1&exclude=' + shown.join(',')).then( rsp => {
+                if (rsp.err !== 'ok') {
+                    return;
+                }
+                if (section === 'new') {
                     this.new_books = rsp.new_books || [];
-                    this.social_recommend_books = rsp.social_recommend_books || [];
+                } else {
+                    this.random_books = rsp.random_books || [];
                 }
             }).catch( error => {
                 console.error('Failed to refresh books:', error);
