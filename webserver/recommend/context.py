@@ -13,6 +13,11 @@ def utc_now() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
 
 
+def home_seed(reader_id: Optional[int], now: datetime.datetime, bucket_minutes: int) -> str:
+    bucket = int((now - datetime.datetime(1970, 1, 1)).total_seconds() // (max(bucket_minutes, 1) * 60))
+    return "%d:%d" % (reader_id or 0, bucket)
+
+
 @dataclass
 class RecommendContext:
     reader_id: Optional[int]

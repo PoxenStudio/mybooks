@@ -559,6 +559,8 @@ class AdminSettings(BaseHandler):
             "AI_ALLOW_SET_CATEGORY",
             "MAIN_PAGE_RANDOM_COUNT",
             "MAIN_PAGE_RECENT_COUNT",
+            "RECOMMEND_ENABLE",
+            "RECOMMEND_USE_CROWD",
             "INDEX_PAGE_TYPE",
             "DEFAULT_PAGE_SIZE",
             "ENABLE_WEBDAV_SERVICE",

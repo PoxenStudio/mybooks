@@ -351,7 +351,7 @@ export default {
             }
         },
         refreshBooks() {
-            this.$backend('/index').then( rsp => {
+            this.$backend('/index?refresh=1').then( rsp => {
                 if (rsp.err === 'ok') {
                     this.random_books = rsp.random_books || [];
                     this.new_books = rsp.new_books || [];

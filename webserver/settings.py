@@ -87,6 +87,18 @@ settings = {
     "RECOMMEND_DIVERSITY": 0.3,               # MMR 多样性惩罚系数
     "RECOMMEND_MAX_PER_AUTHOR": 2,
     "RECOMMEND_MAX_PER_SERIES": 2,
+    "RECOMMEND_USE_CROWD": True,              # 参考其他用户的阅读/下载/读完/收藏数据
+    "RECOMMEND_CROWD_TTL": 600,               # 群体数据刷新周期（秒）
+    "RECOMMEND_CROWD_MIN_USERS": 2,           # 除本人外至少这么多用户有行为数据才启用群体信号
+    "RECOMMEND_CROWD_SECS_CAP": 10800,        # 单人单书阅读时长封顶（秒）
+    "RECOMMEND_CROWD_EXCLUDE_READERS": [],    # 不参与群体统计的用户 id（测试号、批量下载账号等）
+    "RECOMMEND_TREND_DAYS": 30,
+    "RECOMMEND_USE_REVIEWS": True,            # ENABLE_BOOK_REVIEW 关闭时自动视为 False
+    "RECOMMEND_QUALITY_PRIOR_STRENGTH": 3,    # 贝叶斯平均先验强度
+    "RECOMMEND_EXPLORE_RATIO": 0.25,          # 随机推荐中完全随机抽取的比例
+    "RECOMMEND_TEMPERATURE": 0.35,            # 抽样温度，越大越随机
+    "RECOMMEND_SEED_BUCKET_MINUTES": 30,      # 同一时间段内刷新结果不变
+    "RECOMMEND_WEIGHTS": {},                  # 覆盖默认权重，键见 webserver/recommend/config.py
     "DEFAULT_PAGE_SIZE": 60,
     "ENABLE_AUDIO_CONVERSION_LOG": False,
     "ENABLE_AUDIO_SUBTITLE": True,

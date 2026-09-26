@@ -8,6 +8,8 @@ from webserver.recommend.features import BookFeatures
 
 Scored = Tuple[BookFeatures, float]
 
+MMR_MAX_N = 100
+
 
 def book_similarity(a: BookFeatures, b: BookFeatures) -> float:
     if set(a.authors) & set(b.authors):
@@ -20,33 +22,62 @@ def book_similarity(a: BookFeatures, b: BookFeatures) -> float:
     return len(ta & tb) / len(ta | tb)
 
 
+class _Caps:
+    def __init__(self, max_per_author: int, max_per_series: int):
+        self.max_per_author = max_per_author
+        self.max_per_series = max_per_series
+        self.authors: Counter = Counter()
+        self.series: Counter = Counter()
+
+    def allows(self, book: BookFeatures) -> bool:
+        if any(self.authors[a] >= self.max_per_author for a in book.authors):
+            return False
+        return not (book.series and self.series[book.series] >= self.max_per_series)
+
+    def take(self, book: BookFeatures) -> None:
+        self.authors.update(book.authors)
+        if book.series:
+            self.series[book.series] += 1
+
+
 def mmr_rerank(scored: Sequence[Scored], n: int, diversity: float, max_per_author: int, max_per_series: int) -> List[BookFeatures]:
     """Greedy MMR; hard per-author/series caps are relaxed only when the pool cannot fill n otherwise."""
+    if diversity <= 0 or n > MMR_MAX_N:
+        return _capped(scored, n, max_per_author, max_per_series)
     remaining = list(scored)
+    penalty = [0.0] * len(remaining)
     selected: List[BookFeatures] = []
-    authors: Counter = Counter()
-    series: Counter = Counter()
-
-    def within_caps(book: BookFeatures) -> bool:
-        if any(authors[a] >= max_per_author for a in book.authors):
-            return False
-        return not (book.series and series[book.series] >= max_per_series)
-
+    caps = _Caps(max_per_author, max_per_series)
     for enforce_caps in (True, False):
-        while len(selected) < n:
+        while len(selected) < n and remaining:
             best, best_value = None, None
             for i, (book, score) in enumerate(remaining):
-                if enforce_caps and not within_caps(book):
+                if enforce_caps and not caps.allows(book):
                     continue
-                penalty = max((book_similarity(book, s) for s in selected), default=0.0)
-                value = score - diversity * penalty
+                value = score - diversity * penalty[i]
                 if best_value is None or value > best_value:
                     best, best_value = i, value
             if best is None:
                 break
             book, _ = remaining.pop(best)
+            penalty.pop(best)
             selected.append(book)
-            authors.update(book.authors)
-            if book.series:
-                series[book.series] += 1
+            caps.take(book)
+            penalty = [max(p, book_similarity(other, book)) for p, (other, _) in zip(penalty, remaining)]
     return selected
+
+
+def _capped(scored: Sequence[Scored], n: int, max_per_author: int, max_per_series: int) -> List[BookFeatures]:
+    ordered = sorted(scored, key=lambda x: x[1], reverse=True)
+    caps = _Caps(max_per_author, max_per_series)
+    selected: List[BookFeatures] = []
+    skipped: List[BookFeatures] = []
+    for book, _ in ordered:
+        if len(selected) >= n:
+            break
+        if caps.allows(book):
+            selected.append(book)
+            caps.take(book)
+        else:
+            skipped.append(book)
+    return selected + skipped[:n - len(selected)]

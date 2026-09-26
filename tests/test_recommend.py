@@ -6,11 +6,17 @@ import random
 import time
 import unittest
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import scoped_session, sessionmaker
+
+from webserver import models
 from webserver.constants import CALIBRE_COLUMN_CATEGORY
-from webserver.recommend import BookFeatures, CalibreFeatureSource, FeatureIndex, RecommendConfig, RecommendContext, RecommendService
+from webserver.models import BookReview, Item, Reader, Reading, ReadingState
+from webserver.recommend import BookFeatures, CalibreFeatureSource, FeatureIndex, RecommendConfig, RecommendContext, RecommendService, SqlCrowdSource, home_seed
+from webserver.recommend.crowd import CrowdData, CrowdView, Engagement, build_crowd
 from webserver.recommend.diversity import mmr_rerank
-from webserver.recommend.recommenders import NewBooksRecommender, UniformRandomRecommender
-from webserver.recommend.scoring import FreshnessScorer, WeightedScorer
+from webserver.recommend.recommenders import NewBooksRecommender, SampledRecommender, weighted_sample
+from webserver.recommend.scoring import FreshnessScorer, QualityScorer, WeightedScorer
 
 NOW = datetime.datetime(2026, 9, 1)
 
@@ -108,12 +114,154 @@ class TestNewBooks(unittest.TestCase):
         self.assertLessEqual(sum(1 for i in picked if features[i].authors == ("same",)), 2)
 
 
-class TestUniformRandom(unittest.TestCase):
+class FixedScorer:
+    name = "fixed"
+
+    def __init__(self, scores):
+        self.scores = scores
+
+    def score(self, b, _ctx):
+        return self.scores.get(b.book_id, 0.0)
+
+
+class TestSampledRecommender(unittest.TestCase):
     def test_excludes_and_filters(self):
         features = library(*[book(i) for i in range(1, 11)])
         c = ctx(is_visible=lambda b: b.book_id % 2 == 0).excluding([2, 4])
-        picked = UniformRandomRecommender().recommend(features, c, 10)
+        picked = SampledRecommender(RecommendConfig(), FixedScorer({})).recommend(features, c, 10)
         self.assertEqual(sorted(picked), [6, 8, 10])
+
+    def test_same_seed_same_result(self):
+        features = library(*[book(i, authors=(str(i),)) for i in range(1, 101)])
+        rec = SampledRecommender(RecommendConfig(), FixedScorer({}))
+        first = rec.recommend(features, ctx(rng=random.Random("1:42")), 10)
+        self.assertEqual(first, rec.recommend(features, ctx(rng=random.Random("1:42")), 10))
+        self.assertNotEqual(first, rec.recommend(features, ctx(rng=random.Random("1:43")), 10))
+        self.assertEqual(len(set(first)), 10)
+
+    def test_high_scores_are_favoured_but_not_exclusive(self):
+        features = library(*[book(i, authors=(str(i),)) for i in range(1, 101)])
+        rec = SampledRecommender(RecommendConfig(), FixedScorer({i: 1.0 for i in range(1, 11)}))
+        picks = [i for seed in range(200) for i in rec.recommend(features, ctx(rng=random.Random(seed)), 8)]
+        high = sum(1 for i in picks if i <= 10) / len(picks)
+        self.assertGreater(high, 0.5)
+        self.assertLess(high, 1.0)
+
+    def test_weighted_sample_is_without_replacement(self):
+        scored = [(book(i), 0.5) for i in range(20)]
+        picked = weighted_sample(scored, 10, 0.35, random.Random(0))
+        self.assertEqual(len({b.book_id for b, _ in picked}), 10)
+
+
+def engagement(reader_id, book_id, **kwargs):
+    return Engagement(reader_id=reader_id, book_id=book_id, **kwargs)
+
+
+class TestCrowd(unittest.TestCase):
+    config = RecommendConfig(crowd_min_users=2)
+
+    def snapshot(self, *engagements, reviews=None, items=None):
+        return build_crowd(CrowdData(list(engagements), reviews or {}, items or {}), NOW, self.config)
+
+    def test_seconds_capped_per_reader(self):
+        snap = self.snapshot(engagement(1, 1, read_secs=50000), engagement(2, 1, read_secs=100))
+        self.assertEqual(snap.totals[1].secs, 10800 + 100)
+
+    def test_own_activity_is_subtracted(self):
+        snap = self.snapshot(engagement(1, 1, read_secs=60), engagement(2, 1, read_secs=60), engagement(3, 2, downloaded=True))
+        self.assertEqual(CrowdView(snap, None, self.config).stats(1).readers, 2)
+        self.assertEqual(CrowdView(snap, 1, self.config).stats(1).readers, 1)
+        self.assertGreater(CrowdView(snap, 3, self.config).popularity(1), CrowdView(snap, 1, self.config).popularity(1))
+
+    def test_needs_enough_other_readers(self):
+        snap = self.snapshot(engagement(1, 1, read_secs=60), engagement(2, 1, read_secs=60))
+        self.assertTrue(CrowdView(snap, None, self.config).available)
+        self.assertFalse(CrowdView(snap, 1, self.config).available)
+        self.assertFalse(CrowdView(None, None, self.config).available)
+
+    def test_finish_rate_is_smoothed(self):
+        lucky = [engagement(1, 1, read_secs=30, finished=True)]
+        solid = [engagement(r, 2, read_secs=30, finished=r <= 9) for r in range(1, 11)]
+        others = [engagement(r, 3 + r % 2, read_secs=6000) for r in range(1, 21)]
+        view = CrowdView(self.snapshot(*lucky, *solid, *others), None, self.config)
+        self.assertGreater(view.finish_rate(2), view.finish_rate(1))
+        self.assertLess(view.finish_rate(1), 0.6)
+
+    def test_deep_reading_bonus(self):
+        view = CrowdView(self.snapshot(engagement(1, 1, read_secs=6000), engagement(2, 2, read_secs=60), engagement(3, 3, read_secs=600)), None, self.config)
+        self.assertAlmostEqual(view.finish_rate(1) - view.finish_rate(2), 0.1)
+
+    def test_trend_prefers_recent_activity(self):
+        snap = self.snapshot(
+            engagement(1, 1, read_secs=60, last_active=NOW - datetime.timedelta(days=1)),
+            engagement(2, 2, read_secs=60, last_active=NOW - datetime.timedelta(days=60)),
+        )
+        view = CrowdView(snap, None, self.config)
+        self.assertGreater(view.trend(1), 0.9)
+        self.assertEqual(view.trend(2), 0.0)
+
+    def test_quality_falls_back_to_reviews_without_crowd(self):
+        view = CrowdView(self.snapshot(reviews={1: (2, 20)}), None, self.config)
+        scorer = QualityScorer(view, default_rating=6.0)
+        rated = BookFeatures(book_id=1, rating=6.0)
+        unrated = BookFeatures(book_id=2)
+        self.assertAlmostEqual(scorer.score(rated, ctx()), (20 + 3 * 6) / 5 / 10)
+        self.assertAlmostEqual(scorer.score(unrated, ctx()), 0.6)
+
+
+class TestSqlCrowdSource(unittest.TestCase):
+    def setUp(self):
+        engine = create_engine("sqlite://")
+        models.Base.metadata.create_all(engine)
+        self.session = scoped_session(sessionmaker(bind=engine))
+        readers = []
+        for rid, allow in ((1, True), (2, True), (3, False), (4, True)):
+            r = Reader()
+            r.id, r.username, r.name, r.allow_statistic = rid, "u%d" % rid, "u%d" % rid, allow
+            readers.append(r)
+        self.session.add_all(readers)
+        t = datetime.datetime(2026, 8, 30, 10)
+        for day in range(3):
+            self.session.add(Reading(1, 100, "read", "web", t, duration=600, date=(t + datetime.timedelta(days=day)).date()))
+        for _ in range(10):
+            self.session.add(Reading(2, 100, "download", "web", t))
+        self.session.add(Reading(3, 100, "read", "web", t, duration=600))
+        self.session.add(Reading(4, 100, "read", "web", t, duration=600))
+        state = ReadingState(100, 2)
+        state.set_favorite(True)
+        state.set_read_state(2)
+        self.session.add(state)
+        item = Item()
+        item.book_id, item.count_visit, item.count_download = 100, 3, 4
+        self.session.add(item)
+        for rid, status, rating in ((1, BookReview.STATUS_APPROVED, 8), (2, BookReview.STATUS_HIDDEN, 2)):
+            self.session.add(BookReview(reader_id=rid, book_id=100, rating=rating, status=status, create_time=t, update_time=t))
+        self.session.commit()
+
+    def tearDown(self):
+        self.session.remove()
+
+    def test_load(self):
+        data = SqlCrowdSource(self.session).load(RecommendConfig(crowd_exclude_readers=(4,)))
+        by_reader = {e.reader_id: e for e in data.engagements}
+        self.assertEqual(set(by_reader), {1, 2})
+        self.assertEqual(by_reader[1].read_secs, 1800)
+        self.assertTrue(by_reader[2].downloaded and by_reader[2].favorite and by_reader[2].finished)
+        self.assertEqual(data.reviews, {100: (1, 8)})
+        self.assertEqual(data.item_counts, {100: 7})
+        snap = build_crowd(data, NOW, RecommendConfig())
+        self.assertEqual(snap.totals[100].dl_users, 1)
+
+    def test_reviews_disabled(self):
+        self.assertEqual(SqlCrowdSource(self.session).load(RecommendConfig(use_reviews=False)).reviews, {})
+
+
+class TestSeed(unittest.TestCase):
+    def test_bucket(self):
+        self.assertEqual(home_seed(1, NOW, 30), home_seed(1, NOW + datetime.timedelta(minutes=29), 30))
+        self.assertNotEqual(home_seed(1, NOW, 30), home_seed(1, NOW + datetime.timedelta(minutes=30), 30))
+        self.assertNotEqual(home_seed(1, NOW, 30), home_seed(2, NOW, 30))
+        self.assertEqual(home_seed(None, NOW, 30), home_seed(0, NOW, 30))
 
 
 class FakeCalibreCache:
@@ -172,7 +320,22 @@ class TestFeatureIndex(unittest.TestCase):
         self.assertEqual(source.loads, 2)
 
 
+class StaticCrowd:
+    def __init__(self, data):
+        self.data = data
+
+    def load(self, _config):
+        return self.data
+
+
 class TestRecommendService(unittest.TestCase):
+    def service(self, features, crowd=None):
+        service = RecommendService(StaticSource(features), RecommendConfig, StaticCrowd(crowd) if crowd else None)
+        service.index.refresh()
+        if service.crowd:
+            service.crowd.refresh()
+        return service
+
     def test_not_ready_returns_none(self):
         service = RecommendService(StaticSource({}), RecommendConfig)
         service.index.snapshot = lambda: None
@@ -180,12 +343,28 @@ class TestRecommendService(unittest.TestCase):
 
     def test_random_and_new_are_disjoint(self):
         features = library(*[book(i, days_ago=i, authors=(str(i),)) for i in range(1, 21)])
-        service = RecommendService(StaticSource(features), RecommendConfig)
-        service.index.refresh()
-        result = service.home(ctx(exclude_ids=frozenset({1})), 10, 5)
+        result = self.service(features).home(ctx(exclude_ids=frozenset({1})), 10, 5)
         self.assertEqual(result.new_ids, [2, 3, 4, 5, 6])
         self.assertEqual(len(result.random_ids), 10)
         self.assertFalse(set(result.random_ids) & (set(result.new_ids) | {1}))
+
+    def test_crowd_favourite_shows_up_more(self):
+        features = library(*[book(i, days_ago=400 + i, authors=(str(i),)) for i in range(1, 201)])
+        crowd = CrowdData([engagement(r, 7, read_secs=3600, finished=True, favorite=True) for r in range(2, 6)])
+        service = self.service(features, crowd)
+        hits = sum(7 in service.home(ctx(reader_id=None, rng=random.Random(seed)), 8, 0).random_ids for seed in range(100))
+        uniform_hits = 100 * 8 / 200
+        self.assertGreater(hits, 3 * uniform_hits)
+
+    def test_user_scores_exclude_own_activity(self):
+        features = library(*[book(i, authors=(str(i),)) for i in range(1, 51)])
+        crowd = CrowdData([engagement(1, 7, read_secs=3600, favorite=True), engagement(2, 8, read_secs=60), engagement(3, 8, read_secs=60)])
+        service = self.service(features, crowd)
+        c = ctx(reader_id=1)
+        scorer = service._random_scorer(features, service.crowd.snapshot(), CrowdView(service.crowd.snapshot(), 1, service.config_loader()), c, service.config_loader())
+        guest = service._random_scorer(features, service.crowd.snapshot(), CrowdView(service.crowd.snapshot(), None, service.config_loader()), ctx(reader_id=None), service.config_loader())
+        self.assertLess(scorer.score(features[7], c), guest.score(features[7], c))
+        self.assertAlmostEqual(scorer.score(features[8], c), guest.score(features[8], c))
 
 
 if __name__ == "__main__":

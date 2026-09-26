@@ -950,6 +950,18 @@ export default {
             })),
           },
           {
+            icon: "mdi-auto-fix",
+            key: "RECOMMEND_ENABLE",
+            label: "settings.recommend_enable",
+            type: "checkbox",
+          },
+          {
+            icon: "mdi-account-group-outline",
+            key: "RECOMMEND_USE_CROWD",
+            label: "settings.recommend_use_crowd",
+            type: "checkbox",
+          },
+          {
             icon: "mdi-book-multiple",
             key: "DEFAULT_PAGE_SIZE",
             label: "settings.default_page_size",
