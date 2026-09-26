@@ -50,6 +50,10 @@
   content: "\F0849";
 }
 
+.mdi-account-group-outline::before {
+  content: "\F0B58";
+}
+
 .mdi-account-outline::before {
   content: "\F0013";
 }
@@ -120,6 +124,10 @@
 
 .mdi-at::before {
   content: "\F0065";
+}
+
+.mdi-auto-fix::before {
+  content: "\F0068";
 }
 
 .mdi-barcode::before {

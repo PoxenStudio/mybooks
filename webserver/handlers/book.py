@@ -117,10 +117,14 @@ class Index(BaseHandler):
         new_ids = random.sample(ids[0:600], min(cnt_recent, len(ids[0:600])))
         return sorted(random_ids, reverse=True), sorted(new_ids, reverse=True)
 
+    def _stable_home(self):
+        """Same results within a time bucket only when RECOMMEND_SEED_BUCKET_MINUTES > 0 and this is not a refresh."""
+        return RecommendConfig.from_conf(CONF).seed_bucket_minutes > 0 and self.get_argument("refresh", "0") != "1"
+
     def _home_seed(self, reader_id):
         if self.get_argument("seed", ""):
             return self.get_argument("seed")
-        if self.get_argument("refresh", "0") == "1":
+        if not self._stable_home():
             return str(time.time_ns())
         return home_seed(reader_id, utc_now(), RecommendConfig.from_conf(CONF).seed_bucket_minutes)
 
@@ -141,7 +145,7 @@ class Index(BaseHandler):
             exclude_ids=frozenset(exclude_ids),
             rng=random.Random(seed),
             avoid_ids=self._shown_ids(),
-            shuffle=self.get_argument("refresh", "0") == "1",
+            shuffle=not self._stable_home(),
         )
         try:
             result = service.home(ctx, cnt_random, cnt_recent)

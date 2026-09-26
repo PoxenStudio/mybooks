@@ -46,7 +46,7 @@ class RecommendConfig:
     quality_prior_strength: float = 3.0
     explore_ratio: float = 0.25
     temperature: float = 0.35
-    seed_bucket_minutes: int = 30
+    seed_bucket_minutes: int = 0
     profile_ttl_seconds: int = 600
     half_life_days: float = 180.0
     cold_start_threshold: float = 3.0

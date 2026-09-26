@@ -100,7 +100,7 @@ settings = {
     "RECOMMEND_QUALITY_PRIOR_STRENGTH": 3,    # 贝叶斯平均先验强度
     "RECOMMEND_EXPLORE_RATIO": 0.25,          # 随机推荐中完全随机抽取的比例
     "RECOMMEND_TEMPERATURE": 0.35,            # 抽样温度，越大越随机
-    "RECOMMEND_SEED_BUCKET_MINUTES": 30,      # 同一时间段内刷新结果不变
+    "RECOMMEND_SEED_BUCKET_MINUTES": 0,       # 0：每次打开首页都重新随机；>0：该时间段内打开结果不变
     "RECOMMEND_WEIGHTS": {},                  # 覆盖默认权重，键见 webserver/recommend/config.py
     "RECOMMEND_PROFILE_TTL": 600,             # 用户画像缓存（秒），用户改阅读状态/评价时立即失效
     "RECOMMEND_HALF_LIFE_DAYS": 180,          # 用户行为时间衰减半衰期
