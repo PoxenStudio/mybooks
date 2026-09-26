@@ -9,7 +9,7 @@ import datetime
 import math
 import statistics
 from dataclasses import dataclass, field, fields
-from typing import Dict, Iterable, Optional, Protocol, Tuple
+from typing import Dict, Hashable, Iterable, Optional, Protocol, Tuple
 
 from webserver.recommend.config import RecommendConfig
 
@@ -62,6 +62,10 @@ class CrowdData:
 
 class CrowdSource(Protocol):
     def load(self, config: RecommendConfig) -> CrowdData:
+        ...
+
+    def fingerprint(self) -> Hashable:
+        """Cheap value that changes whenever load() would return different data."""
         ...
 
 

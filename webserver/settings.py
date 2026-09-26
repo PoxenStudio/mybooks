@@ -92,6 +92,9 @@ settings = {
     "RECOMMEND_CROWD_MIN_USERS": 2,           # 除本人外至少这么多用户有行为数据才启用群体信号
     "RECOMMEND_CROWD_SECS_CAP": 10800,        # 单人单书阅读时长封顶（秒）
     "RECOMMEND_CROWD_EXCLUDE_READERS": [],    # 不参与群体统计的用户 id（测试号、批量下载账号等）
+    "RECOMMEND_CROWD_IGNORE_PROTOCOLS": ["webdav"],  # 这些协议的下载不计入群体统计（WebDAV 客户端同步时会批量读取文件）
+    "RECOMMEND_USE_LEGACY_HISTORY": False,    # 把 Reader.extra 旧版阅读/推送历史作为弱群体信号
+    "RECOMMEND_POOL_SIZE": 300,               # 每个用户预先打分保留的随机推荐候选数
     "RECOMMEND_TREND_DAYS": 30,
     "RECOMMEND_USE_REVIEWS": True,            # ENABLE_BOOK_REVIEW 关闭时自动视为 False
     "RECOMMEND_QUALITY_PRIOR_STRENGTH": 3,    # 贝叶斯平均先验强度

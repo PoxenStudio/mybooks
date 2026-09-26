@@ -38,6 +38,9 @@ class RecommendConfig:
     crowd_min_users: int = 2
     crowd_secs_cap: int = 10800
     crowd_exclude_readers: Tuple[int, ...] = ()
+    crowd_ignore_protocols: Tuple[str, ...] = ("webdav",)
+    use_legacy_history: bool = False
+    pool_size: int = 300
     trend_days: int = 30
     use_reviews: bool = True
     quality_prior_strength: float = 3.0
@@ -81,6 +84,9 @@ class RecommendConfig:
             crowd_min_users=int(conf.get("RECOMMEND_CROWD_MIN_USERS", cls.crowd_min_users)),
             crowd_secs_cap=int(conf.get("RECOMMEND_CROWD_SECS_CAP", cls.crowd_secs_cap)),
             crowd_exclude_readers=tuple(int(i) for i in conf.get("RECOMMEND_CROWD_EXCLUDE_READERS") or ()),
+            crowd_ignore_protocols=tuple(str(p) for p in conf.get("RECOMMEND_CROWD_IGNORE_PROTOCOLS", cls.crowd_ignore_protocols) or ()),
+            use_legacy_history=bool(conf.get("RECOMMEND_USE_LEGACY_HISTORY", cls.use_legacy_history)),
+            pool_size=int(conf.get("RECOMMEND_POOL_SIZE", cls.pool_size)),
             trend_days=int(conf.get("RECOMMEND_TREND_DAYS", cls.trend_days)),
             use_reviews=bool(conf.get("RECOMMEND_USE_REVIEWS", cls.use_reviews)) and bool(conf.get("ENABLE_BOOK_REVIEW", True)),
             quality_prior_strength=float(conf.get("RECOMMEND_QUALITY_PRIOR_STRENGTH", cls.quality_prior_strength)),

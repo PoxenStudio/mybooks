@@ -5,7 +5,8 @@ SQLAlchemy data sources for crowd statistics and reader profiles.
 @author: PoxenStudio, 2026
 """
 
-from typing import Dict, List, Tuple
+import datetime
+from typing import Dict, Hashable, List, Tuple
 
 from sqlalchemy import func, or_
 
@@ -15,9 +16,25 @@ from webserver.recommend.crowd import CrowdData, Engagement
 from webserver.recommend.profile import BookSignal
 
 
+LEGACY_HISTORY_KEYS = ("read_history", "push_history")
+
+
 class SqlCrowdSource:
     def __init__(self, scoped_session):
         self.make_session = scoped_session.session_factory
+
+    def fingerprint(self) -> Hashable:
+        session = self.make_session()
+        try:
+            return (
+                session.query(func.count(Reading.id), func.max(Reading.update_time), func.sum(Reading.duration)).one(),
+                session.query(func.count(ReadingState.book_id), func.max(ReadingState.favorite_date), func.max(ReadingState.read_date)).one(),
+                session.query(func.count(BookReview.id), func.max(BookReview.update_time)).one(),
+                session.query(func.count(Reader.id), func.sum(Reader.id)).filter(Reader.allow_statistic.is_(True)).one(),
+                session.query(func.sum(Item.count_visit + Item.count_download)).scalar(),
+            )
+        finally:
+            session.close()
 
     def load(self, config: RecommendConfig) -> CrowdData:
         session = self.make_session()
@@ -42,6 +59,8 @@ class SqlCrowdSource:
             return result[key]
 
         rows = session.query(Reading.reader_id, Reading.book_id, Reading.action, func.sum(Reading.duration), func.max(Reading.update_time))
+        if config.crowd_ignore_protocols:
+            rows = rows.filter(or_(Reading.action == Reading.ACTION_READ, Reading.protocol.notin_(config.crowd_ignore_protocols)))
         for reader_id, book_id, action, secs, last in rows.group_by(Reading.reader_id, Reading.book_id, Reading.action):
             if reader_id not in eligible:
                 continue
@@ -64,11 +83,26 @@ class SqlCrowdSource:
             e.started = read_state > 0
             e.last_active = max(filter(None, (e.last_active, favorite_date if e.favorite else None, read_date)), default=None)
 
+        if config.use_legacy_history:
+            self._add_legacy_history(session, eligible, result)
+
         own_ratings = session.query(BookReview.reader_id, BookReview.book_id, BookReview.rating).filter(BookReview.deleted_at.is_(None))
         for reader_id, book_id, rating in own_ratings:
             if (reader_id, book_id) in result:
                 result[(reader_id, book_id)].rating = rating
         return result
+
+    @staticmethod
+    def _add_legacy_history(session, eligible, result: Dict[Tuple[int, int], Engagement]) -> None:
+        """Pre-Reading-table history in Reader.extra, counted like a download and never overriding real records."""
+        for reader_id, extra in session.query(Reader.id, Reader.extra).filter(Reader.id.in_(eligible)):
+            for key in LEGACY_HISTORY_KEYS:
+                for entry in (extra or {}).get(key) or []:
+                    book_id, ts = entry.get("id"), entry.get("timestamp")
+                    if not isinstance(book_id, int) or (reader_id, book_id) in result:
+                        continue
+                    last = datetime.datetime.fromtimestamp(ts, datetime.timezone.utc).replace(tzinfo=None) if ts else None
+                    result[(reader_id, book_id)] = Engagement(reader_id=reader_id, book_id=book_id, downloaded=True, last_active=last)
 
     def _reviews(self, session) -> Dict[int, Tuple[int, int]]:
         rows = session.query(BookReview.book_id, func.count(BookReview.id), func.sum(BookReview.rating)).filter(
