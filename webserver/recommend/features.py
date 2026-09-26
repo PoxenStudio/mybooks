@@ -9,7 +9,7 @@ import datetime
 import math
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Protocol, Tuple
+from typing import Dict, Hashable, List, Optional, Protocol, Tuple
 
 from webserver.constants import CALIBRE_COLUMN_CATEGORY
 from webserver.recommend.snapshot import BackgroundSnapshot
@@ -39,10 +39,17 @@ class FeatureSource(Protocol):
     def load(self) -> Dict[int, BookFeatures]:
         ...
 
+    def fingerprint(self) -> Hashable:
+        """Cheap value that changes whenever load() would return different data."""
+        ...
+
 
 class CalibreFeatureSource:
     def __init__(self, cache):
         self.cache = cache
+
+    def fingerprint(self) -> Hashable:
+        return self.cache.last_modified(), len(self.cache.all_book_ids())
 
     def _field(self, name, ids, default=None):
         try:
@@ -116,9 +123,10 @@ class InvertedIndex:
 class Library:
     def __init__(self, books: Dict[int, BookFeatures]):
         self.books = books
+        self.ids = sorted(books)
         self.inverted = InvertedIndex(books)
 
 
 class FeatureIndex(BackgroundSnapshot[Library]):
     def __init__(self, source: FeatureSource, ttl_seconds: float = 300):
-        super().__init__(lambda: Library(source.load()), ttl_seconds, "features")
+        super().__init__(lambda: Library(source.load()), ttl_seconds, "features", fingerprint=source.fingerprint)

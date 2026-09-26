@@ -24,6 +24,7 @@ from webserver.recommend.features import InvertedIndex
 from webserver.recommend.profile import BookSignal, SeriesNextScorer, SimilarityScorer, WantsScorer, book_weight, build_profile
 from webserver.recommend.recommenders import NewBooksRecommender, SampledRecommender, weighted_sample
 from webserver.recommend.scoring import FreshnessScorer, QualityScorer, Reason, WeightedScorer
+from webserver.recommend.snapshot import BackgroundSnapshot
 
 NOW = datetime.datetime(2026, 9, 1)
 
@@ -50,10 +51,14 @@ class StaticSource:
     def __init__(self, features):
         self.features = features
         self.loads = 0
+        self.version = 0
 
     def load(self):
         self.loads += 1
         return self.features
+
+    def fingerprint(self):
+        return self.version
 
 
 class TestScoring(unittest.TestCase):
@@ -279,6 +284,34 @@ class TestSqlCrowdSource(unittest.TestCase):
         data = SqlCrowdSource(self.session).load(RecommendConfig())
         self.assertEqual({e.reader_id: e.rating for e in data.engagements}[1], 8)
 
+    def test_fingerprint_changes_with_activity(self):
+        source = SqlCrowdSource(self.session)
+        before = source.fingerprint()
+        self.assertEqual(before, source.fingerprint())
+        self.session.add(Reading(1, 101, "read", "web", datetime.datetime(2026, 8, 31), duration=60))
+        self.session.commit()
+        self.assertNotEqual(before, source.fingerprint())
+
+    def test_ignored_protocols(self):
+        self.session.add(Reading(4, 300, "download", Reading.PROTOCOL_WEBDAV, datetime.datetime(2026, 8, 31)))
+        self.session.commit()
+
+        def books(config):
+            return {e.book_id for e in SqlCrowdSource(self.session).load(config).engagements if e.reader_id == 4}
+
+        self.assertNotIn(300, books(RecommendConfig()))
+        self.assertIn(300, books(RecommendConfig(crowd_ignore_protocols=())))
+
+    def test_legacy_history(self):
+        reader = self.session.get(Reader, 2)
+        reader.extra = {"read_history": [{"id": 400, "title": "x", "timestamp": 1780000000}, {"id": 100, "title": "y", "timestamp": 1}]}
+        self.session.commit()
+        self.assertNotIn(400, {e.book_id for e in SqlCrowdSource(self.session).load(RecommendConfig()).engagements})
+        engagements = {(e.reader_id, e.book_id): e for e in SqlCrowdSource(self.session).load(RecommendConfig(use_legacy_history=True)).engagements}
+        self.assertTrue(engagements[(2, 400)].downloaded)
+        self.assertEqual(engagements[(2, 400)].last_active.year, 2026)
+        self.assertTrue(engagements[(2, 100)].favorite)
+
     def test_reviews_disabled(self):
         self.assertEqual(SqlCrowdSource(self.session).load(RecommendConfig(use_reviews=False)).reviews, {})
 
@@ -354,6 +387,9 @@ class StaticCrowd:
     def load(self, _config):
         return self.data
 
+    def fingerprint(self):
+        return id(self.data)
+
 
 class TestRecommendService(unittest.TestCase):
     def service(self, features, crowd=None):
@@ -389,8 +425,8 @@ class TestRecommendService(unittest.TestCase):
         service = self.service(features, crowd)
         c = ctx(reader_id=1)
         config, snap = service.config_loader(), service.crowd.snapshot()
-        scorer = service._random_scorer(features, snap, CrowdView(snap, 1, config), None, c, config)
-        guest = service._random_scorer(features, snap, CrowdView(snap, None, config), None, ctx(reader_id=None), config)
+        scorer = service._random_scorer(features, snap, CrowdView(snap, 1, config), {}, c, config)
+        guest = service._random_scorer(features, snap, CrowdView(snap, None, config), {}, ctx(reader_id=None), config)
         self.assertLess(scorer.score(features[7], c), guest.score(features[7], c))
         self.assertAlmostEqual(scorer.score(features[8], c), guest.score(features[8], c))
 
@@ -541,6 +577,80 @@ class TestPersonalizedService(unittest.TestCase):
     def test_guest_has_no_profile(self):
         self.service.home(ctx(reader_id=None), 5, 5)
         self.assertEqual(self.profiles.loads, 0)
+
+
+class TestSnapshotFingerprint(unittest.TestCase):
+    def setUp(self):
+        self.loads = 0
+        self.fp = 1
+
+    def loader(self):
+        self.loads += 1
+        return self.loads
+
+    def test_unchanged_fingerprint_skips_reload(self):
+        snap = BackgroundSnapshot(self.loader, 60, "t", fingerprint=lambda: self.fp)
+        snap.refresh()
+        snap.refresh(force=False)
+        self.assertEqual((self.loads, snap.version), (1, 1))
+        self.fp = 2
+        snap.refresh(force=False)
+        self.assertEqual((self.loads, snap.version), (2, 2))
+
+    def test_max_age_and_invalidate_force_reload(self):
+        snap = BackgroundSnapshot(self.loader, 60, "t", fingerprint=lambda: self.fp, max_age_seconds=0)
+        snap.refresh()
+        snap.refresh(force=False)
+        self.assertEqual(self.loads, 2)
+        snap = BackgroundSnapshot(self.loader, 60, "t", fingerprint=lambda: self.fp)
+        snap.refresh()
+        snap.invalidate()
+        snap._build()
+        self.assertEqual(snap.version, 2)
+
+
+def wait_for(predicate, timeout=2.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.01)
+    return False
+
+
+class TestPools(unittest.TestCase):
+    def setUp(self):
+        self.features = library(*[book(i, days_ago=400 + i, authors=("a%d" % i,)) for i in range(1, 2001)])
+        self.profiles = StaticProfiles({1: []})
+        self.config = RecommendConfig(pool_size=30)
+        self.service = RecommendService(StaticSource(self.features), lambda: self.config, None, self.profiles)
+        self.service.index.refresh()
+
+    def test_exploration_reaches_beyond_pool(self):
+        self.service.home(ctx(reader_id=1), 8, 0)
+        pool_ids = {b.book_id for b, _ in self.service._pools[1].random_pool}
+        picked = {i for seed in range(20) for i in self.service.home(ctx(reader_id=1, rng=random.Random(seed)), 8, 0).random_ids}
+        self.assertTrue(picked - pool_ids)
+        self.assertTrue(picked & pool_ids)
+
+    def test_pool_grows_with_request_size(self):
+        self.service.home(ctx(reader_id=1), 40, 0)
+        self.assertGreaterEqual(len(self.service._pools[1].random_pool), 40 * 6)
+
+    def test_stale_pool_serves_fresh_exclusions_then_rebuilds(self):
+        first = self.service.home(ctx(reader_id=1, rng=random.Random(7)), 8, 0).random_ids
+        old_pool = self.service._pools[1]
+        self.profiles.signals[1] = [signal(i, read_state=2) for i in first]
+        self.service.invalidate_reader(1)
+        second = self.service.home(ctx(reader_id=1, rng=random.Random(7)), 8, 0).random_ids
+        self.assertFalse(set(first) & set(second))
+        self.assertTrue(wait_for(lambda: self.service._pools[1] is not old_pool))
+        self.assertFalse({b.book_id for b, _ in self.service._pools[1].random_pool} & set(first))
+
+    def test_guest_and_reader_pools_are_separate(self):
+        self.service.home(ctx(reader_id=None), 5, 5)
+        self.service.home(ctx(reader_id=1), 5, 5)
+        self.assertEqual(set(self.service._pools), {0, 1})
 
 
 if __name__ == "__main__":

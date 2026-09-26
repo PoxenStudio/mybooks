@@ -5,6 +5,8 @@ Recommendation service orchestrating features, crowd data, profiles and recommen
 @author: PoxenStudio, 2026
 """
 
+import itertools
+import logging
 import threading
 import time
 from dataclasses import dataclass, field
@@ -16,6 +18,7 @@ from webserver.recommend.coread import CoReadIndex, CoReadScorer, build_coread
 from webserver.recommend.crowd import CrowdSnapshot, CrowdSource, CrowdView, build_crowd
 from webserver.recommend.features import BookFeatures, FeatureIndex, FeatureSource, Library
 from webserver.recommend.profile import ProfileSource, SeriesNextScorer, SimilarityScorer, UserProfile, WantsScorer, build_profile
+from webserver.recommend.diversity import Scored
 from webserver.recommend.recommenders import NewBooksRecommender, SampledRecommender
 from webserver.recommend.scoring import (
     FreshnessScorer,
@@ -44,15 +47,26 @@ class HomeResult:
 
 
 @dataclass
-class PersonalState:
+class ProfileState:
     key: tuple
+    version: int
     expire_at: float
     profile: UserProfile
-    sim: Optional[SimilarityScorer]
-    co: Optional[CoReadScorer]
+
+
+@dataclass
+class PoolState:
+    key: tuple
+    new_scorer: Scorer
+    random_scorer: Scorer
+    new_pool: List[Scored]
+    random_pool: List[Scored]
 
 
 class RecommendService:
+    """Scoring happens when a reader's candidate pool is (re)built; requests only pick from the pool.
+    A stale pool keeps serving, filtered by the reader's fresh exclusions, while a worker thread rebuilds it."""
+
     def __init__(
         self,
         source: FeatureSource,
@@ -66,11 +80,18 @@ class RecommendService:
         self.crowd: Optional[BackgroundSnapshot[CrowdSnapshot]] = None
         self.coread: Optional[BackgroundSnapshot[CoReadIndex]] = None
         if crowd_source is not None:
-            self.crowd = BackgroundSnapshot(lambda: self._load_crowd(crowd_source), config.crowd_ttl_seconds, "crowd")
-            self.coread = BackgroundSnapshot(lambda: self._load_coread(crowd_source), config.co_ttl_seconds, "coread")
+            def fingerprint():
+                return crowd_source.fingerprint(), self.config_loader()
+
+            self.crowd = BackgroundSnapshot(lambda: self._load_crowd(crowd_source), config.crowd_ttl_seconds, "crowd", fingerprint)
+            self.coread = BackgroundSnapshot(lambda: self._load_coread(crowd_source), config.co_ttl_seconds, "coread", fingerprint)
         self.profile_source = profile_source
         self._score_cache: Dict[tuple, Tuple[Dict[int, float], float]] = {}
-        self._personal: Dict[int, PersonalState] = {}
+        self._profiles: Dict[int, ProfileState] = {}
+        self._pools: Dict[int, PoolState] = {}
+        self._profile_versions = itertools.count(1)
+        self._pending: Dict[int, Callable[[], PoolState]] = {}
+        self._worker: Optional[threading.Thread] = None
         self._lock = threading.Lock()
 
     def _load_crowd(self, crowd_source: CrowdSource) -> CrowdSnapshot:
@@ -86,7 +107,7 @@ class RecommendService:
 
     def invalidate_reader(self, reader_id: int) -> None:
         with self._lock:
-            self._personal.pop(reader_id, None)
+            self._profiles.pop(reader_id, None)
 
     def home(self, ctx: RecommendContext, n_random: int, n_new: int) -> Optional[HomeResult]:
         """None means the feature index is not ready yet; callers fall back to their legacy logic."""
@@ -101,77 +122,126 @@ class RecommendService:
             self.coread.ttl_seconds = config.co_ttl_seconds
             crowd, coread = self.crowd.snapshot(), self.coread.snapshot()
         view = CrowdView(crowd, ctx.reader_id, config)
-        personal = self._personal_state(ctx.reader_id, library, coread, config)
-        profile = personal.profile if personal else None
+        profile_state = self._profile_state(ctx.reader_id, library, config)
+        profile = profile_state.profile if profile_state else None
+        pool = self._pool_state(ctx, library, crowd, coread, view, profile_state, n_random, n_new, config)
         personal_ctx = ctx.excluding(profile.excluded) if profile else ctx
 
-        new_scorer = self._new_scorer(view, personal, config)
-        new_ids = NewBooksRecommender(config, new_scorer).recommend(library.books, personal_ctx, n_new)
-
-        random_scorer = self._random_scorer(library.books, crowd, view, personal, ctx, config)
-        sampler = SampledRecommender(config, random_scorer)
-        random_ids = sampler.recommend(library.books, personal_ctx.excluding(new_ids), n_random)
+        new_ids = NewBooksRecommender(config, pool.new_scorer).pick(pool.new_pool, personal_ctx, n_new)
+        sampler = SampledRecommender(config, pool.random_scorer)
+        random_ids = sampler.pick(pool.random_pool, library.books, library.ids, personal_ctx.excluding(new_ids), n_random)
         if profile and len(random_ids) < n_random and profile.finished:
             relaxed = ctx.excluding(profile.reading | profile.disliked | frozenset(new_ids))
             random_ids = sampler.recommend(library.books, relaxed, n_random)
 
         reasons: Dict[int, Reason] = {}
-        for ids, scorer in ((new_ids, new_scorer), (random_ids, random_scorer)):
+        for ids, scorer in ((new_ids, pool.new_scorer), (random_ids, pool.random_scorer)):
             for book_id in ids:
                 explanation = scorer.explain(library.books[book_id], ctx)
                 if explanation:
                     reasons[book_id] = explanation[0]
         return HomeResult(random_ids=random_ids, new_ids=new_ids, reasons=reasons)
 
-    def _personal_state(self, reader_id: Optional[int], library: Library, coread: Optional[CoReadIndex], config: RecommendConfig) -> Optional[PersonalState]:
+    def _profile_state(self, reader_id: Optional[int], library: Library, config: RecommendConfig) -> Optional[ProfileState]:
         if not reader_id or self.profile_source is None:
             return None
-        key = (self.index.version, self.coread.version if coread is not None and self.coread is not None else 0, config)
+        key = (self.index.version, config)
         with self._lock:
-            state = self._personal.get(reader_id)
+            state = self._profiles.get(reader_id)
             if state and state.key == key and state.expire_at > time.monotonic():
                 return state
         profile = build_profile(reader_id, self.profile_source.load(reader_id), library.books, utc_now(), config)
-        co = CoReadScorer(profile, coread, library.books) if coread is not None else None
-        state = PersonalState(
-            key=key,
-            expire_at=time.monotonic() + config.profile_ttl_seconds,
-            profile=profile,
-            sim=None if profile.cold else SimilarityScorer(profile, library.inverted),
-            co=co if co else None,
-        )
+        state = ProfileState(key, next(self._profile_versions), time.monotonic() + config.profile_ttl_seconds, profile)
         with self._lock:
-            self._personal[reader_id] = state
+            self._profiles[reader_id] = state
         return state
 
+    def _pool_state(self, ctx: RecommendContext, library: Library, crowd, coread, view: CrowdView, profile_state: Optional[ProfileState], n_random: int, n_new: int, config: RecommendConfig) -> PoolState:
+        reader_key = ctx.reader_id or 0
+        crowd_version = self.crowd.version if crowd is not None and self.crowd is not None else 0
+        coread_version = self.coread.version if coread is not None and self.coread is not None else 0
+        key = (self.index.version, crowd_version, coread_version, config, profile_state.version if profile_state else 0, n_random, n_new)
+        profile = profile_state.profile if profile_state else None
+        build_ctx = RecommendContext(ctx.reader_id, ctx.is_visible, profile.excluded if profile else frozenset(), ctx.now)
+
+        def build() -> PoolState:
+            return self._build_pool(key, reader_key, build_ctx, library, crowd, coread, view, profile, n_random, n_new, config)
+
+        with self._lock:
+            state = self._pools.get(reader_key)
+        if state is None:
+            return build()
+        if state.key != key:
+            self._schedule(reader_key, build)
+        return state
+
+    def _build_pool(self, key: tuple, reader_key: int, ctx: RecommendContext, library: Library, crowd, coread, view: CrowdView, profile: Optional[UserProfile], n_random: int, n_new: int, config: RecommendConfig) -> PoolState:
+        sim = SimilarityScorer(profile, library.inverted) if profile and not profile.cold else None
+        co = CoReadScorer(profile, coread, library.books) if profile and coread is not None else None
+        personal = self._personal_components(sim, co if co else None, profile)
+        new_scorer = self._new_scorer(view, personal, profile, config)
+        random_scorer = self._random_scorer(library.books, crowd, view, personal, ctx, config)
+        state = PoolState(
+            key=key,
+            new_scorer=new_scorer,
+            random_scorer=random_scorer,
+            new_pool=NewBooksRecommender(config, new_scorer).pool(library.books, ctx, n_new),
+            random_pool=SampledRecommender(config, random_scorer).pool(library.books, ctx, n_random),
+        )
+        with self._lock:
+            self._pools[reader_key] = state
+        return state
+
+    def _schedule(self, reader_key: int, build: Callable[[], PoolState]) -> None:
+        with self._lock:
+            self._pending[reader_key] = build
+            if self._worker is not None and self._worker.is_alive():
+                return
+            self._worker = threading.Thread(target=self._drain, name="recommend-pools", daemon=True)
+            self._worker.start()
+
+    def _drain(self) -> None:
+        while True:
+            with self._lock:
+                if not self._pending:
+                    self._worker = None
+                    return
+                _, build = self._pending.popitem()
+            try:
+                build()
+            except Exception:
+                logging.exception("[recommend] pool rebuild failed")
+
     @staticmethod
-    def _personal_components(personal: Optional[PersonalState], w_sim: float, w_co: float) -> Components:
-        components: Components = []
-        if personal and personal.sim:
-            components.append((personal.sim, w_sim))
-        if personal and personal.co:
-            components.append((personal.co, w_co))
+    def _personal_components(sim: Optional[SimilarityScorer], co: Optional[CoReadScorer], profile: Optional[UserProfile]) -> Dict[str, Scorer]:
+        components: Dict[str, Scorer] = {}
+        if sim:
+            components["sim"] = sim
+        if co:
+            components["co"] = co
+        if profile and profile.wants:
+            components["wants"] = WantsScorer(profile)
+        if profile and profile.series_progress:
+            components["series_next"] = SeriesNextScorer(profile)
         return components
 
-    def _new_scorer(self, view: CrowdView, personal: Optional[PersonalState], config: RecommendConfig) -> Scorer:
+    def _new_scorer(self, view: CrowdView, personal: Dict[str, Scorer], profile: Optional[UserProfile], config: RecommendConfig) -> Scorer:
         components: Components = [(FreshnessScorer(config.new_half_life_days), config.w_new_fresh), (SocialProofScorer(view), config.w_new_social_proof)]
         if view.available:
             components.append((TrendScorer(view), config.w_new_trend))
-        components += self._personal_components(personal, config.w_new_sim, config.w_new_co)
-        if personal and personal.profile.series_progress:
-            components.append((SeriesNextScorer(personal.profile), config.w_new_series_next))
+        weights = {"sim": config.w_new_sim, "co": config.w_new_co, "series_next": config.w_new_series_next}
+        components += [(personal[name], w) for name, w in weights.items() if name in personal]
         return WeightedScorer(components)
 
-    def _random_scorer(self, books: Dict[int, BookFeatures], crowd, view: CrowdView, personal: Optional[PersonalState], ctx: RecommendContext, config: RecommendConfig) -> Scorer:
+    def _random_scorer(self, books: Dict[int, BookFeatures], crowd, view: CrowdView, personal: Dict[str, Scorer], ctx: RecommendContext, config: RecommendConfig) -> Scorer:
         guest = not ctx.reader_id
         crowd_version = self.crowd.version if crowd is not None and self.crowd is not None else 0
         key = (self.index.version, crowd_version, config, view.available, guest)
         base, default_rating = self._cached_scores(key, books, crowd, view.available, guest, config)
         shared = self._shared_components(view, guest, default_rating, config)
         components: Components = [(OverlayScorer(base, WeightedScorer(shared), view.own.keys()), sum(w for _, w in shared))]
-        components += self._personal_components(personal, config.w_random_sim, config.w_random_co)
-        if personal and personal.profile.wants:
-            components.append((WantsScorer(personal.profile), config.w_random_wants))
+        weights = {"sim": config.w_random_sim, "co": config.w_random_co, "wants": config.w_random_wants}
+        components += [(personal[name], w) for name, w in weights.items() if name in personal]
         return WeightedScorer(components)
 
     def _cached_scores(self, key: tuple, books: Dict[int, BookFeatures], crowd, available: bool, guest: bool, config: RecommendConfig) -> Tuple[Dict[int, float], float]:
