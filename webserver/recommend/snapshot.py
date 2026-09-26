@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
+"""
+Background-refreshed TTL snapshot shared by the recommendation data sources.
+@author: PoxenStudio, 2026
+"""
 
 import logging
 import threading

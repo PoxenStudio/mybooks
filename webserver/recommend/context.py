@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
+"""
+Per-request recommendation context: reader, visibility, exclusions, clock and seeded RNG.
+@author: PoxenStudio, 2026
+"""
 
 import datetime
 import random

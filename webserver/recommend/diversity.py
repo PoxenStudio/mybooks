@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
+"""
+Diversity re-ranking (MMR) with per-author and per-series caps.
+@author: PoxenStudio, 2026
+"""
 
 from collections import Counter
 from typing import List, Sequence, Tuple

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
+"""
+Unit tests for the home page recommendation engine.
+@author: PoxenStudio, 2026
+"""
 
 import datetime
 import random
@@ -11,19 +15,24 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 
 from webserver import models
 from webserver.constants import CALIBRE_COLUMN_CATEGORY
-from webserver.models import BookReview, Item, Reader, Reading, ReadingState
-from webserver.recommend import BookFeatures, CalibreFeatureSource, FeatureIndex, RecommendConfig, RecommendContext, RecommendService, SqlCrowdSource, home_seed
+from webserver.models import BookReadingStats, BookReview, Item, Reader, Reading, ReadingState
+from webserver.recommend import BookFeatures, CalibreFeatureSource, FeatureIndex, RecommendConfig, RecommendContext, RecommendService, SqlCrowdSource, SqlProfileSource, home_seed
+from webserver.recommend.coread import CoReadScorer, build_coread
 from webserver.recommend.crowd import CrowdData, CrowdView, Engagement, build_crowd
 from webserver.recommend.diversity import mmr_rerank
+from webserver.recommend.features import InvertedIndex
+from webserver.recommend.profile import BookSignal, SeriesNextScorer, SimilarityScorer, WantsScorer, book_weight, build_profile
 from webserver.recommend.recommenders import NewBooksRecommender, SampledRecommender, weighted_sample
-from webserver.recommend.scoring import FreshnessScorer, QualityScorer, WeightedScorer
+from webserver.recommend.scoring import FreshnessScorer, QualityScorer, Reason, WeightedScorer
 
 NOW = datetime.datetime(2026, 9, 1)
 
 
-def book(book_id, days_ago=None, authors=("A",), series=None, tags=(), category=""):
+def book(book_id, days_ago=None, authors=("A",), series=None, tags=(), category="", series_index=0.0):
     ts = NOW - datetime.timedelta(days=days_ago) if days_ago is not None else None
-    return BookFeatures(book_id=book_id, authors=tuple(authors), series=series, tags=tuple(tags), category=category, timestamp=ts)
+    return BookFeatures(
+        book_id=book_id, title="t%d" % book_id, authors=tuple(authors), series=series, series_index=series_index, tags=tuple(tags), category=category, timestamp=ts
+    )
 
 
 def library(*books):
@@ -252,6 +261,24 @@ class TestSqlCrowdSource(unittest.TestCase):
         snap = build_crowd(data, NOW, RecommendConfig())
         self.assertEqual(snap.totals[100].dl_users, 1)
 
+    def test_profile_source(self):
+        t = datetime.datetime(2026, 8, 30, 10)
+        self.session.add(BookReadingStats(reader_id=1, book_id=100, format="epub", total_seconds=5000, create_time=t, update_time=t))
+        wants = ReadingState(200, 1)
+        wants.set_wants(True)
+        self.session.add(wants)
+        self.session.commit()
+        signals = {s.book_id: s for s in SqlProfileSource(self.session).load(1)}
+        self.assertEqual(signals[100].read_secs, 5000)
+        self.assertEqual(signals[100].rating, 8)
+        self.assertTrue(signals[200].wants)
+        signals = {s.book_id: s for s in SqlProfileSource(self.session).load(3)}
+        self.assertEqual(signals, {})
+
+    def test_crowd_engagement_carries_own_rating(self):
+        data = SqlCrowdSource(self.session).load(RecommendConfig())
+        self.assertEqual({e.reader_id: e.rating for e in data.engagements}[1], 8)
+
     def test_reviews_disabled(self):
         self.assertEqual(SqlCrowdSource(self.session).load(RecommendConfig(use_reviews=False)).reviews, {})
 
@@ -303,7 +330,7 @@ class TestFeatureIndex(unittest.TestCase):
     def test_builds_in_background_then_serves_snapshot(self):
         source = StaticSource(library(book(1)))
         index = FeatureIndex(source, ttl_seconds=60)
-        self.assertIn(1, self.wait_built(index))
+        self.assertIn(1, self.wait_built(index).books)
         index.snapshot()
         self.assertEqual(source.loads, 1)
 
@@ -361,10 +388,159 @@ class TestRecommendService(unittest.TestCase):
         crowd = CrowdData([engagement(1, 7, read_secs=3600, favorite=True), engagement(2, 8, read_secs=60), engagement(3, 8, read_secs=60)])
         service = self.service(features, crowd)
         c = ctx(reader_id=1)
-        scorer = service._random_scorer(features, service.crowd.snapshot(), CrowdView(service.crowd.snapshot(), 1, service.config_loader()), c, service.config_loader())
-        guest = service._random_scorer(features, service.crowd.snapshot(), CrowdView(service.crowd.snapshot(), None, service.config_loader()), ctx(reader_id=None), service.config_loader())
+        config, snap = service.config_loader(), service.crowd.snapshot()
+        scorer = service._random_scorer(features, snap, CrowdView(snap, 1, config), None, c, config)
+        guest = service._random_scorer(features, snap, CrowdView(snap, None, config), None, ctx(reader_id=None), config)
         self.assertLess(scorer.score(features[7], c), guest.score(features[7], c))
         self.assertAlmostEqual(scorer.score(features[8], c), guest.score(features[8], c))
+
+
+def signal(book_id, days_ago=0, **kwargs):
+    return BookSignal(book_id=book_id, last_active=NOW - datetime.timedelta(days=days_ago), **kwargs)
+
+
+class TestProfile(unittest.TestCase):
+    config = RecommendConfig()
+
+    def weight(self, **kwargs):
+        return book_weight(signal(1, **kwargs), NOW, self.config)
+
+    def test_behaviour_order_and_max_not_sum(self):
+        self.assertGreater(self.weight(favorite=True), self.weight(read_state=2))
+        self.assertGreater(self.weight(read_state=2), self.weight(read_state=1))
+        self.assertGreater(self.weight(read_state=1), self.weight(wants=True))
+        self.assertEqual(self.weight(favorite=True, read_state=2), self.weight(favorite=True))
+
+    def test_decay_and_rating(self):
+        self.assertAlmostEqual(self.weight(favorite=True, days_ago=180), self.weight(favorite=True) / 2)
+        self.assertAlmostEqual(self.weight(read_state=2, rating=10), 2 * self.weight(read_state=2))
+        self.assertLess(self.weight(read_state=2, rating=2), 0)
+        self.assertAlmostEqual(self.weight(rating=8), 1.5 * 1.5)
+
+    def test_build(self):
+        features = library(book(1, authors=("Liu",), series="S", series_index=1), book(2, authors=("Liu",)), book(3, authors=("Bad",)), book(4))
+        signals = [signal(1, favorite=True), signal(2, read_state=1), signal(3, read_state=2, rating=2), signal(4, wants=True)]
+        profile = build_profile(1, signals, features, NOW, self.config)
+        self.assertFalse(profile.cold)
+        self.assertEqual(profile.excluded, frozenset({2, 3}))
+        self.assertEqual(profile.wants, frozenset({4}))
+        self.assertEqual(profile.series_progress, {"S": 1})
+        self.assertAlmostEqual(sum(abs(v) for v in profile.vectors["author"].values()), 1.0)
+        self.assertLess(profile.vectors["author"]["Bad"], 0)
+
+    def test_cold_start(self):
+        profile = build_profile(1, [signal(1, wants=True)], library(book(1)), NOW, self.config)
+        self.assertTrue(profile.cold)
+
+
+class TestPersonalScorers(unittest.TestCase):
+    def setUp(self):
+        self.features = library(
+            book(1, authors=("Liu",), tags=("scifi",)),
+            book(2, authors=("Bad",)),
+            book(10, authors=("Liu",)),
+            book(11, authors=("Other",), tags=("scifi",)),
+            book(12, authors=("Bad",)),
+            book(13, authors=("Nobody",)),
+            book(20, series="S", series_index=2),
+            book(21, series="S", series_index=0.5),
+        )
+        signals = [signal(1, favorite=True), signal(2, read_state=2, rating=0), signal(99, wants=True)]
+        self.profile = build_profile(1, signals, self.features, NOW, RecommendConfig())
+        self.profile.series_progress["S"] = 1
+
+    def test_similarity(self):
+        sim = SimilarityScorer(self.profile, InvertedIndex(self.features))
+        score = {i: sim.score(self.features[i], ctx()) for i in (10, 11, 12, 13)}
+        self.assertGreater(score[10], score[11])
+        self.assertGreater(score[11], score[13])
+        self.assertEqual(score[13], 0.5)
+        self.assertLess(score[12], 0.5)
+        self.assertEqual(sim.explain(self.features[10], ctx())[0], Reason("author", "Liu"))
+        self.assertIsNone(sim.explain(self.features[12], ctx()))
+
+    def test_wants_and_series_next(self):
+        self.assertEqual(WantsScorer(self.profile).explain(BookFeatures(book_id=99), ctx())[0], Reason("wants"))
+        series = SeriesNextScorer(self.profile)
+        self.assertEqual(series.score(self.features[20], ctx()), 1.0)
+        self.assertEqual(series.score(self.features[21], ctx()), 0.0)
+
+
+class TestCoRead(unittest.TestCase):
+    config = RecommendConfig(crowd_min_users=2)
+
+    def test_needs_two_co_readers(self):
+        index = build_coread([engagement(1, 1, finished=True), engagement(1, 2, finished=True)], self.config)
+        self.assertEqual(index.neighbors, {})
+        index = build_coread([engagement(r, b, finished=True) for r in (1, 2) for b in (1, 2)], self.config)
+        self.assertEqual([n for n, _, _ in index.neighbors[1]], [2])
+
+    def test_heavy_readers_count_less_and_dislikes_are_ignored(self):
+        light = [engagement(r, b, finished=True) for r in (1, 2) for b in (1, 2)]
+        heavy = [engagement(r, b, downloaded=True) for r in (3, 4) for b in [1, *range(3, 200)]]
+        disliked = [engagement(r, 500, finished=True, rating=2) for r in (1, 2)]
+        index = build_coread(light + heavy + disliked, self.config)
+        sims = {n: sim for n, sim, _ in index.neighbors[1]}
+        self.assertEqual(index.neighbors[1][0][0], 2)
+        self.assertGreater(sims[2], 2 * max(v for n, v in sims.items() if n != 2))
+        self.assertNotIn(500, index.neighbors)
+        self.assertLessEqual(len(index.neighbors[3]), self.config.co_neighbors)
+
+    def test_scorer_reason_names_source_book(self):
+        features = library(book(1), book(2), book(3))
+        index = build_coread([engagement(r, b, finished=True) for r in (2, 3) for b in (1, 2)], self.config)
+        profile = build_profile(1, [signal(1, favorite=True)], features, NOW, self.config)
+        scorer = CoReadScorer(profile, index, features)
+        self.assertEqual(scorer.score(features[2], ctx()), 1.0)
+        self.assertEqual(scorer.explain(features[2], ctx())[0], Reason("co_read", "t1"))
+        self.assertIsNone(scorer.explain(features[3], ctx()))
+
+
+class StaticProfiles:
+    def __init__(self, signals):
+        self.signals = signals
+        self.loads = 0
+
+    def load(self, reader_id):
+        self.loads += 1
+        return self.signals.get(reader_id, [])
+
+
+class TestPersonalizedService(unittest.TestCase):
+    def setUp(self):
+        self.features = library(*[book(i, days_ago=400 + i, authors=("a%d" % (i % 20),)) for i in range(1, 101)])
+        self.profiles = StaticProfiles({1: [signal(i, read_state=2) for i in range(1, 60)] + [signal(60, favorite=True), signal(61, read_state=1)]})
+        crowd = CrowdData([engagement(r, b, finished=True) for r in (2, 3) for b in (60, 70)])
+        self.service = RecommendService(StaticSource(self.features), RecommendConfig, StaticCrowd(crowd), self.profiles)
+        self.service.index.refresh()
+        self.service.crowd.refresh()
+        self.service.coread.refresh()
+
+    def test_excludes_read_and_reading(self):
+        result = self.service.home(ctx(reader_id=1), 20, 10)
+        shown = set(result.random_ids) | set(result.new_ids)
+        self.assertFalse(shown & (set(range(1, 60)) | {61}))
+
+    def test_relaxes_finished_when_short(self):
+        result = self.service.home(ctx(reader_id=1), 60, 0)
+        self.assertEqual(len(result.random_ids), 60)
+        self.assertNotIn(61, result.random_ids)
+
+    def test_co_read_reason(self):
+        reasons = [self.service.home(ctx(reader_id=1, rng=random.Random(seed)), 12, 0).reasons.get(70) for seed in range(30)]
+        self.assertIn(Reason("co_read", "t60"), reasons)
+
+    def test_invalidate_reader(self):
+        self.service.home(ctx(reader_id=1), 5, 5)
+        self.service.home(ctx(reader_id=1), 5, 5)
+        self.assertEqual(self.profiles.loads, 1)
+        self.service.invalidate_reader(1)
+        self.service.home(ctx(reader_id=1), 5, 5)
+        self.assertEqual(self.profiles.loads, 2)
+
+    def test_guest_has_no_profile(self):
+        self.service.home(ctx(reader_id=None), 5, 5)
+        self.assertEqual(self.profiles.loads, 0)
 
 
 if __name__ == "__main__":

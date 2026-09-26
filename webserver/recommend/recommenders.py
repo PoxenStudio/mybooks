@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
-
+"""
+New-book and sampled random recommenders.
+@author: PoxenStudio, 2026
+"""
 
 import heapq
 import math

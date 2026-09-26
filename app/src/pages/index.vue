@@ -173,7 +173,7 @@
                 <v-row>
                     <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="(book,idx) in get_random_books" :key="'rec'+idx+book.id" class="book-card">
                         <v-card :to="book.href" class="ma-1">
-                            <div class="book-img-container" :title="book.title">
+                            <div class="book-img-container" :title="reasonText(book) || book.title">
                                 <v-img
                                     :src="book.thumb"
                                     class="cover-fill-img book-img-hover"
@@ -182,6 +182,7 @@
                                 <div v-if="book.book_type === 1" class="physical-book-badge">
                                     <v-icon small color="white">mdi-bookshelf</v-icon>
                                 </div>
+                                <div v-if="reasonText(book)" class="reason-badge">{{ reasonText(book) }}</div>
                             </div>
                         </v-card>
                     </v-col>
@@ -209,7 +210,11 @@
                 </template>
                 <v-row>
                     <v-col cols="12">
-                        <book-cards :books="get_recent_books"></book-cards>
+                        <book-cards :books="get_recent_books">
+                            <template #introduce="{ book }">
+                                <div v-if="reasonText(book)" class="reason-line text-caption primary--text">{{ reasonText(book) }}</div>
+                            </template>
+                        </book-cards>
                     </v-col>
                 </v-row>
             </home-section-card>
@@ -349,6 +354,13 @@ export default {
             } else if (type === 'categories') {
                 this.$router.replace('/categories');
             }
+        },
+        reasonText(book) {
+            const reason = book.reason;
+            if (!reason || !this.$te('index.reason.' + reason.type)) {
+                return '';
+            }
+            return this.$t('index.reason.' + reason.type, { value: reason.value });
         },
         refreshBooks() {
             this.$backend('/index?refresh=1').then( rsp => {
@@ -655,6 +667,26 @@ export default {
 .book-img-container .v-responsive__content {
     width: 100% !important;
     height: 100% !important;
+}
+
+.reason-badge {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 2px 4px;
+    font-size: 10px;
+    line-height: 14px;
+    color: white;
+    background: rgba(0, 0, 0, 0.55);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    z-index: 3;
+}
+
+.reason-line {
+    margin: 2px 4px;
 }
 
 .physical-book-badge {

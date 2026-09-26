@@ -99,6 +99,14 @@ settings = {
     "RECOMMEND_TEMPERATURE": 0.35,            # 抽样温度，越大越随机
     "RECOMMEND_SEED_BUCKET_MINUTES": 30,      # 同一时间段内刷新结果不变
     "RECOMMEND_WEIGHTS": {},                  # 覆盖默认权重，键见 webserver/recommend/config.py
+    "RECOMMEND_PROFILE_TTL": 600,             # 用户画像缓存（秒），用户改阅读状态/评价时立即失效
+    "RECOMMEND_HALF_LIFE_DAYS": 180,          # 用户行为时间衰减半衰期
+    "RECOMMEND_COLD_START_THRESHOLD": 3.0,    # 画像权重低于此值视为冷启动，不做元数据相似推荐
+    "RECOMMEND_DISLIKE_MAX_RATING": 4,        # 本人评分 ≤ 该值（0-10）视为不喜欢
+    "RECOMMEND_CO_TTL": 86400,                # 共读关系重建周期（秒）
+    "RECOMMEND_CO_MIN_SECS": 600,             # 阅读时长低于此值不计入共读的"读过"
+    "RECOMMEND_CO_NEIGHBORS": 30,             # 每本书保留的共读邻居数
+    "RECOMMEND_CO_MAX_BOOKS_PER_READER": 1000,  # 每个用户最多取最近这么多本书参与共读计算
     "DEFAULT_PAGE_SIZE": 60,
     "ENABLE_AUDIO_CONVERSION_LOG": False,
     "ENABLE_AUDIO_SUBTITLE": True,

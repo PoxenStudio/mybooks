@@ -138,7 +138,14 @@ class Index(BaseHandler):
         except Exception:
             logging.exception("[recommend] home recommendation failed, fall back to legacy")
             return None
-        return (result.random_ids, result.new_ids) if result else None
+        return (result.random_ids, result.new_ids, result.reasons) if result else None
+
+    def _fmt_with_reason(self, book, reasons):
+        data = self.fmt(book)
+        reason = reasons.get(book["id"])
+        if reason:
+            data["reason"] = {"type": reason.type, "value": reason.value}
+        return data
 
     def _books_in_order(self, ids):
         books = {b["id"]: b for b in self.get_books(ids=ids)}
@@ -168,7 +175,7 @@ class Index(BaseHandler):
         reader_id = self.user_id() or None
         seed = self._home_seed(reader_id)
         home_ids = self._recommend_home_ids(cnt_random, cnt_recent, [b["id"] for b in social_books], seed, reader_id)
-        random_ids, new_ids = home_ids or self._legacy_home_ids(ids, cnt_random, cnt_recent)
+        random_ids, new_ids, reasons = home_ids or (*self._legacy_home_ids(ids, cnt_random, cnt_recent), {})
         random_books = self._books_in_order(random_ids)
         new_books = self._books_in_order(new_ids)
 
@@ -176,8 +183,8 @@ class Index(BaseHandler):
             "err": "ok",
             "random_books_count": len(random_books),
             "new_books_count": len(new_books),
-            "random_books": [self.fmt(b) for b in random_books],
-            "new_books": [self.fmt(b) for b in new_books],
+            "random_books": [self._fmt_with_reason(b, reasons) for b in random_books],
+            "new_books": [self._fmt_with_reason(b, reasons) for b in new_books],
             "social_recommend_books": social_books,
             "seed": seed if home_ids else "",
         }
@@ -1233,6 +1240,7 @@ class BookFavorite(BaseHandler):
         reading_state.set_favorite(favorite_status)
         self.sqlite_session.add(reading_state)
         self.sqlite_session.commit()
+        self.invalidate_recommendation()
 
         action = "收藏" if favorite_status else "取消收藏"
         return {"err": "ok", "msg": _("%s成功") % action}
@@ -1304,6 +1312,7 @@ class BookWantToRead(BaseHandler):
         reading_state.set_wants(wants_status)
         self.sqlite_session.add(reading_state)
         self.sqlite_session.commit()
+        self.invalidate_recommendation()
 
         action = "标记为待读" if wants_status else "取消待读"
         return {"err": "ok", "msg": _("%s成功") % action}
@@ -1662,6 +1671,7 @@ class BookReadingState(BaseHandler):
 
         self.sqlite_session.add(reading_state)
         self.sqlite_session.commit()
+        self.invalidate_recommendation()
 
         state_names = {0: "未读", 1: "在读", 2: "已读完"}
         return {"err": "ok", "msg": _("阅读状态已设置为：%s") % state_names[read_state]}
@@ -1862,6 +1872,7 @@ class BookStateBatch(BaseHandler):
             self.sqlite_session.add(reading_state)
 
         self.sqlite_session.commit()
+        self.invalidate_recommendation()
 
         return {"err": "ok", "msg": _("已处理 %d 本书籍") % len(reading_states), "count": len(reading_states)}
 

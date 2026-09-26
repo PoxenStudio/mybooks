@@ -23,6 +23,18 @@
     "checkingServer": "Checking server..."
   },
   "index": {
+    "reason": {
+      "author": "Because you read {value}",
+      "series": "You read the {value} series",
+      "tag": "You like {value}",
+      "wants": "On your want-to-read list",
+      "series_next": "New in the {value} series",
+      "co_read": "Readers of {value} also read this",
+      "popular": "Read by {value} people here",
+      "trending": "{value} people reading lately",
+      "finished_by_others": "Finished by {value} readers",
+      "reviewed": "{value} good reviews"
+    },
     "myReading": "Currently Reading",
     "continueReading": "Continue Reading",
     "randomRecommendation": "Recommendation",

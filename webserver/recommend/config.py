@@ -1,14 +1,25 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
+"""
+Recommendation settings loaded from CONF.
+@author: PoxenStudio, 2026
+"""
 
 from dataclasses import dataclass
 from typing import Mapping, Tuple
 
 DEFAULT_WEIGHTS = {
+    "random_sim": 0.40,
+    "random_co": 0.20,
+    "random_wants": 0.15,
     "random_popularity": 0.15,
     "random_quality": 0.10,
+    "new_sim": 0.40,
     "new_fresh": 0.25,
     "new_trend": 0.10,
+    "new_co": 0.05,
+    "new_series_next": 0.20,
+    "new_social_proof": 0.05,
 }
 
 
@@ -33,10 +44,25 @@ class RecommendConfig:
     explore_ratio: float = 0.25
     temperature: float = 0.35
     seed_bucket_minutes: int = 30
+    profile_ttl_seconds: int = 600
+    half_life_days: float = 180.0
+    cold_start_threshold: float = 3.0
+    dislike_max_rating: int = 4
+    co_ttl_seconds: int = 86400
+    co_min_secs: int = 600
+    co_neighbors: int = 30
+    co_max_books_per_reader: int = 1000
+    w_random_sim: float = DEFAULT_WEIGHTS["random_sim"]
+    w_random_co: float = DEFAULT_WEIGHTS["random_co"]
+    w_random_wants: float = DEFAULT_WEIGHTS["random_wants"]
     w_random_popularity: float = DEFAULT_WEIGHTS["random_popularity"]
     w_random_quality: float = DEFAULT_WEIGHTS["random_quality"]
     w_new_fresh: float = DEFAULT_WEIGHTS["new_fresh"]
     w_new_trend: float = DEFAULT_WEIGHTS["new_trend"]
+    w_new_sim: float = DEFAULT_WEIGHTS["new_sim"]
+    w_new_co: float = DEFAULT_WEIGHTS["new_co"]
+    w_new_series_next: float = DEFAULT_WEIGHTS["new_series_next"]
+    w_new_social_proof: float = DEFAULT_WEIGHTS["new_social_proof"]
 
     @classmethod
     def from_conf(cls, conf: Mapping) -> "RecommendConfig":
@@ -61,8 +87,23 @@ class RecommendConfig:
             explore_ratio=float(conf.get("RECOMMEND_EXPLORE_RATIO", cls.explore_ratio)),
             temperature=float(conf.get("RECOMMEND_TEMPERATURE", cls.temperature)),
             seed_bucket_minutes=int(conf.get("RECOMMEND_SEED_BUCKET_MINUTES", cls.seed_bucket_minutes)),
+            profile_ttl_seconds=int(conf.get("RECOMMEND_PROFILE_TTL", cls.profile_ttl_seconds)),
+            half_life_days=float(conf.get("RECOMMEND_HALF_LIFE_DAYS", cls.half_life_days)),
+            cold_start_threshold=float(conf.get("RECOMMEND_COLD_START_THRESHOLD", cls.cold_start_threshold)),
+            dislike_max_rating=int(conf.get("RECOMMEND_DISLIKE_MAX_RATING", cls.dislike_max_rating)),
+            co_ttl_seconds=int(conf.get("RECOMMEND_CO_TTL", cls.co_ttl_seconds)),
+            co_min_secs=int(conf.get("RECOMMEND_CO_MIN_SECS", cls.co_min_secs)),
+            co_neighbors=int(conf.get("RECOMMEND_CO_NEIGHBORS", cls.co_neighbors)),
+            co_max_books_per_reader=int(conf.get("RECOMMEND_CO_MAX_BOOKS_PER_READER", cls.co_max_books_per_reader)),
+            w_random_sim=float(weights["random_sim"]),
+            w_random_co=float(weights["random_co"]),
+            w_random_wants=float(weights["random_wants"]),
             w_random_popularity=float(weights["random_popularity"]),
             w_random_quality=float(weights["random_quality"]),
             w_new_fresh=float(weights["new_fresh"]),
             w_new_trend=float(weights["new_trend"]),
+            w_new_sim=float(weights["new_sim"]),
+            w_new_co=float(weights["new_co"]),
+            w_new_series_next=float(weights["new_series_next"]),
+            w_new_social_proof=float(weights["new_social_proof"]),
         )

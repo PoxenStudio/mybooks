@@ -23,6 +23,18 @@
     "checkingServer": "正在检测服务器..."
   },
   "index": {
+    "reason": {
+      "author": "因为你读过{value}的书",
+      "series": "你读过「{value}」系列",
+      "tag": "你喜欢的「{value}」",
+      "wants": "你标记过想读",
+      "series_next": "「{value}」系列新作",
+      "co_read": "读过《{value}》的人也在读",
+      "popular": "站内{value}人读过",
+      "trending": "最近{value}人在读",
+      "finished_by_others": "已有{value}人读完",
+      "reviewed": "{value}条好评"
+    },
     "myReading": "在读书籍",
     "continueReading": "继续阅读",
     "randomRecommendation": "随便推荐",

@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
+"""
+SQLAlchemy data sources for crowd statistics and reader profiles.
+@author: PoxenStudio, 2026
+"""
 
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 from sqlalchemy import func, or_
 
-from webserver.models import BookReview, Item, Reader, Reading, ReadingState
+from webserver.models import BookReadingStats, BookReview, Item, Reader, Reading, ReadingState
 from webserver.recommend.config import RecommendConfig
 from webserver.recommend.crowd import CrowdData, Engagement
+from webserver.recommend.profile import BookSignal
 
 
 class SqlCrowdSource:
@@ -58,6 +63,11 @@ class SqlCrowdSource:
             e.finished = read_state == 2
             e.started = read_state > 0
             e.last_active = max(filter(None, (e.last_active, favorite_date if e.favorite else None, read_date)), default=None)
+
+        own_ratings = session.query(BookReview.reader_id, BookReview.book_id, BookReview.rating).filter(BookReview.deleted_at.is_(None))
+        for reader_id, book_id, rating in own_ratings:
+            if (reader_id, book_id) in result:
+                result[(reader_id, book_id)].rating = rating
         return result
 
     def _reviews(self, session) -> Dict[int, Tuple[int, int]]:
@@ -69,3 +79,55 @@ class SqlCrowdSource:
     def _item_counts(self, session) -> Dict[int, int]:
         rows = session.query(Item.book_id, Item.count_visit + Item.count_download).filter(Item.count_visit + Item.count_download > 0)
         return {book_id: int(count) for book_id, count in rows}
+
+
+class SqlProfileSource:
+    def __init__(self, scoped_session):
+        self.make_session = scoped_session.session_factory
+
+    def load(self, reader_id: int) -> List[BookSignal]:
+        session = self.make_session()
+        try:
+            return list(self._signals(session, reader_id).values())
+        finally:
+            session.close()
+
+    def _signals(self, session, reader_id: int) -> Dict[int, BookSignal]:
+        result: Dict[int, BookSignal] = {}
+
+        def get(book_id):
+            if book_id not in result:
+                result[book_id] = BookSignal(book_id=book_id)
+            return result[book_id]
+
+        def touch(signal, *times):
+            signal.last_active = max(filter(None, (signal.last_active, *times)), default=None)
+
+        for row in session.query(ReadingState).filter(ReadingState.reader_id == reader_id):
+            if not (row.favorite or row.wants or row.read_state):
+                continue
+            signal = get(row.book_id)
+            signal.favorite, signal.wants, signal.read_state = row.favorite == 1, row.wants == 1, row.read_state
+            touch(signal, row.favorite_date if row.favorite else None, row.wants_date if row.wants else None, row.read_date if row.read_state else None)
+
+        allow_statistic = session.query(Reader.allow_statistic).filter(Reader.id == reader_id).scalar()
+        if allow_statistic:
+            rows = session.query(Reading.book_id, Reading.action, func.sum(Reading.duration), func.max(Reading.update_time)).filter(Reading.reader_id == reader_id)
+            for book_id, action, secs, last in rows.group_by(Reading.book_id, Reading.action):
+                signal = get(book_id)
+                if action == "read":
+                    signal.read_secs = max(signal.read_secs, int(secs or 0))
+                else:
+                    signal.downloaded = True
+                touch(signal, last)
+            stats = session.query(BookReadingStats.book_id, func.sum(BookReadingStats.total_seconds)).filter(BookReadingStats.reader_id == reader_id)
+            for book_id, secs in stats.group_by(BookReadingStats.book_id):
+                signal = get(book_id)
+                signal.read_secs = max(signal.read_secs, int(secs or 0))
+
+        reviews = session.query(BookReview.book_id, BookReview.rating, BookReview.update_time).filter(BookReview.reader_id == reader_id, BookReview.deleted_at.is_(None))
+        for book_id, rating, updated in reviews:
+            signal = get(book_id)
+            signal.rating = rating
+            touch(signal, updated)
+        return result
