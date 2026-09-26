@@ -649,6 +649,8 @@
     "device_ftp_path": "Target Path",
     "ai_capability": "AI Assistant",
     "main_page_recent_count": "Main Page - Recent Updates Count",
+    "recommend_enable": "Main Page - Smart recommendations (off: pure random)",
+    "recommend_use_crowd": "Main Page - Use other users' reading and downloads in recommendations",
     "main_page_random_count": "Main Page - Random Recommendations Count",
     "index_page_type": "Index Page Type",
     "index_page_type_index": "Default Home Page",

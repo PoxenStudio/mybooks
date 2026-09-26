@@ -48,7 +48,7 @@ from webserver.services.reading_stats_service import ManualReadingService, Readi
 from webserver.services.scan_service import ScanService, SCAN_EXT
 from webserver.services.download_quota_service import DownloadQuotaService
 from webserver.services.book_review_service import BookReviewService
-from webserver.recommend import RecommendContext
+from webserver.recommend import RecommendConfig, RecommendContext, home_seed, utc_now
 from webserver.plugins.meta import douban, douban_v2
 from webserver.plugins.meta.bookbarn_tags import BookBarnTags
 from webserver.plugins.parser.txt import get_content_encoding
@@ -114,16 +114,24 @@ class Index(BaseHandler):
         new_ids = random.sample(ids[0:600], min(cnt_recent, len(ids[0:600])))
         return sorted(random_ids, reverse=True), sorted(new_ids, reverse=True)
 
-    def _recommend_home_ids(self, cnt_random, cnt_recent, exclude_ids):
+    def _home_seed(self, reader_id):
+        if self.get_argument("seed", ""):
+            return self.get_argument("seed")
+        if self.get_argument("refresh", "0") == "1":
+            return str(time.time_ns())
+        return home_seed(reader_id, utc_now(), RecommendConfig.from_conf(CONF).seed_bucket_minutes)
+
+    def _recommend_home_ids(self, cnt_random, cnt_recent, exclude_ids, seed, reader_id):
         if not CONF.get("RECOMMEND_ENABLE", True) or self.get_argument("personalized", "1") == "0":
             return None
         service = self.settings.get("recommend")
         if service is None:
             return None
         ctx = RecommendContext(
-            reader_id=self.user_id() or None,
+            reader_id=reader_id,
             is_visible=lambda f: self.is_book_visible({"tags": f.tags, CALIBRE_COLUMN_CATEGORY: f.category}),
             exclude_ids=frozenset(exclude_ids),
+            rng=random.Random(seed),
         )
         try:
             result = service.home(ctx, cnt_random, cnt_recent)
@@ -157,7 +165,9 @@ class Index(BaseHandler):
         cnt_recent = min(cnt_recent, len(ids))
         cnt_random = min(cnt_random, len(ids))
         social_books = self._social_recommend_books()
-        home_ids = self._recommend_home_ids(cnt_random, cnt_recent, [b["id"] for b in social_books])
+        reader_id = self.user_id() or None
+        seed = self._home_seed(reader_id)
+        home_ids = self._recommend_home_ids(cnt_random, cnt_recent, [b["id"] for b in social_books], seed, reader_id)
         random_ids, new_ids = home_ids or self._legacy_home_ids(ids, cnt_random, cnt_recent)
         random_books = self._books_in_order(random_ids)
         new_books = self._books_in_order(new_ids)
@@ -169,6 +179,7 @@ class Index(BaseHandler):
             "random_books": [self.fmt(b) for b in random_books],
             "new_books": [self.fmt(b) for b in new_books],
             "social_recommend_books": social_books,
+            "seed": seed if home_ids else "",
         }
 
 
