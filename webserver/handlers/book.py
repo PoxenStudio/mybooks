@@ -1941,8 +1941,14 @@ class BookEdit(BaseHandler):
             cover_data = ImageGenerator.generate_cover(mi.title, author)
             if cover_data:
                 mi.cover_data = ("jpeg", cover_data)
-        self.calibre_db.set_metadata(bid, mi, force_changes=True)
-        return True
+
+        result = True
+        try:
+            self.calibre_db.set_metadata(bid, mi, force_changes=True)
+        except Exception as e:
+            result = False
+            logging.error(f"[XXX]Failed to update metadata: {e} for bid: {bid}")
+        return result
 
     @js
     @auth
@@ -1962,16 +1968,27 @@ class BookEdit(BaseHandler):
         data = tornado.escape.json_decode(self.request.body)
         logging.debug(f"Book edit data: {data}")
         id_list = data.get("ids", None)
+
+        result = True
+        failed = 0
         if id_list and bid in id_list:
             # 仅当有列表，且当前书籍在列表中时，才进行批量更新
             for bid in id_list:
-                self.edit_book(bid, data)
+                if not self.edit_book(bid, data):
+                    failed += 1
                 update_books.append(bid)
-            return {"err": "ok", "msg": _("更新成功"), "books": update_books}
+            if failed == len(id_list):
+                result = False
         else:
-            self.edit_book(bid, data)
+            result = self.edit_book(bid, data)
             update_books = [bid]
-        return {"err": "ok", "msg": _("更新成功"), "books": update_books}
+        if result:
+            if failed > 0:
+                return {"err": "ok", "msg": _("部分更新成功, 失败{failed}本书籍，可以从日志查看错误信息"), "books": update_books}
+            else:
+                return {"err": "ok", "msg": _("更新成功"), "books": update_books}
+        else:
+            return {"err": "ok", "msg": _("更新失败，可以从日志查看错误信息"), "books": update_books}
 
 
 class BookDelete(BaseHandler):
