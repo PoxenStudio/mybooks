@@ -68,6 +68,8 @@ CONF = loader.get_settings()
 
 
 MAX_SHOWN_IDS = 500
+SUGGESTION_COUNT = 12
+SUGGESTION_SPARE = 4
 
 
 class Index(BaseHandler):
@@ -141,7 +143,7 @@ class Index(BaseHandler):
             return None
         ctx = RecommendContext(
             reader_id=reader_id,
-            is_visible=lambda f: self.is_book_visible({"tags": f.tags, CALIBRE_COLUMN_CATEGORY: f.category}),
+            is_visible=self.is_features_visible,
             exclude_ids=frozenset(exclude_ids),
             rng=random.Random(seed),
             avoid_ids=self._shown_ids(),
@@ -3528,11 +3530,40 @@ class BookTxtParser(BaseHandler):
 
 
 class BookSuggestion(ListHandler):
+    def _related_books(self, book_id):
+        """Books from the recommendation engine with their reasons, or None to fall back to the tag/author lookup."""
+        service = self.settings.get("recommend")
+        if service is None or not CONF.get("RECOMMEND_ENABLE", True):
+            return None
+        ctx = RecommendContext(reader_id=None, is_visible=self.is_features_visible)
+        try:
+            result = service.similar(book_id, ctx, SUGGESTION_COUNT + SUGGESTION_SPARE)
+        except Exception:
+            logging.exception("[recommend] related books for %s failed, fall back to legacy", book_id)
+            return None
+        if result is None:
+            return None
+        books = {b["id"]: b for b in self.load_books_by_ids(result.ids)}
+        formatted = []
+        for book_id in result.ids:
+            if book_id not in books or len(formatted) >= SUGGESTION_COUNT:
+                continue
+            data = self.fmt(books[book_id])
+            reason = result.reasons.get(book_id)
+            if reason:
+                data["reason"] = {"type": reason.type, "value": reason.value}
+            formatted.append(data)
+        return formatted
+
     @js
     def get(self, id):
         book = self.get_book(id, raise_exception=False)
         if not book:
             return {"err": "params.book.invalid", "msg": _("书籍已不存在")}
+
+        related = self._related_books(book["id"])
+        if related is not None:
+            return {"err": "ok", "msg": _("推荐成功"), "books": related}
 
         tags = book.get("tags", [])
         similar_books = []

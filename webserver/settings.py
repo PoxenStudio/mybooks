@@ -95,6 +95,11 @@ settings = {
     "RECOMMEND_CROWD_IGNORE_PROTOCOLS": ["webdav"],  # 这些协议的下载不计入群体统计（WebDAV 客户端同步时会批量读取文件）
     "RECOMMEND_USE_LEGACY_HISTORY": False,    # 把 Reader.extra 旧版阅读/推送历史作为弱群体信号
     "RECOMMEND_POOL_SIZE": 300,               # 每个用户预先打分保留的随机推荐候选数
+    "RECOMMEND_SIMILAR_POOL": 60,             # 详情页相关推荐：每本书保留的高分候选数（按书缓存，所有人共用）
+    "RECOMMEND_SIMILAR_MAX_TAG_BOOKS": 2000,  # 包含书数超过此值的泛标签不参与召回，只参与打分
+    "RECOMMEND_SIMILAR_MAX_PER_AUTHOR": 3,
+    "RECOMMEND_SIMILAR_MAX_PER_SERIES": 3,
+    "RECOMMEND_SIMILAR_CACHE_SIZE": 1000,     # 缓存多少本书的候选池
     "RECOMMEND_TREND_DAYS": 30,
     "RECOMMEND_USE_REVIEWS": True,            # ENABLE_BOOK_REVIEW 关闭时自动视为 False
     "RECOMMEND_QUALITY_PRIOR_STRENGTH": 3,    # 贝叶斯平均先验强度

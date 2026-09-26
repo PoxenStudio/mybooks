@@ -9,6 +9,7 @@ import itertools
 import logging
 import threading
 import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -18,8 +19,9 @@ from webserver.recommend.coread import CoReadIndex, CoReadScorer, build_coread
 from webserver.recommend.crowd import CrowdSnapshot, CrowdSource, CrowdView, build_crowd
 from webserver.recommend.features import BookFeatures, FeatureIndex, FeatureSource, Library
 from webserver.recommend.profile import ProfileSource, SeriesNextScorer, SimilarityScorer, UserProfile, WantsScorer, build_profile
-from webserver.recommend.diversity import Scored
-from webserver.recommend.recommenders import NewBooksRecommender, SampledRecommender
+from webserver.recommend.recommenders import NewBooksRecommender, SampledRecommender, weighted_sample
+from webserver.recommend.diversity import Scored, mmr_rerank
+from webserver.recommend.similar import Related, RelatedBooks
 from webserver.recommend.scoring import (
     FreshnessScorer,
     ItemPopularityScorer,
@@ -50,6 +52,12 @@ def _pick_avoiding(pick: Callable[[RecommendContext], List[int]], ctx: Recommend
 class HomeResult:
     random_ids: List[int]
     new_ids: List[int]
+    reasons: Dict[int, Reason] = field(default_factory=dict)
+
+
+@dataclass
+class RelatedResult:
+    ids: List[int]
     reasons: Dict[int, Reason] = field(default_factory=dict)
 
 
@@ -99,6 +107,7 @@ class RecommendService:
         self._profile_versions = itertools.count(1)
         self._pending: Dict[int, Callable[[], PoolState]] = {}
         self._worker: Optional[threading.Thread] = None
+        self._related: "OrderedDict[tuple, List[Related]]" = OrderedDict()
         self._lock = threading.Lock()
 
     def _load_crowd(self, crowd_source: CrowdSource) -> CrowdSnapshot:
@@ -123,11 +132,7 @@ class RecommendService:
         library = self.index.snapshot()
         if library is None:
             return None
-        crowd, coread = None, None
-        if config.use_crowd and self.crowd is not None and self.coread is not None:
-            self.crowd.ttl_seconds = config.crowd_ttl_seconds
-            self.coread.ttl_seconds = config.co_ttl_seconds
-            crowd, coread = self.crowd.snapshot(), self.coread.snapshot()
+        crowd, coread = self._crowd_snapshots(config)
         view = CrowdView(crowd, ctx.reader_id, config)
         profile_state = self._profile_state(ctx.reader_id, library, config)
         profile = profile_state.profile if profile_state else None
@@ -149,6 +154,47 @@ class RecommendService:
                 if explanation:
                     reasons[book_id] = explanation[0]
         return HomeResult(random_ids=random_ids, new_ids=new_ids, reasons=reasons)
+
+    def similar(self, book_id: int, ctx: RecommendContext, n: int) -> Optional[RelatedResult]:
+        """Related books for one book, identical for every reader apart from visibility; None when not ready."""
+        config = self.config_loader()
+        library = self.index.snapshot()
+        if library is None or book_id not in library.books or n <= 0:
+            return None
+        crowd, coread = self._crowd_snapshots(config)
+        pool = self._related_pool(library.books[book_id], library, crowd, coread, config)
+        candidates = [r for r in pool if ctx.accepts(r.book)]
+        scored = [(r.book, r.score) for r in candidates]
+        sampled = weighted_sample(scored, max(n, len(scored) // 2), config.temperature, ctx.rng)
+        picked = mmr_rerank(sampled, n, config.diversity, config.similar_max_per_author, config.similar_max_per_series)
+        reasons = {r.book.book_id: r.reason for r in candidates if r.reason}
+        return RelatedResult(ids=[b.book_id for b in picked], reasons={b.book_id: reasons[b.book_id] for b in picked if b.book_id in reasons})
+
+    def _crowd_snapshots(self, config: RecommendConfig) -> Tuple[Optional[CrowdSnapshot], Optional[CoReadIndex]]:
+        if not config.use_crowd or self.crowd is None or self.coread is None:
+            return None, None
+        self.crowd.ttl_seconds = config.crowd_ttl_seconds
+        self.coread.ttl_seconds = config.co_ttl_seconds
+        return self.crowd.snapshot(), self.coread.snapshot()
+
+    def _related_pool(self, source: BookFeatures, library: Library, crowd, coread, config: RecommendConfig) -> List[Related]:
+        crowd_version = self.crowd.version if crowd is not None and self.crowd is not None else 0
+        coread_version = self.coread.version if coread is not None and self.coread is not None else 0
+        key = (source.book_id, self.index.version, crowd_version, coread_version, config)
+        with self._lock:
+            if key in self._related:
+                self._related.move_to_end(key)
+                return self._related[key]
+        view = CrowdView(crowd, None, config)
+        rated = [b.rating for b in library.books.values() if b.rating > 0]
+        shared: Components = [(QualityScorer(view, sum(rated) / len(rated) if rated else DEFAULT_RATING), config.w_similar_quality)]
+        shared.append((PopularityScorer(view) if view.available else ItemPopularityScorer(view), config.w_similar_popularity))
+        pool = RelatedBooks(library, coread, shared, config).rank(source, config.similar_pool)
+        with self._lock:
+            self._related[key] = pool
+            while len(self._related) > config.similar_cache_size:
+                self._related.popitem(last=False)
+        return pool
 
     def _profile_state(self, reader_id: Optional[int], library: Library, config: RecommendConfig) -> Optional[ProfileState]:
         if not reader_id or self.profile_source is None:
