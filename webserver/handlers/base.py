@@ -769,16 +769,7 @@ class BaseHandler(web.RequestHandler):
 
         # Apply per-user reading range filter (only when read_limit is set)
         if CONF.get(constants.ALLOW_READ_RANGE_SETTING, False):
-            user = self.current_user
-            if not user:
-                # For guests, only show books without categories and tags
-                books = [
-                    b
-                    for b in books
-                    if not b.get("tags") and not b.get(constants.CALIBRE_COLUMN_CATEGORY)
-                ]
-            elif getattr(user, "read_limit", 0) > 0:
-                books = [b for b in books if self.is_book_in_reading_range(b, user)]
+            books = [b for b in books if self.is_book_visible(b)]
 
         logging.debug(
             "[%5d ms] select books from database (count = %d)"
@@ -858,6 +849,18 @@ class BaseHandler(web.RequestHandler):
             logging.error(f"删除书籍《{book_title}》失败: {e}")
             result = False
         return result
+
+    def is_book_visible(self, book) -> bool:
+        """Reading-range visibility of a book dict (needs "tags" and the category column) for the current user."""
+        if not CONF.get(constants.ALLOW_READ_RANGE_SETTING, False):
+            return True
+        user = self.current_user
+        if not user:
+            # For guests, only show books without categories and tags
+            return not book.get("tags") and not book.get(constants.CALIBRE_COLUMN_CATEGORY)
+        if getattr(user, "read_limit", 0) > 0:
+            return self.is_book_in_reading_range(book, user)
+        return True
 
     def is_book_in_reading_range(self, book, user) -> bool:
         """Check whether a book is accessible for the given user based on their reading range.
@@ -1343,15 +1346,7 @@ class ListHandler(BaseHandler):
                 for colnum, key in self._custom_column_map.items():
                     if colnum in book:
                         book[key] = book.pop(colnum)
-            user = self.current_user
-            if not user:
-                books = [
-                    b
-                    for b in books
-                    if not b.get("tags") and not b.get(constants.CALIBRE_COLUMN_CATEGORY)
-                ]
-            elif getattr(user, "read_limit", 0) > 0:
-                books = [b for b in books if self.is_book_in_reading_range(b, user)]
+            books = [b for b in books if self.is_book_visible(b)]
 
         # 只查询剩余书籍的Item信息
         item = Item()
