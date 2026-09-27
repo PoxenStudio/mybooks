@@ -42,6 +42,13 @@
                             <v-icon v-if="isSameColor(settings.accent, color.value)" small color="white" style="text-shadow: 0 1px 2px rgba(0,0,0,0.5);">mdi-check</v-icon>
                         </div>
                     </div>
+                    <div class="d-flex align-center mt-2" style="gap: 10px;">
+                        <label class="custom-color-field text--secondary">
+                            <input type="color" :value="settings.accent" @input="update({ accent: $event.target.value })" />
+                            <span>{{ $t('appearance.custom') }}</span>
+                        </label>
+                        <v-btn x-small text @click="restoreAccent">{{ $t('appearance.restore') }}</v-btn>
+                    </div>
                 </div>
 
                 <!-- Top bar / brand color -->
@@ -187,9 +194,9 @@ export default {
                 return this.settings.darkMode;
             },
             set(value) {
-                // 切换深浅色时联动背景图案：浅色 → 浅色图2，深色 → 深色图2，
-                // 避免深色主题下还残留一张浅色底图（反之亦然）。
-                this.update({ darkMode: value, background: value ? 'repeat-image-4' : 'repeat-image-2' });
+                // 只切深浅色，不动背景图案：背景与顶栏色一样是跨模式独立的单值，
+                // 强制捆绑「浅色→浅色图2 / 深色→深色图2」会覆盖用户自己选的壁纸。
+                this.update({ darkMode: value });
             },
         },
         iconMode: {
@@ -278,6 +285,11 @@ export default {
         },
         isBrandColorSelected(value) {
             return this.isSameColor(this.currentBrandColor, value);
+        },
+        restoreAccent() {
+            // accent 没有「null = 回到默认」的语义（后端 _clean_color_required 只收合法 hex），
+            // 恢复默认必须发字面量默认色，不能像 brandColor 那样发 null
+            this.update({ accent: DEFAULT_ACCENT });
         },
         /** 所有改动的唯一入口：先落 store（立即生效），再排队同步 */
         update(patch) {
