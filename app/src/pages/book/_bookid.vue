@@ -1164,7 +1164,7 @@
             outlined
             dense
             show-size
-            accept=".epub,.mobi,.azw,.azw3,.pdf,.txt,.djvu,.uvz"
+            accept=".epub,.mobi,.azw,.azw3,.pdf,.txt,.djvu,.uvz,.cbz"
             prepend-icon="mdi-file-document"
         ></v-file-input>
         <v-checkbox v-model="upload_format_force" :label="$t('book.forceReplaceFormat')" dense hide-details class="mt-0"></v-checkbox>
@@ -1542,11 +1542,11 @@ export default {
             return this.book.files.length > 0;
         },
 
-        // 仅含 DJVU/UVZ 扫描版托管格式（无任何可在线阅读的格式），下载对话框给出提示
+        // 仅含 DJVU/UVZ/CBZ 托管格式（无任何可在线阅读的格式），下载对话框给出提示
         // 注意：与后端 webserver/constants.py 的 MANAGED_DOCUMENT_FORMATS 保持一致（前端无法直接引用后端常量）
         managedOnly: function() {
             if (!this.book || !this.book.files || !this.book.files.length) return false;
-            const managedFormats = ['djvu', 'uvz'];
+            const managedFormats = ['djvu', 'uvz', 'cbz'];
             return this.book.files.every(file => managedFormats.includes(file.format.toLowerCase()));
         },
 
