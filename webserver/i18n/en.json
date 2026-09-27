@@ -528,5 +528,15 @@
   "单次阅读时长需在 0~18 小时之间": "Duration must be between 0 and 18 hours",
   "无 NCX 目录，合并时改用 EPUB3 导航 / spine 顺序兜底": "No NCX table of contents; falling back to EPUB3 navigation / spine order",
   "未定位到正文条目": "No spine documents found",
-  "含字体混淆资源，合并时将剔除": "Obfuscated fonts detected; they will be excluded from the merge"
+  "含字体混淆资源，合并时将剔除": "Obfuscated fonts detected; they will be excluded from the merge",
+  "文件校验失败：%s": "File validation failed: %s",
+  "本书没有可转换的格式": "This book has no convertible format",
+  "文件内容不是有效的 DjVu 容器": "File content is not a valid DjVu container",
+  "DjVu 容器长度不匹配": "DjVu container length mismatch",
+  "文件内容不是有效的 UVZ ZIP 容器": "File content is not a valid UVZ ZIP container",
+  "UVZ 容器条目数超出预算(%d)": "UVZ container exceeds the entry budget (%d)",
+  "UVZ 容器为空": "UVZ container is empty",
+  "UVZ 容器包含加密条目，无法导入": "UVZ container contains encrypted entries and cannot be imported",
+  "UVZ 容器已损坏：%s": "UVZ container is corrupted: %s",
+  "不支持的托管文档格式: %s": "Unsupported managed document format: %s"
 }

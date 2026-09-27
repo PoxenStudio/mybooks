@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 
+import contextlib
+import os
 import warnings
 from unittest import mock
 from tests.test_main import TestWithUserLogin, setUpModule as init, testdir
+from tests.test_managed_documents import _make_djvu, _make_uvz
 
 def setUpModule():
     init()
@@ -61,3 +64,57 @@ class TestUpload(TestWithUserLogin):
 
             d = self.json("/api/book/upload", method="POST", body="k=1", request_timeout=30)
             self.assertEqual(d["err"], "ok")
+
+    # ---- DJVU/UVZ 扫描版托管文档（下载专用）----
+
+    def _upload_managed(self, name, data):
+        warnings.simplefilter('ignore', ResourceWarning)
+        patches = [
+            mock.patch("webserver.handlers.book.BookUpload.get_upload_file", return_value=(name, data)),
+            mock.patch("webserver.handlers.base.BaseHandler.user_history"),
+            mock.patch("webserver.handlers.base.BaseHandler.add_msg"),
+            mock.patch("webserver.models.Item.save", return_value=True),
+            mock.patch("calibre.db.legacy.LibraryDatabase.import_book", return_value=1008610086),
+        ]
+        with contextlib.ExitStack() as stack:
+            for pt in patches:
+                stack.enter_context(pt)
+            return self.json("/api/book/upload", method="POST", body="k=1", request_timeout=30)
+
+    def test_upload_djvu_new_file(self):
+        data = _make_djvu(b"DJVI" + b"\x00" * 8)
+        d = self._upload_managed("managed_djvu_smoke.djvu", data)
+        self.assertEqual(d["err"], "ok")
+
+    def test_upload_djvu_invalid_container(self):
+        d = self._upload_managed("bad_djvu.djvu", b"NOTDJVU" + b"\x00" * 32)
+        self.assertEqual(d["err"], "book.invalid")
+
+    def test_upload_uvz_new_file(self):
+        p = _make_uvz({"0001.pdg": b"fake-page"})
+        try:
+            with open(p, "rb") as f:
+                data = f.read()
+            d = self._upload_managed("managed_uvz_smoke.uvz", data)
+            self.assertEqual(d["err"], "ok")
+        finally:
+            os.remove(p)
+
+    def test_upload_managed_unsupported_format_still_rejected(self):
+        d = self._upload_managed("managed_smoke.xyz", b"data")
+        self.assertEqual(d["err"], "params.format.unsupported")
+
+    def test_chunk_upload_accepts_managed_format_gate(self):
+        d = self.json(
+            "/api/book/upload/chunk?filename=managed_djvu_smoke.djvu&chunk_index=0&total_chunks=1",
+            method="POST", body="k=1",
+        )
+        # 通过格式闸门后因缺少 hash 被拦下，说明 DJVU 已被放行
+        self.assertEqual(d["err"], "params.hash")
+
+    def test_chunk_upload_rejects_unknown_format(self):
+        d = self.json(
+            "/api/book/upload/chunk?filename=managed_smoke.xyz&chunk_index=0&total_chunks=1",
+            method="POST", body="k=1",
+        )
+        self.assertEqual(d["err"], "params.format.unsupported")
