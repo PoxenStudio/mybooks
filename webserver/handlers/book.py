@@ -2869,13 +2869,15 @@ class BookUploadChunk(BaseHandler):
 
         if CONF.get("USE_DYNAMIC_COVER", False):
             fmt, cover_data = mi.cover_data
-            if fmt is None and cover_data is not None:
+            # 与 BookUpload._add_new_book 对齐：封面缺失即生成兜底封面
+            if fmt is None or cover_data is None:
                 author = mi.authors[0] if mi.authors else _("佚名")
                 data = ImageGenerator.generate_cover(mi.title, author)
                 if data:
                     mi.cover_data = ("jpeg", data)
                     dynamic_cover = True
-        if mi.cover_data and mi.cover_data[1][:4] == b"RIFF":
+        # cover_data 恒为二元组（无封面时是 (None, None)，真值），必须判 [1] 非空
+        if mi.cover_data and mi.cover_data[1] and mi.cover_data[1][:4] == b"RIFF":
             mi.cover_data = ("jpeg", ImageHelper.convert_to_jpeg(mi.cover_data[1]))
         book_id = self.calibre_db.import_book(mi, fpaths)
         if book_id is not None and dynamic_cover:
@@ -3086,6 +3088,9 @@ class BookUploadChunk(BaseHandler):
                     if book_id is None:
                         book_id = b.get("id")
                     if b.get("authors", "") != mi.authors:
+                        # 与 BookUpload.post 对齐：作者不匹配的候选不可作为并入目标，
+                        # 否则托管格式（作者来自文件名、不可信）会误并入同名不同作者的书
+                        book_id = None
                         continue
                     if fmt.upper() in b.formats:
                         return {
@@ -3447,7 +3452,7 @@ class BookRead(BaseHandler):
         if not fpath:
             # _epub_conversion_source 返回 None 有两种含义：已可直接阅读，或没有任何可读格式。
             # 仅含 DJVU/UVZ 等托管格式的书籍不允许进入阅读流程。
-            if not any(book.get("fmt_%s" % f) for f in ("epub", "pdf", "mobi", "azw3", "azw", "txt", "docx")):
+            if not any(book.get("fmt_%s" % f) for f in constants.SUPPORTED_EBOOK_FORMATS):
                 return {"err": "params.book.invalid", "msg": _("抱歉，在线阅读器暂不支持该格式的书籍，可以转为epub或者pdf后阅读")}
             return {"err": "ok", "msg": _("可以直接打开"), "data": {"status": "ready", "path": fpath}}
 

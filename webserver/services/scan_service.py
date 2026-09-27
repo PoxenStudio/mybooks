@@ -471,7 +471,9 @@ class ScanService(AsyncService):
                 ids = self.db.books_with_same_title(mi)
                 logging.info("[IMPORT] Same title %d book(s) for: %s", len(ids) if ids else 0, fpath)
             if ids and managed_doc and len(ids) > 1:
-                # 扫描版无可信作者元数据：多个同名候选一律按新书入库，避免误并
+                # 扫描版无可信作者元数据：多个同名候选一律按新书入库，避免误并。
+                # 注意入口差异（有意保留）：此处沿用 TXT 先例不校验作者，唯一同名候选即并入；
+                # 网页上传/分片路径（book.py）则要求作者匹配才并入。
                 logging.info("[IMPORT] %d same-title candidates for managed document, import as new book", len(ids))
                 ids = []
             existed_ebook = False

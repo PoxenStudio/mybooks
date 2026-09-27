@@ -65,12 +65,18 @@ def _analyze_uvz(fpath):
 def analyze_managed_document(fpath, fmt):
     """校验 DJVU/UVZ 文件确为声称的容器格式。非法抛 InvalidManagedDocumentError。"""
     fmt = (fmt or "").lower().lstrip(".")
-    if fmt == "djvu":
-        _analyze_djvu(fpath)
-    elif fmt == "uvz":
-        _analyze_uvz(fpath)
-    else:
-        _invalid(_("不支持的托管文档格式: %s") % fmt)
+    try:
+        if fmt == "djvu":
+            _analyze_djvu(fpath)
+        elif fmt == "uvz":
+            _analyze_uvz(fpath)
+        else:
+            _invalid(_("不支持的托管文档格式: %s") % fmt)
+    except InvalidManagedDocumentError:
+        raise
+    except OSError as err:
+        # 文件不可读（权限/磁盘等）：统一转为校验错误，避免调用方 500
+        _invalid(_("无法读取文件：%s") % err)
 
 
 def filename_metadata(name):
