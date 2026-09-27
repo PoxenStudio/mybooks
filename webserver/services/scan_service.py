@@ -50,7 +50,7 @@ from webserver.services.catalog import CatalogExtractService
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_CATEGORY, CALIBRE_ERROR_FLAG
 from webserver.constants import BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL, CALIBRE_COLUMN_DYNAMIC_COVER, CALIBRE_COLUMN_TRANSLATORS
 from webserver.constants import MANAGED_DOCUMENT_FORMATS
-from webserver.services.managed_documents import InvalidManagedDocumentError, analyze_managed_document
+from webserver.services.managed_documents import InvalidManagedDocumentError, analyze_managed_document, build_managed_metadata
 from webserver.services.background_service import BackgroundService, BackgroundTask
 from webserver import loader
 
@@ -391,7 +391,7 @@ class ScanService(AsyncService):
         _translators = []
         _authors = []
 
-        # DJVU/UVZ 托管格式：校验容器后再导入，不读电子书元数据
+        # DJVU/UVZ/CBZ 托管格式：校验容器后再导入，不读电子书元数据
         managed_doc = fmt in MANAGED_DOCUMENT_FORMATS
         if managed_doc:
             try:
@@ -404,13 +404,13 @@ class ScanService(AsyncService):
                 return None, ScanFile.INVALID
 
         # Skip metadata reading when title/author are derived from filename
-        skip_metadata = (fmt == "txt" or managed_doc)
-        if skip_metadata:
+        if managed_doc:
+            mi = build_managed_metadata(fpath, fmt, fname)
+            logging.info("[IMPORT] Managed document cataloged from filename: %s", repr(mi.title))
+        elif fmt == "txt":
             title = fname[:-len(fmt) - 1]
             title = utils.remove_zlibrary_suffix(title)
-            author = None
-            if fmt == "txt" or managed_doc:
-                title, author = utils.guess_title_author_from_filename(title)
+            title, author = utils.guess_title_author_from_filename(title)
             mi = Metadata(title, [author] if author else [_("佚名")])
             logging.info("[IMPORT] Skipped metadata read for %s: %s", fmt, repr(title))
         else:

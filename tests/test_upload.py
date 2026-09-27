@@ -100,6 +100,17 @@ class TestUpload(TestWithUserLogin):
         finally:
             os.remove(p)
 
+    def test_upload_cbz_new_file(self):
+        # CBZ 走托管路径并提取首页封面（jpeg 魔数，不应触发 RIFF→jpeg 转换分支）
+        p = _make_uvz({"010.jpg": b"page-10", "002.jpg": b"\xff\xd8\xff\xe0fake-jpeg"})
+        try:
+            with open(p, "rb") as f:
+                data = f.read()
+            d = self._upload_managed("managed_cbz_smoke.cbz", data)
+            self.assertEqual(d["err"], "ok")
+        finally:
+            os.remove(p)
+
     def test_upload_managed_unsupported_format_still_rejected(self):
         d = self._upload_managed("managed_smoke.xyz", b"data")
         self.assertEqual(d["err"], "params.format.unsupported")

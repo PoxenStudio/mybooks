@@ -56,7 +56,7 @@ from webserver.handlers.audio import AudioUtils
 from webserver import constants
 from webserver.constants import COLUMN_CATEGORY, CALIBRE_COLUMN_CATEGORY
 from webserver.constants import CALIBRE_ERROR_FLAG, SUPPORTED_EBOOK_FORMATS, MANAGED_DOCUMENT_FORMATS
-from webserver.services.managed_documents import InvalidManagedDocumentError, analyze_managed_document, filename_metadata
+from webserver.services.managed_documents import InvalidManagedDocumentError, analyze_managed_document, build_managed_metadata
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT
 from webserver.constants import BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL, AUTO_FILL_META
 from webserver.constants import COLUMN_EXT_LINK, CALIBRE_COLUMN_EXT_LINK
@@ -2756,12 +2756,12 @@ class BookUpload(BaseHandler):
             _translators = []
             _authors = []
             if fmt in MANAGED_DOCUMENT_FORMATS:
-                # 扫描版托管格式（DJVU/UVZ）：校验容器后按文件名编目，不读电子书元数据
+                # 扫描版托管格式（DJVU/UVZ/CBZ）：校验容器后按文件名编目，不读电子书元数据
                 try:
                     analyze_managed_document(fpath, fmt)
                 except InvalidManagedDocumentError as e:
                     return {"err": "book.invalid", "msg": _("文件校验失败：%s") % e}
-                mi = filename_metadata(name)
+                mi = build_managed_metadata(fpath, fmt, name)
                 _authors = list(mi.authors)
             else:
                 with open(fpath, "rb") as stream:
@@ -3040,12 +3040,12 @@ class BookUploadChunk(BaseHandler):
             _translators = []
             _authors = []
             if fmt in MANAGED_DOCUMENT_FORMATS:
-                # 扫描版托管格式（DJVU/UVZ）：校验合并后的完整文件，再按文件名编目
+                # 扫描版托管格式（DJVU/UVZ/CBZ）：校验合并后的完整文件，再按文件名编目
                 try:
                     analyze_managed_document(final_path, fmt)
                 except InvalidManagedDocumentError as e:
                     return {"err": "book.invalid", "msg": _("文件校验失败：%s") % e}
-                mi = filename_metadata(filename)
+                mi = build_managed_metadata(final_path, fmt, filename)
                 _authors = list(mi.authors)
             else:
                 with open(final_path, "rb") as stream:

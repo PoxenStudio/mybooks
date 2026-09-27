@@ -539,5 +539,10 @@
   "UVZ 容器包含加密条目，无法导入": "UVZ container contains encrypted entries and cannot be imported",
   "UVZ 容器已损坏：%s": "UVZ container is corrupted: %s",
   "不支持的托管文档格式: %s": "Unsupported managed document format: %s",
-  "无法读取文件：%s": "Cannot read file: %s"
+  "无法读取文件：%s": "Cannot read file: %s",
+  "文件内容不是有效的 CBZ ZIP 容器": "File content is not a valid CBZ ZIP container",
+  "CBZ 容器内未找到图片页": "No image pages found in the CBZ container",
+  "CBZ 容器条目数超出预算(%d)": "CBZ container exceeds the entry budget (%d)",
+  "CBZ 容器包含加密条目，无法导入": "CBZ container contains encrypted entries and cannot be imported",
+  "CBZ 容器已损坏：%s": "CBZ container is corrupted: %s"
 }

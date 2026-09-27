@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
-"""DJVU/UVZ 扫描版托管文档：容器校验与文件名编目。
+"""DJVU/UVZ/CBZ 托管文档（扫描版/漫画包）：容器校验与文件名编目。
 
-这类格式无法解出可供在线阅读的电子书内容（UVZ 内页多为超星 PDG 等私有格式），
-因此只入库保存原始文件供下载；BookRead 对无可读格式的书籍一律 404，天然禁读。
-校验只识别容器结构，不解压、不解码页面内容。
+这类格式无法解出可供在线阅读的电子书内容（UVZ 内页多为超星 PDG 等私有格式，
+CBZ 为漫画图片包，mybooks 无漫画阅读器），因此只入库保存原始文件供下载；
+BookRead 对无可读格式的书籍一律 404，天然禁读。
+校验只识别容器结构，不解压、不解码页面内容（CBZ 仅从首页图提取封面）。
 """
 
 import logging
 import os
+import re
 import struct
 import zipfile
 
@@ -17,6 +19,10 @@ from webserver import utils
 
 # 与 ZIP 容器类工具一致的条目预算：防御性上限，防炸卷/炸内存
 MAX_ARCHIVE_ENTRIES = 10000
+# 封面候选条目的解压后大小上限：防止单个超大条目耗尽内存
+MAX_COVER_ENTRY_BYTES = 20 * 1024 * 1024
+# CBZ 封面/图片页认可的扩展名
+IMAGE_EXTS = frozenset(("jpg", "jpeg", "png", "webp", "gif", "bmp"))
 
 
 class InvalidManagedDocumentError(Exception):
@@ -30,6 +36,11 @@ def _invalid(message):
 def _read_signature(fpath, size):
     with open(fpath, "rb") as f:
         return f.read(size)
+
+
+def _natural_key(name):
+    """自然排序键（"2.jpg" < "10.jpg"），元组首元保证 int/str 不互比。"""
+    return tuple((0, int(t)) if t.isdigit() else (1, t) for t in re.split(r"(\d+)", name))
 
 
 def _analyze_djvu(fpath):
@@ -62,14 +73,40 @@ def _analyze_uvz(fpath):
         _invalid(_("UVZ 容器已损坏：%s") % err)
 
 
+def _analyze_cbz(fpath):
+    """CBZ（漫画图片 ZIP 包）：ZIP 校验之外，至少要含一张常见扩展名的图片页。"""
+    if not _read_signature(fpath, 4).startswith(b"PK"):
+        _invalid(_("文件内容不是有效的 CBZ ZIP 容器"))
+    try:
+        with zipfile.ZipFile(fpath) as archive:
+            infos = archive.infolist()
+            if len(infos) > MAX_ARCHIVE_ENTRIES:
+                _invalid(_("CBZ 容器条目数超出预算(%d)") % MAX_ARCHIVE_ENTRIES)
+            if any(info.flag_bits & 0x1 for info in infos):
+                _invalid(_("CBZ 容器包含加密条目，无法导入"))
+            if not any(
+                not info.is_dir()
+                and info.filename.rsplit(".", 1)[-1].lower() in IMAGE_EXTS
+                for info in infos
+            ):
+                _invalid(_("CBZ 容器内未找到图片页"))
+    except InvalidManagedDocumentError:
+        raise
+    except (OSError, zipfile.BadZipFile, zipfile.LargeZipFile) as err:
+        logging.info("CBZ container check failed for %s: %s", fpath, err)
+        _invalid(_("CBZ 容器已损坏：%s") % err)
+
+
 def analyze_managed_document(fpath, fmt):
-    """校验 DJVU/UVZ 文件确为声称的容器格式。非法抛 InvalidManagedDocumentError。"""
+    """校验 DJVU/UVZ/CBZ 文件确为声称的容器格式。非法抛 InvalidManagedDocumentError。"""
     fmt = (fmt or "").lower().lstrip(".")
     try:
         if fmt == "djvu":
             _analyze_djvu(fpath)
         elif fmt == "uvz":
             _analyze_uvz(fpath)
+        elif fmt == "cbz":
+            _analyze_cbz(fpath)
         else:
             _invalid(_("不支持的托管文档格式: %s") % fmt)
     except InvalidManagedDocumentError:
@@ -77,6 +114,32 @@ def analyze_managed_document(fpath, fmt):
     except OSError as err:
         # 文件不可读（权限/磁盘等）：统一转为校验错误，避免调用方 500
         _invalid(_("无法读取文件：%s") % err)
+
+
+def _extract_cbz_cover(fpath):
+    """取自然排序最前的图片页作封面，返回 (fmt, bytes)；失败返回 None 不影响入库。
+
+    仅在容器校验通过后调用，异常按无封面处理。
+    """
+    try:
+        with zipfile.ZipFile(fpath) as archive:
+            candidates = [
+                info for info in archive.infolist()
+                if not info.is_dir()
+                and info.file_size <= MAX_COVER_ENTRY_BYTES
+                and info.filename.rsplit(".", 1)[-1].lower() in IMAGE_EXTS
+            ]
+            if not candidates:
+                return None
+            candidates.sort(key=lambda info: _natural_key(info.filename))
+            data = archive.read(candidates[0])
+    except (OSError, zipfile.BadZipFile, zipfile.LargeZipFile) as err:
+        logging.info("CBZ cover extraction failed for %s: %s", fpath, err)
+        return None
+    fmt = candidates[0].filename.rsplit(".", 1)[-1].lower()
+    if fmt == "jpeg":
+        fmt = "jpg"
+    return (fmt, data) if data else None
 
 
 def filename_metadata(name):
@@ -90,3 +153,13 @@ def filename_metadata(name):
     stem = utils.remove_zlibrary_suffix(stem)
     title, author = utils.guess_title_author_from_filename(stem)
     return Metadata(title or stem, [author] if author else [_("佚名")])
+
+
+def build_managed_metadata(fpath, fmt, name):
+    """托管格式的完整编目：文件名元数据 + CBZ 首页图封面。"""
+    mi = filename_metadata(name)
+    if (fmt or "").lower().lstrip(".") == "cbz":
+        cover = _extract_cbz_cover(fpath)
+        if cover:
+            mi.cover_data = cover
+    return mi

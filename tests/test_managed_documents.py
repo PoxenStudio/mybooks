@@ -23,7 +23,7 @@ try:
 except ImportError:
     _HAS_CALIBRE_META = False
 
-from webserver.services.managed_documents import filename_metadata
+from webserver.services.managed_documents import build_managed_metadata, filename_metadata
 
 
 def _make_djvu(payload=b"", form_size=None):
@@ -33,9 +33,9 @@ def _make_djvu(payload=b"", form_size=None):
     return b"AT&TFORM" + struct.pack(">I", form_size) + b"DJVU" + payload
 
 
-def _make_uvz(entries):
+def _make_zip(entries):
     """entries: {name: bytes}; 以 None 值表示目录条目。"""
-    buf = tempfile.NamedTemporaryFile(suffix=".uvz", delete=False)
+    buf = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in entries.items():
             if data is None:
@@ -44,6 +44,10 @@ def _make_uvz(entries):
                 zf.writestr(name, data)
     buf.close()
     return buf.name
+
+
+# 兼容既有引用（UVZ/CBZ 共用同一 ZIP fixture 构造器）
+_make_uvz = _make_zip
 
 
 class TestAnalyzeManagedDocument(unittest.TestCase):
@@ -132,6 +136,43 @@ class TestAnalyzeManagedDocument(unittest.TestCase):
         with self.assertRaises(InvalidManagedDocumentError):
             analyze_managed_document(p, "djvu")
 
+    def test_cbz_valid(self):
+        p = _make_zip({"010.jpg": b"fake-jpeg", "002.jpg": b"fake-jpeg", "ComicInfo.xml": b"<xml/>"})
+        try:
+            self.assertIsNone(analyze_managed_document(p, "cbz"))
+        finally:
+            os.remove(p)
+
+    def test_cbz_without_images_rejected(self):
+        p = _make_zip({"info.xml": b"<xml/>", "notes.txt": b"text"})
+        try:
+            with self.assertRaises(InvalidManagedDocumentError):
+                analyze_managed_document(p, "cbz")
+        finally:
+            os.remove(p)
+
+    def test_cbz_not_zip_rejected(self):
+        p = self._write("fake.cbz", b"not a zip file at all........")
+        with self.assertRaises(InvalidManagedDocumentError):
+            analyze_managed_document(p, "cbz")
+
+    def test_cbz_encrypted_entry_rejected(self):
+        p = _make_zip({"0001.jpg": b"fake-jpeg"})
+        try:
+            real_infolist = zipfile.ZipFile.infolist
+
+            def encrypted_infolist(zf):
+                infos = real_infolist(zf)
+                for info in infos:
+                    info.flag_bits |= 0x1
+                return infos
+
+            with mock.patch.object(zipfile.ZipFile, "infolist", encrypted_infolist):
+                with self.assertRaises(InvalidManagedDocumentError):
+                    analyze_managed_document(p, "cbz")
+        finally:
+            os.remove(p)
+
 
 @unittest.skipUnless(_HAS_CALIBRE_META, "requires calibre metadata libs")
 class TestFilenameMetadata(unittest.TestCase):
@@ -144,6 +185,34 @@ class TestFilenameMetadata(unittest.TestCase):
         mi = filename_metadata("某本无名扫描书.uvz")
         self.assertEqual(mi.title, "某本无名扫描书")
         self.assertEqual(list(mi.authors), ["佚名"])
+
+    def test_cbz_cover_natural_order(self):
+        # 自然排序：002.jpg 是首页（字典序会把 010.jpg 排在 002.jpg 前）
+        p = _make_zip({"010.jpg": b"page-10", "002.jpg": b"page-02", "ComicInfo.xml": b"<xml/>"})
+        try:
+            mi = build_managed_metadata(p, "cbz", "某漫画.cbz")
+            self.assertEqual(mi.cover_data[0], "jpg")
+            self.assertEqual(mi.cover_data[1], b"page-02")
+        finally:
+            os.remove(p)
+
+    def test_cbz_cover_skips_oversized_entry(self):
+        p = _make_zip({"0001.png": b"fake-png"})
+        try:
+            with mock.patch.object(md, "MAX_COVER_ENTRY_BYTES", 4):
+                mi = build_managed_metadata(p, "cbz", "某漫画.cbz")
+            self.assertEqual(mi.cover_data, (None, None))
+        finally:
+            os.remove(p)
+
+    def test_cbz_without_images_has_no_cover(self):
+        # 容器校验会拦下无图 CBZ；这里直接验证封面函数对无图包返回 None 兜底
+        p = _make_zip({"info.xml": b"<xml/>"})
+        try:
+            mi = build_managed_metadata(p, "cbz", "某漫画.cbz")
+            self.assertEqual(mi.cover_data, (None, None))
+        finally:
+            os.remove(p)
 
 
 if __name__ == "__main__":
