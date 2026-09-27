@@ -14,7 +14,11 @@ import zipfile
 from unittest import mock
 
 from webserver.services import managed_documents as md
-from webserver.services.managed_documents import InvalidManagedDocumentError, analyze_managed_document
+from webserver.services.managed_documents import (
+    InvalidManagedDocumentError,
+    _extract_cbz_cover,
+    analyze_managed_document,
+)
 
 try:
     import calibre.ebooks.metadata.book.base  # noqa: F401
@@ -170,6 +174,45 @@ class TestAnalyzeManagedDocument(unittest.TestCase):
             with mock.patch.object(zipfile.ZipFile, "infolist", encrypted_infolist):
                 with self.assertRaises(InvalidManagedDocumentError):
                     analyze_managed_document(p, "cbz")
+        finally:
+            os.remove(p)
+
+    @staticmethod
+    def _patch_zip_method(path, method):
+        """把 ZIP 里全部本地/中央目录条目的压缩方法字段改成指定值（如 98=PPMd）。"""
+        data = bytearray(open(path, "rb").read())
+        for sig, off in ((b"PK\x01\x02", 10), (b"PK\x03\x04", 8)):
+            idx = data.find(sig)
+            while idx != -1:
+                struct.pack_into("<H", data, idx + off, method)
+                idx = data.find(sig, idx + 4)
+        open(path, "wb").write(bytes(data))
+        return path
+
+    def test_cbz_ppmd_cover_degrades_to_none(self):
+        # P2 回归：WinRAR 等工具会产出 PPMd(98) 压缩的 CBZ——容器校验不解压必须放行，
+        # 封面提取遇 NotImplementedError 降级为无封面，绝不让合法 CBZ 入库失败
+        p = self._patch_zip_method(_make_zip({"0001.jpg": b"fake-jpeg-data"}), 98)
+        try:
+            self.assertIsNone(analyze_managed_document(p, "cbz"))
+            self.assertIsNone(_extract_cbz_cover(p))
+        finally:
+            os.remove(p)
+
+    def test_cbz_corrupt_stream_cover_degrades_to_none(self):
+        # 容器合法但压缩流损坏（zlib.error 从 zipfile.read 裸抛）同样降级为无封面
+        payload = bytes(range(256)) * 64
+        p = _make_zip({"0001.jpg": payload})
+        try:
+            data = bytearray(open(p, "rb").read())
+            info_at = zipfile.ZipFile(p).infolist()[0]
+            start = data.find(b"PK\x03\x04") + 30 + len(info_at.filename)
+            mid = start + info_at.compress_size // 2
+            for i in range(mid, mid + 4):
+                data[i] ^= 0xFF
+            open(p, "wb").write(bytes(data))
+            self.assertIsNone(analyze_managed_document(p, "cbz"))
+            self.assertIsNone(_extract_cbz_cover(p))
         finally:
             os.remove(p)
 
