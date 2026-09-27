@@ -13,6 +13,7 @@ import os
 import re
 import struct
 import zipfile
+import zlib
 
 from webserver.i18n import _
 from webserver import utils
@@ -119,7 +120,9 @@ def analyze_managed_document(fpath, fmt):
 def _extract_cbz_cover(fpath):
     """取自然排序最前的图片页作封面，返回 (fmt, bytes)；失败返回 None 不影响入库。
 
-    仅在容器校验通过后调用，异常按无封面处理。
+    仅在容器校验通过后调用。封面是锦上添花：任何读取/解码期异常（PPMd 等不支持
+    的压缩方法 NotImplementedError、坏 deflate 流 zlib.error、加密条目 TOCTOU
+    RuntimeError 等）一律降级为无封面，绝不让合法 CBZ 入库失败。
     """
     try:
         with zipfile.ZipFile(fpath) as archive:
@@ -133,12 +136,13 @@ def _extract_cbz_cover(fpath):
                 return None
             candidates.sort(key=lambda info: _natural_key(info.filename))
             data = archive.read(candidates[0])
-    except (OSError, zipfile.BadZipFile, zipfile.LargeZipFile) as err:
+            fmt = candidates[0].filename.rsplit(".", 1)[-1].lower()
+            if fmt == "jpeg":
+                fmt = "jpg"
+    except (OSError, zipfile.BadZipFile, zipfile.LargeZipFile,
+            NotImplementedError, RuntimeError, zlib.error, EOFError) as err:
         logging.info("CBZ cover extraction failed for %s: %s", fpath, err)
         return None
-    fmt = candidates[0].filename.rsplit(".", 1)[-1].lower()
-    if fmt == "jpeg":
-        fmt = "jpg"
     return (fmt, data) if data else None
 
 
