@@ -126,6 +126,12 @@ class TestAnalyzeManagedDocument(unittest.TestCase):
         with self.assertRaises(InvalidManagedDocumentError):
             analyze_managed_document(p, "txt")
 
+    def test_unreadable_file_wrapped_as_invalid(self):
+        # 文件不可读（不存在/权限）应转为校验错误而非 OSError 直抛
+        p = os.path.join(self.tmp, "missing.djvu")
+        with self.assertRaises(InvalidManagedDocumentError):
+            analyze_managed_document(p, "djvu")
+
 
 @unittest.skipUnless(_HAS_CALIBRE_META, "requires calibre metadata libs")
 class TestFilenameMetadata(unittest.TestCase):

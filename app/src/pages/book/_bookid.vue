@@ -1543,6 +1543,7 @@ export default {
         },
 
         // 仅含 DJVU/UVZ 扫描版托管格式（无任何可在线阅读的格式），下载对话框给出提示
+        // 注意：与后端 webserver/constants.py 的 MANAGED_DOCUMENT_FORMATS 保持一致（前端无法直接引用后端常量）
         managedOnly: function() {
             if (!this.book || !this.book.files || !this.book.files.length) return false;
             const managedFormats = ['djvu', 'uvz'];

@@ -118,3 +118,42 @@ class TestUpload(TestWithUserLogin):
             method="POST", body="k=1",
         )
         self.assertEqual(d["err"], "params.format.unsupported")
+
+    @staticmethod
+    def _chunk_multipart(data):
+        boundary = "----mybooksTestBoundary"
+        part = (
+            "--" + boundary + "\r\n"
+            'Content-Disposition: form-data; name="chunk"; filename="chunk_0"\r\n'
+            "Content-Type: application/octet-stream\r\n"
+            "\r\n"
+        ).encode("utf-8") + data + ("\r\n--" + boundary + "--\r\n").encode("utf-8")
+        return part, boundary
+
+    def test_chunk_upload_djvu_merge_new_book(self):
+        # 分片上传 djvu 走完整合并链：托管元数据无封面（cover_data=(None, None)），
+        # 回归 _add_new_book 里 RIFF 检查缺 [1] 守卫时的 TypeError（P1）
+        data = _make_djvu(b"DJVI" + b"\x00" * 8)
+        part, boundary = self._chunk_multipart(data)
+        with mock.patch("calibre.db.legacy.LibraryDatabase.import_book", return_value=1008610086), \
+                mock.patch("webserver.handlers.base.BaseHandler.user_history"), \
+                mock.patch("webserver.handlers.base.BaseHandler.add_msg"), \
+                mock.patch("webserver.models.Item.save", return_value=True):
+            d = self.json(
+                "/api/book/upload/chunk?filename=managed_chunk_smoke.djvu"
+                "&chunk_index=0&total_chunks=1&file_hash=abcdef0123456789",
+                method="POST", body=part,
+                headers={"Content-Type": "multipart/form-data; boundary=%s" % boundary},
+            )
+        self.assertEqual(d["err"], "ok")
+
+    def test_chunk_upload_djvu_merge_invalid_container(self):
+        part, boundary = self._chunk_multipart(b"NOTDJVU" + b"\x00" * 32)
+        d = self.json(
+            "/api/book/upload/chunk?filename=bad_chunk_smoke.djvu"
+            "&chunk_index=0&total_chunks=1&file_hash=abcdef0123456789",
+            method="POST", body=part,
+            headers={"Content-Type": "multipart/form-data; boundary=%s" % boundary},
+        )
+        self.assertEqual(d["err"], "book.invalid")
+
