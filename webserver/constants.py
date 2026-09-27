@@ -18,6 +18,8 @@ DEFAULT_ISBN = "0000000000001"
 
 CALIBRE_ERROR_FLAG = "<*ERROR*>"
 SUPPORTED_EBOOK_FORMATS = ["azw3", "epub", "mobi", "pdf", "txt", "azw", "docx"]
+# 扫描版托管文档（DJVU/UVZ）：可入库可下载，但阅读器不支持在线阅读；见 services/managed_documents.py
+MANAGED_DOCUMENT_FORMATS = ["djvu", "uvz"]
 SUPPORTED_AUDIO_FORMATS = ['.mp3', ".m4a", ".m4b", ".wav", ".wma", ".opus"]
 # 有声书字幕文件格式（与音频文件同目录同名，如 0001_第一章.wav -> 0001_第一章.srt）
 SUPPORTED_SUBTITLE_FORMATS = ['.srt', '.vtt']

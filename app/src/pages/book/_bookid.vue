@@ -159,6 +159,7 @@
                             </v-list-item-subtitle>
                         </v-list-item-content>
                     </v-list-item>
+                    <p v-if="managedOnly" class="caption grey--text mb-0 mt-2 px-4">{{ $t('book.managedDocumentsOnly') }}</p>
                 </v-list>
                 <p v-else><br/>{{ $t('book.noDownloadableFiles') }}</p>
             </AppDialog>
@@ -243,7 +244,7 @@
                     </v-btn>
                     <!-- download -->
                     <div class="book-action-btns">
-                        <v-btn icon small fab @click="downloadBook" :disabled="!hasCompatibleFormats">
+                        <v-btn icon small fab @click="downloadBook" :disabled="!hasDownloadableFiles">
                             <v-icon>mdi-download</v-icon>
                         </v-btn>
                         <v-btn icon small fab :to="'/book/' + book.id + '/edit'">
@@ -829,12 +830,12 @@
         <v-col cols="12" sm="6" class="book-action-col">
             <v-card outlined>
                 <v-list>
-                    <v-list-item @click="downloadBook" :disabled="!hasEBooks">
-                        <v-list-item-avatar large :color="hasEBooks ? 'primary' : 'grey'">
+                    <v-list-item @click="downloadBook" :disabled="!hasDownloadableFiles">
+                        <v-list-item-avatar large :color="hasDownloadableFiles ? 'primary' : 'grey'">
                             <v-icon dark>mdi-download</v-icon>
                         </v-list-item-avatar>
                         <v-list-item-content>
-                            <v-list-item-title :class="{ 'grey--text': !hasEBooks }">{{ $t('book.download') }}</v-list-item-title>
+                            <v-list-item-title :class="{ 'grey--text': !hasDownloadableFiles }">{{ $t('book.download') }}</v-list-item-title>
                         </v-list-item-content>
                         <v-list-item-action>
                             <v-icon>mdi-arrow-right</v-icon>
@@ -1163,7 +1164,7 @@
             outlined
             dense
             show-size
-            accept=".epub,.mobi,.azw,.azw3,.pdf,.txt"
+            accept=".epub,.mobi,.azw,.azw3,.pdf,.txt,.djvu,.uvz"
             prepend-icon="mdi-file-document"
         ></v-file-input>
         <v-checkbox v-model="upload_format_force" :label="$t('book.forceReplaceFormat')" dense hide-details class="mt-0"></v-checkbox>
@@ -1533,6 +1534,19 @@ export default {
             return this.book.files.some(file =>
                 supportedFormats.includes(file.format.toLowerCase())
             );
+        },
+
+        // 是否存在可下载的文件（含 DJVU/UVZ 扫描版托管格式）
+        hasDownloadableFiles: function() {
+            if (!this.book || !this.book.files) return false;
+            return this.book.files.length > 0;
+        },
+
+        // 仅含 DJVU/UVZ 扫描版托管格式（无任何可在线阅读的格式），下载对话框给出提示
+        managedOnly: function() {
+            if (!this.book || !this.book.files || !this.book.files.length) return false;
+            const managedFormats = ['djvu', 'uvz'];
+            return this.book.files.every(file => managedFormats.includes(file.format.toLowerCase()));
         },
 
         // 获取要发送的文件格式（优先级：epub > azw3 > pdf）
