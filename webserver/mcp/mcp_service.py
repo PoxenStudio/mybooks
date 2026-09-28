@@ -6,9 +6,10 @@ MCP Service Module
 @author: PoxenStudio, 2025-12
 """
 
-import datetime
 import logging
 import json
+import json as json_lib
+import urllib.parse
 import traceback
 import uuid
 import time
@@ -28,6 +29,7 @@ from webserver.base.formatter import MCPBookFormatter
 from webserver.services.book_search import BookSearch
 from webserver.services.autofill import AutoFillService
 from webserver import loader, utils
+from webserver.mcp.api_tools import API_TOOLS
 
 CONF = loader.get_settings()
 MCP_TOKEN_KEY = "AI_MCP_TOKEN"
@@ -281,88 +283,6 @@ class MCPService:
             logging.error(traceback.format_exc())
             return [TextContent(type="text", text=json.dumps({"status": "error", "message": _(u"列举书籍时发生错误: %s") % str(e)}))]
 
-    async def search_books(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
-        # 验证token
-        user_info = self._require_auth(arguments)
-        if not user_info:
-            return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Authentication required"}))]
-
-        name = arguments.get("name", "")
-        rating = arguments.get("rating", "")
-        tags = arguments.get("tags", "")
-        isbn = arguments.get("isbn", "")
-        create_time = arguments.get("create_time", "")
-
-        if not any([name, rating, tags, isbn, create_time]):
-            return [TextContent(type="text",
-                                text=json.dumps({"status": "error", "message": "At least one search parameter is required"}))]
-
-        include_comments = arguments.get("include_comments", False)
-        title = _(u"搜索结果")
-
-        try:
-            ids = None
-
-            def intersect(new_ids):
-                nonlocal ids
-                if ids is None:
-                    ids = set(new_ids)
-                else:
-                    ids = ids.intersection(new_ids)
-
-            # 1. Handle name with OpenCC support
-            if name:
-                import opencc
-                name_ids = self.base_handler.calibre_db_cache.search(name)
-                for profile in {'s2t', "t2s"}:
-                    if len(name_ids) >= self.MAX_BOOKS_COUNT_IN_RESULT * 2:
-                        break
-                    converted_name = opencc.OpenCC(profile).convert(name)
-                    if converted_name == name:
-                        continue
-                    ids2 = self.base_handler.calibre_db_cache.search(converted_name)
-                    if len(ids2) > 0:
-                        name_ids = name_ids.union(ids2)
-                intersect(name_ids)
-                title = _(u"搜索：%(name)s") % {"name": name}
-
-            # 2. Handle rating
-            if rating:
-                intersect(self.base_handler.calibre_db_cache.search(f"rating:{rating}"))
-
-            # 3. Handle tags
-            if tags:
-                for tag in tags.split(","):
-                    if tag.strip():
-                        intersect(self.base_handler.calibre_db_cache.search(f"tags:\"{tag.strip()}\""))
-
-            # 4. Handle isbn
-            if isbn:
-                intersect(self.base_handler.calibre_db_cache.search(f"isbn:{isbn}"))
-
-            # 5. Handle create_time (mapped to date added)
-            if create_time:
-                intersect(self.base_handler.calibre_db_cache.search(f"added:{create_time}"))
-
-            if not ids:
-                return [TextContent(type="text", text=json.dumps({"status": "success",
-                                                                  "message": "No books found", "books": []}))]
-
-            total_books_count = len(ids)
-            if len(ids) > self.MAX_BOOKS_COUNT_IN_RESULT:
-                # 将set转换为list，按值从大到小排序，再进行切片操作
-                ids_list = sorted(list(ids), reverse=True)
-                ids = ids_list[:self.MAX_BOOKS_COUNT_IN_RESULT]
-
-            book_list = self.base_handler.get_book_list([], ids=ids, title=title, include_comments=include_comments)
-            book_list["total"] = total_books_count
-            return [TextContent(type="text", text=json.dumps({"status": "success", "data": book_list}))]
-        except Exception as e:
-            logging.error(f"Error processing book: {e}")
-            logging.error(traceback.format_exc())
-            return [TextContent(type="text",
-                                text=json.dumps({"status": "error", "message": "Search books failed: %s" % str(e)}))]
-
     async def update_book_info(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
         """更新书籍详细信息"""
         # 验证token
@@ -449,167 +369,6 @@ class MCPService:
 
         except Exception as e:
             error_msg = f"Error updating book info: {str(e)}"
-            logging.error(error_msg)
-            logging.error(traceback.format_exc())
-            return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
-
-    async def save_meta_to_file(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
-        """将书籍元数据保存到电子书文件中（仅支持 epub/azw3/pdf）"""
-        # 验证token
-        user_info = self._require_auth(arguments)
-        if not user_info:
-            return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Authentication required"}))]
-
-        try:
-            book_id = arguments.get("book_id")
-            if not book_id:
-                return [TextContent(type="text", text=json.dumps({"status": "error",
-                                                                  "message": "Missing required parameter: book_id"}))]
-            book_id = int(book_id)
-
-            fmt = arguments.get("fmt")
-            if fmt is not None:
-                fmt = str(fmt).strip().lower()
-
-            # 检查权限 - 需要管理员权限或者是书籍拥有者
-            from webserver.models import Reader
-            user = self.base_handler.sqlite_session.query(Reader).get(user_info["user_id"])
-            if not user:
-                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "User not found"}))]
-
-            if not (user.is_admin() or self.base_handler.is_book_owner(book_id, user_info["user_id"])):
-                return [TextContent(type="text", text=json.dumps({"status": "error",
-                                                                  "message": "Permission denied: not book owner or admin"}))]
-
-            raw_result = self.base_handler.save_book_meta(book_id, fmt=fmt)
-            result = {
-                "status": "success" if raw_result.get("err") == "ok" else "error",
-                "message": raw_result.get("msg", ""),
-                "book_id": book_id,
-                "success_formats": raw_result.get("success_formats", []),
-                "failed_formats": raw_result.get("failed_formats", []),
-                "updated_by": user_info["username"]
-            }
-            logging.info(f"Book {book_id} metadata saved to file via MCP by {user_info['username']}: fmt={fmt}")
-            return [TextContent(type="text", text=json.dumps(result))]
-
-        except Exception as e:
-            error_msg = f"Error saving book metadata to file: {str(e)}"
-            logging.error(error_msg)
-            logging.error(traceback.format_exc())
-            return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
-
-    async def get_book_reading_stats(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
-        """
-        获取当前用户对某本书、分格式的阅读时长/进度统计。
-        """
-        user_info = self._require_auth(arguments)
-        if not user_info:
-            return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Authentication required"}))]
-
-        try:
-            book_id = arguments.get("book_id")
-            if book_id is None:
-                return [TextContent(type="text", text=json.dumps({"status": "error",
-                                                                  "message": "Missing required parameter: book_id"}))]
-
-            try:
-                book = self.base_handler.get_book(book_id)
-                bid = book["id"]
-            except Exception as e:
-                return [TextContent(type="text", text=json.dumps({"status": "error", "message": f"Book not found: {str(e)}"}))]
-
-            from webserver.services.reading_stats_service import ReadingStatsService
-            stats = ReadingStatsService.get_book_format_stats(user_info["user_id"], bid)
-
-            result = {
-                "status": "success",
-                "book_id": bid,
-                "title": book.get("title", ""),
-                "stats": stats,
-            }
-            return [TextContent(type="text", text=json.dumps(result))]
-
-        except Exception as e:
-            error_msg = f"Error getting book reading stats: {str(e)}"
-            logging.error(error_msg)
-            logging.error(traceback.format_exc())
-            return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
-
-    async def update_book_reading_stats(self, arguments: dict[str, Any]) -> Sequence[TextContent]:
-        """手动更新/纠正当前用户对某本书、某个格式的阅读时长/进度/开始或完成时间。只允许操作当前登录用户
-        自己的统计数据，不接受操作他人数据的参数。
-        """
-        user_info = self._require_auth(arguments)
-        if not user_info:
-            return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Authentication required"}))]
-
-        try:
-            book_id = arguments.get("book_id")
-            fmt = arguments.get("format")
-            if book_id is None or not fmt:
-                return [TextContent(type="text", text=json.dumps({"status": "error",
-                                                                  "message": "Missing required parameter: book_id/format"}))]
-
-            try:
-                book = self.base_handler.get_book(book_id)
-                bid = book["id"]
-            except Exception as e:
-                return [TextContent(type="text", text=json.dumps({"status": "error", "message": f"Book not found: {str(e)}"}))]
-
-            from webserver.models import BookReadingStats
-            from webserver.services.reading_stats_service import ReadingStatsService
-
-            progress = None
-            raw_progress = arguments.get("progress")
-            if isinstance(raw_progress, (list, tuple)) and len(raw_progress) == 2:
-                try:
-                    current, total = int(raw_progress[0]), int(raw_progress[1])
-                except (TypeError, ValueError):
-                    return [TextContent(type="text", text=json.dumps({"status": "error",
-                                                                      "message": "Invalid progress, expected [current, total]"}))]
-                if total <= 0:
-                    return [TextContent(type="text", text=json.dumps({"status": "error",
-                                                                      "message": "Invalid progress, expected [current, total]"}))]
-                progress = (current, total)
-
-            def parse_time(value):
-                if value is None:
-                    return None
-                if isinstance(value, (int, float)):
-                    ts = value / 1000.0 if value > 1e12 else value
-                    return datetime.datetime.utcfromtimestamp(ts)
-                return datetime.datetime.fromisoformat(str(value))
-
-            state = arguments.get("state")
-            if state is not None and state not in (BookReadingStats.STATE_READING, BookReadingStats.STATE_FINISHED):
-                return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Invalid state, expected 0 or 1"}))]
-
-            stats = ReadingStatsService.update_book_format_stats(
-                user_info["user_id"],
-                bid,
-                str(fmt).strip().lower(),
-                duration_seconds=int(arguments.get("duration_seconds") or 0),
-                progress=progress,
-                start_time=parse_time(arguments.get("start_time")),
-                finish_time=parse_time(arguments.get("finish_time")),
-                state=state,
-            )
-
-            result = {
-                "status": "success",
-                "book_id": bid,
-                "title": book.get("title", ""),
-                "stats": stats,
-                "updated_by": user_info["username"],
-            }
-            logging.info(f"Book {bid} reading stats ({fmt}) updated via MCP by {user_info['username']}")
-            return [TextContent(type="text", text=json.dumps(result))]
-
-        except ValueError as e:
-            return [TextContent(type="text", text=json.dumps({"status": "error", "message": f"Invalid time format: {str(e)}"}))]
-        except Exception as e:
-            error_msg = f"Error updating book reading stats: {str(e)}"
             logging.error(error_msg)
             logging.error(traceback.format_exc())
             return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
@@ -1260,6 +1019,107 @@ class MCPService:
             logging.error(error_msg)
             return [TextContent(type="text", text=json.dumps({"status": "error", "message": error_msg}))]
 
+    def _native_tools(self):
+        """MCP 独有、直接在进程内实现的工具；其余工具见 api_tools.API_TOOLS（与 mybooks skill 对齐）"""
+        return {
+            "login": self.login,
+            "logout": self.logout,
+            "get_books_count": self.get_books_count,
+            "get_books": self.get_books,
+            "update_book_info": self.update_book_info,
+            "query_book_metadata": self.query_book_metadata,
+            "auto_fill_book_info": self.auto_fill_book_info,
+            "upload_book": self.upload_book,
+            "download_book": self.download_book,
+        }
+
+    @staticmethod
+    def _legacy_search_args(arguments: dict[str, Any]) -> dict[str, Any]:
+        """兼容旧版 MCP search_books 的 rating/tags/create_time 参数，转成 Calibre 表达式并入 name"""
+        exprs = []
+        if arguments.get("rating"):
+            exprs.append(f"rating:{arguments['rating']}")
+        for tag in str(arguments.get("tags") or "").split(","):
+            if tag.strip():
+                exprs.append('tags:"%s"' % tag.strip().replace('"', '\\"'))
+        if arguments.get("create_time"):
+            exprs.append(f"date:{arguments['create_time']}")
+        if not exprs:
+            return arguments
+        args = {k: v for k, v in arguments.items() if k not in ("rating", "tags", "create_time")}
+        name = str(args.get("name") or "").strip()
+        if name:
+            # 普通关键字无法与表达式直接 AND，改用字段参数：关键字退化为书名/作者任一包含
+            exprs.insert(0, '(title:"{0}" OR authors:"{0}")'.format(name.replace('"', '\\"')))
+        args["name"] = " AND ".join(exprs)
+        return args
+
+    async def _api_request(self, user_info: Dict[str, Any], method: str, path: str,
+                           params: Optional[Dict[str, Any]] = None, json: Any = None) -> Dict[str, Any]:
+        """以 MCP 认证用户的身份，通过本机回环 HTTP 调用 MyBooks API（与 skill 走同一套 handler）"""
+        from tornado.httpclient import AsyncHTTPClient, HTTPRequest
+        from tornado.options import options
+        from tornado.web import create_signed_value
+
+        handler = self.base_handler
+        secret = handler.application.settings["cookie_secret"]
+        now = str(int(time.time()))
+        cookies = {"user_id": str(user_info["user_id"]), "lt": now, "invited": now}
+        cookie_header = "; ".join(f"{k}={create_signed_value(secret, k, v).decode()}" for k, v in cookies.items())
+
+        opts = options.as_dict()
+        host = opts.get("host") or ""
+        host = host if host not in ("", "0.0.0.0", "::") else "127.0.0.1"
+        if ":" in host:
+            host = f"[{host}]"
+        url = f"http://{host}:{opts.get('port') or 8080}{path}"
+        if params:
+            url += "?" + urllib.parse.urlencode({k: v for k, v in params.items() if v is not None}, doseq=True)
+
+        # 透传原始请求的 Host/Proto，使返回的封面等链接指向对外地址而不是 127.0.0.1
+        req = handler.request
+        headers = {
+            "Cookie": cookie_header,
+            "X-Forwarded-Host": req.headers.get("X-Forwarded-Host", req.host),
+            "X-Forwarded-Proto": req.headers.get("X-Forwarded-Proto", req.protocol),
+            "X-Real-Ip": req.remote_ip or "",
+        }
+        body = None
+        if method in ("POST", "PUT", "PATCH") or json is not None:
+            body = json_lib.dumps(json if json is not None else {})
+            headers["Content-Type"] = "application/json"
+
+        resp = await AsyncHTTPClient().fetch(
+            HTTPRequest(url, method=method, headers=headers, body=body, request_timeout=300,
+                        follow_redirects=False, allow_nonstandard_methods=True),
+            raise_error=False,
+        )
+        try:
+            return json_lib.loads(resp.body)
+        except Exception:
+            text = (resp.body or b"")[:500].decode("utf-8", "replace")
+            return {"err": "http.error", "code": resp.code, "msg": text or str(resp.error)}
+
+    async def call_api_tool(self, tool_name: str, arguments: dict[str, Any]) -> Sequence[TextContent]:
+        user_info = self._require_auth(arguments)
+        if not user_info:
+            return [TextContent(type="text", text=json.dumps({"status": "error", "message": "Authentication required"}))]
+
+        args = {k: v for k, v in arguments.items() if k != "token"}
+        if tool_name == "search_books":
+            args = self._legacy_search_args(args)
+
+        async def call(method, path, params=None, json=None):
+            return await self._api_request(user_info, method, path, params=params, json=json)
+
+        try:
+            result = await API_TOOLS[tool_name].func(call, args)
+        except Exception as e:
+            logging.error(f"[MCP] tool {tool_name} failed: {e}")
+            logging.error(traceback.format_exc())
+            result = {"status": "error", "message": f"{tool_name} failed: {e}"}
+        return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+
     async def list_tools(self) -> list[Tool]:
         """获取可用工具列表"""
         tools = [
@@ -1299,58 +1159,6 @@ class MCPService:
                         }
                     },
                     "required": ["page"]
-                }
-            ),
-            Tool(
-                name="search_books",
-                description="Search for books in the collection." + self.need_login_prompt + "\n\n"
-                            "Returns a list of books with below key fields:\n"
-                            "- id: Book ID\n"
-                            "- title: Book title\n"
-                            "- author: Author name\n"
-                            "- comments: Book description (if include_comments=True)\n"
-                            "- publisher: Publisher\n"
-                            "- tags: List of tags\n"
-                            "- category: Category of book\n"
-                            "- rating: Rating (0-10)\n"
-                            "- pubdate: Publication date\n",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "name": {
-                            "type": "string",
-                            "description": "Name of the book, author to search for"
-                        },
-                        "rating": {
-                            "type": "string",
-                            "description": "Rating search query (e.g., '>=4', '5')"
-                        },
-                        "tags": {
-                            "type": "string",
-                            "description": "Tags to search for (comma separated)"
-                        },
-                        "isbn": {
-                            "type": "string",
-                            "description": "ISBN to search for"
-                        },
-                        "create_time": {
-                            "type": "string",
-                            "description": "Create time (date added) query (e.g., '>2024-01-01')"
-                        },
-                        "include_comments": {
-                            "type": "boolean",
-                            "description": "Whether to include book comments in the response."
-                                           "It could save tokens if not include comments.",
-                            "default": False
-                        }
-                    },
-                    "anyOf": [
-                        {"required": ["name"]},
-                        {"required": ["rating"]},
-                        {"required": ["tags"]},
-                        {"required": ["isbn"]},
-                        {"required": ["create_time"]}
-                    ]
                 }
             ),
             Tool(
@@ -1471,104 +1279,6 @@ class MCPService:
                     ]
                 }
             ),
-            Tool(
-                name="save_meta_to_file",
-                description="Save book metadata (title, author, comments, cover, etc.) into the ebook file "
-                            "itself. Only epub, azw3, and pdf formats are supported." + self.need_login_prompt + "\n\n"
-                            "Required parameters:\n"
-                            "- book_id: ID of the book to save metadata for\n\n"
-                            "Optional parameters:\n"
-                            "- fmt: Limit the operation to one format (epub/azw3/pdf). "
-                            "If omitted, all supported formats present on the book are updated.\n\n"
-                            "Returns:\n"
-                            "- success/error status, list of formats updated successfully and formats that failed",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "book_id": {
-                            "type": ["string", "integer"],
-                            "description": "ID of the book to save metadata for"
-                        },
-                        "fmt": {
-                            "type": "string",
-                            "description": "Optional format to limit the save to: epub, azw3, or pdf"
-                        }
-                    },
-                    "required": ["book_id"]
-                }
-            ),
-            Tool(
-                name="get_book_reading_stats",
-                description="Get the current user's reading duration/progress statistics for a book, "
-                            "broken down by ebook format (epub/pdf/mobi/etc)." + self.need_login_prompt + "\n\n"
-                            "Returns for each format:\n"
-                            "- state: 0=reading, 1=finished\n"
-                            "- total_seconds: cumulative reading duration in seconds\n"
-                            "- progress_current/progress_total/progress_percent: reading progress\n"
-                            "- start_time/finish_time: when the current/last round started/finished\n"
-                            "- start_count: how many times reading was started for this format\n",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "book_id": {
-                            "type": ["string", "integer"],
-                            "description": "ID of the book to get reading stats for"
-                        }
-                    },
-                    "required": ["book_id"]
-                }
-            ),
-            Tool(
-                name="update_book_reading_stats",
-                description="Manually update/correct the current user's reading duration or progress for a "
-                            "book format. Useful for backfilling historical reading records or marking a book "
-                            "as started/finished when no automatic heartbeat exists (e.g. no sync data)."
-                            + self.need_login_prompt + "\n\n"
-                            "Required parameters:\n"
-                            "- book_id: ID of the book\n"
-                            "- format: ebook format, e.g. epub/pdf/mobi/azw3/txt\n\n"
-                            "Optional parameters (at least one is normally set):\n"
-                            "- duration_seconds: seconds to ADD to the cumulative total (not an absolute value)\n"
-                            "- progress: [current, total], e.g. [120, 488]; reaching ~100% auto-marks finished\n"
-                            "- start_time: ISO8601 string or epoch timestamp; explicitly starts a new reading round\n"
-                            "- finish_time: ISO8601 string or epoch timestamp; explicitly marks this round finished\n"
-                            "- state: 0 (reading) or 1 (finished), alternative to finish_time\n",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "book_id": {
-                            "type": ["string", "integer"],
-                            "description": "ID of the book to update reading stats for"
-                        },
-                        "format": {
-                            "type": "string",
-                            "description": "Ebook format, e.g. epub/pdf/mobi/azw3/txt"
-                        },
-                        "duration_seconds": {
-                            "type": "integer",
-                            "description": "Seconds to add to the cumulative reading duration"
-                        },
-                        "progress": {
-                            "type": "array",
-                            "description": "[current, total] reading progress",
-                            "items": {"type": "integer"}
-                        },
-                        "start_time": {
-                            "type": ["string", "number"],
-                            "description": "ISO8601 string or epoch timestamp; explicitly starts a new reading round"
-                        },
-                        "finish_time": {
-                            "type": ["string", "number"],
-                            "description": "ISO8601 string or epoch timestamp; explicitly marks this round finished"
-                        },
-                        "state": {
-                            "type": "integer",
-                            "description": "0=reading, 1=finished"
-                        }
-                    },
-                    "required": ["book_id", "format"]
-                }
-            ),
             # Tool(
             #     name="upload_book",
             #     description="Upload a new ebook file to the collection. Supports epub, pdf, and azw3 formats. "
@@ -1627,6 +1337,8 @@ class MCPService:
             #     }
             # )
         ]
+        tools += [Tool(name=t.name, description=t.description + self.need_login_prompt, inputSchema=t.input_schema())
+                  for t in API_TOOLS.values()]
         if self.need_login:
             for tool in tools:
                 if "token" not in tool.inputSchema.get("required", []):
@@ -1766,50 +1478,17 @@ class MCPService:
                 tool_name = params.get("name")
                 arguments = params.get("arguments", {})
 
-                if tool_name == "login":
-                    result = await self.login(arguments)
+                handler = self._native_tools().get(tool_name)
+                if handler is not None:
+                    result = await handler(arguments)
                     return self._create_tool_result(request_id, result[0].text)
-                elif tool_name == "logout":
-                    result = await self.logout(arguments)
+                if tool_name in API_TOOLS:
+                    result = await self.call_api_tool(tool_name, arguments)
                     return self._create_tool_result(request_id, result[0].text)
-                elif tool_name == "get_books_count":
-                    result = await self.get_books_count(arguments)
-                    return self._create_tool_result(request_id, result[0].text)
-                elif tool_name == "get_books":
-                    result = await self.get_books(arguments)
-                    return self._create_tool_result(request_id, result[0].text)
-                elif tool_name == "search_books":
-                    result = await self.search_books(arguments)
-                    return self._create_tool_result(request_id, result[0].text)
-                elif tool_name == "update_book_info":
-                    result = await self.update_book_info(arguments)
-                    return self._create_tool_result(request_id, result[0].text)
-                elif tool_name == "query_book_metadata":
-                    result = await self.query_book_metadata(arguments)
-                    return self._create_tool_result(request_id, result[0].text)
-                elif tool_name == "auto_fill_book_info":
-                    result = await self.auto_fill_book_info(arguments)
-                    return self._create_tool_result(request_id, result[0].text)
-                elif tool_name == "save_meta_to_file":
-                    result = await self.save_meta_to_file(arguments)
-                    return self._create_tool_result(request_id, result[0].text)
-                elif tool_name == "get_book_reading_stats":
-                    result = await self.get_book_reading_stats(arguments)
-                    return self._create_tool_result(request_id, result[0].text)
-                elif tool_name == "update_book_reading_stats":
-                    result = await self.update_book_reading_stats(arguments)
-                    return self._create_tool_result(request_id, result[0].text)
-                elif tool_name == "upload_book":
-                    result = await self.upload_book(arguments)
-                    return self._create_tool_result(request_id, result[0].text)
-                elif tool_name == "download_book":
-                    result = await self.download_book(arguments)
-                    return self._create_tool_result(request_id, result[0].text)
-                else:
-                    return self._create_jsonrpc_response(
-                        request_id,
-                        error={"code": -32601, "message": f"Unknown tool: {tool_name}"}
-                    )
+                return self._create_jsonrpc_response(
+                    request_id,
+                    error={"code": -32601, "message": f"Unknown tool: {tool_name}"}
+                )
 
             # 未知方法
             else:
