@@ -962,6 +962,10 @@
   content: "\F1741";
 }
 
+.mdi-stethoscope::before {
+  content: "\F04D9";
+}
+
 .mdi-stop::before {
   content: "\F04DB";
 }
