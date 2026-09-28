@@ -2250,6 +2250,79 @@ class RecentBook(ListHandler):
 class SearchBook(ListHandler):
     CALIBRE_KEYS = ("title:", "authors:", "comments:", "publisher:", "isbn:", "series:", "tags:", "author:", "py:", "title_sort:")
     CALIBRE_KEY_DESCRIPTION = (_("书名:"), _("作者:"), _("简介:"), _("出版社:"), _("ISBN:"), _("丛书:"), _("标签:"), _("作者:"), _("书名:"), _("书名:"))
+    # Calibre 内置的搜索字段；自定义列以 # 开头，另行识别
+    CALIBRE_SEARCH_TERMS = {
+        "all", "author", "authors", "author_sort", "comments", "cover", "date", "format", "formats", "id", "identifiers", "isbn", "languages", "language", "marked", "ondevice",
+        "pubdate", "published", "publisher", "rating", "series", "series_index", "series_sort", "size", "tag", "tags", "template", "timestamp", "title", "title_sort", "uuid", "vl", "py",
+    }
+    CALIBRE_EXPR_RE = re.compile(r"(?:^|[\s(])(#?[A-Za-z_][A-Za-z0-9_]*):", re.UNICODE)
+    ISBN_RE = re.compile(r"^(?:97[89])?\d{9}[\dXx]$")
+    # 组合条件搜索的参数 -> (Calibre 字段, 描述)
+    FIELD_ARGS = (
+        ("author", "authors", _("作者:")),
+        ("publisher", "publisher", _("出版社:")),
+        ("series", "series", _("丛书:")),
+        ("tag", "tags", _("标签:")),
+    )
+
+    @classmethod
+    def _is_calibre_expr(cls, text):
+        for m in cls.CALIBRE_EXPR_RE.finditer(text):
+            key = m.group(1)
+            if key.startswith("#") or key.lower() in cls.CALIBRE_SEARCH_TERMS:
+                return True
+        return False
+
+    @staticmethod
+    def _quote(value):
+        return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+    @staticmethod
+    def _variants(value):
+        # 原文 + 简繁体转换结果，去重保序
+        values = [value]
+        for profile in ["s2t", "t2s"]:
+            converted = opencc.OpenCC(profile).convert(value)
+            if converted not in values:
+                values.append(converted)
+        return values
+
+    def _field_clause(self, field, value, exact=False):
+        prefix = "=" if exact else ""
+        return "(" + " OR ".join(f"{field}:{self._quote(prefix + v)}" for v in self._variants(value)) + ")"
+
+    def _isbn_clause(self, isbn):
+        isbn = re.sub(r"[\s-]", "", isbn)
+        return f"(isbn:{self._quote(isbn)} OR identifiers:{self._quote('=isbn:' + isbn)})"
+
+    def _build_structured_query(self, name, book_title, exact):
+        """组合条件搜索：name/title/author/isbn/publisher/series/tag 之间为 AND 关系。
+
+        未提供任何字段参数时返回 None，走原有的关键字搜索逻辑。
+        """
+        isbn = self.get_argument("isbn", "").strip()
+        fields = [(field, self.get_argument(arg, "").strip(), desc) for arg, field, desc in self.FIELD_ARGS]
+        fields = [f for f in fields if f[1]]
+        if not isbn and not fields:
+            return None, None
+
+        clauses, descs = [], []
+        if name:
+            if self._is_calibre_expr(name):
+                clauses.append("( " + name + " )")
+            else:
+                clauses.append("(" + " OR ".join(self._quote(v) for v in self._variants(self._clear(name))) + ")")
+            descs.append(name)
+        if book_title:
+            clauses.append(self._field_clause("title", book_title, exact=True))
+            descs.append(_("书名:") + book_title)
+        for field, value, desc in fields:
+            clauses.append(self._field_clause(field, value, exact))
+            descs.append(desc + value)
+        if isbn:
+            clauses.append(self._isbn_clause(isbn))
+            descs.append(_("ISBN:") + isbn)
+        return " AND ".join(clauses), " ".join(descs)
 
     def _clear(self, text):
         # 去除字串中的括号及其内容，以免影响查询
@@ -2305,6 +2378,11 @@ class SearchBook(ListHandler):
         exclude_id = int(self.get_argument("exclude", "0").strip())
         seg = int(self.get_argument("seg", "0").strip())  # 是否进行分词查询
         order_by = self.get_argument("order", "").strip()
+        exact = self.get_argument("exact", "0").strip() in ("1", "true")
+
+        structured_query, structured_desc = self._build_structured_query(name, book_title, exact)
+        if structured_query:
+            return self._render_search(structured_query, _("搜索") + structured_desc, exclude_id, order_by)
 
         if not name and not book_title:
             return self.write({"err": "params.invalid", "msg": _("请输入搜索关键字")})
@@ -2321,6 +2399,14 @@ class SearchBook(ListHandler):
                 title_name = name.replace(key, self.CALIBRE_KEY_DESCRIPTION[idx], 1)
                 name = name.replace("py:", "title_sort:")
                 break
+
+        if not calibre_query and not title_search:
+            if self.ISBN_RE.match(re.sub(r"[\s-]", "", name)):
+                # 纯 ISBN 关键字：直接按 ISBN 精确查找
+                return self._render_search(self._isbn_clause(name), _("搜索") + _("ISBN:") + name, exclude_id, order_by)
+            if self._is_calibre_expr(name):
+                # 任意 Calibre 条件表达式，如 authors:=余华 AND rating:>=4、#category:="小说"
+                calibre_query = True
 
         title = _("搜索") + title_name
         ids = []
@@ -2373,10 +2459,21 @@ class SearchBook(ListHandler):
                 logging.error("Search book failed: %s" % e)
                 logging.error(traceback.format_exc())
         logging.info(f"[TRACE] search took {time.time() - start:.2f} seconds.")
+        return self._render_book_ids(ids, title, exclude_id, order_by)
 
-        if exclude_id > 0 and exclude_id in seen:
-            if exclude_id in ids:
-                ids.remove(exclude_id)
+    def _render_search(self, query, title, exclude_id, order_by):
+        logging.info(f"Searching books with query: {query}")
+        ids = []
+        try:
+            ids = list(self.calibre_db_cache.search(query) or [])
+        except Exception as e:
+            logging.error("Search book failed: %s" % e)
+            logging.error(traceback.format_exc())
+        return self._render_book_ids(ids, title, exclude_id, order_by)
+
+    def _render_book_ids(self, ids, title, exclude_id, order_by):
+        if exclude_id > 0 and exclude_id in ids:
+            ids.remove(exclude_id)
 
         # 查询被别的用户标记为sole的图书ID，并将ids中对应的ID去除
         sole_book_ids = set(item.book_id for item in self.sqlite_session.query(Item).filter(Item.sole == 1, Item.collector_id != self.user_id()).all())

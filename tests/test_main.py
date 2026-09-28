@@ -197,6 +197,27 @@ class TestAppWithoutLogin(TestApp):
         d = self.json("/api/search?name=A")
         self.assert_book_list(d, 6)
 
+    def test_search_calibre_expr_and_fields(self):
+        d = self.json("/api/search?name=" + Q("title:NotFound OR id:>0"))
+        self.assertEqual(d["err"], "ok")
+        self.assertTrue(d["total"] > 0)
+
+        d = self.json("/api/search?name=" + Q("id:>0 AND title:NotFound"))
+        self.assertEqual(d["err"], "ok")
+        self.assertEqual(d["total"], 0)
+
+        d = self.json("/api/search?author=NotFound&publisher=NotFound")
+        self.assertEqual(d["err"], "ok")
+        self.assertEqual(d["total"], 0)
+
+        d = self.json("/api/search?isbn=978-0-00-000000-0")
+        self.assertEqual(d["err"], "ok")
+        self.assertEqual(d["total"], 0)
+
+        d = self.json("/api/search?name=9780000000000")
+        self.assertEqual(d["err"], "ok")
+        self.assertEqual(d["total"], 0)
+
     # def test_hot(self):
     #     d = self.json("/api/hot")
     #     self.assert_book_list(d, 0)

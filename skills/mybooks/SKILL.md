@@ -155,27 +155,72 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 ### `search_books` — 搜索书籍
 
 **使用场景**：
-- 按书名或作者名搜索，支持简繁体自动转换
-- "有没有余华的书？" / "找一下《三体》"
+- 关键词模糊搜索（书名/作者/简介），支持简繁体自动转换："有没有余华的书？" / "找一下《三体》"
+- 按字段精确定位：只查书名、只查作者、按 ISBN 查找："ISBN 9787536692930 是哪本书？"
+- 组合条件搜索：多个字段参数同时给出时按 **AND** 组合："余华在作家出版社出的书"
+- Calibre 条件表达式：`name` 中写入 `字段:值` 形式的表达式，支持 `AND`/`OR`/`NOT` 与括号："评分 4 星以上的科幻小说"
 
-**参数**：
+**参数**（`name`/`title`/`author`/`isbn`/`publisher`/`series`/`tag` 至少提供一个）：
 
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|------|--------|------|
-| `name` | string | ✅ | — | 搜索关键词（书名或作者名） |
+| `name` | string | ❌ | — | 关键词、纯 ISBN 号或 Calibre 条件表达式（见下方说明） |
+| `title` | string | ❌ | — | 书名，**精确匹配** |
+| `author` | string | ❌ | — | 作者，包含匹配 |
+| `isbn` | string | ❌ | — | ISBN-10 / ISBN-13，可带 `-` |
+| `publisher` | string | ❌ | — | 出版社，包含匹配 |
+| `series` | string | ❌ | — | 丛书，包含匹配 |
+| `tag` | string | ❌ | — | 标签，包含匹配 |
+| `exact` | bool | ❌ | false | 为 true 时 `author`/`publisher`/`series`/`tag` 改为精确匹配 |
+| `order` | string | ❌ | — | 排序字段，如 `pubdate`、`rating`、`timestamp` |
 | `num` | int | ❌ | 20 | 每页数量 |
 | `page` | int | ❌ | 1 | 页码，从 1 开始 |
 
+**`name` 的三种解析方式**（后台自动识别）：
+1. **纯 ISBN**（10/13 位数字，可含 `-`）→ 按 ISBN 精确查找。
+2. **Calibre 条件表达式**（包含 `字段:` 形式，字段为 Calibre 内置搜索字段或 `#` 开头的自定义列）→ 原样交给 Calibre 搜索（同时追加简繁体转换版本以 OR 合并）。
+3. 其它 → 普通关键字，在书名/作者/简介等所有字段中模糊搜索。
+
+**Calibre 表达式速查**：
+
+| 写法 | 含义 |
+|------|------|
+| `title:三体` | 书名包含"三体" |
+| `title:=三体` | 书名**等于**"三体" |
+| `title:"=三体 死神永生"` | 值含空格时用双引号包住 |
+| `authors:=余华` | 作者精确为"余华" |
+| `tags:科幻 AND rating:>=4` | 标签含"科幻"且评分 ≥ 4 星 |
+| `publisher:作家 OR publisher:人民文学` | 任一出版社 |
+| `authors:刘慈欣 AND NOT tags:短篇` | 排除条件 |
+| `pubdate:>=2020` / `pubdate:<2000-01-01` | 出版日期范围 |
+| `formats:epub` | 有 EPUB 格式 |
+| `isbn:9787536692930` | 按 ISBN |
+| `#category:="小说"` | 自定义列（分类） |
+| `title:~^三体` | 正则匹配 |
+
+常用字段：`title` `authors` `tags` `publisher` `series` `isbn` `identifiers` `comments` `rating` `pubdate` `timestamp` `formats` `languages` `id`，以及 `#` 开头的自定义列。
+
 **执行脚本**：
 ```bash
+# 关键词
 <skill-installation-path>/scripts/mybooks_api.py search_books '{"name":"三体"}'
+# 按 ISBN
+<skill-installation-path>/scripts/mybooks_api.py search_books '{"isbn":"978-7-5366-9293-0"}'
+# 组合条件：余华 + 作家出版社
+<skill-installation-path>/scripts/mybooks_api.py search_books '{"author":"余华","publisher":"作家出版社"}'
+# 书名精确匹配
+<skill-installation-path>/scripts/mybooks_api.py search_books '{"title":"活着"}'
+# Calibre 表达式
+<skill-installation-path>/scripts/mybooks_api.py search_books '{"name":"tags:科幻 AND rating:>=4","order":"rating"}'
 ```
+
+**选择建议**：用户只给出模糊描述时用 `name` 关键词；明确说出"作者是…/出版社是…/ISBN…"时用对应字段参数；需要评分、日期、格式、排除等条件时用 Calibre 表达式。字段参数与 `name` 可同时使用，彼此为 AND 关系。
 
 **响应示例**：
 ```json
 {
   "err": "ok",
-  "title": "搜索：三体",
+  "title": "搜索作者:余华 出版社:作家出版社",
   "total": 3,
   "books": [ /* 书籍对象列表 */ ]
 }

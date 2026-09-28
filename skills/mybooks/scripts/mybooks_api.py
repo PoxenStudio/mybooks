@@ -211,22 +211,39 @@ class MyBooksAPI:
 
     def search_books(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Search books by keyword (title or author).
+        Search books by keyword, by field conditions (combined with AND), or
+        by a raw Calibre search expression.
 
         Args:
-            name (str, required): Search keyword
+            name (str, optional): Keyword (title/author/comments), a bare ISBN,
+                or a Calibre expression such as 'title:=三体' or
+                'authors:余华 AND rating:>=4'
+            title (str, optional): Exact book title
+            author (str, optional): Author (contains match)
+            isbn (str, optional): ISBN-10/13, dashes allowed
+            publisher (str, optional): Publisher (contains match)
+            series (str, optional): Series (contains match)
+            tag (str, optional): Tag (contains match)
+            exact (bool, optional): Use exact match for author/publisher/series/tag
+            order (str, optional): Sort field, e.g. 'pubdate'
             num (int, optional): Results per page (default: 20)
             page (int, optional): Page number (default: 1)
         """
-        name = args.get("name", "")
         num = args.get("num", 20)
         page = args.get("page", 1)
-        start = (page - 1) * num
+        params: Dict[str, Any] = {"num": num, "start": (page - 1) * num}
+        for key in ("name", "title", "author", "isbn", "publisher", "series", "tag", "order"):
+            value = str(args.get(key) or "").strip()
+            if value:
+                params[key] = value
+        if args.get("exact"):
+            params["exact"] = 1
+        if len(params) == 2:
+            return {"err": "params.invalid", "msg": "At least one of name/title/author/isbn/publisher/series/tag is required"}
 
-        encoded_name = urllib.parse.quote(name)
         return self._call_with_auto_relogin(
             "GET",
-            f"/api/search?name={encoded_name}&num={num}&start={start}"
+            "/api/search?" + urllib.parse.urlencode(params)
         )
 
     def search_by_category(self, args: Dict[str, Any]) -> Dict[str, Any]:
