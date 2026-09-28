@@ -705,7 +705,23 @@
     "review_requires_approval": "Reviews require approval before showing (only when reviews are allowed)",
     "enable_book_recommend_to_others": "Allow users to recommend books to others",
     "enable_shared_notes": "Allow readers to see other users' highlights and notes while reading",
-    "enable_homepage_booklists": "Show booklist recommendations on homepage"
+    "enable_homepage_booklists": "Show booklist recommendations on homepage",
+    "reader_dicts": "MyReader web dictionaries",
+    "reader_dicts_tips": "Applies to the embedded MyReader web app only: these are the default on/off states of each reader's dictionary list.",
+    "reader_dict_mybooks": "MyBooks Dictionary",
+    "reader_dict_baike": "Baidu Baike",
+    "reader_mydicts": "MyDict servers",
+    "reader_dict_url": "Server URL",
+    "reader_dict_token": "Token",
+    "reader_dict_default_enabled": "Enabled by default",
+    "reader_dict_default_name": "MyDict",
+    "reader_dict_test": "Test connection",
+    "reader_dict_test_ok": "Connected",
+    "reader_dict_test_ok_count": "Connected: looking up \"{word}\" returned {count} result(s)",
+    "reader_dict_test_failed": "Connection failed: {msg}",
+    "reader_dict_test_not_mydict": "{msg}: this address has no MyDict query API (/api/v1/query). Make sure it is the MyDict server address (default port 8000), not MyBooks' own address. When MyBooks runs in Docker, localhost/127.0.0.1 is the MyBooks container itself — use http://host.docker.internal:8000, the host's LAN IP, or the container name on a shared Docker network (e.g. http://mydict:8000)",
+    "reader_dict_test_unauthorized": "{msg}: the token is invalid or lacks query permission",
+    "reader_dict_test_summary": "Dictionary test finished: {ok} succeeded, {failed} failed (hover the icon in front of each URL for details)"
   },
   "book": {
     "readingStats": {

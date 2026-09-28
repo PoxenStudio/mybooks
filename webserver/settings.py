@@ -134,6 +134,11 @@ settings = {
     "STAMP_POSITION": "bottom-right",
 
     "EPUB_VIEWER": "MyReader",
+    # Embedded MyReader (web) dictionaries — defaults for the reader's
+    # dictionary list, see webserver/handlers/reader_dict.py.
+    "READER_DICT_MYBOOKS_ENABLED": True,
+    "READER_DICT_BAIKE_ENABLED": True,
+    "READER_MYDICTS": [],
     "PDF_VIEWER": "/static/pdfjs/web/viewer.html?file=%(pdf_url)s",
     "ENABLE_PODCAST_SERVICE": False,
     "ENABLE_WEBDAV_SERVICE": True,

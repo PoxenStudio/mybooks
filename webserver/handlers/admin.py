@@ -44,6 +44,7 @@ from webserver.base.setting_saver import SettingsSaver
 from webserver.base.trash_manager import TrashManager
 from webserver.version import VERSION
 from webserver.handlers.audio import AudioUtils
+from webserver.handlers import reader_dict
 from webserver.assistant.book_ai_client import BookAIClient
 from webserver.constants import (
     CALIBRE_COLUMN_BOOK_TYPE,
@@ -603,6 +604,9 @@ class AdminSettings(BaseHandler):
             "UPLOAD_IGNORE_TITLE_CHECKING",
             "ENABLE_TOOLBOX_DEV_MODE",
             "ENABLE_TOOLBOX_STORE",
+            "READER_DICT_MYBOOKS_ENABLED",
+            "READER_DICT_BAIKE_ENABLED",
+            "READER_MYDICTS",
         ]
 
         current_icon = CONF.get(
@@ -632,6 +636,9 @@ class AdminSettings(BaseHandler):
         if args.get(IMPORT_BY_INOTIFY, False):
             # 如果启用基于 inotify 的文件导入，不能默认删除文件
             args["REMOVE_IMPORTED_FILE"] = False
+
+        if "READER_MYDICTS" in args:
+            args["READER_MYDICTS"] = reader_dict.sanitize_mydicts(args["READER_MYDICTS"])
 
         args["META_ALL_SOURCES"] = BookSearch.all_sources()
         if "META_SELECTED_SOURCES" not in args:

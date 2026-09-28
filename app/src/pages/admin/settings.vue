@@ -315,6 +315,14 @@
               </div>
             </template>
 
+            <template v-if="card.show_reader_dicts">
+              <reader-dict-editor
+                v-model="settings.READER_MYDICTS"
+                :mybooks-enabled.sync="settings.READER_DICT_MYBOOKS_ENABLED"
+                :baike-enabled.sync="settings.READER_DICT_BAIKE_ENABLED"
+              ></reader-dict-editor>
+            </template>
+
             <template v-if="card.show_devices">
               <div class="pl-6">
               <template v-for="(device, idx) in settings.DEVICES">
@@ -841,6 +849,7 @@
 import SSLManager from "~/components/SSLManager.vue";
 import ReadingRangeDialog from "~/components/ReadingRangeDialog.vue";
 import BookNavEditor, { createCategory } from "~/components/BookNavEditor.vue";
+import ReaderDictEditor from "~/components/ReaderDictEditor.vue";
 import { languageOptions } from "~/utils/languageCodes";
 
 export default {
@@ -848,6 +857,7 @@ export default {
     "ssl-manager": SSLManager,
     "reading-range-dialog": ReadingRangeDialog,
     "book-nav-editor": BookNavEditor,
+    "reader-dict-editor": ReaderDictEditor,
   },
   created() {
     // 为body添加settings-page类名，应用背景图样式
@@ -1120,7 +1130,8 @@ export default {
             label: "settings.enable_folder_browse",
             type: "checkbox",
           },
-        ]
+        ],
+        show_reader_dicts: true,
       },
       {
         show: false,
@@ -1585,6 +1596,12 @@ export default {
         ) {
           this.settings["site_icon"] = "favicon_0";
         }
+        if (!Array.isArray(this.settings["READER_MYDICTS"])) {
+          this.$set(this.settings, "READER_MYDICTS", []);
+        }
+        for (const key of ["READER_DICT_MYBOOKS_ENABLED", "READER_DICT_BAIKE_ENABLED"]) {
+          if (typeof this.settings[key] !== "boolean") this.$set(this.settings, key, true);
+        }
         if (
           !("DEVICES" in this.settings) ||
           !Array.isArray(this.settings["DEVICES"])
@@ -1830,6 +1847,12 @@ export default {
         return;
       }
       this.settings["BOOK_NAV"] = this.serializeBookNav(this.bookNavList);
+      // showToken is view state only; the server drops incomplete entries.
+      this.settings["READER_MYDICTS"] = (this.settings["READER_MYDICTS"] || []).map((dict) => {
+        const entry = { ...dict };
+        delete entry.showToken;
+        return entry;
+      });
 
       if (this.settings["site_language"] === "") {
         this.settings["site_language"] = "zh";
