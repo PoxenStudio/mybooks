@@ -23,6 +23,7 @@ from webserver.toolbox.review_book_language_tool import ReviewBookLanguageTool
 from webserver.toolbox.minify_pdf import MinifyPdfTool
 from webserver.toolbox.formats_pruning import FormatsPruningTool
 from webserver.toolbox.epub_fixer import EpubFixerTool
+from webserver.toolbox.utils import epub_fixer_lib
 from webserver.toolbox.epub_split import EpubSplitTool
 from webserver.toolbox.author_clean_tool import AuthorCleanTool
 from webserver.toolbox.mimo_tts import MimoTTSTool
@@ -524,6 +525,103 @@ class AdminEpubFixerFix(BaseHandler):
 
         tool.fix(int(book_id), backup, self.user_id())
         return {"err": "ok", "msg": _("EPUB修复任务已启动,不要重复执行,注意查看消息通知中的处理结果")}
+
+
+class AdminEpubFixerAnalyze(BaseHandler):
+    """EPUB 精修：结构检测后台任务（全量解码较重不进请求线程，结果走 /progress）。"""
+
+    @js
+    @is_admin
+    def post(self):
+        data = tornado.escape.json_decode(self.request.body)
+        raw_ids = data.get("book_ids") or (
+            [data.get("book_id")] if data.get("book_id") else [])
+        try:
+            book_ids = [int(x) for x in raw_ids if str(x).strip()]
+        except (TypeError, ValueError):
+            return {"err": "params.invalid", "msg": _("书籍 ID 不合法")}
+        book_ids = list(dict.fromkeys(book_ids))
+        if not book_ids:
+            return {"err": "params.missing", "msg": _("请提供书籍ID")}
+        if len(book_ids) > 20:
+            return {"err": "params.invalid", "msg": _("单次最多支持 20 本书籍检测")}
+
+        tool = EpubFixerTool()
+        if tool.is_running():
+            return {"err": "task.running", "msg": _("已有 EPUB 修复任务正在执行，请稍后再试")}
+
+        tool.analyze_books(book_ids, user_id=self.user_id())
+        return {"err": "ok", "msg": _("结构检测任务已启动")}
+
+
+class AdminEpubFixerRepair(BaseHandler):
+    """EPUB 精修 → 重转 → 写回 批量流水线（后台任务）。"""
+
+    @js
+    @is_admin
+    def post(self):
+        data = tornado.escape.json_decode(self.request.body)
+        raw_ids = data.get("book_ids") or []
+        try:
+            book_ids = [int(x) for x in raw_ids if str(x).strip()]
+        except (TypeError, ValueError):
+            return {"err": "params.invalid", "msg": _("书籍 ID 不合法")}
+        book_ids = list(dict.fromkeys(book_ids))
+        if not book_ids:
+            return {"err": "params.missing", "msg": _("请提供书籍ID")}
+        if len(book_ids) > 100:
+            return {"err": "params.invalid", "msg": _("单次最多支持 100 本书籍批量处理")}
+        try:
+            ops = epub_fixer_lib.normalize_ops(data.get("ops"))
+        except ValueError as err:
+            return {"err": "params.invalid", "msg": str(err)}
+        reconvert = data.get("reconvert", True)
+        if isinstance(reconvert, str):
+            reconvert = reconvert.lower() not in ("false", "0", "no", "")
+        else:
+            reconvert = bool(reconvert)
+        write_mode = data.get("write_mode") or "overwrite"
+        if write_mode not in ("overwrite", "new_book"):
+            return {"err": "params.invalid", "msg": _("未知写回方式：%s") % write_mode}
+        backup = bool(data.get("backup", False))
+        suffix = (data.get("suffix") or u"（精修）").strip()[:30]
+
+        tool = EpubFixerTool()
+        if tool.is_running():
+            return {"err": "task.running", "msg": _("已有 EPUB 修复任务正在执行，请稍后再试")}
+
+        tool.repair(book_ids, ops=ops, reconvert=reconvert,
+                    write_mode=write_mode, backup=backup, suffix=suffix,
+                    user_id=self.user_id())
+        return {"err": "ok", "msg": _("EPUB 精修任务已启动，可在本页查看进度与逐本结果")}
+
+
+class AdminEpubFixerProgress(BaseHandler):
+    """EPUB 修复/精修任务进度（两种任务共用 _last_task_id）。"""
+
+    @js
+    @is_admin
+    def get(self):
+        task = EpubFixerTool.get_last_task()
+        if not task:
+            return {"err": "task.not_found", "msg": _("尚未启动修复任务")}
+
+        progress_data = task.get("progress_data") or {}
+        result = {
+            "status": task.get("status"),
+            "progress": task.get("progress", 0),
+            "stage": progress_data.get("stage", ""),
+            "book_index": progress_data.get("book_index", 0),
+            "book_total": progress_data.get("book_total", 0),
+            "current_title": progress_data.get("current_title", ""),
+            "results": progress_data.get("results", []),
+        }
+
+        if task.get("status") == BackgroundTask.STATUS_FAILED:
+            return {"err": "task.failed", "msg": task.get("error_message") or _("修复失败"), "data": result}
+        if task.get("status") == BackgroundTask.STATUS_COMPLETED:
+            return {"err": "ok", "msg": _("修复已完成"), "data": result}
+        return {"err": "ok", "data": result}
 
 
 class AdminEpubSplitChapters(BaseHandler):
@@ -1505,6 +1603,9 @@ def routes():
                 (r"/api/toolbox/formats_pruning/start", AdminFormatsPruningStart),
                 (r"/api/toolbox/formats_pruning/progress", AdminFormatsPruningProgress),
                 (r"/api/toolbox/epub_fixer/fix", AdminEpubFixerFix),
+                (r"/api/toolbox/epub_fixer/analyze", AdminEpubFixerAnalyze),
+                (r"/api/toolbox/epub_fixer/repair", AdminEpubFixerRepair),
+                (r"/api/toolbox/epub_fixer/progress", AdminEpubFixerProgress),
                 (r"/api/toolbox/epub_split/chapters", AdminEpubSplitChapters),
                 (r"/api/toolbox/epub_split/generate", AdminEpubSplitGenerate),
                 (r"/api/toolbox/author_clean", AdminAuthorClean),
