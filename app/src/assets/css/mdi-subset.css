@@ -138,6 +138,10 @@
   content: "\F009A";
 }
 
+.mdi-book-alphabet::before {
+  content: "\F061D";
+}
+
 .mdi-book-arrow-right-outline::before {
   content: "\F1683";
 }
@@ -484,6 +488,14 @@
 
 .mdi-exclamation::before {
   content: "\F0205";
+}
+
+.mdi-eye::before {
+  content: "\F0208";
+}
+
+.mdi-eye-off::before {
+  content: "\F0209";
 }
 
 .mdi-eye-outline::before {
