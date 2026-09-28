@@ -32,14 +32,18 @@ class MCPHandler(ListHandler):
         if token is None or token == "":
             if cls.mcp_service_single is None:
                 cls.mcp_service_single = MCPService(base_handler, token=token)
-            return cls.mcp_service_single
+            service = cls.mcp_service_single
+        elif cls.last_service_token is not None and token == cls.last_service_token \
+                and cls.mcp_service_with_token is not None:
+            service = cls.mcp_service_with_token
         else:
-            if cls.last_service_token is not None and token == cls.last_service_token \
-                    and cls.mcp_service_with_token is not None:
-                return cls.mcp_service_with_token
             cls.mcp_service_with_token = MCPService(base_handler, token=token)
             cls.last_service_token = token
-            return cls.mcp_service_with_token
+            service = cls.mcp_service_with_token
+        # 服务实例被复用，但 handler 是每个请求独立的（request/session 等），需更新为当前请求
+        if base_handler is not None:
+            service.base_handler = base_handler
+        return service
 
     @js
     def get(self):
