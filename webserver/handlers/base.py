@@ -822,7 +822,7 @@ class BaseHandler(web.RequestHandler):
 
     def get_all_fmts(self, book):
         fmts = []
-        for fmt in constants.SUPPORTED_EBOOK_FORMATS:
+        for fmt in constants.SUPPORTED_EBOOK_FORMATS + constants.MANAGED_DOCUMENT_FORMATS:
             fmt_key = f"fmt_{fmt}"
             if fmt_key in book and book[fmt_key]:
                 fmts.append(fmt)

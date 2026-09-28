@@ -55,7 +55,8 @@ from webserver.plugins.parser.txt import get_content_encoding
 from webserver.handlers.audio import AudioUtils
 from webserver import constants
 from webserver.constants import COLUMN_CATEGORY, CALIBRE_COLUMN_CATEGORY
-from webserver.constants import CALIBRE_ERROR_FLAG, SUPPORTED_EBOOK_FORMATS
+from webserver.constants import CALIBRE_ERROR_FLAG, SUPPORTED_EBOOK_FORMATS, MANAGED_DOCUMENT_FORMATS
+from webserver.services.managed_documents import InvalidManagedDocumentError, analyze_managed_document, build_managed_metadata
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT
 from webserver.constants import BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL, AUTO_FILL_META
 from webserver.constants import COLUMN_EXT_LINK, CALIBRE_COLUMN_EXT_LINK
@@ -661,6 +662,10 @@ class BookConverter(BaseHandler):
             if book_path:
                 fmts.append(fmt)
                 paths.append(book_path)
+
+        if not fmts:
+            # 仅含 DJVU/UVZ 等托管格式的书籍没有可转换的电子书源
+            return {"err": "params.book.invalid", "msg": _("本书没有可转换的格式")}
 
         if ('epub' in fmts) and ('azw3' in fmts):
             return {"err": "params.book.invalid", "msg": _("本书已有EPUB及Kindle版本, 不需要转换")}
@@ -2644,7 +2649,7 @@ class BookUpload(BaseHandler):
             return {"err": "params.filename", "msg": _("文件名不合法, 没有扩展名")}
         fmt = fmt.lower()
 
-        if fmt not in SUPPORTED_EBOOK_FORMATS:
+        if fmt not in SUPPORTED_EBOOK_FORMATS and fmt not in MANAGED_DOCUMENT_FORMATS:
             return {"err": "params.format.unsupported", "msg": _("不支持的书籍格式: %s" % fmt)}
 
         if f"fmt_{fmt}" in book and not force:
@@ -2667,11 +2672,18 @@ class BookUpload(BaseHandler):
 
         logging.info(f"Save format file to [{fpath}]")
         try:
+            if fmt in MANAGED_DOCUMENT_FORMATS:
+                # 扫描版托管格式：校验容器后再入库；置于 try 内，失败时 finally 仍清理暂存文件
+                try:
+                    analyze_managed_document(fpath, fmt)
+                except InvalidManagedDocumentError as e:
+                    return {"err": "book.invalid", "msg": _("文件校验失败：%s") % e}
             self.calibre_db.add_format(book_id, fmt.upper(), fpath, index_is_id=True, replace=force)
             logging.info(f"Successfully added {fmt.upper()} format to book {book_id}")
 
             try:
-                if update_metadata:
+                # 托管格式无法回写元数据，save_book_meta 仅支持 EPUB/AZW3/PDF
+                if update_metadata and fmt not in MANAGED_DOCUMENT_FORMATS:
                     self.save_book_meta(book_id, fmt=fmt)
                     logging.info(f"Metadata written to new format {fmt.upper()} for book {book_id}")
             except Exception as e:
@@ -2721,7 +2733,7 @@ class BookUpload(BaseHandler):
         if not fmt:
             return {"err": "params.filename", "msg": _("文件名不合法, 没有扩展名")}
         fmt = fmt.lower()
-        if fmt not in SUPPORTED_EBOOK_FORMATS:
+        if fmt not in SUPPORTED_EBOOK_FORMATS and fmt not in MANAGED_DOCUMENT_FORMATS:
             return {"err": "params.format.unsupported", "msg": _("不支持的书籍格式: %s" % fmt)}
 
         # save file
@@ -2743,42 +2755,51 @@ class BookUpload(BaseHandler):
             failed = False
             _translators = []
             _authors = []
-            with open(fpath, "rb") as stream:
-                mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
-                if mi.title and mi.title == CALIBRE_ERROR_FLAG:
-                    if fmt == "pdf":
-                        mi.title = utils.remove_zlibrary_suffix(name.replace("." + fmt, ""))
+            if fmt in MANAGED_DOCUMENT_FORMATS:
+                # 扫描版托管格式（DJVU/UVZ/CBZ）：校验容器后按文件名编目，不读电子书元数据
+                try:
+                    analyze_managed_document(fpath, fmt)
+                except InvalidManagedDocumentError as e:
+                    return {"err": "book.invalid", "msg": _("文件校验失败：%s") % e}
+                mi = build_managed_metadata(fpath, fmt, name)
+                _authors = list(mi.authors)
+            else:
+                with open(fpath, "rb") as stream:
+                    mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
+                    if mi.title and mi.title == CALIBRE_ERROR_FLAG:
+                        if fmt == "pdf":
+                            mi.title = utils.remove_zlibrary_suffix(name.replace("." + fmt, ""))
+                        else:
+                            logging.error("Failed to get metadata for %s, reason:%s", fpath, mi.comments)
+                            failed = True
+                    mi.title = utils.super_strip(mi.title)
+                    if mi.authors:
+                        _authors, _translators = guess_authors(mi.authors)
                     else:
-                        logging.error("Failed to get metadata for %s, reason:%s", fpath, mi.comments)
-                        failed = True
-                mi.title = utils.super_strip(mi.title)
-                if mi.authors:
-                    _authors, _translators = guess_authors(mi.authors)
-                else:
-                    _authors = guess_authors([utils.super_strip(mi.author_sort)])
-                mi.tags = guess_tags(mi.tags)
-                mi.authors = _authors
+                        _authors = guess_authors([utils.super_strip(mi.author_sort)])
+                    mi.tags = guess_tags(mi.tags)
+                    mi.authors = _authors
 
-            if failed:
-                return {"err": "book.invalid", "msg": _("此书籍文件无法识别, 或者受DRM保护无法导入")}
+                if failed:
+                    return {"err": "book.invalid", "msg": _("此书籍文件无法识别, 或者受DRM保护无法导入")}
 
-            name = name[:-len(fmt) - 1]
-            if fmt == "txt":
-                mi.title = utils.remove_zlibrary_suffix(name)
-                title, author = utils.guess_title_author_from_filename(mi.title)
-                mi.title = title if title else mi.title
-                mi.authors = [author] if author else [_("佚名")]
-            elif fmt == "pdf":
-                if CONF["PDF_TILE_WITH_FILE_NAME"]:
+                name = name[:-len(fmt) - 1]
+                if fmt == "txt":
                     mi.title = utils.remove_zlibrary_suffix(name)
-                else:
-                    title = mi.title.strip() if mi.title else ""
-                    if not title or title.find(_("下载工具")) >= 0 or title == "SSReader Print.":
+                    title, author = utils.guess_title_author_from_filename(mi.title)
+                    mi.title = title if title else mi.title
+                    mi.authors = [author] if author else [_("佚名")]
+                elif fmt == "pdf":
+                    if CONF["PDF_TILE_WITH_FILE_NAME"]:
                         mi.title = utils.remove_zlibrary_suffix(name)
                     else:
-                        mi.title = utils.remove_zlibrary_suffix(title)
-                if mi.authors is None or len(mi.authors) == 0 or mi.authors[0].lower() == "unknown":
-                    mi.authors = [_("佚名")]
+                        title = mi.title.strip() if mi.title else ""
+                        if not title or title.find(_("下载工具")) >= 0 or title == "SSReader Print.":
+                            mi.title = utils.remove_zlibrary_suffix(name)
+                        else:
+                            mi.title = utils.remove_zlibrary_suffix(title)
+                    if mi.authors is None or len(mi.authors) == 0 or mi.authors[0].lower() == "unknown":
+                        mi.authors = [_("佚名")]
 
             logging.info("upload mi.title = " + repr(mi.title))
             if mi.cover_data and mi.cover_data[1] and mi.cover_data[1][:4] == b"RIFF":
@@ -2787,6 +2808,10 @@ class BookUpload(BaseHandler):
                 books = []
             else:
                 books = self.calibre_db.books_with_same_title(mi)
+            if books and fmt in MANAGED_DOCUMENT_FORMATS and len(books) > 1:
+                # 扫描版无可信作者元数据：多个同名候选一律按新书入库，避免误并
+                logging.info("upload: %d same-title candidates for managed document, import as new book", len(books))
+                books = []
             if books:
                 book_id = None
                 for id in books:
@@ -2844,13 +2869,15 @@ class BookUploadChunk(BaseHandler):
 
         if CONF.get("USE_DYNAMIC_COVER", False):
             fmt, cover_data = mi.cover_data
-            if fmt is None and cover_data is not None:
+            # 与 BookUpload._add_new_book 对齐：封面缺失即生成兜底封面
+            if fmt is None or cover_data is None:
                 author = mi.authors[0] if mi.authors else _("佚名")
                 data = ImageGenerator.generate_cover(mi.title, author)
                 if data:
                     mi.cover_data = ("jpeg", data)
                     dynamic_cover = True
-        if mi.cover_data and mi.cover_data[1][:4] == b"RIFF":
+        # cover_data 恒为二元组（无封面时是 (None, None)，真值），必须判 [1] 非空
+        if mi.cover_data and mi.cover_data[1] and mi.cover_data[1][:4] == b"RIFF":
             mi.cover_data = ("jpeg", ImageHelper.convert_to_jpeg(mi.cover_data[1]))
         book_id = self.calibre_db.import_book(mi, fpaths)
         if book_id is not None and dynamic_cover:
@@ -2931,7 +2958,7 @@ class BookUploadChunk(BaseHandler):
         if not fmt:
             return {"err": "params.filename", "msg": _("文件名不合法，没有包含扩展名")}
         fmt = fmt.lower()
-        if fmt not in SUPPORTED_EBOOK_FORMATS:
+        if fmt not in SUPPORTED_EBOOK_FORMATS and fmt not in MANAGED_DOCUMENT_FORMATS:
             return {"err": "params.format.unsupported", "msg": _("不支持的书籍格式: %s" % fmt)}
 
         if not file_hash:
@@ -3012,32 +3039,45 @@ class BookUploadChunk(BaseHandler):
             failed = False
             _translators = []
             _authors = []
-            with open(final_path, "rb") as stream:
-                mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
-                if mi.title and mi.title == CALIBRE_ERROR_FLAG:
-                    if fmt == "pdf":
-                        mi.title = utils.remove_zlibrary_suffix(filename.replace("." + fmt, ""))
+            if fmt in MANAGED_DOCUMENT_FORMATS:
+                # 扫描版托管格式（DJVU/UVZ/CBZ）：校验合并后的完整文件，再按文件名编目
+                try:
+                    analyze_managed_document(final_path, fmt)
+                except InvalidManagedDocumentError as e:
+                    return {"err": "book.invalid", "msg": _("文件校验失败：%s") % e}
+                mi = build_managed_metadata(final_path, fmt, filename)
+                _authors = list(mi.authors)
+            else:
+                with open(final_path, "rb") as stream:
+                    mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
+                    if mi.title and mi.title == CALIBRE_ERROR_FLAG:
+                        if fmt == "pdf":
+                            mi.title = utils.remove_zlibrary_suffix(filename.replace("." + fmt, ""))
+                        else:
+                            logger.error("Failed to get metadata for %s, reason:%s", final_path, mi.comments)
+                            failed = True
+                    mi.title = utils.super_strip(mi.title)
+                    if mi.authors:
+                        _authors, _translators = guess_authors(mi.authors)
                     else:
-                        logger.error("Failed to get metadata for %s, reason:%s", final_path, mi.comments)
-                        failed = True
-                mi.title = utils.super_strip(mi.title)
-                if mi.authors:
-                    _authors, _translators = guess_authors(mi.authors)
-                else:
-                    _authors, _translators = guess_authors([utils.super_strip(mi.author_sort)])
-                mi.authors = _authors
-            if failed:
-                return {"err": "book.invalid", "msg": _("此书籍文件无法识别, 或者受DRM保护无法导入")}
+                        _authors, _translators = guess_authors([utils.super_strip(mi.author_sort)])
+                    mi.authors = _authors
+                if failed:
+                    return {"err": "book.invalid", "msg": _("此书籍文件无法识别, 或者受DRM保护无法导入")}
 
-            # Handle special formats like txt and pdf
-            if fmt in ["txt", "pdf"]:
-                mi.title = utils.remove_zlibrary_suffix(filename.replace("." + fmt, ""))
-                mi.authors = [_("佚名")]
+                # Handle special formats like txt and pdf
+                if fmt in ["txt", "pdf"]:
+                    mi.title = utils.remove_zlibrary_suffix(filename.replace("." + fmt, ""))
+                    mi.authors = [_("佚名")]
 
             logging.info("chunked upload mi.title = " + repr(mi.title))
 
             # Check for existing books
             books = self.calibre_db.books_with_same_title(mi)
+            if books and fmt in MANAGED_DOCUMENT_FORMATS and len(books) > 1:
+                # 扫描版无可信作者元数据：多个同名候选一律按新书入库，避免误并
+                logging.info("chunked upload: %d same-title candidates for managed document, import as new book", len(books))
+                books = []
             if books:
                 book_id = None
                 for id in books:
@@ -3048,6 +3088,9 @@ class BookUploadChunk(BaseHandler):
                     if book_id is None:
                         book_id = b.get("id")
                     if b.get("authors", "") != mi.authors:
+                        # 与 BookUpload.post 对齐：作者不匹配的候选不可作为并入目标，
+                        # 否则托管格式（作者来自文件名、不可信）会误并入同名不同作者的书
+                        book_id = None
                         continue
                     if fmt.upper() in b.formats:
                         return {
@@ -3062,7 +3105,7 @@ class BookUploadChunk(BaseHandler):
                 else:
                     self.calibre_db.add_format(book_id, fmt.upper(), final_path, True)
             else:
-                book_id = self._add_new_book(mi, [final_path], fmt)
+                book_id = self._add_new_book(mi, [final_path])
                 if _translators:
                     translators = ",".join(_translators)
                     self.calibre_db_cache.set_field(CALIBRE_COLUMN_TRANSLATORS, {book_id: translators})
@@ -3407,6 +3450,10 @@ class BookRead(BaseHandler):
 
         fpath = self._epub_conversion_source(book, fmt_arg)
         if not fpath:
+            # _epub_conversion_source 返回 None 有两种含义：已可直接阅读，或没有任何可读格式。
+            # 仅含 DJVU/UVZ 等托管格式的书籍不允许进入阅读流程。
+            if not any(book.get("fmt_%s" % f) for f in constants.SUPPORTED_EBOOK_FORMATS):
+                return {"err": "params.book.invalid", "msg": _("抱歉，在线阅读器暂不支持该格式的书籍，可以转为epub或者pdf后阅读")}
             return {"err": "ok", "msg": _("可以直接打开"), "data": {"status": "ready", "path": fpath}}
 
         service = ConverterService()
