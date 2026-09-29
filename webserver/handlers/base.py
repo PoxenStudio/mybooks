@@ -1299,6 +1299,7 @@ class BaseHandler(web.RequestHandler):
                 "shared_notes": CONF.get("ENABLE_SHARED_NOTES", True),
             },
             "indexPage": CONF.get("INDEX_PAGE_TYPE", "index"),
+            "epub_viewer": CONF.get("EPUB_VIEWER", "MyReader"),
             "defaultPageSize": CONF.get("DEFAULT_PAGE_SIZE", 60),
             "aiEnabled": CONF.get("AI_ENABLED", False),
             "standalone": CONF.get("STANDALONE", False),

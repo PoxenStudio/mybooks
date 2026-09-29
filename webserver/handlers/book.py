@@ -3389,6 +3389,8 @@ class BookUploadBatchCancel(BaseHandler):
 
 
 class BookRead(BaseHandler):
+    READABLE_FORMATS = ("epub", "pdf", "mobi", "azw3", "azw", "txt", "djvu", "cbz")
+
     def get(self, bid):
         if not CONF["ALLOW_GUEST_READ"] and not self.current_user:
             return self.redirect("/login")
@@ -3412,7 +3414,7 @@ class BookRead(BaseHandler):
         if self.current_user:
             # 网页阅读器心跳不带阅读进度（epub.js 阅读器目前不回传阅读位置），格式取显式指定的
             # format 参数，缺省时按优先级挑书籍里第一个存在的格式，分格式时长统计使用。
-            stat_fmt = fmt_arg or next((f for f in ("epub", "pdf", "mobi", "azw3", "azw", "txt", "djvu") if book.get("fmt_%s" % f)), None)
+            stat_fmt = fmt_arg or next((f for f in self.READABLE_FORMATS if book.get("fmt_%s" % f)), None)
             ReadingStatsService.heartbeat(self.current_user.id, book_id, Reading.PROTOCOL_WEB, fmt=stat_fmt)
 
         book_reader = CONF.get("EPUB_VIEWER", "MyReader")
@@ -3423,12 +3425,14 @@ class BookRead(BaseHandler):
         if book_reader == "MyReader":
             myreader_format = None
             if fmt_arg:
-                if fmt_arg in ("epub", "pdf") and fpath_arg:
+                if fmt_arg in ("epub", "pdf", "cbz") and fpath_arg:
                     myreader_format = fmt_arg
             elif book.get("fmt_epub"):
                 myreader_format = "epub"
             elif "fmt_pdf" in book:
                 myreader_format = "pdf"
+            elif "fmt_cbz" in book:
+                myreader_format = "cbz"
             if myreader_format:
                 return self.redirect(
                     "/readerx/open?bookId=%s&format=%s" % (book_id, myreader_format)
@@ -3562,8 +3566,11 @@ class BookRead(BaseHandler):
         fpath = self._epub_conversion_source(book, fmt_arg)
         if not fpath:
             # _epub_conversion_source 返回 None 有两种含义：已可直接阅读，或没有任何可读格式。
-            # 仅含 UVZ/CBZ 等托管格式的书籍不允许进入阅读流程（DJVU 有专门的 DjVu.js 阅读器）。
-            if not any(book.get("fmt_%s" % f) for f in constants.SUPPORTED_EBOOK_FORMATS + ["djvu"]):
+            # 仅含 UVZ 等托管格式的书籍不允许进入阅读流程（DJVU 有 DjVu.js 阅读器，CBZ 仅 MyReader 可读）。
+            readable = constants.SUPPORTED_EBOOK_FORMATS + ["djvu"]
+            if CONF.get("EPUB_VIEWER", "MyReader") == "MyReader":
+                readable.append("cbz")
+            if not any(book.get("fmt_%s" % f) for f in readable):
                 return {"err": "params.book.invalid", "msg": _("抱歉，在线阅读器暂不支持该格式的书籍，可以转为epub或者pdf后阅读")}
             return {"err": "ok", "msg": _("可以直接打开"), "data": {"status": "ready", "path": fpath}}
 

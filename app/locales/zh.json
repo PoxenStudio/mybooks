@@ -545,6 +545,7 @@
     "epubReader": "阅读EPUB文件",
     "pdfReader": "阅读PDF文件",
     "djvuReader": "阅读DjVu文件",
+    "cbzReader": "阅读CBZ漫画",
     "manage": "管理",
     "process": "文件处理",
     "syncBookInfo": "从互联网同步书籍信息",
