@@ -18,9 +18,9 @@ DEFAULT_ISBN = "0000000000001"
 
 CALIBRE_ERROR_FLAG = "<*ERROR*>"
 SUPPORTED_EBOOK_FORMATS = ["azw3", "epub", "mobi", "pdf", "txt", "azw", "docx"]
-# 扫描版/漫画包等下载专用托管文档（DJVU/UVZ/CBZ）：可入库可下载，但阅读器不支持在线阅读；见 services/managed_documents.py
+# 扫描版/漫画包等托管文档（DJVU/UVZ/CBZ）：先校验容器再入库，DJVU/CBZ 元数据经 calibre 插件读写；见 services/managed_documents.py
 MANAGED_DOCUMENT_FORMATS = ["djvu", "uvz", "cbz"]
-META_WRITABLE_FORMATS = ["epub", "azw3", "pdf", "djvu"]
+META_WRITABLE_FORMATS = ["epub", "azw3", "pdf", "djvu", "cbz"]
 SUPPORTED_AUDIO_FORMATS = ['.mp3', ".m4a", ".m4b", ".wav", ".wma", ".opus"]
 # 有声书字幕文件格式（与音频文件同目录同名，如 0001_第一章.wav -> 0001_第一章.srt）
 SUPPORTED_SUBTITLE_FORMATS = ['.srt', '.vtt']

@@ -2,19 +2,15 @@
 # -*- coding: UTF-8 -*-
 """DJVU/UVZ/CBZ 托管文档（扫描版/漫画包）：容器校验与编目。
 
-这类格式无法解出可供在线阅读的电子书内容（UVZ 内页多为超星 PDG 等私有格式，
-CBZ 为漫画图片包，mybooks 无漫画阅读器），因此只入库保存原始文件供下载；
-BookRead 对无可读格式的书籍一律 404，天然禁读。
-校验只识别容器结构，不解压、不解码页面内容（CBZ 仅从首页图提取封面）。
-DJVU 另经 djvu_meta calibre 插件读取内嵌元数据并渲染首页作封面，插件缺失时退回文件名编目。
+UVZ 内页多为超星 PDG 等私有格式，只入库保存原始文件供下载；校验只识别容器结构，不解码页面内容。
+DJVU/CBZ 的内嵌元数据与封面经 calibre 元数据插件（calibre/plugins 下的 djvu_meta、cbz_meta）读取，
+与文件名编目结果合并；插件缺失时 DJVU 退回文件名编目，CBZ 退回 calibre 内置漫画插件。
 """
 
 import logging
 import os
-import re
 import struct
 import zipfile
-import zlib
 
 from webserver.constants import CALIBRE_ERROR_FLAG
 from webserver.i18n import _
@@ -22,9 +18,7 @@ from webserver import utils
 
 # 与 ZIP 容器类工具一致的条目预算：防御性上限，防炸卷/炸内存
 MAX_ARCHIVE_ENTRIES = 10000
-# 封面候选条目的解压后大小上限：防止单个超大条目耗尽内存
-MAX_COVER_ENTRY_BYTES = 20 * 1024 * 1024
-# CBZ 封面/图片页认可的扩展名
+# CBZ 图片页认可的扩展名
 IMAGE_EXTS = frozenset(("jpg", "jpeg", "png", "webp", "gif", "bmp"))
 
 
@@ -39,11 +33,6 @@ def _invalid(message):
 def _read_signature(fpath, size):
     with open(fpath, "rb") as f:
         return f.read(size)
-
-
-def _natural_key(name):
-    """自然排序键（"2.jpg" < "10.jpg"），元组首元保证 int/str 不互比。"""
-    return tuple((0, int(t)) if t.isdigit() else (1, t) for t in re.split(r"(\d+)", name))
 
 
 def _analyze_djvu(fpath):
@@ -121,35 +110,6 @@ def analyze_managed_document(fpath, fmt):
         _invalid(_("无法读取文件：%s") % err)
 
 
-def _extract_cbz_cover(fpath):
-    """取自然排序最前的图片页作封面，返回 (fmt, bytes)；失败返回 None 不影响入库。
-
-    仅在容器校验通过后调用。封面是锦上添花：任何读取/解码期异常（PPMd 等不支持
-    的压缩方法 NotImplementedError、坏 deflate 流 zlib.error、加密条目 TOCTOU
-    RuntimeError 等）一律降级为无封面，绝不让合法 CBZ 入库失败。
-    """
-    try:
-        with zipfile.ZipFile(fpath) as archive:
-            candidates = [
-                info for info in archive.infolist()
-                if not info.is_dir()
-                and info.file_size <= MAX_COVER_ENTRY_BYTES
-                and info.filename.rsplit(".", 1)[-1].lower() in IMAGE_EXTS
-            ]
-            if not candidates:
-                return None
-            candidates.sort(key=lambda info: _natural_key(info.filename))
-            data = archive.read(candidates[0])
-            fmt = candidates[0].filename.rsplit(".", 1)[-1].lower()
-            if fmt == "jpeg":
-                fmt = "jpg"
-    except (OSError, zipfile.BadZipFile, zipfile.LargeZipFile,
-            NotImplementedError, RuntimeError, zlib.error, EOFError) as err:
-        logging.info("CBZ cover extraction failed for %s: %s", fpath, err)
-        return None
-    return (fmt, data) if data else None
-
-
 def filename_metadata(name):
     """按文件名构造最小 Calibre 元数据。
 
@@ -163,14 +123,14 @@ def filename_metadata(name):
     return Metadata(title or stem, [author] if author else [_("佚名")])
 
 
-def _read_djvu_metadata(fpath):
+def _read_file_metadata(fpath, fmt):
     from calibre.customize.ui import get_file_type_metadata
 
     try:
         with open(fpath, "rb") as stream:
-            mi = get_file_type_metadata(stream, "djvu")
+            mi = get_file_type_metadata(stream, fmt)
     except Exception as err:
-        logging.info("DjVu metadata read failed for %s: %s", fpath, err)
+        logging.info("%s metadata read failed for %s: %s", fmt.upper(), fpath, err)
         return None
     if mi.title == CALIBRE_ERROR_FLAG:
         return None
@@ -178,15 +138,11 @@ def _read_djvu_metadata(fpath):
 
 
 def build_managed_metadata(fpath, fmt, name):
-    """托管格式的完整编目：文件名元数据 + CBZ 首页图封面 + DJVU 内嵌元数据与首页封面。"""
+    """托管格式的完整编目：文件名元数据，DJVU/CBZ 再合并插件读出的内嵌元数据与封面。"""
     mi = filename_metadata(name)
     fmt = (fmt or "").lower().lstrip(".")
-    if fmt == "cbz":
-        cover = _extract_cbz_cover(fpath)
-        if cover:
-            mi.cover_data = cover
-    elif fmt == "djvu":
-        file_mi = _read_djvu_metadata(fpath)
+    if fmt in ("djvu", "cbz"):
+        file_mi = _read_file_metadata(fpath, fmt)
         if file_mi is not None:
             mi.smart_update(file_mi)
     return mi

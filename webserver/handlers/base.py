@@ -1136,7 +1136,7 @@ class BaseHandler(web.RequestHandler):
                 }
             return {
                 "err": "format.not_supported",
-                "msg": _("书籍没有支持的格式（需要 EPUB、AZW3、PDF 或 DJVU）"),
+                "msg": _("书籍没有支持的格式（需要 EPUB、AZW3、PDF、DJVU 或 CBZ）"),
             }
         try:
             from calibre.ebooks.metadata.meta import set_metadata

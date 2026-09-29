@@ -16,7 +16,6 @@ from unittest import mock
 from webserver.services import managed_documents as md
 from webserver.services.managed_documents import (
     InvalidManagedDocumentError,
-    _extract_cbz_cover,
     analyze_managed_document,
 )
 
@@ -204,7 +203,6 @@ class TestAnalyzeManagedDocument(unittest.TestCase):
         p = self._patch_zip_method(_make_zip({"0001.jpg": b"fake-jpeg-data"}), 98)
         try:
             self.assertIsNone(analyze_managed_document(p, "cbz"))
-            self.assertIsNone(_extract_cbz_cover(p))
         finally:
             os.remove(p)
 
@@ -221,7 +219,6 @@ class TestAnalyzeManagedDocument(unittest.TestCase):
                 data[i] ^= 0xFF
             open(p, "wb").write(bytes(data))
             self.assertIsNone(analyze_managed_document(p, "cbz"))
-            self.assertIsNone(_extract_cbz_cover(p))
         finally:
             os.remove(p)
 
@@ -238,31 +235,28 @@ class TestFilenameMetadata(unittest.TestCase):
         self.assertEqual(mi.title, "某本无名扫描书")
         self.assertEqual(list(mi.authors), ["佚名"])
 
-    def test_cbz_cover_natural_order(self):
-        # 自然排序：002.jpg 是首页（字典序会把 010.jpg 排在 002.jpg 前）
-        p = _make_zip({"010.jpg": b"page-10", "002.jpg": b"page-02", "ComicInfo.xml": b"<xml/>"})
-        try:
-            mi = build_managed_metadata(p, "cbz", "某漫画.cbz")
-            self.assertEqual(mi.cover_data[0], "jpg")
-            self.assertEqual(mi.cover_data[1], b"page-02")
-        finally:
-            os.remove(p)
+    def test_cbz_merges_plugin_metadata(self):
+        from calibre.ebooks.metadata.book.base import Metadata
 
-    def test_cbz_cover_skips_oversized_entry(self):
-        p = _make_zip({"0001.png": b"fake-png"})
+        file_mi = Metadata("漫画标题", ["作者甲"])
+        file_mi.cover_data = ("jpg", b"page-01")
+        p = _make_zip({"0001.jpg": b"page-01"})
         try:
-            with mock.patch.object(md, "MAX_COVER_ENTRY_BYTES", 4):
+            with mock.patch("calibre.customize.ui.get_file_type_metadata", return_value=file_mi) as reader:
                 mi = build_managed_metadata(p, "cbz", "某漫画.cbz")
-            self.assertEqual(mi.cover_data, (None, None))
+            self.assertEqual(reader.call_args[0][1], "cbz")
+            self.assertEqual((mi.title, list(mi.authors)), ("漫画标题", ["作者甲"]))
+            self.assertEqual(mi.cover_data, ("jpg", b"page-01"))
         finally:
             os.remove(p)
 
-    def test_cbz_without_images_has_no_cover(self):
-        # 容器校验会拦下无图 CBZ；这里直接验证封面函数对无图包返回 None 兜底
-        p = _make_zip({"info.xml": b"<xml/>"})
+    def test_uvz_skips_plugin(self):
+        p = _make_uvz({"0001.pdg": b"fake-page"})
         try:
-            mi = build_managed_metadata(p, "cbz", "某漫画.cbz")
-            self.assertEqual(mi.cover_data, (None, None))
+            with mock.patch("calibre.customize.ui.get_file_type_metadata") as reader:
+                mi = build_managed_metadata(p, "uvz", "某本无名扫描书.uvz")
+            reader.assert_not_called()
+            self.assertEqual(mi.title, "某本无名扫描书")
         finally:
             os.remove(p)
 
