@@ -793,6 +793,7 @@
     "read": "Read",
     "epubReader": "Read EPUB file",
     "pdfReader": "Read PDF file",
+    "djvuReader": "Read DjVu file",
     "manage": "Manage",
     "process": "File Processing",
     "syncBookInfo": "Sync meta from the internet",

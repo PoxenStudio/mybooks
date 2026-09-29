@@ -140,6 +140,7 @@ settings = {
     "READER_DICT_BAIKE_ENABLED": True,
     "READER_MYDICTS": [],
     "PDF_VIEWER": "/static/pdfjs/web/viewer.html?file=%(pdf_url)s",
+    "DJVU_VIEWER": "/static/djvureader/index.html?file=%(djvu_url)s&name=%(name)s",
     "ENABLE_PODCAST_SERVICE": False,
     "ENABLE_WEBDAV_SERVICE": True,
     "WEBDAV_SYNC_FOLDER": False,

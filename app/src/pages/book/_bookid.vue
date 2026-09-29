@@ -1641,6 +1641,11 @@ export default {
             return this.book.files.some(file => file.format.toLowerCase() === 'pdf');
         },
 
+        hasDjvu() {
+            if (!this.book || !this.book.files) return false;
+            return this.book.files.some(file => file.format.toLowerCase() === 'djvu');
+        },
+
         // 目录提取当前仅支持从 EPUB/PDF/TXT 中解析
         hasCatalogFormats() {
             if (!this.book || !this.book.files) return false;
@@ -1667,7 +1672,7 @@ export default {
             return ['epub', 'azw3', 'mobi', 'azw', 'docx'].some(format => formats.includes(format));
         },
 
-        // 可供在线阅读的格式列表，按优先级排列：TXT > EPUB > PDF
+        // 可供在线阅读的格式列表，按优先级排列：TXT > EPUB > PDF > DJVU
         readFormats() {
             if (!this.book) return [];
             const formats = [];
@@ -1675,6 +1680,7 @@ export default {
             // TXT 默认同时支持转换为 EPUB 阅读
             if (this.hasEpubFormat || this.is_txt) formats.push({ key: 'epub', label: this.$t('book.epubReader'), href: '/read/' + this.book.id + '?format=epub' });
             if (this.hasPDF) formats.push({ key: 'pdf', label: this.$t('book.pdfReader'), href: '/read/' + this.book.id + '?format=pdf' });
+            if (this.hasDjvu) formats.push({ key: 'djvu', label: this.$t('book.djvuReader'), href: '/read/' + this.book.id + '?format=djvu' });
             return formats;
         },
 

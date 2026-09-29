@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title></title>
+
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+	<meta http-equiv="Permissions-Policy" content="interest-cohort=()">
+	<meta name="description" content="">
+	<meta name="viewport" content="width=device-width, user-scalable=no">
+	<meta name="apple-mobile-web-app-capable" content="yes">
+
+	<link rel="icon" type="image/png" href="favicon.png">
+
+	<style>
+		html, body {
+			margin: 0;
+			padding: 0;
+			width: 100%;
+			height: 100%;
+			overflow: hidden;
+		}
+
+		#viewer {
+			width: 100%;
+			height: 100%;
+		}
+	</style>
+
+	<!-- Libs：DjVu.js 0.5.4 + DjVu.js Viewer 0.10.0（viewer 的 CSS 已内置在 js 中） -->
+	<script src="js/djvu.js"></script>
+	<script src="js/djvu_viewer.js"></script>
+
+	<!-- Reader -->
+	<script>
+		// 参数：
+		//   file  - djvu 文件地址（必填，已 URL 编码）
+		//   name  - 显示在底栏/窗口标题上的书名（可选）
+		//   page  - 打开时跳转的页码（可选，缺省时恢复上次阅读位置）
+		//   lang  - 界面语言（可选，缺省按浏览器语言选择）
+		//   theme - light / dark（可选，缺省跟随系统）
+		const url = new URL(window.location)
+		const file = url.searchParams.get("file") || url.searchParams.get("bookPath")
+		const name = url.searchParams.get("name") || ""
+		const progressKey = "djvureader:page:" + file
+
+		function loadPage() {
+			try {
+				return parseInt(localStorage.getItem(progressKey), 10) || 1
+			} catch (e) {
+				return 1
+			}
+		}
+
+		function savePage(page) {
+			try {
+				localStorage.setItem(progressKey, String(page))
+			} catch (e) {
+				// 隐私模式等场景下 localStorage 不可用，忽略即可
+			}
+		}
+
+		function pickLanguage(available) {
+			const wanted = (url.searchParams.get("lang") || navigator.language || "en").toLowerCase()
+			if (available.includes(wanted)) return wanted
+			const short = wanted.split(/[-_]/)[0]
+			return available.includes(short) ? short : "en"
+		}
+
+		window.onload = async () => {
+			const viewer = new DjVu.Viewer()
+			window.ViewerInstance = viewer
+			viewer.render(document.querySelector("#viewer"))
+			if (!file) return
+
+			if (name) document.title = name
+			const config = {
+				pageNumber: parseInt(url.searchParams.get("page"), 10) || loadPage(),
+				language: pickLanguage(DjVu.Viewer.getAvailableLanguages()),
+				uiOptions: {
+					hideFullPageSwitch: true,
+					hideOpenAndCloseButtons: true,
+				},
+			}
+			if (name) config.name = name
+			const theme = url.searchParams.get("theme")
+			if (theme === "light" || theme === "dark") config.theme = theme
+
+			viewer.on(DjVu.Viewer.Events.PAGE_NUMBER_CHANGED, () => savePage(viewer.getPageNumber()))
+			await viewer.loadDocumentByUrl(file, config)
+		}
+	</script>
+</head>
+
+<body>
+	<div id="viewer"></div>
+</body>
+
+</html>
