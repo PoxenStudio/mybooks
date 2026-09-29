@@ -227,6 +227,18 @@
     "registerButton": "Register",
     "pageTitle": "Sign Up"
   },
+  "upgrading": {
+    "title": "Upgrading the database. Please do not restart; wait for it to finish",
+    "waiting": "Service starting…",
+    "finished": "Upgrade finished, entering…",
+    "stepProgress": "Step {index} / {total}",
+    "steps": {
+      "items": "Upgrading book info table",
+      "readers": "Upgrading user table",
+      "scanfiles": "Upgrading scan import records",
+      "readings": "Upgrading reading records"
+    }
+  },
   "welcome": {
     "enterPassword": "Enter Access Password",
     "description": "This is a private library. You need to enter a password to access.",

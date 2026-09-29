@@ -226,6 +226,18 @@
     "registerButton": "註冊",
     "pageTitle": "註冊"
   },
+  "upgrading": {
+    "title": "正在執行資料庫升級，請不要重新啟動，等待任務完成",
+    "waiting": "服務啟動中…",
+    "finished": "升級完成，正在進入…",
+    "stepProgress": "第 {index} / {total} 步",
+    "steps": {
+      "items": "升級圖書資訊表",
+      "readers": "升級使用者表",
+      "scanfiles": "升級掃描匯入記錄表",
+      "readings": "升級閱讀記錄表"
+    }
+  },
   "welcome": {
     "enterPassword": "請輸入存取密碼",
     "description": "本站為私人圖書館，需輸入密碼才可進行訪問",
