@@ -159,7 +159,7 @@
                             </v-list-item-subtitle>
                         </v-list-item-content>
                     </v-list-item>
-                    <p v-if="managedOnly" class="caption grey--text mb-0 mt-2 px-4">{{ $t('book.managedDocumentsOnly') }}</p>
+                    <p v-if="noReadableFormat" class="caption grey--text mb-0 mt-2 px-4">{{ $t('book.noReadableFormat') }}</p>
                 </v-list>
                 <p v-else><br/>{{ $t('book.noDownloadableFiles') }}</p>
             </AppDialog>
@@ -1536,18 +1536,15 @@ export default {
             );
         },
 
-        // 是否存在可下载的文件（含 DJVU/UVZ 扫描版托管格式）
+        // 是否存在可下载的文件
         hasDownloadableFiles: function() {
             if (!this.book || !this.book.files) return false;
             return this.book.files.length > 0;
         },
 
-        // 仅含 DJVU/UVZ/CBZ 托管格式（无任何可在线阅读的格式），下载对话框给出提示
-        // 注意：与后端 webserver/constants.py 的 MANAGED_DOCUMENT_FORMATS 保持一致（前端无法直接引用后端常量）
-        managedOnly: function() {
-            if (!this.book || !this.book.files || !this.book.files.length) return false;
-            const managedFormats = ['djvu', 'uvz', 'cbz'];
-            return this.readFormats.length === 0 && this.book.files.every(file => managedFormats.includes(file.format.toLowerCase()));
+        // 有文件但没有任何可在线阅读的格式（如仅含 UVZ），下载对话框给出提示
+        noReadableFormat: function() {
+            return this.hasDownloadableFiles && this.readFormats.length === 0;
         },
 
         // 获取要发送的文件格式（优先级：epub > azw3 > pdf）

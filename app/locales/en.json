@@ -944,7 +944,7 @@
     "uploadNewFormatDesc": "Add a new format file to the current book",
     "selectFile": "Select File",
     "supportedFormatsUpload": "Supported formats: EPUB, MOBI, AZW, AZW3, PDF, TXT, DJVU, UVZ, CBZ",
-    "managedDocumentsOnly": "This book only has DJVU/UVZ/CBZ scanned or comic formats, available for download only; online reading is not supported.",
+    "noReadableFormat": "This book has no format that can be read online; download only.",
     "forceReplaceFormat": "Force replace existing format",
     "upload": "Upload",
     "selectFileToUpload": "Please select a file to upload",

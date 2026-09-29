@@ -695,7 +695,7 @@
     "uploadNewFormatDesc": "为当前书籍添加新的格式文件",
     "selectFile": "选择文件",
     "supportedFormatsUpload": "支持的格式: EPUB, MOBI, AZW, AZW3, PDF, TXT, DJVU, UVZ, CBZ",
-    "managedDocumentsOnly": "本书仅有 DJVU/UVZ/CBZ 扫描版或漫画包格式，仅供下载，不支持在线阅读",
+    "noReadableFormat": "本书暂无可在线阅读的格式，仅供下载",
     "forceReplaceFormat": "强制替换已存在的格式",
     "upload": "上传",
     "selectFileToUpload": "请选择要上传的文件",

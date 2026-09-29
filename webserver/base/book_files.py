@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
-"""DJVU/UVZ/CBZ 托管文档（扫描版/漫画包）：容器校验与编目。
+"""书籍文件的入库前校验与元数据读取，上传/分片上传/扫描导入共用。
 
-UVZ 内页多为超星 PDG 等私有格式，只入库保存原始文件供下载；校验只识别容器结构，不解码页面内容。
-DJVU/CBZ 的内嵌元数据与封面经 calibre 元数据插件（calibre/plugins 下的 djvu_meta、cbz_meta）读取，
-与文件名编目结果合并；插件缺失时 DJVU 退回文件名编目，CBZ 退回 calibre 内置漫画插件。
+校验：DJVU/UVZ/CBZ 只识别容器结构（不解码页面），其它格式由 calibre 读元数据时自行识别。
+元数据：常规电子书走 calibre get_metadata；扫描版以文件名编目为底，再合并 calibre 插件
+（calibre/plugins 下的 djvu_meta、cbz_meta、uvz_meta）读出的内嵌元数据与封面，插件缺失时自动降级。
 """
 
 import logging
@@ -12,7 +12,7 @@ import os
 import struct
 import zipfile
 
-from webserver.constants import CALIBRE_ERROR_FLAG
+from webserver.constants import CALIBRE_ERROR_FLAG, SCANNED_DOCUMENT_FORMATS
 from webserver.i18n import _
 from webserver import utils
 
@@ -22,12 +22,12 @@ MAX_ARCHIVE_ENTRIES = 10000
 IMAGE_EXTS = frozenset(("jpg", "jpeg", "png", "webp", "gif", "bmp"))
 
 
-class InvalidManagedDocumentError(Exception):
+class InvalidBookFileError(Exception):
     """容器校验失败；message 为可直接展示给用户的说明。"""
 
 
 def _invalid(message):
-    raise InvalidManagedDocumentError(message)
+    raise InvalidBookFileError(message)
 
 
 def _read_signature(fpath, size):
@@ -60,7 +60,7 @@ def _analyze_uvz(fpath):
                 _invalid(_("UVZ 容器为空"))
             if any(info.flag_bits & 0x1 for info in infos):
                 _invalid(_("UVZ 容器包含加密条目，无法导入"))
-    except InvalidManagedDocumentError:
+    except InvalidBookFileError:
         raise
     except (OSError, zipfile.BadZipFile, zipfile.LargeZipFile) as err:
         logging.info("UVZ container check failed for %s: %s", fpath, err)
@@ -84,29 +84,26 @@ def _analyze_cbz(fpath):
                 for info in infos
             ):
                 _invalid(_("CBZ 容器内未找到图片页"))
-    except InvalidManagedDocumentError:
+    except InvalidBookFileError:
         raise
     except (OSError, zipfile.BadZipFile, zipfile.LargeZipFile) as err:
         logging.info("CBZ container check failed for %s: %s", fpath, err)
         _invalid(_("CBZ 容器已损坏：%s") % err)
 
 
-def analyze_managed_document(fpath, fmt):
-    """校验 DJVU/UVZ/CBZ 文件确为声称的容器格式。非法抛 InvalidManagedDocumentError。"""
-    fmt = (fmt or "").lower().lstrip(".")
+CONTAINER_VALIDATORS = {"djvu": _analyze_djvu, "uvz": _analyze_uvz, "cbz": _analyze_cbz}
+
+
+def validate_book_file(fpath, fmt):
+    """入库前校验文件确为声称的容器格式，非法抛 InvalidBookFileError；无校验器的格式直接放行。"""
+    validator = CONTAINER_VALIDATORS.get((fmt or "").lower().lstrip("."))
+    if validator is None:
+        return
     try:
-        if fmt == "djvu":
-            _analyze_djvu(fpath)
-        elif fmt == "uvz":
-            _analyze_uvz(fpath)
-        elif fmt == "cbz":
-            _analyze_cbz(fpath)
-        else:
-            _invalid(_("不支持的托管文档格式: %s") % fmt)
-    except InvalidManagedDocumentError:
+        validator(fpath)
+    except InvalidBookFileError:
         raise
     except OSError as err:
-        # 文件不可读（权限/磁盘等）：统一转为校验错误，避免调用方 500
         _invalid(_("无法读取文件：%s") % err)
 
 
@@ -137,12 +134,16 @@ def _read_file_metadata(fpath, fmt):
     return mi
 
 
-def build_managed_metadata(fpath, fmt, name):
-    """托管格式的完整编目：文件名元数据，DJVU/CBZ 再合并插件读出的内嵌元数据与封面。"""
-    mi = filename_metadata(name)
+def read_book_metadata(fpath, fmt, name):
+    """读取书籍文件元数据；扫描版以文件名编目为底合并内嵌元数据，读取失败时由调用方按 CALIBRE_ERROR_FLAG 处理。"""
+    from calibre.ebooks.metadata.meta import get_metadata
+
     fmt = (fmt or "").lower().lstrip(".")
-    if fmt in ("djvu", "cbz"):
-        file_mi = _read_file_metadata(fpath, fmt)
-        if file_mi is not None:
-            mi.smart_update(file_mi)
+    if fmt not in SCANNED_DOCUMENT_FORMATS:
+        with open(fpath, "rb") as stream:
+            return get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
+    mi = filename_metadata(name)
+    file_mi = _read_file_metadata(fpath, fmt)
+    if file_mi is not None:
+        mi.smart_update(file_mi)
     return mi

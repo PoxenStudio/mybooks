@@ -235,7 +235,7 @@ class TestCbzWrite(unittest.TestCase):
         self.assertIn(b"<Title>New</Title>", read_entry(out, "book/ComicInfo.xml"))
 
     def test_file_write_truncates_and_stays_valid(self):
-        from webserver.services.managed_documents import analyze_managed_document
+        from webserver.base.book_files import validate_book_file
 
         src = make_cbz({"1.jpg": b"p" * 5000, "ComicInfo.xml": COMICINFO * 1})
         with tempfile.NamedTemporaryFile(suffix=".cbz", delete=False) as f:
@@ -243,7 +243,7 @@ class TestCbzWrite(unittest.TestCase):
         try:
             with open(f.name, "rb+") as stream:
                 core.write_metadata(stream, Metadata("S", ["A"]), apply_null=True)
-            analyze_managed_document(f.name, "cbz")
+            validate_book_file(f.name, "cbz")
             with open(f.name, "rb") as stream:
                 self.assertEqual(core.read_metadata(stream, quick=True).title, "S")
         finally:
