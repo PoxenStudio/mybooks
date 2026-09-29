@@ -2,11 +2,46 @@
 # -*- coding: UTF-8 -*-
 
 import logging
+import re
 import threading
 from queue import Queue
 
 from sqlalchemy.sql import text
 from webserver.models import Message
+
+
+def _ensure_scanfiles_indexes(session) -> bool:
+    """为 scanfiles 建查询索引（幂等），返回是否新建了索引。
+
+    扫描导入 Phase1 对每个文件做 path/hash 两次等值查询（ScanService._scan_one_file），
+    批量上传进度轮询按 import_id 过滤（BookUploadBatchStatus）；表随已导入记录增长到
+    几十万行以上后，无索引时这些查询都是全表扫，是重复全量扫描耗时的大头。
+    hash 列在 talebook 血统的存量库上已带 UNIQUE 隐式索引（mybooks 模型去掉了 unique，
+    但旧库的约束仍在），按"首列为 hash 的既有索引"判断避免重复建；CREATE INDEX 在大表上
+    首次执行需要一次全表扫描，仅发生在版本升级后的首次启动。
+    """
+    existing = {}
+    for row in session.execute(text('PRAGMA index_list("scanfiles")')).fetchall():
+        idx_name = row[1]
+        # 防御性检查：索引名来自数据库目录，仍拒绝无法安全内插进 PRAGMA 的名字
+        if not isinstance(idx_name, str) or not re.fullmatch(r"[A-Za-z0-9_]+", idx_name):
+            logging.warning("[DB] Skip unsafe index name on scanfiles: %r", idx_name)
+            continue
+        cols = [
+            c[2]
+            for c in session.execute(text(f'PRAGMA index_info("{idx_name}")')).fetchall()
+        ]
+        existing[idx_name] = cols
+    wanted = {"ix_scanfiles_path": "path", "ix_scanfiles_import_id": "import_id"}
+    if not any(cols and cols[0] == "hash" for cols in existing.values()):
+        wanted["ix_scanfiles_hash"] = "hash"
+    changed = False
+    for name, col in wanted.items():
+        if name in existing:
+            continue
+        session.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON scanfiles ({col})"))
+        changed = True
+    return changed
 
 
 class SingletonType(type):
@@ -186,6 +221,8 @@ class AsyncService(metaclass=SingletonType):
         changed = False
         if "import_type" not in columns:
             self.session.execute(text("ALTER TABLE scanfiles ADD COLUMN import_type INTEGER DEFAULT 0"))
+            changed = True
+        if _ensure_scanfiles_indexes(self.session):
             changed = True
         return changed
 

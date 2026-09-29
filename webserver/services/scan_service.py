@@ -71,10 +71,29 @@ class ScanService(AsyncService):
         ScanFile.READY: 0,
     }
     invalid_folder: set[str] = set()
+    static_bulk_delete: dict = {
+        "running": False,
+        "done": False,
+        "err": "",
+        "status": "",
+        "delete_files": False,
+        "total": 0,
+        "processed": 0,
+        "deleted_files": 0,
+        "skipped": 0,
+    }
 
     @staticmethod
     def is_importing():
         return ScanService.static_is_importing
+
+    @staticmethod
+    def is_bulk_deleting():
+        return bool(ScanService.static_bulk_delete.get("running"))
+
+    @staticmethod
+    def bulk_delete_state():
+        return dict(ScanService.static_bulk_delete)
 
     @staticmethod
     def can_manage(user_id, is_admin_user):
@@ -160,6 +179,176 @@ class ScanService(AsyncService):
         except Exception as err:
             logging.error("[IMPORT] Failed to mark missing scan files: %s", err)
             session.rollback()
+
+    @staticmethod
+    def resolve_ready_paths(session, mark_missing=True):
+        """选择器 "ready"：取出全部 READY 记录的路径，续导取消/中断遗留的待导入文件。
+
+        Phase1 逐行 commit，READY 记录是持久化的，中断后靠本选择器即可续导（哈希复用，
+        不重算）；源文件已不存在的记录顺手标 MISSED——取消路径没有 _mark_missing_scan_files
+        的清扫，在这里补上，避免一直残留在待导入列表。
+        """
+        paths = []
+        dirty = False
+        rows = session.query(ScanFile).filter(ScanFile.status == ScanFile.READY).all()
+        for row in rows:
+            if not row.path:
+                continue
+            if os.path.isfile(row.path):
+                paths.append(row.path)
+            elif mark_missing:
+                row.status = ScanFile.MISSED
+                row.update_time = datetime.datetime.now()
+                dirty = True
+        if dirty:
+            try:
+                session.commit()
+            except Exception as err:
+                logging.error("[IMPORT] Failed to mark missing ready records: %s", err)
+                session.rollback()
+        logging.info("[IMPORT] Ready selector resolved %d paths (%d rows)", len(paths), len(rows))
+        return paths
+
+    @staticmethod
+    def status_filter(query, status):
+        """todo 语义 = 非 IMPORTED（管理页待导入口径）；其余按状态等值过滤。
+
+        选择器解析、导入预检、批量删除共用本实现，防止各处过滤条件漂移。
+        """
+        if status == "todo":
+            return query.filter(ScanFile.status.not_in([ScanFile.IMPORTED]))
+        return query.filter(ScanFile.status == status)
+
+    @staticmethod
+    def resolve_filter_paths(session, filter_kind="todo"):
+        """选择器 "filter"：按状态取磁盘上仍存在的记录路径。
+
+        "todo" = 非 IMPORTED（管理页待导入语义）；其余取 ScanFile 状态常量做等值过滤
+        （normalize_import_filelist 已挡掉 IMPORTED 与任意字符串）。已消失的文件不改
+        状态（记录自身已带 invalid/missed 等状态），只从本次导入剔除。
+        """
+        query = ScanService.status_filter(session.query(ScanFile.path), filter_kind)
+        paths = [p for (p,) in query.all() if p and os.path.isfile(p)]
+        logging.info("[IMPORT] Filter selector (%s) resolved %d paths", filter_kind, len(paths))
+        return paths
+
+    @staticmethod
+    def resolve_dir_paths(scan_upload_path, names):
+        """选择器 "dirs"：把扫描目录下的**一级**子目录名解析成绝对路径（去重、保序）。
+
+        严格限定在 scan_upload_path 内（realpath + commonpath 防目录穿越）；名字里带
+        路径分隔符的（子路径）一律不收，解析后按相对路径首段复核排除项——隐藏目录、
+        ~ 临时目录、有声书目录，内层段绕不过（如 "sf/../audiobooks"）；不存在或越界的
+        名字直接丢弃并记日志。
+        """
+        if not scan_upload_path:
+            return []
+        base = os.path.realpath(scan_upload_path)
+        if not os.path.isdir(base):
+            return []
+        dirs = []
+        for name in names or []:
+            if not isinstance(name, str):
+                continue
+            name = name.strip().strip("/\\")
+            if not name or "\x00" in name:
+                continue
+            try:
+                path = os.path.realpath(os.path.join(base, name))
+            except (ValueError, OSError):
+                logging.warning("[IMPORT] Dir selector skipped invalid dir: %r", name)
+                continue
+            try:
+                inside = os.path.commonpath([base, path]) == base
+            except ValueError:
+                # Windows 跨盘符等场景 commonpath 直接抛 ValueError
+                inside = False
+            if not inside or not os.path.isdir(path):
+                logging.warning("[IMPORT] Dir selector skipped invalid dir: %r", name)
+                continue
+            rel = os.path.relpath(path, base)
+            if os.sep in rel or (os.altsep and os.altsep in rel):
+                # 一级子目录契约：realpath 后仍带分隔符说明请求的是嵌套子路径
+                logging.warning("[IMPORT] Dir selector skipped nested path: %r", name)
+                continue
+            first = rel.split(os.sep)[0]
+            # Windows 上目录名大小写不敏感，"AudioBooks" 也要挡（常量本身全小写）
+            if first.startswith((".", "~")) or first.lower() == constants.AUDIO_BOOK_IMPORTS:
+                logging.warning("[IMPORT] Dir selector skipped excluded dir: %r", name)
+                continue
+            if path not in dirs:
+                dirs.append(path)
+        logging.info("[IMPORT] Dir selector resolved %d dirs", len(dirs))
+        return dirs
+
+    @staticmethod
+    def _real_file_in_scan_dir(fpath, scan_upload_path):
+        """realpath + commonpath 判定路径相对扫描导入目录的位置；返回 (realpath, reason)。
+
+        防越界删除的单一闸口：文件位于目录内 → (realpath, None)；目录外 → (None, "outside")；
+        缺失/非文件/解析失败（含跨盘 ValueError）→ (None, "missing")。有声书的 path 是
+        目录，isfile 闸门保证 audiobooks/ 源目录永不会被本判定放行删除。
+        """
+        if not fpath or not scan_upload_path:
+            return None, "missing"
+        try:
+            real = os.path.realpath(fpath)
+        except (ValueError, OSError):
+            return None, "missing"
+        if not os.path.isfile(real):
+            return None, "missing"
+        try:
+            inside = os.path.commonpath([scan_upload_path, real]) == scan_upload_path
+        except ValueError:
+            inside = False
+        return (real, None) if inside else (None, "outside")
+
+    @staticmethod
+    def _bulk_delete_core(session, status, delete_files, scan_upload_path, progress=None, batch_size=500):
+        """批量删除指定状态的全部 ScanFile 记录；delete_files 时把扫描导入目录内的源文件一并真删。
+
+        记录一律删除；文件只有 realpath+commonpath 确认位于 scan_upload_path 内才删：
+        越界只删记录并计 skip，文件本就不存在不算 skip；delete_files=False 时完全不做
+        stat（百万行纯记录删除省去逐行 realpath/isfile）。按 id 排序分批查询、删除、提交，
+        内存与表大小解耦；返回 (total, deleted_files, skipped)。有声书记录的 path 是目录，
+        isfile 闸门保证 audiobooks/ 源目录永不被本方法真删。
+        """
+        base_query = ScanService.status_filter(session.query(ScanFile), status)
+        total = base_query.count()
+        base = os.path.realpath(scan_upload_path) if scan_upload_path else ""
+        processed = deleted_files = skipped = 0
+        while True:
+            rows = base_query.order_by(ScanFile.id).limit(batch_size).all()
+            if not rows:
+                break
+            ids = [row.id for row in rows]
+            for row in rows:
+                if delete_files:
+                    real, reason = ScanService._real_file_in_scan_dir(row.path, base)
+                    if reason == "outside":
+                        logging.warning("[BULK-DELETE] Skip file outside scan dir: %s", row.path)
+                        skipped += 1
+                    elif real:
+                        try:
+                            os.remove(real)
+                            deleted_files += 1
+                        except OSError as err:
+                            logging.error("[BULK-DELETE] Failed to remove %s: %s", real, err)
+                            skipped += 1
+                processed += 1
+            session.query(ScanFile).filter(ScanFile.id.in_(ids)).delete(synchronize_session=False)
+            try:
+                session.commit()
+            except Exception as err:
+                logging.error("[BULK-DELETE] Batch commit error: %s", err)
+                session.rollback()
+                raise
+            if progress:
+                try:
+                    progress(processed, total, deleted_files, skipped)
+                except Exception:
+                    logging.error("[BULK-DELETE] Progress callback error", exc_info=True)
+        return total, deleted_files, skipped
 
     def _collect_imported_path(self, skip_last=False):
         start_time = time.time()
@@ -278,16 +467,23 @@ class ScanService(AsyncService):
         return filelist
 
     @AsyncService.register_service
-    def do_import(self, paths, user_id, skip_last_dirs=0, force=False, import_id=0, cleanup_dir=None):
+    def do_import(self, paths, user_id, skip_last_dirs=0, force=False, import_id=0, cleanup_dir=None, selector=None):
         """
             force: 为TRUE时不检查重复的图书，直接导入
             import_id: 由调用方预先生成的批次id(如批量上传)，用于调用方在发起后立即拿到id去轮询逐文件结果；
                        为0时按原逻辑自动生成(或复用skip_last_dirs计算出的续跑id)
             cleanup_dir: 本次导入完成/取消后需要清理的暂存目录(如批量上传的暂存文件)，
                          仅当 KEEP_UPLOAD_SOURCE_FILE 配置为 False 时才会删除
+            selector: 服务端选择器 ("ready"|"filter", value)，非空时忽略 paths 参数，由本方法
+                      在后台服务线程解析出文件清单——全量 .all() + 逐行 stat 在百万行表上会
+                      冻住 tornado ioloop，绝不能在 handler 里做（handler 只做 COUNT 预检）
         """
         if ScanService.static_is_importing:
             logging.error("Importing is running, please wait...")
+            return
+        if ScanService.is_bulk_deleting():
+            # 二道闸：handler 检查与异步入队之间存在窗口，服务线程入口再拦一次
+            logging.error("[IMPORT] Bulk deleting is running, import rejected")
             return
 
         ScanService.invalid_folder.clear()
@@ -305,10 +501,24 @@ class ScanService(AsyncService):
         if import_id:
             imported_id = import_id
 
+        if selector is not None:
+            sel_kind, sel_value = selector
+            if sel_kind == "ready":
+                paths = self.resolve_ready_paths(self.session)
+            else:
+                paths = self.resolve_filter_paths(self.session, sel_value)
+
         filelist = self._collect_files(paths, imported_dirs=imported_dirs, imported_files=imported_files)
         logging.info("[IMPORT] Collected %d files in %.3f seconds (skip_last_dirs=%d)", len(filelist), time.time() - start_time, skip_last_dirs)
         if not filelist:
             logging.warning("[IMPORT] No valid files found in: %s", paths)
+            if selector is not None:
+                # 选择器空跑：记录在库但磁盘上已无对应文件（missed/invalid 等），明确告知而非静默结束
+                self.add_msg(
+                    user_id=user_id,
+                    status="warning",
+                    msg=_("选择器没有找到可导入的文件，对应记录可能已失效或源文件已不存在"),
+                )
             ScanService.static_is_importing = False
             ScanService.static_import_user_id = 0
             if cleanup_dir and not CONF.get("KEEP_UPLOAD_SOURCE_FILE", False):
@@ -958,3 +1168,67 @@ class ScanService(AsyncService):
         except Exception as e:
             logging.error("[RENAME FILE] Failed to commit: %s", e)
             session.rollback()
+
+    @staticmethod
+    def _bulk_delete_progress(processed, total, deleted_files, skipped):
+        st = ScanService.static_bulk_delete
+        st["processed"] = processed
+        st["total"] = total
+        st["deleted_files"] = deleted_files
+        st["skipped"] = skipped
+
+    @AsyncService.register_service
+    def do_bulk_delete(self, user_id, status, delete_files=True):
+        """批量删除后台服务：删除指定状态的全部记录，可选连同扫描导入目录内的源文件一起真删。
+
+        与 do_import 是各自独立的服务线程，靠状态位互斥（本方法拒绝在导入运行时启动，
+        do_import/批量上传/手动删除侧在启动前检查 is_bulk_deleting）；进度写入
+        static_bulk_delete 供 /admin/import/bulk_delete/status 轮询。
+        """
+        if ScanService.static_is_importing:
+            self.add_msg(user_id=user_id, status="error", msg=_("已有导入任务正在运行，请稍后再试"))
+            return
+        if ScanService.is_bulk_deleting():
+            return
+        # 有声书导入写同一张 scanfiles 表（import_type=2），与批量删除互斥；
+        # 延迟导入避免模块级循环（audios_import → scan_service）
+        from webserver.services.audios_import import AudioBookImporter
+
+        if AudioBookImporter.is_running():
+            self.add_msg(user_id=user_id, status="error", msg=_("有声书导入任务正在运行，请稍后再试"))
+            return
+        ScanService.static_bulk_delete = {
+            "running": True,
+            "done": False,
+            "err": "",
+            "status": status,
+            "delete_files": bool(delete_files),
+            "total": 0,
+            "processed": 0,
+            "deleted_files": 0,
+            "skipped": 0,
+        }
+        start_time = time.time()
+        try:
+            total, deleted_files, skipped = self._bulk_delete_core(
+                self.session, status, bool(delete_files), CONF.get("scan_upload_path", ""),
+                progress=self._bulk_delete_progress,
+            )
+            ScanService.static_bulk_delete["total"] = total
+            self.add_msg(
+                user_id=user_id,
+                status="success",
+                msg=_("批量删除完成: 共%d条记录，已删除文件%d个，跳过%d个") % (total, deleted_files, skipped),
+            )
+            logging.info(
+                "[BULK-DELETE] Done in %.3fs: status=%s total=%d files=%d skipped=%d",
+                time.time() - start_time, status, total, deleted_files, skipped,
+            )
+        except Exception as err:
+            ScanService.static_bulk_delete["err"] = str(err)
+            logging.error("[BULK-DELETE] Failed: %s", err)
+            logging.error(traceback.format_exc())
+            self.add_msg(user_id=user_id, status="error", msg=_("批量删除失败: %s") % err)
+        finally:
+            ScanService.static_bulk_delete["running"] = False
+            ScanService.static_bulk_delete["done"] = True
