@@ -25,6 +25,7 @@
 #   - 每 20 个文件批量提交一次事务，完成后执行最终提交并清理 scoped_session。
 #
 
+import datetime
 import errno
 import hashlib
 import os
@@ -140,6 +141,25 @@ class ScanService(AsyncService):
             logging.exception("save error: %s", err)
         session.rollback()
         return False
+
+    def _mark_missing_scan_files(self):
+        """导入完成后，将源文件已不存在的 NEW/READY 记录标记为 MISSED，避免一直残留在待导入列表中"""
+        start_time = time.time()
+        session = self.session
+        try:
+            rows = session.query(ScanFile).filter(ScanFile.status.in_([ScanFile.NEW, ScanFile.READY])).all()
+            missed = 0
+            for row in rows:
+                if row.path and not os.path.exists(row.path):
+                    row.status = ScanFile.MISSED
+                    row.update_time = datetime.datetime.now()
+                    missed += 1
+            if missed:
+                session.commit()
+            logging.info("[IMPORT] Checked %d NEW/READY records, marked %d as missed in %.3f seconds", len(rows), missed, time.time() - start_time)
+        except Exception as err:
+            logging.error("[IMPORT] Failed to mark missing scan files: %s", err)
+            session.rollback()
 
     def _collect_imported_path(self, skip_last=False):
         start_time = time.time()
@@ -327,6 +347,7 @@ class ScanService(AsyncService):
                 )
             else:
                 logging.info("[IMPORT] Completed")
+                self._mark_missing_scan_files()
                 self.add_msg(
                     user_id=user_id,
                     status="success",
@@ -722,7 +743,7 @@ class ScanService(AsyncService):
         if hash_rows:
             logging.info("[SCAN] Clear existing rows with same hash: %s, count: %d", hash_val, len(hash_rows))
             session.query(ScanFile).filter(
-                ScanFile.hash == hash_val and ScanFile.status != ScanFile.IMPORTED
+                ScanFile.hash == hash_val, ScanFile.status != ScanFile.IMPORTED
             ).delete(synchronize_session=False)
             session.flush()
         row.status = ScanFile.READY
