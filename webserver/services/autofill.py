@@ -11,8 +11,7 @@ from webserver.plugins.meta.bookbarn_tags import BookBarnTags
 from webserver.services import AsyncService
 from webserver.services.background_service import BackgroundService, BackgroundTask
 from webserver.services.book_search import BookSearch
-from webserver.services.catalog import CatalogExtractService
-from webserver.constants import AUTO_FILL_META, CALIBRE_COLUMN_TRANSLATORS, DEFAULT_ISBN
+from webserver.constants import AUTO_FILL_META, CALIBRE_COLUMN_TRANSLATORS
 
 CONF = loader.get_settings()
 
