@@ -227,6 +227,18 @@
     "registerButton": "注册",
     "pageTitle": "注册"
   },
+  "upgrading": {
+    "title": "正在执行数据库升级，请不要重启，等待任务完成",
+    "waiting": "服务启动中…",
+    "finished": "升级完成，正在进入…",
+    "stepProgress": "第 {index} / {total} 步",
+    "steps": {
+      "items": "升级图书信息表",
+      "readers": "升级用户表",
+      "scanfiles": "升级扫描导入记录表",
+      "readings": "升级阅读记录表"
+    }
+  },
   "welcome": {
     "enterPassword": "请输入访问密码",
     "description": "本站为私人图书馆，需输入密码才可进行访问",

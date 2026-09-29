@@ -21,7 +21,7 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 from tornado import web
 from tornado.options import define, options
 
-from webserver import loader, models, social_routes
+from webserver import db_upgrade, loader, models, social_routes
 from webserver.base.setting_saver import SettingsSaver
 from webserver.services import AsyncService
 from webserver.services.book_barn import BookBarnService
@@ -241,7 +241,7 @@ def configure_plugins():
         logging.error("[INIT]Failed to configure plugins: %s" % e)
 
 
-def make_app():
+def make_app(upgrade_status_addr=None):
     auth_db_path = CONF["user_database"]
     logging.info("Revision:: [%s]" % VERSION)
     logging.info("Init library with [%s]" % options.with_library)
@@ -409,7 +409,18 @@ def make_app():
 
     is_upgrade = CONF.get("installed_version", "") != VERSION
     logging.info(f"The installed version is {CONF.get("installed_version", "NONE")}, {"" if is_upgrade else "no"} need to check or upgrade table structure.")
-    need_sync_item_time = AsyncService().setup(book_db, ScopedSession, need_check_db=is_upgrade)
+    status_server = None
+    bound_sockets = None
+    if is_upgrade and upgrade_status_addr:
+        bound_sockets = db_upgrade.bind_service_sockets(*upgrade_status_addr)
+        if bound_sockets:
+            status_server = db_upgrade.UpgradeStatusServer(bound_sockets)
+            status_server.start()
+    try:
+        need_sync_item_time = AsyncService().setup(book_db, ScopedSession, need_check_db=is_upgrade)
+    finally:
+        if status_server:
+            status_server.stop()
     if is_upgrade and CONF.get("installed", False):
         logging.info("Need to save the setting for initialized version")
         SettingsSaver().save_extra_settings(CONF)
@@ -429,6 +440,7 @@ def make_app():
 
     app_routes = []
     app_routes += social_routes.SOCIAL_AUTH_ROUTES
+    app_routes += db_upgrade.routes()
     app_routes += assistant.routes()
     app_routes += mcp.routes()
     app_routes += admin.routes()
@@ -465,6 +477,7 @@ def make_app():
 
     app = web.Application(app_routes, **app_settings)
     app._engine = engine
+    app.bound_sockets = bound_sockets
 
     # Start background service
     BookBarnService().get_daily_books()
@@ -568,7 +581,7 @@ def main():
     AsyncHTTPClient.configure(None, max_clients=200)
 
     try:
-        app = make_app()
+        app = make_app(upgrade_status_addr=(options.port, options.host))
     except Exception as e:
         logging.error(f"Error making app: {e}")
         logging.error(traceback.format_exc())
@@ -588,7 +601,10 @@ def main():
     logging.info("Starting server...")
     logging.debug("Max upload size set to: %d bytes", get_upload_size())
     http_server = tornado.httpserver.HTTPServer(app, xheaders=True, max_buffer_size=get_upload_size())
-    http_server.listen(options.port, options.host)
+    if getattr(app, "bound_sockets", None):
+        http_server.add_sockets(app.bound_sockets)
+    else:
+        http_server.listen(options.port, options.host)
     tornado.ioloop.IOLoop.instance().start()
 
     from flask.ext.sqlalchemy import _EngineDebuggingSignalEvents

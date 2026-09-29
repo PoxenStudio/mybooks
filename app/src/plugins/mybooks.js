@@ -78,6 +78,13 @@ export default ({ app }, inject) => {
             })
             .then(rsp => {
                 const { route, redirect, res } = app.context;
+                if (rsp.err === 'db_upgrading') {
+                    if (route.path !== "/upgrading") {
+                        redirect(302, "/upgrading?next=" + encodeURIComponent(route.fullPath));
+                    }
+                    // 升级期间原请求不再回调，避免各页面把它当成错误弹框
+                    return process.server ? rsp : new Promise(() => {});
+                }
                 if (rsp.err === 'not_installed') {
                     redirect(301, "/install");
                 } else if (rsp.err === 'not_invited') {
