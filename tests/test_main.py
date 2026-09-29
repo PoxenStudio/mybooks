@@ -239,6 +239,7 @@ class TestAppWithoutLogin(TestApp):
         self.assertEqual(d["user"]["is_login"], False)
         self.assertEqual(d["user"]["is_admin"], False)
         self.assertEqual(d["sys"]["books"], 13)
+        self.assertEqual(d["sys"]["epub_viewer"], main.CONF.get("EPUB_VIEWER", "MyReader"))
 
         d = self.json("/api/user/info?detail=1")
         self.assertEqual(d["user"]["is_login"], False)
@@ -528,15 +529,15 @@ class TestBook(TestWithUserLogin):
             rsp = self.fetch("/read/%s" % BID_EPUB, follow_redirects=False)
             self.assertEqual(rsp.code, 200)
 
-    def _mock_djvu_only_book(self):
-        # 测试库里没有 djvu 书籍：把 PDF 样书改造成只含 DJVU 格式的书
+    def _mock_djvu_only_book(self, fmt="djvu"):
+        # 测试库里没有 djvu/cbz 书籍：把 PDF 样书改造成只含该格式的书
         orig_get_book = BaseHandler.get_book
 
         def fake_get_book(handler, book_id, *args, **kwargs):
             book = orig_get_book(handler, book_id, *args, **kwargs)
             if book and int(book_id) == BID_PDF:
                 book = dict(book)
-                book["fmt_djvu"] = book.pop("fmt_pdf")
+                book["fmt_%s" % fmt] = book.pop("fmt_pdf")
             return book
 
         return mock.patch.object(BaseHandler, "get_book", fake_get_book)
@@ -553,6 +554,20 @@ class TestBook(TestWithUserLogin):
             d = self.json("/api/book/%s/read" % BID_PDF, method="POST", body=json.dumps({"format": "djvu"}))
             self.assertEqual(d["err"], "ok")
             self.assertEqual(d["data"]["status"], "ready")
+
+    def test_read_cbz_with_myreader(self):
+        with self._mock_djvu_only_book("cbz"), mock.patch.dict(webserver.handlers.book.CONF, {"EPUB_VIEWER": "MyReader"}):
+            rsp = self.fetch("/read/%s?format=cbz" % BID_PDF, follow_redirects=False)
+            self.assertEqual(rsp.code, 302)
+            self.assertEqual(rsp.headers["Location"], "/readerx/open?bookId=%s&format=cbz" % BID_PDF)
+            d = self.json("/api/book/%s/read" % BID_PDF, method="POST", body=json.dumps({"format": "cbz"}))
+            self.assertEqual(d["err"], "ok")
+            self.assertEqual(d["data"]["status"], "ready")
+
+    def test_read_cbz_without_myreader(self):
+        with self._mock_djvu_only_book("cbz"), mock.patch.dict(webserver.handlers.book.CONF, {"EPUB_VIEWER": "epubjs.html"}):
+            d = self.json("/api/book/%s/read" % BID_PDF, method="POST", body=json.dumps({"format": "cbz"}))
+            self.assertEqual(d["err"], "params.book.invalid")
 
     def test_edit(self):
         body = {

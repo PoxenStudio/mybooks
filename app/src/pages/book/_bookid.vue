@@ -1547,7 +1547,7 @@ export default {
         managedOnly: function() {
             if (!this.book || !this.book.files || !this.book.files.length) return false;
             const managedFormats = ['djvu', 'uvz', 'cbz'];
-            return this.book.files.every(file => managedFormats.includes(file.format.toLowerCase()));
+            return this.readFormats.length === 0 && this.book.files.every(file => managedFormats.includes(file.format.toLowerCase()));
         },
 
         // 获取要发送的文件格式（优先级：epub > azw3 > pdf）
@@ -1653,6 +1653,17 @@ export default {
             return this.book.files.some(file => file.format.toLowerCase() === 'djvu');
         },
 
+        hasCbz() {
+            if (!this.book || !this.book.files) return false;
+            return this.book.files.some(file => file.format.toLowerCase() === 'cbz');
+        },
+
+        // 与后端 EPUB_VIEWER 默认值一致：未配置时视为 MyReader
+        isMyReader() {
+            const sys = this.$store.state.sys || {};
+            return (sys.epub_viewer || 'MyReader') === 'MyReader';
+        },
+
         // 目录提取当前仅支持从 EPUB/PDF/TXT 中解析
         hasCatalogFormats() {
             if (!this.book || !this.book.files) return false;
@@ -1679,7 +1690,7 @@ export default {
             return ['epub', 'azw3', 'mobi', 'azw', 'docx'].some(format => formats.includes(format));
         },
 
-        // 可供在线阅读的格式列表，按优先级排列：TXT > EPUB > PDF > DJVU
+        // 可供在线阅读的格式列表，按优先级排列：TXT > EPUB > PDF > DJVU > CBZ（CBZ 仅 MyReader 支持）
         readFormats() {
             if (!this.book) return [];
             const formats = [];
@@ -1688,6 +1699,7 @@ export default {
             if (this.hasEpubFormat || this.is_txt) formats.push({ key: 'epub', label: this.$t('book.epubReader'), href: '/read/' + this.book.id + '?format=epub' });
             if (this.hasPDF) formats.push({ key: 'pdf', label: this.$t('book.pdfReader'), href: '/read/' + this.book.id + '?format=pdf' });
             if (this.hasDjvu) formats.push({ key: 'djvu', label: this.$t('book.djvuReader'), href: '/read/' + this.book.id + '?format=djvu' });
+            if (this.hasCbz && this.isMyReader) formats.push({ key: 'cbz', label: this.$t('book.cbzReader'), href: '/read/' + this.book.id + '?format=cbz' });
             return formats;
         },
 
