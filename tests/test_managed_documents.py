@@ -78,6 +78,15 @@ class TestAnalyzeManagedDocument(unittest.TestCase):
         with self.assertRaises(InvalidManagedDocumentError):
             analyze_managed_document(p, "djvu")
 
+    def test_djvu_odd_form_pad_byte(self):
+        p = self._write("pad.djvu", _make_djvu(b"X") + b"\x00")
+        self.assertIsNone(analyze_managed_document(p, "djvu"))
+
+    def test_djvu_even_form_extra_byte(self):
+        p = self._write("extra.djvu", _make_djvu(b"XY") + b"\x00")
+        with self.assertRaises(InvalidManagedDocumentError):
+            analyze_managed_document(p, "djvu")
+
     def test_djvu_truncated(self):
         p = self._write("trunc.djvu", _make_djvu()[:10])
         with self.assertRaises(InvalidManagedDocumentError):

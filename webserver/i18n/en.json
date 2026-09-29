@@ -532,7 +532,7 @@
   "文件校验失败：%s": "File validation failed: %s",
   "本书没有可转换的格式": "This book has no convertible format",
   "文件内容不是有效的 DjVu 容器": "File content is not a valid DjVu container",
-  "DjVu 容器长度不匹配": "DjVu container length mismatch",
+  "无效的DjVu文件": "Invalid DjVu file",
   "文件内容不是有效的 UVZ ZIP 容器": "File content is not a valid UVZ ZIP container",
   "UVZ 容器条目数超出预算(%d)": "UVZ container exceeds the entry budget (%d)",
   "UVZ 容器为空": "UVZ container is empty",

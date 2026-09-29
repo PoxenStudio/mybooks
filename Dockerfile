@@ -98,7 +98,7 @@ COPY requirements_release.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir --no-compile -r /tmp/requirements.txt --break-system-packages && \
     rm -rf /root/.cache /root/.config/pip /tmp/requirements.txt /tmp/pip-* /var/tmp/*
 
-# MyBooks 自带的 calibre 插件（DjVu 元数据），启动参数 --path-system-plugins 指向此目录
+# MyBooks 自带的 calibre 插件（DjVu 元数据）
 COPY calibre/plugins/ /tmp/calibre-plugins/
 RUN python3 /tmp/calibre-plugins/djvu_meta/build.py --out /usr/lib/calibre/mybooks-plugins && \
     rm -rf /tmp/calibre-plugins
