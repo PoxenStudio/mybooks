@@ -1,4 +1,4 @@
-# MyBoooks Python 后台 API 接口文档
+# MyBoooks 后台 API 接口文档
 **最后更新时间**：2026-09-28
 
 ## 基础说明
