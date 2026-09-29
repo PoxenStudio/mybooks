@@ -19,6 +19,13 @@ def _ensure_scanfiles_indexes(session) -> bool:
     hash 列在 talebook 血统的存量库上已带 UNIQUE 隐式索引（mybooks 模型去掉了 unique，
     但旧库的约束仍在），按"首列为 hash 的既有索引"判断避免重复建；CREATE INDEX 在大表上
     首次执行需要一次全表扫描，仅发生在版本升级后的首次启动。
+
+    status 做成 (status, import_type) 复合索引：按状态的公共查询（选择器解析、导入预检
+    COUNT、批量删除、summary 的 GROUP BY）统一带电子书口径过滤（ScanService.
+    ebook_scan_filter 排除有声书记录），复合索引能整段覆盖——单列 status 索引仍要逐行
+    回表取 import_type。status 等值查询照样吃这个索引的最左前缀。
+
+    调用方需保证 import_type 列已存在（adjust_scanfile_table 先 ALTER 再建索引）。
     """
     existing = {}
     for row in session.execute(text('PRAGMA index_list("scanfiles")')).fetchall():
@@ -32,14 +39,20 @@ def _ensure_scanfiles_indexes(session) -> bool:
             for c in session.execute(text(f'PRAGMA index_info("{idx_name}")')).fetchall()
         ]
         existing[idx_name] = cols
-    wanted = {"ix_scanfiles_path": "path", "ix_scanfiles_import_id": "import_id"}
+    wanted = {
+        "ix_scanfiles_path": ("path",),
+        "ix_scanfiles_import_id": ("import_id",),
+        "ix_scanfiles_status_import_type": ("status", "import_type"),
+    }
     if not any(cols and cols[0] == "hash" for cols in existing.values()):
-        wanted["ix_scanfiles_hash"] = "hash"
+        wanted["ix_scanfiles_hash"] = ("hash",)
     changed = False
-    for name, col in wanted.items():
+    for name, columns in wanted.items():
         if name in existing:
             continue
-        session.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON scanfiles ({col})"))
+        session.execute(
+            text(f"CREATE INDEX IF NOT EXISTS {name} ON scanfiles ({', '.join(columns)})")
+        )
         changed = True
     return changed
 
