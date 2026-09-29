@@ -1095,6 +1095,7 @@ export default {
                 'metadata_update': this.$t('appHeader.taskTypeMetadataUpdate'),
                 'cover_update': this.$t('appHeader.taskTypeCoverUpdate'),
                 'save_meta': this.$t('appHeader.taskTypeSaveMeta'),
+                'bulk_delete': this.$t('appHeader.taskTypeBulkDelete'),
             };
             return typeMap[serviceType] || "";
         },

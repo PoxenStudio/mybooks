@@ -555,5 +555,6 @@
   "批量删除完成: 共%d条记录，已删除文件%d个，跳过%d个": "Bulk delete finished: %d records in total, %d files deleted, %d skipped",
   "批量删除失败: %s": "Bulk delete failed: %s",
   "正在取消批量删除任务, 请稍后查看状态": "Cancelling the bulk delete task, please check the status later",
-  "批量删除已取消: 已处理%d条记录，已删除文件%d个，跳过%d个": "Bulk delete cancelled: %d records processed, %d files deleted, %d skipped"
+  "批量删除已取消: 已处理%d条记录，已删除文件%d个，跳过%d个": "Bulk delete cancelled: %d records processed, %d files deleted, %d skipped",
+  "批量删除导入记录": "Bulk delete import records"
 }
