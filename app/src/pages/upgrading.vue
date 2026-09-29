@@ -117,7 +117,7 @@ export default {
     transition: background-color 0.1s linear;
 }
 .upgrade-task {
-    font-size: 32px;
+    font-size: 28px;
     line-height: 1.4;
     text-align: center;
 }
