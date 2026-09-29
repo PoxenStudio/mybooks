@@ -193,7 +193,8 @@
       "book_review": true,
       "book_recommend": true,
       "shared_notes": true
-    }
+    },
+    "sidebar_items": ["audiobooks", "printbooks", "tags", "series", "memo"]
   },
   "user": {
     "id": 1,
@@ -236,6 +237,21 @@ sys中为基础系统信息，title为网站标题, books为在库书籍数量�
 | `book_review` | `ENABLE_BOOK_REVIEW` | `true` | 是否允许用户对书籍进行评论及评分 |
 | `book_recommend` | `ENABLE_BOOK_RECOMMEND_TO_OTHERS` | `true` | 评价是否计入推荐人数/首页推荐位 |
 | `shared_notes` | `ENABLE_SHARED_NOTES` | `true` | 阅读时是否可查看其他用户的划线与笔记 |
+
+`sys.sidebar_items`（string 数组，对应配置项 `SIDEBAR_ITEMS`，默认 `[]`）为管理员配置的侧边栏可选导航项白名单：**空数组表示全部显示**，非空时仅显示数组中列出的项。未列入可选范围的导航（首页、作者、所有图书、个人/管理/书单菜单等）始终显示。可取值如下：
+
+| 值 | 侧边栏项 | 备注 |
+|---|---|---|
+| `audiobooks` | 有声书 | |
+| `printbooks` | 实体书 | 还需 `sys.allow.physical_books` 为 true |
+| `publishers` | 出版社 | |
+| `folders` | 文件夹浏览 | 还需 `sys.allow.folder` 为 true |
+| `categories` | 分类浏览 | |
+| `tags` | 标签 | |
+| `series` | 丛书 | |
+| `languages` | 语言 | |
+| `rating` | 评分 | |
+| `memo` | 站内留言 | |
 
 登录用户的 `user` 字段：
 
