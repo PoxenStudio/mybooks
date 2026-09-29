@@ -78,6 +78,8 @@ class ScanService(AsyncService):
         "err": "",
         "status": "",
         "delete_files": False,
+        "cancel": False,
+        "cancelled": False,
         "total": 0,
         "processed": 0,
         "deleted_files": 0,
@@ -121,6 +123,14 @@ class ScanService(AsyncService):
             return
         ScanService.static_abort_flag = True
         logging.info("[IMPORT]Cancel the importing")
+
+    @staticmethod
+    def cancel_bulk_delete():
+        """请求取消正在运行的批量删除任务：只置标志，由批循环在批次边界生效（已提交的批次不回滚）。"""
+        if not ScanService.is_bulk_deleting():
+            return
+        ScanService.static_bulk_delete["cancel"] = True
+        logging.info("[BULK-DELETE]Cancel requested")
 
     @staticmethod
     def get_invalid_folders():
@@ -328,13 +338,16 @@ class ScanService(AsyncService):
         return (real, None) if inside else (None, "outside")
 
     @staticmethod
-    def _bulk_delete_core(session, status, delete_files, scan_upload_path, progress=None, batch_size=500):
+    def _bulk_delete_core(session, status, delete_files, scan_upload_path, progress=None, batch_size=500, should_cancel=None):
         """批量删除指定状态的全部 ScanFile 记录；delete_files 时把扫描导入目录内的源文件一并真删。
 
         记录一律删除；文件只有 realpath+commonpath 确认位于 scan_upload_path 内才删：
         越界只删记录并计 skip，文件本就不存在不算 skip；delete_files=False 时完全不做
         stat（百万行纯记录删除省去逐行 realpath/isfile）。按 id 排序分批查询、删除、提交，
         内存与表大小解耦；返回 (total, deleted_files, skipped)。
+
+        should_cancel 在每批开始前调用，返回 True 即停在批次边界（已提交的批次不回滚）；
+        返回的 total 仍是开工前的全量计数，processed 以 progress 回调最后一次上报为准。
 
         过滤口径经 status_filter → ebook_scan_filter 收敛：有声书记录（import_type=2）不参与
         本方法——它的 path 是目录（isfile 闸门本就不会真删），而那条记录本身是跳表，不能清。
@@ -344,6 +357,9 @@ class ScanService(AsyncService):
         base = os.path.realpath(scan_upload_path) if scan_upload_path else ""
         processed = deleted_files = skipped = 0
         while True:
+            if should_cancel is not None and should_cancel():
+                logging.info("[BULK-DELETE]Cancelled after %d/%d records", processed, total)
+                break
             rows = base_query.order_by(ScanFile.id).limit(batch_size).all()
             if not rows:
                 break
@@ -1206,12 +1222,13 @@ class ScanService(AsyncService):
         st["skipped"] = skipped
 
     @AsyncService.register_service
-    def do_bulk_delete(self, user_id, status, delete_files=True):
+    def do_bulk_delete(self, user_id, status, delete_files=False):
         """批量删除后台服务：删除指定状态的电子书记录，可选连同扫描导入目录内的源文件一起真删。
 
         与 do_import 是各自独立的服务线程，靠状态位互斥（本方法拒绝在导入运行时启动，
         do_import/批量上传/手动删除侧在启动前检查 is_bulk_deleting）；进度写入
-        static_bulk_delete 供 /admin/import/bulk_delete/status 轮询。
+        static_bulk_delete 供 /admin/import/bulk_delete/status 轮询。cancel 置位后批循环
+        在批次边界停下（已提交批次不回滚），state.cancelled 供前端区分展示。
         """
         if ScanService.static_is_importing:
             self.add_msg(user_id=user_id, status="error", msg=_("已有导入任务正在运行，请稍后再试"))
@@ -1232,6 +1249,8 @@ class ScanService(AsyncService):
             "err": "",
             "status": status,
             "delete_files": bool(delete_files),
+            "cancel": False,
+            "cancelled": False,
             "total": 0,
             "processed": 0,
             "deleted_files": 0,
@@ -1242,17 +1261,32 @@ class ScanService(AsyncService):
             total, deleted_files, skipped = self._bulk_delete_core(
                 self.session, status, bool(delete_files), CONF.get("scan_upload_path", ""),
                 progress=self._bulk_delete_progress,
+                should_cancel=lambda: ScanService.static_bulk_delete.get("cancel", False),
             )
             ScanService.static_bulk_delete["total"] = total
-            self.add_msg(
-                user_id=user_id,
-                status="success",
-                msg=_("批量删除完成: 共%d条记录，已删除文件%d个，跳过%d个") % (total, deleted_files, skipped),
-            )
-            logging.info(
-                "[BULK-DELETE] Done in %.3fs: status=%s total=%d files=%d skipped=%d",
-                time.time() - start_time, status, total, deleted_files, skipped,
-            )
+            if ScanService.static_bulk_delete.get("cancel"):
+                ScanService.static_bulk_delete["cancelled"] = True
+                self.add_msg(
+                    user_id=user_id,
+                    status="warning",
+                    msg=_("批量删除已取消: 已处理%d条记录，已删除文件%d个，跳过%d个")
+                    % (ScanService.static_bulk_delete["processed"], deleted_files, skipped),
+                )
+                logging.info(
+                    "[BULK-DELETE] Cancelled in %.3fs: status=%s processed=%d/%d files=%d skipped=%d",
+                    time.time() - start_time, status,
+                    ScanService.static_bulk_delete["processed"], total, deleted_files, skipped,
+                )
+            else:
+                self.add_msg(
+                    user_id=user_id,
+                    status="success",
+                    msg=_("批量删除完成: 共%d条记录，已删除文件%d个，跳过%d个") % (total, deleted_files, skipped),
+                )
+                logging.info(
+                    "[BULK-DELETE] Done in %.3fs: status=%s total=%d files=%d skipped=%d",
+                    time.time() - start_time, status, total, deleted_files, skipped,
+                )
         except Exception as err:
             ScanService.static_bulk_delete["err"] = str(err)
             logging.error("[BULK-DELETE] Failed: %s", err)

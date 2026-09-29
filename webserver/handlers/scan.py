@@ -499,6 +499,11 @@ class ImportCancel(BaseHandler):
     @is_admin
     def post(self):
         try:
+            # 批删运行时 is_importing 为 False，必须先于导入分支检查，
+            # 否则用户点了取消却被告知"没有正在运行的任务"
+            if ScanService.is_bulk_deleting():
+                ScanService.cancel_bulk_delete()
+                return {"err": "ok", "msg": _("正在取消批量删除任务, 请稍后查看状态")}
             if not ScanService.is_importing():
                 return {"err": "not_importing", "msg": _("当前没有正在运行的任务")}
             ScanService.cancel()
@@ -536,6 +541,26 @@ class ImportDirs(BaseHandler):
         return {"err": "ok", "dirs": names, "scan_dir": scan_upload_path}
 
 
+def parse_delete_files(raw, default=False):
+    """解析 ImportBulkDelete 的 delete_files 参数，返回 True/False，无法识别返回 None。
+
+    缺省（不传）为 False：真删源文件是高危动作，API 必须显式声明，不给 curl 误调用
+    留缓冲。容忍表单/查询串风格的布尔；未知字符串与类型一律拒绝（None），由 handler
+    回参数错误——"false" 决不能被当成真删，"maybe" 也不能被当成默认值。
+    """
+    if raw is None:
+        return default
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str):
+        v = raw.strip().lower()
+        if v in ("true", "1", "yes"):
+            return True
+        if v in ("false", "0", "no", ""):
+            return False
+    return None
+
+
 class ImportBulkDelete(BaseHandler):
     @js
     @is_admin
@@ -545,25 +570,15 @@ class ImportBulkDelete(BaseHandler):
         实际删除在 ScanService.do_bulk_delete 的独立服务线程里执行，这里只做参数校验、
         互斥检查与 COUNT 预检（空集直接拒绝，避免空跑一趟后台任务）。作用范围只含电子书
         扫描记录：有声书记录用同一张表存目录跳表，清掉会导致下次有声书导入全量重跑。
+        delete_files 缺省为 False（只删记录），真删源文件必须显式传 true。
         """
         try:
             req = tornado.escape.json_decode(self.request.body)
             status = req.get("status")
         except Exception:
             return {"err": "params.error", "msg": _("参数错误")}
-        raw = req.get("delete_files", True)
-        if isinstance(raw, bool):
-            delete_files = raw
-        elif isinstance(raw, str):
-            # 容忍表单/查询串风格的布尔；未知字符串一律拒绝，"false" 决不能被当成真删
-            raw = raw.strip().lower()
-            if raw in ("true", "1", "yes"):
-                delete_files = True
-            elif raw in ("false", "0", "no", ""):
-                delete_files = False
-            else:
-                return {"err": "params.error", "msg": _("参数错误")}
-        else:
+        delete_files = parse_delete_files(req.get("delete_files"))
+        if delete_files is None:
             return {"err": "params.error", "msg": _("参数错误")}
         if status != "todo" and status not in SELECTOR_STATUSES:
             return {"err": "params.error", "msg": _("参数错误")}
