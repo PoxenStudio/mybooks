@@ -36,6 +36,7 @@ import threading
 import time
 import traceback
 
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 
 from webserver.i18n import _
@@ -187,10 +188,12 @@ class ScanService(AsyncService):
         Phase1 逐行 commit，READY 记录是持久化的，中断后靠本选择器即可续导（哈希复用，
         不重算）；源文件已不存在的记录顺手标 MISSED——取消路径没有 _mark_missing_scan_files
         的清扫，在这里补上，避免一直残留在待导入列表。
+
+        READY 只由电子书扫描阶段写入，这里仍走 status_filter 的电子书口径以防日后漂移。
         """
         paths = []
         dirty = False
-        rows = session.query(ScanFile).filter(ScanFile.status == ScanFile.READY).all()
+        rows = ScanService.status_filter(session.query(ScanFile), ScanFile.READY).all()
         for row in rows:
             if not row.path:
                 continue
@@ -210,11 +213,32 @@ class ScanService(AsyncService):
         return paths
 
     @staticmethod
+    def ebook_scan_filter(query):
+        """把查询限定在电子书扫描记录上（排除有声书记录）。
+
+        有声书导入复用同一张 scanfiles 表（import_type=2、path 是目录），它的 IMPORTED/
+        EXIST/INVALID 记录是"该目录已处理过"的跳表：一旦被电子书侧的按状态导入/批量删除
+        顺手清掉，下次有声书导入会把全部目录当新目录重跑（INVALID 全量重试是真实 IO 开销）。
+        两套流程各管各的记录口径，按状态的公共入口统一过这道闸。
+
+        import_type 是后加列（旧库 ALTER TABLE 补 0），NULL 一律按电子书处理。
+        """
+        return query.filter(
+            or_(
+                ScanFile.import_type.is_(None),
+                ScanFile.import_type != constants.IMPORT_TYPE_AUDIOBOOK,
+            )
+        )
+
+    @staticmethod
     def status_filter(query, status):
         """todo 语义 = 非 IMPORTED（管理页待导入口径）；其余按状态等值过滤。
 
-        选择器解析、导入预检、批量删除共用本实现，防止各处过滤条件漂移。
+        选择器解析、导入预检、批量删除共用本实现，防止各处过滤条件漂移；统一经
+        ebook_scan_filter 收敛到电子书扫描记录——导入预检的 COUNT 与实际解析、批删执行
+        必须是同一口径，否则预检条数会与实际动作对不上。
         """
+        query = ScanService.ebook_scan_filter(query)
         if status == "todo":
             return query.filter(ScanFile.status.not_in([ScanFile.IMPORTED]))
         return query.filter(ScanFile.status == status)
@@ -310,8 +334,10 @@ class ScanService(AsyncService):
         记录一律删除；文件只有 realpath+commonpath 确认位于 scan_upload_path 内才删：
         越界只删记录并计 skip，文件本就不存在不算 skip；delete_files=False 时完全不做
         stat（百万行纯记录删除省去逐行 realpath/isfile）。按 id 排序分批查询、删除、提交，
-        内存与表大小解耦；返回 (total, deleted_files, skipped)。有声书记录的 path 是目录，
-        isfile 闸门保证 audiobooks/ 源目录永不被本方法真删。
+        内存与表大小解耦；返回 (total, deleted_files, skipped)。
+
+        过滤口径经 status_filter → ebook_scan_filter 收敛：有声书记录（import_type=2）不参与
+        本方法——它的 path 是目录（isfile 闸门本就不会真删），而那条记录本身是跳表，不能清。
         """
         base_query = ScanService.status_filter(session.query(ScanFile), status)
         total = base_query.count()
@@ -511,7 +537,9 @@ class ScanService(AsyncService):
         filelist = self._collect_files(paths, imported_dirs=imported_dirs, imported_files=imported_files)
         logging.info("[IMPORT] Collected %d files in %.3f seconds (skip_last_dirs=%d)", len(filelist), time.time() - start_time, skip_last_dirs)
         if not filelist:
-            logging.warning("[IMPORT] No valid files found in: %s", paths)
+            # 选择器模式下 paths 是全量解析结果（百万行时单条日志上百 MB），只记条数
+            candidates = paths if isinstance(paths, str) else "%d paths" % len(paths or [])
+            logging.warning("[IMPORT] No valid files found in: %s", candidates)
             if selector is not None:
                 # 选择器空跑：记录在库但磁盘上已无对应文件（missed/invalid 等），明确告知而非静默结束
                 self.add_msg(
@@ -1179,7 +1207,7 @@ class ScanService(AsyncService):
 
     @AsyncService.register_service
     def do_bulk_delete(self, user_id, status, delete_files=True):
-        """批量删除后台服务：删除指定状态的全部记录，可选连同扫描导入目录内的源文件一起真删。
+        """批量删除后台服务：删除指定状态的电子书记录，可选连同扫描导入目录内的源文件一起真删。
 
         与 do_import 是各自独立的服务线程，靠状态位互斥（本方法拒绝在导入运行时启动，
         do_import/批量上传/手动删除侧在启动前检查 is_bulk_deleting）；进度写入
@@ -1191,6 +1219,7 @@ class ScanService(AsyncService):
         if ScanService.is_bulk_deleting():
             return
         # 有声书导入写同一张 scanfiles 表（import_type=2），与批量删除互斥；
+        # 批删的作用范围也已排除有声书记录（_bulk_delete_core → status_filter）；
         # 延迟导入避免模块级循环（audios_import → scan_service）
         from webserver.services.audios_import import AudioBookImporter
 
