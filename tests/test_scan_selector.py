@@ -8,6 +8,7 @@
 - handlers.scan.normalize_import_filelist
 - handlers.scan.Scanner.summary 的 ready 计数
 - async_service._ensure_scanfiles_indexes 的幂等与旧库 UNIQUE(hash) 兼容
+- 按状态的选择/批删/summary 一律排除有声书记录（import_type=2），NULL 视为电子书
 """
 
 import os
@@ -18,7 +19,7 @@ import unittest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import scoped_session, sessionmaker
 
-from webserver import models
+from webserver import constants, models
 from webserver.handlers.scan import Scanner, normalize_import_filelist
 from webserver.models import ScanFile
 from webserver.services.async_service import _ensure_scanfiles_indexes
@@ -44,12 +45,17 @@ class ScanSelectorTestBase(unittest.TestCase):
             f.write(b"x")
         return path
 
-    def _row(self, path, status):
+    def _row(self, path, status, import_type=None):
         self._hash_seq += 1
         row = ScanFile(path, "sha256:%d" % self._hash_seq, 1)
         row.status = status
+        if import_type is not None:
+            row.import_type = import_type
         self.session.add(row)
         return row
+
+    def _audio_row(self, path, status):
+        return self._row(path, status, import_type=constants.IMPORT_TYPE_AUDIOBOOK)
 
 
 class TestResolveReadyPaths(ScanSelectorTestBase):
@@ -82,6 +88,50 @@ class TestResolveReadyPaths(ScanSelectorTestBase):
         self._row(existing, ScanFile.INVALID)
 
         self.assertEqual(ScanService.resolve_ready_paths(self.session), [])
+
+    def test_audiobook_ready_excluded(self):
+        # READY 只由电子书扫描阶段写入；万一有声书记录带上该状态，续导选择器也不该碰它
+        # （旧行为会把目录当成"源文件已不存在"，顺手把跳表记录标成 MISSED）
+        audio_dir = os.path.join(self.tmpdir, "audiobooks", "有声书A")
+        os.makedirs(audio_dir, exist_ok=True)
+        self._audio_row(audio_dir, ScanFile.READY)
+
+        self.assertEqual(ScanService.resolve_ready_paths(self.session), [])
+
+        row = self.session.query(ScanFile).filter(ScanFile.path == audio_dir).one()
+        self.assertEqual(row.status, ScanFile.READY)
+
+
+class TestEbookScopeFilter(ScanSelectorTestBase):
+    """按状态的公共过滤口径只认电子书扫描记录（有声书 import_type=2 不参与）。"""
+
+    def test_status_filter_excludes_audiobooks(self):
+        ebook = self._touch("bad.epub")
+        audio_dir = os.path.join(self.tmpdir, "audiobooks", "有声书A")
+        os.makedirs(audio_dir, exist_ok=True)
+        self._row(ebook, ScanFile.INVALID)
+        self._audio_row(audio_dir, ScanFile.INVALID)
+        self._audio_row(audio_dir, ScanFile.EXIST)
+        self._audio_row(audio_dir, ScanFile.IMPORTED)
+
+        invalid = ScanService.status_filter(
+            self.session.query(ScanFile.id), ScanFile.INVALID
+        )
+        self.assertEqual(invalid.count(), 1)
+        # 有声书的 EXIST 同样不进电子书 todo 口径
+        todo = ScanService.status_filter(self.session.query(ScanFile.id), "todo")
+        self.assertEqual(todo.count(), 1)
+
+    def test_legacy_null_import_type_treated_as_ebook(self):
+        # import_type 是后加列，历史行可能为 NULL，必须按电子书处理而非被过滤掉
+        legacy = self._touch("legacy.epub")
+        row = self._row(legacy, ScanFile.INVALID)
+        row.import_type = None
+        self.session.flush()
+
+        query = ScanService.status_filter(self.session.query(ScanFile.id), ScanFile.INVALID)
+
+        self.assertEqual(query.count(), 1)
 
 
 class TestResolveFilterPaths(ScanSelectorTestBase):
@@ -299,6 +349,47 @@ class TestBulkDeleteCore(ScanSelectorTestBase):
         self.assertTrue(os.path.lexists(link))
         self.assertEqual(self.session.query(ScanFile).count(), 0)
 
+    def test_audiobook_records_and_dirs_kept(self):
+        """有声书记录不参与批删——它是"目录已处理过"的跳表，删了下次导入全量重跑。
+
+        旧行为实锤：选「无效」批删会把有声书 INVALID 目录记录一并清掉。
+        """
+        scan_dir = os.path.join(self.tmpdir, "imports")
+        ebook = self._touch(os.path.join("imports", "bad.epub"))
+        self._touch(os.path.join("audiobooks", "有声书A", "01.mp3"))
+        audio_dir = os.path.join(self.tmpdir, "audiobooks", "有声书A")
+        self._row(ebook, ScanFile.INVALID)
+        self._audio_row(audio_dir, ScanFile.INVALID)
+
+        total, deleted_files, skipped = ScanService._bulk_delete_core(
+            self.session, ScanFile.INVALID, True, scan_dir,
+        )
+
+        self.assertEqual(total, 1)
+        self.assertEqual(deleted_files, 1)
+        self.assertFalse(os.path.exists(ebook))
+        audio_row = self.session.query(ScanFile).filter(ScanFile.path == audio_dir).one()
+        self.assertEqual(audio_row.import_type, constants.IMPORT_TYPE_AUDIOBOOK)
+        self.assertTrue(os.path.isfile(os.path.join(audio_dir, "01.mp3")))
+
+    def test_todo_bulk_delete_keeps_audiobook_records(self):
+        scan_dir = os.path.join(self.tmpdir, "imports")
+        ebook = self._touch(os.path.join("imports", "a.epub"))
+        audio_dir = os.path.join(self.tmpdir, "audiobooks", "有声书B")
+        os.makedirs(audio_dir, exist_ok=True)
+        self._row(ebook, ScanFile.DROP)
+        self._audio_row(audio_dir, ScanFile.INVALID)
+
+        total, deleted_files, skipped = ScanService._bulk_delete_core(
+            self.session, "todo", True, scan_dir,
+        )
+
+        self.assertEqual(total, 1)
+        self.assertEqual(deleted_files, 1)
+        rows = self.session.query(ScanFile).all()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].import_type, constants.IMPORT_TYPE_AUDIOBOOK)
+
 
 class TestNormalizeImportFilelist(unittest.TestCase):
     def test_legacy_forms(self):
@@ -413,6 +504,88 @@ class TestScannerSummary(ScanSelectorTestBase):
         self.assertEqual(summary["counts"].get(ScanFile.READY), 3)
         self.assertEqual(summary["counts"].get(ScanFile.IMPORTED), 2)
         self.assertEqual(summary["counts"].get(ScanFile.INVALID), 1)
+
+    def test_audiobooks_excluded_and_total_matches_counts(self):
+        # summary 与批量删除同口径：total 必须等于 sum(counts)，确认框条数才与实际删除数一致
+        self._row(os.path.join(self.tmpdir, "a.epub"), ScanFile.INVALID)
+        self._audio_row(os.path.join(self.tmpdir, "audiobooks", "有声书A"), ScanFile.INVALID)
+        self._audio_row(os.path.join(self.tmpdir, "audiobooks", "有声书A"), ScanFile.IMPORTED)
+
+        scanner = Scanner(None, self.session)
+        try:
+            summary = scanner.summary()
+        finally:
+            scanner.close()
+
+        self.assertEqual(summary["total"], 1)
+        self.assertEqual(sum(summary["counts"].values()), summary["total"])
+        self.assertEqual(summary["counts"].get(ScanFile.INVALID), 1)
+
+    def test_counts_match_bulk_delete_totals_for_every_status(self):
+        """确认框条数（summary.counts）必须等于批删实际条数，逐状态都比一遍。
+
+        summary 与批删各自实现过滤，口径一旦漂移这里必红——前端显示 N 条就得真删 N 条。
+        """
+        scan_dir = os.path.join(self.tmpdir, "imports")
+        statuses = [
+            ScanFile.NEW, ScanFile.READY, ScanFile.DROP, ScanFile.EXIST,
+            ScanFile.INVALID, ScanFile.MISSED, ScanFile.PERMISSION,
+        ]
+        for i, st in enumerate(statuses):
+            self._row(self._touch(os.path.join("imports", "e%d.epub" % i)), st)
+            # 每个状态再配一条有声书记录：既不进 summary，也不被批删带走
+            self._audio_row(os.path.join(self.tmpdir, "audiobooks", "A%d" % i), st)
+        self._row(self._touch(os.path.join("imports", "done.epub")), ScanFile.IMPORTED)
+        self._audio_row(os.path.join(self.tmpdir, "audiobooks", "done"), ScanFile.IMPORTED)
+        # Scanner.close() 会回滚未提交事务，浏览器侧的 summary 也在它自己的会话里查已提交数据
+        self.session.commit()
+
+        scanner = Scanner(None, self.session)
+        try:
+            summary = scanner.summary()
+        finally:
+            scanner.close()
+        counts = summary["counts"]
+
+        self.assertEqual(summary["total"], sum(counts.values()))
+        self.assertEqual(summary["total"], len(statuses) + 1)
+        for st in statuses:
+            total, deleted, skipped = ScanService._bulk_delete_core(
+                self.session, st, False, scan_dir,
+            )
+            self.assertEqual(total, counts.get(st, 0), "status=%s" % st)
+        # IMPORTED 不在批删白名单内，只核对计数（确认框要显示它的条数）
+        self.assertEqual(counts.get(ScanFile.IMPORTED), 1)
+        # 有声书记录一条未动
+        remaining_audio = (
+            self.session.query(ScanFile)
+            .filter(ScanFile.import_type == constants.IMPORT_TYPE_AUDIOBOOK)
+            .count()
+        )
+        self.assertEqual(remaining_audio, len(statuses) + 1)
+
+    def test_todo_dialog_count_matches_deletion(self):
+        """「全部待处理」的确认框条数来自 counts 求和（排除 imported），须等于批删条数。"""
+        scan_dir = os.path.join(self.tmpdir, "imports")
+        self._row(self._touch(os.path.join("imports", "a.epub")), ScanFile.DROP)
+        self._row(self._touch(os.path.join("imports", "b.epub")), ScanFile.EXIST)
+        self._row(self._touch(os.path.join("imports", "c.epub")), ScanFile.IMPORTED)
+        self._audio_row(os.path.join(self.tmpdir, "audiobooks", "有声书A"), ScanFile.INVALID)
+        self.session.commit()  # Scanner.close() 会回滚未提交事务
+
+        scanner = Scanner(None, self.session)
+        try:
+            counts = scanner.summary()["counts"]
+        finally:
+            scanner.close()
+        expected = sum(v for k, v in counts.items() if k != ScanFile.IMPORTED)
+
+        total, deleted, skipped = ScanService._bulk_delete_core(
+            self.session, "todo", False, scan_dir,
+        )
+
+        self.assertEqual(expected, 2)
+        self.assertEqual(total, expected)
 
 
 if __name__ == "__main__":

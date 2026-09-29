@@ -287,6 +287,7 @@
         >
             <p>{{ $t('imports.bulk_delete_desc', { count: bulkDeleteCount, status: bulkStatusLabel }) }}</p>
             <p>{{ $t('imports.bulk_delete_files_warn') }}</p>
+            <p>{{ $t('imports.bulk_delete_audiobook_note') }}</p>
         </AppDialog>
     </v-card>
 </template>
@@ -573,8 +574,12 @@ export default {
             if (!this.bulkStatus) {
                 return;
             }
-            const matches = this.items.filter((item) =>
-                this.bulkStatus === "todo" ? item.status !== "imported" : item.status === this.bulkStatus
+            // 有声书记录（import_type=2）不被服务端选择器与批量删除覆盖，不参与可视勾选，
+            // 否则勾上了却删不掉（列表仍显示它们，只是不进批量范围）
+            const matches = this.items.filter(
+                (item) =>
+                    item.import_type !== 2 &&
+                    (this.bulkStatus === "todo" ? item.status !== "imported" : item.status === this.bulkStatus)
             );
             this.selected = matches;
         },

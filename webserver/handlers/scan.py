@@ -68,9 +68,13 @@ class Scanner:
     def summary(self):
         try:
             # 单次 GROUP BY 聚合取代三个 COUNT：本方法挂在轮询热路径上，
-            # 无 status 索引时每个 COUNT 都是一次全表扫
+            # 无 status 索引时每个 COUNT 都是一次全表扫。
+            # 口径与按状态的导入/批量删除一致（ScanService.ebook_scan_filter 排除有声书记录），
+            # 否则批量删除确认框显示的条数会把有声书记录算进去、与实际删除数对不上。
             counts = dict(
-                self.session.query(ScanFile.status, func.count(ScanFile.id))
+                ScanService.ebook_scan_filter(
+                    self.session.query(ScanFile.status, func.count(ScanFile.id))
+                )
                 .group_by(ScanFile.status)
                 .all()
             )
@@ -83,7 +87,8 @@ class Scanner:
             if self.cached_status:
                 return self.cached_status
             return {"total": 0, "done": 0, "todo": 0, "ready": 0, "counts": {}}
-        # counts：各状态原始计数（GROUP BY 顺带产出），供批量删除确认框显示条数
+        # counts：各状态原始计数（GROUP BY 顺带产出），供批量删除确认框显示条数；
+        # 与 total/done/todo 同口径（均只含电子书扫描记录），故 total == sum(counts)
         self.cached_status = {"total": total, "done": done, "todo": todo, "ready": ready, "counts": counts}
         return self.cached_status
 
@@ -538,7 +543,8 @@ class ImportBulkDelete(BaseHandler):
         """批量删除指定状态的全部记录（可选连同扫描导入目录内的源文件一起真删）。
 
         实际删除在 ScanService.do_bulk_delete 的独立服务线程里执行，这里只做参数校验、
-        互斥检查与 COUNT 预检（空集直接拒绝，避免空跑一趟后台任务）。
+        互斥检查与 COUNT 预检（空集直接拒绝，避免空跑一趟后台任务）。作用范围只含电子书
+        扫描记录：有声书记录用同一张表存目录跳表，清掉会导致下次有声书导入全量重跑。
         """
         try:
             req = tornado.escape.json_decode(self.request.body)
@@ -567,11 +573,9 @@ class ImportBulkDelete(BaseHandler):
             return {"err": "empty", "msg": _("已有批量删除任务正在运行，请稍后再试")}
         if AudioBookImporter.is_running():
             return {"err": "empty", "msg": _("有声书导入任务正在运行，请稍后再试")}
-        query = self.sqlite_session.query(ScanFile.id)
-        if status == "todo":
-            query = query.filter(ScanFile.status.not_in([ScanFile.IMPORTED]))
-        else:
-            query = query.filter(ScanFile.status == status)
+        # 预检与实际删除必须同口径：复用 status_filter（内含电子书口径），
+        # 手写 not_in/== 会与 ImportRun 预检及各解析入口漂移
+        query = ScanService.status_filter(self.sqlite_session.query(ScanFile.id), status)
         total = query.count()
         if not total:
             return {"err": "empty", "msg": _("没有可删除的记录")}
