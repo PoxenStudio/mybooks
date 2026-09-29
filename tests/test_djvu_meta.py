@@ -144,6 +144,18 @@ class TestDjVuMetaCore(unittest.TestCase):
         finally:
             os.remove(f.name)
 
+    def test_odd_length_output_passes_container_check(self):
+        from webserver.services.managed_documents import analyze_managed_document
+
+        for title in ("a", "ab", "abc", "测试"):
+            _, out = self.write(make_djvu(), Metadata(title, ["A"]))
+            with tempfile.NamedTemporaryFile(suffix=".djvu", delete=False) as f:
+                f.write(out)
+            try:
+                analyze_managed_document(f.name, "djvu")
+            finally:
+                os.remove(f.name)
+
     def test_corrupt_file(self):
         mi = core.read_metadata(io.BytesIO(b"AT&TFORM\x00\x00\x00\x04DJVU"))
         self.assertTrue(mi.is_null("title"))

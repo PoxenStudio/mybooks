@@ -52,8 +52,10 @@ def _analyze_djvu(fpath):
     if len(header) != 16 or header[:8] != b"AT&TFORM" or header[12:16] not in (b"DJVU", b"DJVM"):
         _invalid(_("文件内容不是有效的 DjVu 容器"))
     form_size = struct.unpack(">I", header[8:12])[0]
-    if form_size < 4 or form_size + 12 != os.path.getsize(fpath):
-        _invalid(_("DjVu 容器长度不匹配"))
+    # IFF 块按偶数对齐：FORM 长度为奇数时允许文件末尾多一个不计入长度的填充字节
+    expected = {form_size + 12, form_size + 13} if form_size % 2 else {form_size + 12}
+    if form_size < 4 or os.path.getsize(fpath) not in expected:
+        _invalid(_("无效的DjVu文件"))
 
 
 def _analyze_uvz(fpath):
