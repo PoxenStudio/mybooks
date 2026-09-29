@@ -385,9 +385,9 @@ class MonitorService:
                     files |= self._merge_pending
                     self._merge_pending.clear()
 
-            if ScanService.is_importing():
+            if ScanService.is_importing() or ScanService.is_bulk_deleting():
                 logging.info(
-                    "[Monitor] ScanService busy, retrying in %ds (current pending files: %d)",
+                    "[Monitor] ScanService busy (importing or bulk deleting), retrying in %ds (current pending files: %d)",
                     POLL_INTERVAL,
                     len(files),
                 )

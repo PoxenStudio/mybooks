@@ -19,7 +19,20 @@
                         <v-icon>mdi-reload</v-icon>
                         <span v-if="!$vuetify.breakpoint.xs">{{ $t('imports.refresh') }}</span>
                     </v-btn>
-                    <template v-if="selected.length > 0">
+                    <template v-if="bulkStatus">
+                        <v-btn
+                            :disabled="loading"
+                            :outlined="$vuetify.breakpoint.xs"
+                            color="#2d6d4b"
+                            @click="importBooks"
+                            class="flex-shrink-0"
+                            :icon="$vuetify.breakpoint.xs"
+                        >
+                            <v-icon>mdi-import</v-icon>
+                            <span v-if="!$vuetify.breakpoint.xs">{{ $t('imports.import_bulk') }}</span>
+                        </v-btn>
+                    </template>
+                    <template v-else-if="selected.length > 0">
                         <v-btn
                             :disabled="loading"
                             :outlined="$vuetify.breakpoint.xs"
@@ -69,7 +82,7 @@
                         <span v-if="!$vuetify.breakpoint.xs">{{ $t('imports.batch_add_books') }}</span>
                     </v-btn>
                     <v-btn
-                        v-if="importing"
+                        v-if="importing || bulkDeleting"
                         :outlined="$vuetify.breakpoint.xs"
                         color="error"
                         @click="cancelImport"
@@ -77,7 +90,7 @@
                         :icon="$vuetify.breakpoint.xs"
                     >
                         <v-icon>mdi-cancel</v-icon>
-                        <span v-if="!$vuetify.breakpoint.xs">{{ $t('imports.cancel_import') }}</span>
+                        <span v-if="!$vuetify.breakpoint.xs">{{ bulkDeleting ? $t('imports.cancel_bulk_delete') : $t('imports.cancel_import') }}</span>
                     </v-btn>
                     <template v-if="selected.length > 0">
                         <v-btn
@@ -108,10 +121,21 @@
                         hide-details
                     ></v-select>
                 </v-col>
+                <v-col cols="12" sm="6" md="4" class="mb-2">
+                    <v-select
+                        v-model="bulkStatus"
+                        :items="bulkStatusOptionsLocalized"
+                        :label="$t('imports.bulk_select_label')"
+                        :clearable="true"
+                        dense
+                        outlined
+                        hide-details
+                    ></v-select>
+                </v-col>
             </v-row>
         </v-card-actions>
         <v-progress-linear
-            v-if="importing || batchAdding || audioImporting"
+            v-if="importing || batchAdding || audioImporting || bulkDeleting"
             :value="progressPercent"
             height="24"
             color="green"
@@ -122,7 +146,8 @@
             <strong class="white--text">{{ progressPrefix }} {{ count_processed }} / {{ count_total }} ({{ progressPercent }}%)</strong>
         </v-progress-linear>
         <v-card-text>
-            <div v-if="selected.length == 0">{{ $t('imports.select_files') }}</div>
+            <div v-if="bulkStatus">{{ $t('imports.bulk_hint') }}</div>
+            <div v-else-if="selected.length == 0">{{ $t('imports.select_files') }}</div>
             <div v-else>{{ $t('imports.selected_count', { count: selected.length }) }}</div>
         </v-card-text>
         <v-tabs v-model="filter_type" @change="getDataFromApi">
@@ -146,6 +171,8 @@
             :page.sync="page"
             :items-per-page="100"
             :footer-props="{ 'items-per-page-options': [10, 50, 100, 1000, 5000, 10000] }"
+            @item-selected="onUserSelect"
+            @toggle-select-all="onUserSelect"
         >
             <template v-slot:top>
                 <v-data-footer
@@ -218,6 +245,58 @@
                 :disabled="batchAdding"
             ></v-file-input>
         </AppDialog>
+
+        <!-- Import by dirs dialog -->
+        <AppDialog
+            v-model="dirDialog"
+            :persistent="false"
+            type="action"
+            :title="$t('imports.dirs_dialog_title')"
+            max-width="600px"
+            :confirm-text="$t('imports.dirs_dialog_confirm')"
+            :confirm-disabled="selectedDirs.length == 0 || dirsLoading || loading"
+            @confirm="importByDirs"
+        >
+            <p>{{ $t('imports.dirs_dialog_description', { scan_dir: scan_dir }) }}</p>
+            <v-autocomplete
+                v-model="selectedDirs"
+                :items="availableDirs"
+                :label="$t('imports.dirs_select_label')"
+                :no-data-text="$t('imports.dirs_empty')"
+                :loading="dirsLoading"
+                multiple
+                small-chips
+                deletable-chips
+                dense
+                outlined
+                hide-details
+            ></v-autocomplete>
+        </AppDialog>
+
+        <!-- Bulk delete dialog -->
+        <AppDialog
+            v-model="bulkDeleteDialog"
+            :persistent="false"
+            type="confirm"
+            :title="$t('imports.bulk_delete_title')"
+            max-width="520px"
+            :confirm-text="$t('imports.bulk_delete_confirm')"
+            confirm-color="error"
+            :confirm-disabled="bulkDeleting"
+            @confirm="runBulkDelete"
+        >
+            <p>{{ $t('imports.bulk_delete_desc', { count: bulkDeleteCount, status: bulkStatusLabel }) }}</p>
+            <p>{{ $t('imports.bulk_delete_audiobook_note') }}</p>
+            <v-checkbox
+                v-model="bulkDeleteFiles"
+                :label="$t('imports.bulk_delete_files_option')"
+                color="error"
+                hide-details
+                class="mt-0"
+            ></v-checkbox>
+            <p v-if="bulkDeleteFiles" class="error--text mb-0">{{ $t('imports.bulk_delete_files_warn') }}</p>
+            <p v-else class="grey--text mb-0">{{ $t('imports.bulk_delete_records_only') }}</p>
+        </AppDialog>
     </v-card>
 </template>
 
@@ -237,11 +316,22 @@ export default {
         audioImporting: false,
         batchAddDialog: false,
         csvFile: null,
+        dirDialog: false,
+        dirsLoading: false,
+        availableDirs: [],
+        selectedDirs: [],
         skip_last_dirs: 0,
+        prevScope: 0,
+        bulkStatus: null,
+        bulkDeleteDialog: false,
+        bulkDeleting: false,
+        bulkDeleteFiles: false,
+        statusCounts: {},
         scanScopeOptions: [
             { text: "imports.scan_scope_all", value: 0 },
             { text: "imports.scan_scope_exclude_last", value: 1 },
             { text: "imports.scan_scope_exclude_all", value: 2 },
+            { text: "imports.scope_by_dirs", value: 3 },
         ],
         options: {},
         count_todo: 0,
@@ -262,6 +352,26 @@ export default {
                 this.getDataFromApi();
             },
             deep: true,
+        },
+        skip_last_dirs(val) {
+            // 「按分类导入」并入扫描范围：选中即弹目录选择框；对话框关闭后回退到原范围
+            if (val === 3) {
+                this.openDirDialog();
+            } else {
+                this.prevScope = val;
+            }
+        },
+        dirDialog(val) {
+            if (!val && this.skip_last_dirs === 3) {
+                this.skip_last_dirs = this.prevScope;
+            }
+        },
+        bulkStatus(val) {
+            if (!val) {
+                return;
+            }
+            // 批量选择是服务端选择器的可视提示：只勾选当前页匹配行，动作作用于跨页全量
+            this.applyBulkVisualSelection();
         },
     },
     mounted() {
@@ -300,6 +410,7 @@ export default {
             if (this.importing) return this.$t('imports.progressImporting');
             if (this.batchAdding) return this.$t('imports.progressBatchAdding');
             if (this.audioImporting) return this.$t('imports.progressAudioImporting');
+            if (this.bulkDeleting) return this.$t('imports.progressBulkDeleting');
             return "";
         },
         scanScopeOptionsLocalized() {
@@ -307,6 +418,36 @@ export default {
                 text: this.$t(item.text),
                 value: item.value,
             }));
+        },
+        bulkStatusOptionsLocalized() {
+            // 选项不带数量：批量动作的作用范围由后端选择器决定（跨页全量）
+            return [
+                { text: this.$t("imports.bulk_all_todo"), value: "todo" },
+                { text: this.$t("imports.status.ready"), value: "ready" },
+                { text: this.$t("imports.status.new"), value: "new" },
+                { text: this.$t("imports.status.drop"), value: "drop" },
+                { text: this.$t("imports.status.exist"), value: "exist" },
+                { text: this.$t("imports.status.invalid"), value: "invalid" },
+                { text: this.$t("imports.status.missed"), value: "missed" },
+                { text: this.$t("imports.status.permission"), value: "permission" },
+            ];
+        },
+        bulkStatusLabel() {
+            if (!this.bulkStatus) return "";
+            if (this.bulkStatus === "todo") return this.$t("imports.bulk_all_todo");
+            return this.$t("imports.status." + this.bulkStatus);
+        },
+        bulkDeleteCount() {
+            if (!this.bulkStatus) return 0;
+            // todo 口径必须与后端 not_in([IMPORTED]) 一致（含存在同名），直接对 counts 求和
+            if (this.bulkStatus === "todo") {
+                let sum = 0;
+                Object.keys(this.statusCounts || {}).forEach((k) => {
+                    if (k !== "imported") sum += this.statusCounts[k] || 0;
+                });
+                return sum;
+            }
+            return (this.statusCounts && this.statusCounts[this.bulkStatus]) || 0;
         },
     },
     methods: {
@@ -340,13 +481,17 @@ export default {
                     this.scan_dir = rsp.scan_dir;
                     this.count_done = rsp.summary.done;
                     this.count_todo = rsp.summary.todo;
+                    this.statusCounts = rsp.summary.counts || {};
                     this.count_total = 0;
                     this.importing = rsp.importing;
                     if (rsp.ignored_errors && rsp.ignored_errors.length > 0) {
                         this.ignored_errors = rsp.ignored_errors;
                     }
+                    if (this.bulkStatus) {
+                        this.applyBulkVisualSelection();
+                    }
                 }).finally(() => {
-                    if (!this.importing && !this.audioImporting && !this.batchAdding) {
+                    if (!this.importing && !this.audioImporting && !this.batchAdding && !this.bulkDeleting) {
                         this.loading = false;
                     }
                 });
@@ -369,48 +514,110 @@ export default {
                     })
             }, 2000);
         },
-        importBooks() {
+        beginImportPolling() {
+            this.loopCheckStatus("/admin/import/status", (rsp) => {
+                this.import = rsp.status;
+                this.count_done = rsp.summary.done;
+                this.count_todo = rsp.summary.todo;
+
+                this.count_total = rsp.status.total;
+                this.count_processed = rsp.status.processed;
+
+                this.importing = rsp.importing || false;
+                if (!this.importing) {
+                    this.loading = false;
+                    return false;
+                }
+                this.loading = true;
+                return true;
+            });
+        },
+        runImport(payload) {
             this.loading = true;
-            var filelist = "all";
-            if (this.selected.length > 0) {
-                filelist = this.selected.map((v) => {
-                        return v.path;
-                    });
+            return this.$backend("/admin/import/run", {
+                method: "POST",
+                body: JSON.stringify(payload),
+            }).then((rsp) => {
+                if (rsp.err !== "ok") {
+                    this.$alert("error", rsp.msg);
+                    this.loading = false;
+                    return false;
+                }
+                this.selected = [];
+                this.bulkStatus = null;
+                this.beginImportPolling();
+                return true;
+            }).catch(() => {
+                this.loading = false;
+                return false;
+            });
+        },
+        importBooks() {
+            if (this.bulkStatus) {
+                // 服务端选择器：按状态跨页全量，后端固定不走 force（哈希复用、不重算）
+                const filelist = this.bulkStatus === "ready" ? "ready" : { filter: this.bulkStatus };
+                return this.runImport({ filelist });
             }
-            const payload = {
+            const filelist = this.selected.length > 0
+                ? this.selected.map((v) => v.path)
+                : "all";
+            // 手动勾选保持既有语义：强制重导（忽略哈希/导入记录去重）
+            return this.runImport({
                 filelist: filelist,
                 skip_last_dirs: this.skip_last_dirs,
                 force: this.selected.length > 0
-            };
-            this.$backend("/admin/import/run", {
-                method: "POST",
-                body: JSON.stringify(payload),
-            })
+            });
+        },
+        importByDirs() {
+            if (this.selectedDirs.length == 0) {
+                return Promise.resolve(false);
+            }
+            return this.runImport({ filelist: { dirs: this.selectedDirs } }).then((ok) => {
+                if (ok) {
+                    this.dirDialog = false;
+                }
+                return ok;
+            });
+        },
+        applyBulkVisualSelection() {
+            if (!this.bulkStatus) {
+                return;
+            }
+            // 有声书记录（import_type=2）不被服务端选择器与批量删除覆盖，不参与可视勾选，
+            // 否则勾上了却删不掉（列表仍显示它们，只是不进批量范围）
+            const matches = this.items.filter(
+                (item) =>
+                    item.import_type !== 2 &&
+                    (this.bulkStatus === "todo" ? item.status !== "imported" : item.status === this.bulkStatus)
+            );
+            this.selected = matches;
+        },
+        onUserSelect() {
+            // 手动勾选/表头全选即退出批量模式，恢复逐条 force 语义
+            if (this.bulkStatus) {
+                this.bulkStatus = null;
+            }
+        },
+        openDirDialog() {
+            this.selectedDirs = [];
+            this.dirDialog = true;
+            this.dirsLoading = true;
+            this.$backend("/admin/import/dirs")
                 .then((rsp) => {
-                    if (rsp.err !== "ok") {
+                    if (rsp.err === "ok") {
+                        this.availableDirs = rsp.dirs || [];
+                    } else {
                         this.$alert("error", rsp.msg);
-                        this.loading = false;
-                        return;
+                        this.availableDirs = [];
                     }
-
-                    this.loopCheckStatus("/admin/import/status", (rsp) => {
-                        this.import = rsp.status;
-                        this.count_done = rsp.summary.done;
-                        this.count_todo = rsp.summary.todo;
-
-                        this.count_total = rsp.status.total;
-                        this.count_processed = rsp.status.processed;
-
-                        this.importing = rsp.importing || false;
-                        if (!this.importing) {
-                            this.loading = false;
-                            return false;
-                        }
-                        this.loading = true;
-                        return true;
-                    });
-                    this.selected = [];
                 })
+                .catch(() => {
+                    this.$alert("error", this.$t("imports.dirs_load_failed"));
+                    this.availableDirs = [];
+                })
+                .finally(() => {
+                    this.dirsLoading = false;
+                });
         },
         cancelImport() {
             this.$backend("/admin/import/cancel", {
@@ -424,6 +631,13 @@ export default {
                 })
         },
         deleteRecord() {
+            if (this.bulkStatus) {
+                // 批量模式：删除全部匹配记录（跨页全量）；是否连源文件一起删由复选框决定，
+                // 默认不勾——真删是不可恢复动作，必须显式确认
+                this.bulkDeleteFiles = false;
+                this.bulkDeleteDialog = true;
+                return;
+            }
             this.loading = true;
             this.$backend("/admin/import/delete", {
                 method: "POST",
@@ -442,6 +656,77 @@ export default {
                 .finally(() => {
                     this.loading = false;
                 });
+        },
+        runBulkDelete() {
+            if (!this.bulkStatus || this.bulkDeleting) {
+                return;
+            }
+            this.bulkDeleting = true;
+            this.loading = true;
+            this.$backend("/admin/import/bulk_delete", {
+                method: "POST",
+                body: JSON.stringify({
+                    status: this.bulkStatus,
+                    delete_files: this.bulkDeleteFiles,
+                }),
+            }).then((rsp) => {
+                if (rsp.err !== "ok") {
+                    this.$alert("error", rsp.msg);
+                    this.bulkDeleting = false;
+                    this.loading = false;
+                    return;
+                }
+                this.bulkDeleteDialog = false;
+                this.loopBulkDeleteStatus();
+            }).catch(() => {
+                this.bulkDeleting = false;
+                this.loading = false;
+            });
+        },
+        loopBulkDeleteStatus() {
+            // 专用轮询：err 与网络失败都必须复位 bulkDeleting/loading，进度条不能永挂
+            setTimeout(() => {
+                this.$backend("/admin/import/bulk_delete/status")
+                    .then((st) => {
+                        if (st.err !== "ok") {
+                            this.$alert("error", st.msg);
+                            this.bulkDeleting = false;
+                            this.loading = false;
+                            return;
+                        }
+                        const state = st.state || {};
+                        this.bulkDeleting = st.bulk_deleting || false;
+                        this.count_total = state.total || 0;
+                        this.count_processed = state.processed || 0;
+                        if (!st.bulk_deleting) {
+                            this.loading = false;
+                            this.bulkStatus = null;
+                            this.selected = [];
+                            if (state.cancelled) {
+                                // 用户主动取消：已提交批次不回滚，展示已处理条数
+                                this.$alert("warning", this.$t("imports.bulk_delete_cancelled", {
+                                    total: state.processed || 0,
+                                }));
+                            } else if (state.err) {
+                                this.$alert("error", state.err);
+                            } else {
+                                this.$alert("success", this.$t("imports.bulk_delete_done", {
+                                    total: state.processed || 0,
+                                    files: state.deleted_files || 0,
+                                }));
+                            }
+                            this.getDataFromApi();
+                            return;
+                        }
+                        this.loading = true;
+                        this.loopBulkDeleteStatus();
+                    })
+                    .catch(() => {
+                        this.$alert("error", this.$t("imports.bulk_delete_status_failed"));
+                        this.bulkDeleting = false;
+                        this.loading = false;
+                    });
+            }, 2000);
         },
         checkCurrentState() {
             // Check scan status first
@@ -534,6 +819,19 @@ export default {
                         });
                     } else {
                         this.batchAdding = false;
+                    }
+                });
+
+            // Check bulk delete status (刷新后恢复轮询)
+            this.$backend("/admin/import/bulk_delete/status")
+                .then((rsp) => {
+                    if (rsp.err !== "ok") {
+                        return;
+                    }
+                    if (rsp.bulk_deleting) {
+                        this.bulkDeleting = true;
+                        this.loading = true;
+                        this.loopBulkDeleteStatus();
                     }
                 });
         },

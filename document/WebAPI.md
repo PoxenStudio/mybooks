@@ -3592,6 +3592,7 @@ user.appearance为外观设置（顶栏品牌色、侧栏图标配色、深浅�
 - **认证**：需要管理员权限
 - **参数**：
   - `hashlist` (array/string, 必填): 文件hash列表或"all"
+- **说明**：批量删除任务运行时返回 `err=empty`（与批量删除互斥，避免同一批记录被两个流程同时动）。
 - **响应示例**：
 
 ```json
@@ -3608,10 +3609,19 @@ user.appearance为外观设置（顶栏品牌色、侧栏图标配色、深浅�
 - **方法**：POST
 - **认证**：需要管理员权限
 - **参数**：
-  - `filelist` (array/string, 必填): 文件列表或"all"
-  - `skip_last_dirs` (int, 可选): 跳过最后几级目录
-  - `force` (bool, 可选): 强制导入（默认 false）
-- **说明**：已有导入任务运行时返回 `err=empty`；出错时 `server.error`。
+  - `filelist` (array/string/object, 必填): 导入范围，支持下列形态：
+    - `"all"`：全量扫描 `scan_upload_path`
+    - `[path, ...]`：手动勾选的绝对路径数组（保持 `force` 语义）
+    - `"ready"`：服务端选择器，全部 `ready` 记录（续导取消/中断遗留的待导入文件）
+    - `{"dirs": ["目录名", ...]}`：服务端选择器，扫描目录下的一级子目录名
+    - `{"filter": "<status>"}`：服务端选择器，按状态批量。`<status>` 可选 `todo`（非 `imported` 的非 IMPORTED 口径，含存在同名）、`new`、`ready`、`drop`、`exist`、`invalid`、`missed`、`permission`；`imported` 与其它字符串一律拒绝
+  - `skip_last_dirs` (int, 可选): 跳过最后几级目录。选择器形态（`"ready"` / `{"dirs":...}` / `{"filter":...}`）服务端强制为 0
+  - `force` (bool, 可选): 强制导入（默认 false）。选择器形态服务端强制为 false（哈希复用，续导不重算哈希）
+- **说明**：
+  - 服务端选择器只在后端解析文件清单，避免百万级记录在前端与请求体里搬运路径数组；handler 只做 COUNT 预检，实际解析在后台服务线程完成。
+  - 选择器解析为空（记录在库但源文件已不存在）时，后台任务会向消息中心写入一条 warning，而非静默结束。
+  - 已有导入任务或批量删除任务运行时返回 `err=empty`；参数不可识别时 `params.error`；出错时 `server.error`。
+  - 字符串形态只放行 `"all"` 与 `"ready"`，历史版本"任意字符串当作目录路径"的行为已收窄。
 - **响应示例**：
 
 ```json
@@ -3627,6 +3637,7 @@ user.appearance为外观设置（顶栏品牌色、侧栏图标配色、深浅�
 - **方法**：GET
 - **认证**：需要管理员权限
 - **参数**：无
+- **说明**：`summary` 只统计电子书扫描记录（有声书记录 `import_type=2` 不计入），`counts` 为各状态原始计数，与批量删除的预检/执行口径一致。
 - **响应示例**：
 
 ```json
@@ -3719,12 +3730,83 @@ user.appearance为外观设置（顶栏品牌色、侧栏图标配色、深浅�
 - **方法**：POST
 - **认证**：需要管理员权限
 - **参数**：无
+- **说明**：优先取消正在运行的批量删除任务（置取消标志，批循环在批次边界停下，已提交的批次不回滚），否则取消导入任务；两者都没在跑时返回 `err=not_importing`。
 - **响应示例**：
 
 ```json
 {
   "err": "ok",
-  "msg": "导入已取消"
+  "msg": "正在取消任务, 请稍后查看状态"
+}
+```
+
+### 8.10 导入目录列表
+
+- **路径**：`/api/admin/import/dirs`
+- **方法**：GET
+- **认证**：需要管理员权限
+- **参数**：无
+- **说明**：返回 `scan_upload_path` 下的一级子目录名（已排除隐藏目录、`~` 临时目录与有声书目录），不统计文件数——百万级文件树上递归计数本身就是一次全量遍历。
+- **响应示例**：
+
+```json
+{
+  "err": "ok",
+  "dirs": ["科幻", "历史"],
+  "scan_dir": "/data/books/upload"
+}
+```
+
+### 8.11 批量删除导入记录
+
+- **路径**：`/api/admin/import/bulk_delete`
+- **方法**：POST
+- **认证**：需要管理员权限
+- **参数**：
+  - `status` (string, 必填): 目标状态，取值同 `filelist.filter`（`todo`/`new`/`ready`/`drop`/`exist`/`invalid`/`missed`/`permission`）
+  - `delete_files` (bool, 可选): 是否连同源文件一起真删，**默认 false**（只删记录）。字符串 `"true"/"1"/"yes"` 与 `"false"/"0"/"no"` 亦可，其它值一律 `params.error`
+- **说明**：
+  - 作用范围只含电子书扫描记录：有声书导入复用同一张 `scanfiles` 表存目录跳表（`import_type=2`），清掉会导致下次有声书导入把全部目录当新目录重跑。
+  - `delete_files=true` 时，只有 `realpath + commonpath` 确认位于 `scan_upload_path` **内**的常规文件才会被删；越界与删除失败只删记录并计入 `skipped`，文件本就不存在不计 `skipped`。
+  - 实际删除在独立的后台服务线程执行，本接口只做参数校验、互斥检查与 COUNT 预检（空集直接拒绝）；进度用 8.12 轮询。
+  - 已有导入任务、批量删除任务或有声书导入任务运行时返回 `err=empty`。
+- **响应示例**：
+
+```json
+{
+  "err": "ok",
+  "msg": "批量删除任务已启动",
+  "total": 1200
+}
+```
+
+### 8.12 批量删除状态
+
+- **路径**：`/api/admin/import/bulk_delete/status`
+- **方法**：GET
+- **认证**：需要管理员权限
+- **参数**：无
+- **说明**：`state.total` 为开工前的全量计数，取消时 `processed` 会小于 `total`；`state.cancelled` 为 true 表示被用户取消（已提交批次不回滚），`state.err` 非空表示失败。
+- **响应示例**：
+
+```json
+{
+  "err": "ok",
+  "state": {
+    "running": false,
+    "done": true,
+    "err": "",
+    "status": "invalid",
+    "delete_files": false,
+    "cancel": false,
+    "cancelled": false,
+    "total": 1200,
+    "processed": 1200,
+    "deleted_files": 0,
+    "skipped": 0
+  },
+  "bulk_deleting": false,
+  "importing": false
 }
 ```
 

@@ -14,6 +14,7 @@ from webserver.i18n import _
 from webserver.models import ScanFile, Item
 from webserver.services import AsyncService
 from webserver.services.background_service import BackgroundService, BackgroundTask
+from webserver.services.scan_service import ScanService
 
 CONF = loader.get_settings()
 
@@ -209,6 +210,10 @@ class AudioBookImporter(AsyncService):
     def do_import(self, user_id):
         if AudioBookImporter.static_is_running:
             logging.error("[AUDIO_IMPORT] already running, skip")
+            return
+        if ScanService.is_bulk_deleting():
+            # 二道闸：handler 检查与异步入队之间存在窗口，服务线程入口再拦一次
+            logging.error("[AUDIO_IMPORT] bulk deleting is running, skip")
             return
 
         AudioBookImporter.static_is_running = True
