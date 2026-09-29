@@ -1,6 +1,5 @@
 # MyBoooks Python 后台 API 接口文档
 **最后更新时间**：2026-09-28
-**已从PoxenStudio/Talebook更名为MyBooks**
 
 ## 基础说明
 
@@ -182,9 +181,18 @@
     "version": "v3.41.0",
     "upgrable": "",
     "allow": {
-      "book_review": false,
-      "physical_books": false,
+      "register": false,
+      "download": true,
+      "push": true,
+      "read": true,
+      "physical_books": true,
+      "folder": false,
+      "download_quota": false,
       "upload": false,
+      "sync": true,
+      "book_review": true,
+      "book_recommend": true,
+      "shared_notes": true
     }
   },
   "user": {
@@ -210,8 +218,55 @@
 }
 ```
 未登录时返回基础系统信息，用户信息中is_login为false，登录时会返回完整用户信息。
-sys中为基础系统信息，title为网站标题, books为在库书籍数量，version为当前系统版本。其中upgrable代表是否有升级版本，如果为有值且与version不同代表有可升级版本。sys/allow下的book_review表示是否允许用户评论，physical_books代表是否支持实体书，upload代表是否允许上传。
-登录用户的 `user` 字段：`is_login`、`is_guest`、`is_admin`、`is_active`、`nickname`、`username`、`email`、`avatar`、`create_time`、`podcast_token`、`allow_statistic`、`allow_user_disable_statistic`、`total_reading_seconds`、`download_count`、`show_home_recommendations`、`allow_review`（是否允许发表评论）、`show_other_annotations`、`share_annotations`、`appearance`、`kindle_email`、`last_share_email`（最近分享的邮箱）、`extra`；开启 VIP 额度时另有 `vipquota`、`vip_expire`。未登录且允许游客访问时 `is_guest=true`、`nickname="访客"`。
+sys中为基础系统信息，title为网站标题, books为在库书籍数量，version为当前系统版本。其中upgrable代表是否有升级版本，如果为有值且与version不同代表有可升级版本。
+
+`sys.allow` 为站点功能开关，前端据此决定相关入口/按钮是否展示，各字段均为 boolean：
+
+| 字段 | 对应配置项 | 默认值 | 含义 |
+|---|---|---|---|
+| `register` | `ALLOW_REGISTER` | `false` | 是否开放用户注册（控制注册入口） |
+| `download` | `ALLOW_GUEST_DOWNLOAD` | `true` | 是否允许访客（未登录）下载书籍 |
+| `push` | `ALLOW_GUEST_PUSH` | `true` | 是否允许访客推送书籍到 Kindle 邮箱 |
+| `read` | `ALLOW_GUEST_READ` | `true` | 是否允许访客在线阅读 |
+| `physical_books` | `ENABLE_PHYSICAL_BOOKS` | `true` | 是否启用实体书功能（实体书信息、添加实体书等） |
+| `folder` | `ENABLE_FOLDER_BROWSE` | `false` | 是否启用按文件夹浏览书库 |
+| `download_quota` | `ENABLE_DOWNLOAD_QUOTA` | `false` | 是否启用每用户每日下载配额限制 |
+| `upload` | `ALLOW_GUEST_UPLOAD` | `false` | 是否允许访客上传书籍 |
+| `sync` | `ENABLE_DATA_SYNC` | `true` | 是否启用阅读数据同步（MyReader 同步） |
+| `book_review` | `ENABLE_BOOK_REVIEW` | `true` | 是否允许用户对书籍进行评论及评分 |
+| `book_recommend` | `ENABLE_BOOK_RECOMMEND_TO_OTHERS` | `true` | 评价是否计入推荐人数/首页推荐位 |
+| `shared_notes` | `ENABLE_SHARED_NOTES` | `true` | 阅读时是否可查看其他用户的划线与笔记 |
+
+登录用户的 `user` 字段：
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `is_login` | boolean | 是否已登录 |
+| `is_guest` | boolean | 是否为访客（未登录但站点允许游客阅读） |
+| `is_admin` | boolean | 是否为管理员 |
+| `is_active` | boolean | 账号是否已激活 |
+| `nickname` | string | 昵称 |
+| `username` | string | 用户名 |
+| `email` | string | 注册邮箱 |
+| `avatar` | string | 头像完整 URL |
+| `create_time` | string | 注册时间，格式 `YYYY-MM-DD HH:MM:SS` |
+| `podcast_token` | string | Podcast 订阅 Token |
+| `allow_statistic` | boolean | 用户是否参与阅读统计 |
+| `allow_user_disable_statistic` | boolean | 系统是否允许用户关闭阅读统计（`ALLOW_USER_DISABLE_STATISTIC`） |
+| `total_reading_seconds` | int | 累计阅读时长（秒） |
+| `download_count` | int | 累计下载次数 |
+| `show_home_recommendations` | boolean | 首页是否显示其他用户的推荐 |
+| `allow_review` | boolean | 是否允许发表评论（用户未被管理员禁言且 `ENABLE_BOOK_REVIEW` 开启时为 true） |
+| `show_other_annotations` | boolean | 阅读时是否显示其他用户的批注（默认 true） |
+| `share_annotations` | boolean | 自己的批注是否对其他用户可见（默认 true） |
+| `appearance` | object | 外观设置，见下方说明 |
+| `kindle_email` | string | Kindle 推送邮箱 |
+| `last_share_email` | string | 最近一次分享到邮箱的收件人，供分享对话框一键填入 |
+| `extra` | object | 用户扩展数据，仅 `detail` 非空时有内容（含 `*_history` 浏览历史） |
+| `vipquota` | int | VIP 额度，仅开启 VIP 额度时返回 |
+| `vip_expire` | string | VIP 到期日 `YYYY-MM-DD`，仅开启 VIP 额度时返回 |
+
+未登录且允许游客访问时 `is_guest=true`、`nickname="访客"`，只返回 `is_login`、`is_admin`、`is_active`、`is_guest`、`nickname`、`username`、`email`、`extra`、`appearance`、`create_time`、`podcast_token`。
 user.appearance为外观设置（顶栏品牌色、侧栏图标配色、深浅色、圆角、背景图案），用户从未保存过时为空对象`{}`，由前端沿用「本地缓存 → 站点默认sys.theme → 内置默认」的回退顺序，保存入口见 1.9。
 
 
@@ -3372,7 +3427,7 @@ user.appearance为外观设置（顶栏品牌色、侧栏图标配色、深浅�
 - **方法**：GET
 - **认证**：无需认证（`tags` 按当前用户的阅读范围过滤）
 - **参数**：
-  - `kind` (path, 必填): 
+  - `kind` (path, 必填):
     - `size`：书库目录占用字节数（`data` 为 int，缓存 10 分钟）
     - `monthly`：按月新增数，`data` 为 `[{month: "YYYY-MM", ebook, physical}]`，按月份倒序
     - `tags`：热门标签前 50，`data` 为 `[{name, count}]`
@@ -3949,7 +4004,7 @@ POST `tools/call` 响应（`text` 为工具结果的 JSON 字符串）：
 
 ## 14. 书单接口
 
-书单（booklist）是用户自建的书籍集合，每人最多 20 个，可设为公开供他人浏览、点赞。设计见 [BookList_Design.md](BookList_Design.md)。
+书单（booklist）是用户自建的书籍集合，每人最多 20 个，可设为公开供他人浏览、点赞。
 
 **书单对象**字段：`id`、`name`、`description`、`color`、`is_public`、`is_sticky`（管理员置顶）、`view_count`、`like_count`、`book_count`、`create_time`、`update_time`（ISO8601）、`owner`（`{id, username, avatar}`）、`is_owner`、`liked_by_me`；列表接口另带 `cover_books`（最近加入的最多 12 本：`{book_id, title, img, thumb, href}`）。
 
@@ -4174,7 +4229,7 @@ POST `tools/call` 响应（`text` 为工具结果的 JSON 字符串）：
 
 ## 15. 阅读数据同步接口
 
-供 MyReader 等客户端同步书籍/批注/阅读配置，以及导入第三方批注。完整协议见 [MyBooks_Sync_API.md](MyBooks_Sync_API.md)。所有接口需开启同步功能，否则返回 `sync.disabled`。
+供 MyReader 等客户端同步书籍/批注/阅读配置，以及导入第三方批注。所有接口需开启同步功能，否则返回 `sync.disabled`。
 
 ### 15.1 同步记录
 
@@ -4277,7 +4332,7 @@ POST `tools/call` 响应（`text` 为工具结果的 JSON 字符串）：
 
 ## 16. Toolbox 工具接口
 
-工具箱接口均需**管理员权限**（`bg_raw`、`texture_raw` 两个图片资源接口除外）。长任务类工具的通用模式：`POST` 启动任务 → 返回 `{"err": "ok", "msg": "...已启动..."}`；同一工具同时只能运行一个任务（否则 `task.running`）；`GET .../progress` 轮询，返回 `data`（含 `status`: `running`/`completed`/`failed`/`cancelled`、`progress` 百分比及工具特定字段），失败时 `err=task.failed`，从未启动时 `err=task.not_found`。工具设计见 [toolbox_design.md](toolbox_design.md)、[Toolbox_Dynamic_Design.md](Toolbox_Dynamic_Design.md)。
+工具箱接口均需**管理员权限**（`bg_raw`、`texture_raw` 两个图片资源接口除外）。长任务类工具的通用模式：`POST` 启动任务 → 返回 `{"err": "ok", "msg": "...已启动..."}`；同一工具同时只能运行一个任务（否则 `task.running`）；`GET .../progress` 轮询，返回 `data`（含 `status`: `running`/`completed`/`failed`/`cancelled`、`progress` 百分比及工具特定字段），失败时 `err=task.failed`，从未启动时 `err=task.not_found`。
 
 ### 16.1 工具管理
 
@@ -4548,4 +4603,3 @@ EPUB 转有声书（WAV），支持 MiMo TTS / OpenAI TTS 兼容接口。公共 
 - Podcast订阅：使用`podcast_token`参数
 - MCP服务：使用`token`查询参数
 - 音频访问：使用Token进行权限验证
-
