@@ -831,7 +831,7 @@
     "selectStampPositionDesc": "Please select the position of the stamp on the cover:",
     "addStampSuccess": "Stamp successfully added to cover",
     "addStampFailed": "Failed to add stamp",
-    "needEpubOrAzw3": "EPUB, AZW3, PDF or DJVU format required to sync metadata",
+    "needEpubOrAzw3": "EPUB, AZW3, PDF, DJVU or CBZ format required to sync metadata",
     "selectFormatToSeparate": "Select format to separate:",
     "separateHint": "After separation, the selected format will be removed from the current book and created as a new independent book.",
     "needMultipleFormats": "Book has only one format, cannot handle the process.",

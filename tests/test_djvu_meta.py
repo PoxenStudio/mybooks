@@ -12,7 +12,7 @@ from unittest import mock
 
 testdir = os.path.dirname(os.path.realpath(__file__))
 projdir = os.path.realpath(testdir + "/..")
-plugindir = os.path.join(projdir, "calibre", "plugins", "djvu_meta")
+plugindir = os.path.join(os.environ.get("MYBOOKS_CALIBRE_PLUGINS_SRC") or os.path.join(projdir, "calibre", "plugins"), "djvu_meta")
 sys.path.append(projdir)
 
 import webserver.main  # noqa: E402
@@ -166,14 +166,14 @@ class TestDjVuMetaCore(unittest.TestCase):
 @unittest.skipUnless(_READY, "requires calibre and djvu_rs")
 class TestDjVuMetaPlugins(unittest.TestCase):
     def test_zip_plugins_load_and_work(self):
-        spec = importlib.util.spec_from_file_location("djvu_meta_build", os.path.join(plugindir, "build.py"))
+        spec = importlib.util.spec_from_file_location("calibre_plugins_build", os.path.join(os.path.dirname(plugindir), "build.py"))
         build = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(build)
         from calibre.customize import PluginInstallationType
         from calibre.customize.ui import initialize_plugin, load_plugin
 
         with tempfile.TemporaryDirectory() as out_dir:
-            reader_zip, writer_zip = build.build(out_dir)
+            reader_zip, writer_zip = build.build(out_dir, ["djvu_meta"])
             reader = initialize_plugin(load_plugin(reader_zip), reader_zip, PluginInstallationType.SYSTEM)
             writer = initialize_plugin(load_plugin(writer_zip), writer_zip, PluginInstallationType.SYSTEM)
             self.assertEqual(reader.file_types, {"djvu"})

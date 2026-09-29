@@ -854,7 +854,7 @@ class BookRefer(BaseHandler):
 
     def reset_book_meta(self, book_id):
         book = self.get_book(book_id)
-        for fmt in ["epub", "mobi", "azw", "azw3", "txt", "pdf", "djvu"]:
+        for fmt in ["epub", "mobi", "azw", "azw3", "txt", "pdf", "djvu", "cbz"]:
             book_path = book.get("fmt_%s" % fmt, None)
             if book_path:
                 break
@@ -2852,7 +2852,7 @@ class BookUpload(BaseHandler):
             _translators = []
             _authors = []
             if fmt in MANAGED_DOCUMENT_FORMATS:
-                # 扫描版托管格式（DJVU/UVZ/CBZ）：校验容器后按文件名编目，不读电子书元数据
+                # 扫描版托管格式（DJVU/UVZ/CBZ）：校验容器后按文件名编目，DJVU/CBZ 再合并插件读出的内嵌元数据
                 try:
                     analyze_managed_document(fpath, fmt)
                 except InvalidManagedDocumentError as e:
@@ -3136,7 +3136,7 @@ class BookUploadChunk(BaseHandler):
             _translators = []
             _authors = []
             if fmt in MANAGED_DOCUMENT_FORMATS:
-                # 扫描版托管格式（DJVU/UVZ/CBZ）：校验合并后的完整文件，再按文件名编目
+                # 扫描版托管格式（DJVU/UVZ/CBZ）：校验合并后的完整文件，再编目（同上传）
                 try:
                     analyze_managed_document(final_path, fmt)
                 except InvalidManagedDocumentError as e:

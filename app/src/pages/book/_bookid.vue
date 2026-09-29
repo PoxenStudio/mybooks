@@ -1624,7 +1624,7 @@ export default {
         // 与后端 webserver/constants.py 的 META_WRITABLE_FORMATS 保持一致
         hasMetaWritableFormat() {
             if (!this.book || !this.book.files) return false;
-            const writableFormats = ['epub', 'azw3', 'pdf', 'djvu'];
+            const writableFormats = ['epub', 'azw3', 'pdf', 'djvu', 'cbz'];
             return this.book.files.some(file => writableFormats.includes(file.format.toLowerCase()));
         },
 

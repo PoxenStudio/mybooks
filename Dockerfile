@@ -30,9 +30,10 @@ RUN pip install flake8 pytest --break-system-packages
 COPY requirements_release.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir --no-compile -r /tmp/requirements.txt --break-system-packages && \
     rm -rf /root/.cache /root/.config/pip /tmp/requirements.txt /tmp/pip-* /var/tmp/*
-COPY calibre/plugins/ /tmp/calibre-plugins/
-RUN python3 /tmp/calibre-plugins/djvu_meta/build.py --out /usr/lib/calibre/mybooks-plugins && \
-    rm -rf /tmp/calibre-plugins
+# 插件源码不放进 /var/www/mybooks/calibre，避免目录名遮蔽真正的 calibre 包；测试经环境变量定位
+ENV MYBOOKS_CALIBRE_PLUGINS_SRC=/opt/mybooks/calibre-plugins
+COPY calibre/plugins/ /opt/mybooks/calibre-plugins/
+RUN python3 /opt/mybooks/calibre-plugins/build.py --out /usr/lib/calibre/mybooks-plugins
 COPY webserver/ /var/www/mybooks/webserver/
 COPY third-party/foliate-js/ /var/www/mybooks/third-party/foliate-js/
 RUN cd /var/www/mybooks/webserver/services/cfi_gen && npm ci --omit=dev
@@ -98,9 +99,9 @@ COPY requirements_release.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir --no-compile -r /tmp/requirements.txt --break-system-packages && \
     rm -rf /root/.cache /root/.config/pip /tmp/requirements.txt /tmp/pip-* /var/tmp/*
 
-# MyBooks 自带的 calibre 插件（DjVu 元数据）
+# MyBooks 自带的 calibre 插件（DjVu/CBZ 元数据）
 COPY calibre/plugins/ /tmp/calibre-plugins/
-RUN python3 /tmp/calibre-plugins/djvu_meta/build.py --out /usr/lib/calibre/mybooks-plugins && \
+RUN python3 /tmp/calibre-plugins/build.py --out /usr/lib/calibre/mybooks-plugins && \
     rm -rf /tmp/calibre-plugins
 
 
