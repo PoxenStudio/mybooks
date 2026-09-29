@@ -318,7 +318,7 @@
                                 </v-btn>
                             </template>
                             <v-list min-width="200">
-                                <v-list-item @click="saveMetaToFile" :disabled="!hasEpubAzw3OrPDF">
+                                <v-list-item @click="saveMetaToFile" :disabled="!hasMetaWritableFormat">
                                     <v-icon>mdi-file-sync</v-icon>
                                     {{ $t('book.saveMetaToFile') }}
                                 </v-list-item>
@@ -1621,6 +1621,13 @@ export default {
             });
         },
 
+        // 与后端 webserver/constants.py 的 META_WRITABLE_FORMATS 保持一致
+        hasMetaWritableFormat() {
+            if (!this.book || !this.book.files) return false;
+            const writableFormats = ['epub', 'azw3', 'pdf', 'djvu'];
+            return this.book.files.some(file => writableFormats.includes(file.format.toLowerCase()));
+        },
+
         hasEBooks() {
             if (!this.book || !this.book.files) {
                 return false;
@@ -2622,7 +2629,7 @@ export default {
         },
         saveMetaToFile() {
             // 保存元数据到书籍文件
-            if (!this.hasEpubAzw3OrPDF) {
+            if (!this.hasMetaWritableFormat) {
                 this.$alert("error", this.$t('book.needEpubOrAzw3'));
                 return;
             }

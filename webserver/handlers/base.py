@@ -1121,7 +1121,7 @@ class BaseHandler(web.RequestHandler):
 
         # 检查是否有支持的格式（可按 fmt 过滤）
         supported_formats = []
-        for f in ["epub", "azw3", "pdf"]:
+        for f in utils.meta_writable_formats():
             if fmt and f != fmt.lower():
                 continue
             fmt_key = f"fmt_{f}"
@@ -1136,7 +1136,7 @@ class BaseHandler(web.RequestHandler):
                 }
             return {
                 "err": "format.not_supported",
-                "msg": _("书籍没有支持的格式（需要 EPUB、AZW3 或 PDF）"),
+                "msg": _("书籍没有支持的格式（需要 EPUB、AZW3、PDF 或 DJVU）"),
             }
         try:
             from calibre.ebooks.metadata.meta import set_metadata

@@ -28,6 +28,13 @@ def parse_date(date_str):
     return None
 
 
+def meta_writable_formats():
+    """可回写元数据的格式；DJVU 依赖 djvu_meta 插件，未加载时自动排除。"""
+    from calibre.customize.ui import can_set_metadata
+
+    return [f for f in constants.META_WRITABLE_FORMATS if can_set_metadata(f)]
+
+
 def remove_zlibrary_suffix(text):
     """移除文件名中包含z-library的括号内容"""
     if not text:
