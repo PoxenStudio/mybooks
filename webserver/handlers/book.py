@@ -3250,7 +3250,7 @@ class BookUploadBatch(BaseHandler):
         if ScanService.is_importing():
             return {"err": "importing", "msg": _("有其它扫描任务正在运行，请稍后再试")}
         if ScanService.is_bulk_deleting():
-            return {"err": "importing", "msg": _("批量删除任务正在运行，请稍后再试")}
+            return {"err": "importing", "msg": _("已有批量删除任务正在运行，请稍后再试")}
 
         files = self.request.files.get("ebooks", [])
         if not files:

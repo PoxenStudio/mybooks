@@ -543,5 +543,17 @@
   "CBZ 容器内未找到图片页": "No image pages found in the CBZ container",
   "CBZ 容器条目数超出预算(%d)": "CBZ container exceeds the entry budget (%d)",
   "CBZ 容器包含加密条目，无法导入": "CBZ container contains encrypted entries and cannot be imported",
-  "CBZ 容器已损坏：%s": "CBZ container is corrupted: %s"
+  "CBZ 容器已损坏：%s": "CBZ container is corrupted: %s",
+  "已有导入任务正在运行，请稍后再试": "An import task is already running, please try again later",
+  "已有批量删除任务正在运行，请稍后再试": "A bulk delete task is already running, please try again later",
+  "有声书导入任务正在运行，请稍后再试": "An audiobook import task is running, please try again later",
+  "选择器没有找到可导入的文件，对应记录可能已失效或源文件已不存在": "The selector found no files to import; the records may be invalid or their source files no longer exist",
+  "没有可导入的文件": "No files to import",
+  "没有可删除的记录": "No records to delete",
+  "未找到有效的分类目录": "No valid category folders found",
+  "批量删除任务已启动": "Bulk delete task started",
+  "批量删除完成: 共%d条记录，已删除文件%d个，跳过%d个": "Bulk delete finished: %d records in total, %d files deleted, %d skipped",
+  "批量删除失败: %s": "Bulk delete failed: %s",
+  "正在取消批量删除任务, 请稍后查看状态": "Cancelling the bulk delete task, please check the status later",
+  "批量删除已取消: 已处理%d条记录，已删除文件%d个，跳过%d个": "Bulk delete cancelled: %d records processed, %d files deleted, %d skipped"
 }
