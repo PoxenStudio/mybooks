@@ -9,6 +9,8 @@
 - handlers.scan.Scanner.summary 的 ready 计数
 - async_service._ensure_scanfiles_indexes 的幂等、旧库 UNIQUE(hash) 兼容与 (status, import_type) 复合索引
 - 按状态的选择/批删/summary 一律排除有声书记录（import_type=2），NULL 视为电子书
+- handlers.scan.parse_delete_files 的缺省 False（真删必须显式传 true）与未知形态拒绝
+- ScanService._bulk_delete_core 的批次边界取消（已提交批次不回滚）
 """
 
 import os
@@ -20,7 +22,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import scoped_session, sessionmaker
 
 from webserver import constants, models
-from webserver.handlers.scan import Scanner, normalize_import_filelist
+from webserver.handlers.scan import Scanner, normalize_import_filelist, parse_delete_files
 from webserver.models import ScanFile
 from webserver.services.async_service import _ensure_scanfiles_indexes
 from webserver.services.scan_service import ScanService
@@ -304,6 +306,49 @@ class TestBulkDeleteCore(ScanSelectorTestBase):
         self.assertEqual([row[0] for row in progress], [5, 10, 12])
         self.assertEqual(progress[-1], (12, 12, 12, 0))
 
+    def test_cancel_after_first_batch_keeps_rest(self):
+        """取消在批次边界生效：已提交的批次不回滚，剩余记录与文件保留。"""
+        scan_dir = os.path.join(self.tmpdir, "imports")
+        paths = [self._touch(os.path.join("imports", "m%02d.epub" % i)) for i in range(12)]
+        for p in paths:
+            self._row(p, ScanFile.DROP)
+        calls = {"n": 0}
+
+        def should_cancel():
+            calls["n"] += 1
+            return calls["n"] > 1  # 第一批跑完后再检查即取消
+
+        total, deleted_files, skipped = ScanService._bulk_delete_core(
+            self.session, ScanFile.DROP, True, scan_dir,
+            batch_size=5, should_cancel=should_cancel,
+        )
+
+        # total 仍是开工前的全量计数，实际只处理了第一批
+        self.assertEqual(total, 12)
+        self.assertEqual(deleted_files, 5)
+        self.assertEqual(skipped, 0)
+        self.assertEqual(self.session.query(ScanFile).count(), 7)
+        self.assertTrue(all(not os.path.exists(p) for p in paths[:5]))
+        self.assertTrue(all(os.path.exists(p) for p in paths[5:]))
+        # 循环头检查一次 + 第一批结束后检查一次即退出，不再进入第三轮
+        self.assertEqual(calls["n"], 2)
+
+    def test_cancel_before_any_batch_deletes_nothing(self):
+        scan_dir = os.path.join(self.tmpdir, "imports")
+        in1 = self._touch(os.path.join("imports", "a.epub"))
+        self._row(in1, ScanFile.DROP)
+
+        total, deleted_files, skipped = ScanService._bulk_delete_core(
+            self.session, ScanFile.DROP, True, scan_dir,
+            should_cancel=lambda: True,
+        )
+
+        self.assertEqual(total, 1)
+        self.assertEqual(deleted_files, 0)
+        self.assertEqual(skipped, 0)
+        self.assertTrue(os.path.exists(in1))
+        self.assertEqual(self.session.query(ScanFile).count(), 1)
+
     def test_commonpath_valueerror_counts_outside(self):
         scan_dir = os.path.join(self.tmpdir, "imports")
         in1 = self._touch(os.path.join("imports", "a.epub"))
@@ -432,6 +477,31 @@ class TestNormalizeImportFilelist(unittest.TestCase):
             {"unknown": 1},
         ):
             self.assertIsNone(normalize_import_filelist(bad), repr(bad))
+
+
+class TestParseDeleteFiles(unittest.TestCase):
+    """delete_files 解析：缺省为 False（真删高危，API 必须显式声明）。"""
+
+    def test_default_is_false(self):
+        self.assertIs(parse_delete_files(None), False)
+        # 显式传 default 时可覆盖（服务层缺省亦为 False）
+        self.assertIs(parse_delete_files(None, default=False), False)
+
+    def test_bool_passthrough(self):
+        self.assertIs(parse_delete_files(True), True)
+        self.assertIs(parse_delete_files(False), False)
+
+    def test_string_forms(self):
+        for raw, want in (
+            ("true", True), ("True", True), (" TRUE ", True), ("1", True), ("yes", True),
+            ("false", False), ("False", False), ("0", False), ("no", False), ("", False),
+        ):
+            self.assertIs(parse_delete_files(raw), want, repr(raw))
+
+    def test_unknown_forms_rejected(self):
+        # "false" 决不能被当成真删，"maybe" 也不能被当成默认值
+        for bad in ("maybe", "TRUE!", 1, 0, 2, [], {}, ["true"], object()):
+            self.assertIsNone(parse_delete_files(bad), repr(bad))
 
 
 class TestScanfilesIndexes(unittest.TestCase):

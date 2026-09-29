@@ -82,7 +82,7 @@
                         <span v-if="!$vuetify.breakpoint.xs">{{ $t('imports.batch_add_books') }}</span>
                     </v-btn>
                     <v-btn
-                        v-if="importing"
+                        v-if="importing || bulkDeleting"
                         :outlined="$vuetify.breakpoint.xs"
                         color="error"
                         @click="cancelImport"
@@ -90,7 +90,7 @@
                         :icon="$vuetify.breakpoint.xs"
                     >
                         <v-icon>mdi-cancel</v-icon>
-                        <span v-if="!$vuetify.breakpoint.xs">{{ $t('imports.cancel_import') }}</span>
+                        <span v-if="!$vuetify.breakpoint.xs">{{ bulkDeleting ? $t('imports.cancel_bulk_delete') : $t('imports.cancel_import') }}</span>
                     </v-btn>
                     <template v-if="selected.length > 0">
                         <v-btn
@@ -286,8 +286,16 @@
             @confirm="runBulkDelete"
         >
             <p>{{ $t('imports.bulk_delete_desc', { count: bulkDeleteCount, status: bulkStatusLabel }) }}</p>
-            <p>{{ $t('imports.bulk_delete_files_warn') }}</p>
             <p>{{ $t('imports.bulk_delete_audiobook_note') }}</p>
+            <v-checkbox
+                v-model="bulkDeleteFiles"
+                :label="$t('imports.bulk_delete_files_option')"
+                color="error"
+                hide-details
+                class="mt-0"
+            ></v-checkbox>
+            <p v-if="bulkDeleteFiles" class="error--text mb-0">{{ $t('imports.bulk_delete_files_warn') }}</p>
+            <p v-else class="grey--text mb-0">{{ $t('imports.bulk_delete_records_only') }}</p>
         </AppDialog>
     </v-card>
 </template>
@@ -317,6 +325,7 @@ export default {
         bulkStatus: null,
         bulkDeleteDialog: false,
         bulkDeleting: false,
+        bulkDeleteFiles: false,
         statusCounts: {},
         scanScopeOptions: [
             { text: "imports.scan_scope_all", value: 0 },
@@ -623,7 +632,9 @@ export default {
         },
         deleteRecord() {
             if (this.bulkStatus) {
-                // 批量模式：删除全部匹配记录（跨页全量），确认框明示会真删目录内源文件
+                // 批量模式：删除全部匹配记录（跨页全量）；是否连源文件一起删由复选框决定，
+                // 默认不勾——真删是不可恢复动作，必须显式确认
+                this.bulkDeleteFiles = false;
                 this.bulkDeleteDialog = true;
                 return;
             }
@@ -656,7 +667,7 @@ export default {
                 method: "POST",
                 body: JSON.stringify({
                     status: this.bulkStatus,
-                    delete_files: true,
+                    delete_files: this.bulkDeleteFiles,
                 }),
             }).then((rsp) => {
                 if (rsp.err !== "ok") {
@@ -691,7 +702,12 @@ export default {
                             this.loading = false;
                             this.bulkStatus = null;
                             this.selected = [];
-                            if (state.err) {
+                            if (state.cancelled) {
+                                // 用户主动取消：已提交批次不回滚，展示已处理条数
+                                this.$alert("warning", this.$t("imports.bulk_delete_cancelled", {
+                                    total: state.processed || 0,
+                                }));
+                            } else if (state.err) {
                                 this.$alert("error", state.err);
                             } else {
                                 this.$alert("success", this.$t("imports.bulk_delete_done", {
