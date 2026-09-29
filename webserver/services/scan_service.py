@@ -18,7 +18,7 @@
 #   - 读取书籍元数据（calibre get_metadata），并根据标题去重：
 #       * 标题已存在（电子书）→ 追加格式（add_format）。
 #       * 标题不存在 → 全新导入（import_book），同时创建 Item 关联记录。
-#       * DJVU/UVZ 托管格式不读元数据，按文件名编目；仅唯一同名候选才并入，多候选按新书入库。
+#       * DJVU/UVZ/CBZ 扫描版先校验容器，以文件名编目为底合并内嵌元数据；仅唯一同名候选才并入，多候选按新书入库。
 #   - 若配置 IMPORT_CATEGORY_WITH_FOLDER=True，将文件所在上传目录的第一级子目录名
 #     作为书籍分类写入自定义字段。
 #   - 若配置 REMOVE_IMPORTED_FILE=True，导入后删除源文件（仅适用于全新导入或已存在的情况）。
@@ -50,15 +50,15 @@ from webserver.services.autofill import AutoFillService
 from webserver.services.catalog import CatalogExtractService
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_CATEGORY, CALIBRE_ERROR_FLAG
 from webserver.constants import BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL, CALIBRE_COLUMN_DYNAMIC_COVER, CALIBRE_COLUMN_TRANSLATORS
-from webserver.constants import MANAGED_DOCUMENT_FORMATS
-from webserver.services.managed_documents import InvalidManagedDocumentError, analyze_managed_document, build_managed_metadata
+from webserver.constants import SCANNED_DOCUMENT_FORMATS
+from webserver.base.book_files import InvalidBookFileError, read_book_metadata, validate_book_file
 from webserver.services.background_service import BackgroundService, BackgroundTask
 from webserver import loader
 
 CONF = loader.get_settings()
 MEGA_BYTES = 1024 * 1024
-# 可扫描导入的格式 = 常规电子书 + DJVU/UVZ 扫描版托管文档（下载专用，见 services/managed_documents.py）
-SCAN_EXT = ["azw", "azw3", "epub", "mobi", "pdf", "txt", "docx"] + constants.MANAGED_DOCUMENT_FORMATS
+# 可扫描导入的格式与上传一致
+SCAN_EXT = constants.ACCEPTED_BOOK_FORMATS
 
 
 class ScanService(AsyncService):
@@ -402,7 +402,6 @@ class ScanService(AsyncService):
             Handles all error paths internally (sets row.status, calls save_or_rollback).
             Returns book_id if a new book was successfully linked via Item, else None.
         """
-        from calibre.ebooks.metadata.meta import get_metadata
         from calibre.ebooks.metadata.book.base import Metadata
 
         fpath = row.path
@@ -412,23 +411,16 @@ class ScanService(AsyncService):
         _translators = []
         _authors = []
 
-        # DJVU/UVZ/CBZ 托管格式：校验容器后再导入，不读电子书元数据
-        managed_doc = fmt in MANAGED_DOCUMENT_FORMATS
-        if managed_doc:
-            try:
-                analyze_managed_document(fpath, fmt)
-            except InvalidManagedDocumentError as e:
-                logging.error("[IMPORT] Invalid managed document %s: %s", fpath, e)
-                row.status = ScanFile.INVALID
-                row.title = None
-                self.save_or_rollback(row, session)
-                return None, ScanFile.INVALID
+        try:
+            validate_book_file(fpath, fmt)
+        except InvalidBookFileError as e:
+            logging.error("[IMPORT] Invalid book file %s: %s", fpath, e)
+            row.status = ScanFile.INVALID
+            row.title = None
+            self.save_or_rollback(row, session)
+            return None, ScanFile.INVALID
 
-        # Skip metadata reading when title/author are derived from filename
-        if managed_doc:
-            mi = build_managed_metadata(fpath, fmt, fname)
-            logging.info("[IMPORT] Managed document cataloged from filename: %s", repr(mi.title))
-        elif fmt == "txt":
+        if fmt == "txt":
             title = fname[:-len(fmt) - 1]
             title = utils.remove_zlibrary_suffix(title)
             title, author = utils.guess_title_author_from_filename(title)
@@ -436,14 +428,13 @@ class ScanService(AsyncService):
             logging.info("[IMPORT] Skipped metadata read for %s: %s", fmt, repr(title))
         else:
             try:
-                with open(fpath, "rb") as stream:
-                    mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
-                    mi.title = utils.super_strip(mi.title)
-                    if mi.authors:
-                        _authors, _translators = guess_authors(mi.authors)
-                    else:
-                        _authors, _translators = guess_authors([utils.super_strip(mi.author_sort)])
-                    mi.authors = _authors
+                mi = read_book_metadata(fpath, fmt, fname)
+                mi.title = utils.super_strip(mi.title)
+                if mi.authors:
+                    _authors, _translators = guess_authors(mi.authors)
+                else:
+                    _authors, _translators = guess_authors([utils.super_strip(mi.author_sort)])
+                mi.authors = _authors
                 logging.info("[IMPORT] Metadata read [%.3fs]: %s", time.time() - start_time, repr(mi.title))
             except Exception as e:
                 logging.error("[IMPORT] Error reading metadata from %s: %s", fpath, e)
@@ -491,11 +482,11 @@ class ScanService(AsyncService):
             else:
                 ids = self.db.books_with_same_title(mi)
                 logging.info("[IMPORT] Same title %d book(s) for: %s", len(ids) if ids else 0, fpath)
-            if ids and managed_doc and len(ids) > 1:
+            if ids and fmt in SCANNED_DOCUMENT_FORMATS and len(ids) > 1:
                 # 扫描版无可信作者元数据：多个同名候选一律按新书入库，避免误并。
                 # 注意入口差异（有意保留）：此处沿用 TXT 先例不校验作者，唯一同名候选即并入；
                 # 网页上传/分片路径（book.py）则要求作者匹配才并入。
-                logging.info("[IMPORT] %d same-title candidates for managed document, import as new book", len(ids))
+                logging.info("[IMPORT] %d same-title candidates for scanned document, import as new book", len(ids))
                 ids = []
             existed_ebook = False
             if ids:

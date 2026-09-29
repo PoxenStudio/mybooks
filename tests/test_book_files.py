@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
-"""DJVU/UVZ 扫描版托管文档：容器校验与文件名编目测试。
+"""书籍文件入库前校验与元数据读取测试（DJVU/UVZ/CBZ 容器校验、文件名编目）。
 
-纯单元测试（不依赖 tornado/calibre 环境）；filename_metadata 依赖 calibre
-元数据库，在缺 calibre 的环境下自动跳过。
+容器校验不依赖 calibre；filename_metadata/read_book_metadata 依赖 calibre，在缺 calibre 的环境下自动跳过。
 """
 
 import os
@@ -13,20 +12,23 @@ import unittest
 import zipfile
 from unittest import mock
 
-from webserver.services import managed_documents as md
-from webserver.services.managed_documents import (
-    InvalidManagedDocumentError,
-    analyze_managed_document,
+from webserver.base import book_files as md
+from webserver.base.book_files import (
+    InvalidBookFileError,
+    validate_book_file,
 )
 
 try:
+    import webserver.main
+
+    webserver.main.init_calibre()
     import calibre.ebooks.metadata.book.base  # noqa: F401
 
     _HAS_CALIBRE_META = True
 except ImportError:
     _HAS_CALIBRE_META = False
 
-from webserver.services.managed_documents import build_managed_metadata, filename_metadata
+from webserver.base.book_files import filename_metadata, read_book_metadata
 
 
 def _make_djvu(payload=b"", form_size=None):
@@ -53,7 +55,7 @@ def _make_zip(entries):
 _make_uvz = _make_zip
 
 
-class TestAnalyzeManagedDocument(unittest.TestCase):
+class TestValidateBookFile(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
 
@@ -65,49 +67,49 @@ class TestAnalyzeManagedDocument(unittest.TestCase):
 
     def test_djvu_valid(self):
         p = self._write("ok.djvu", _make_djvu(b"DJVI" + b"\x00" * 8))
-        self.assertIsNone(analyze_managed_document(p, "djvu"))
+        self.assertIsNone(validate_book_file(p, "djvu"))
 
     def test_djvu_invalid_magic(self):
         p = self._write("bad.djvu", b"AT&TFORM" + b"\x00" * 4 + b"XXXX" + b"\x00" * 4)
-        with self.assertRaises(InvalidManagedDocumentError):
-            analyze_managed_document(p, "djvu")
+        with self.assertRaises(InvalidBookFileError):
+            validate_book_file(p, "djvu")
 
     def test_djvu_size_mismatch(self):
         p = self._write("short.djvu", _make_djvu(form_size=999))
-        with self.assertRaises(InvalidManagedDocumentError):
-            analyze_managed_document(p, "djvu")
+        with self.assertRaises(InvalidBookFileError):
+            validate_book_file(p, "djvu")
 
     def test_djvu_odd_form_pad_byte(self):
         p = self._write("pad.djvu", _make_djvu(b"X") + b"\x00")
-        self.assertIsNone(analyze_managed_document(p, "djvu"))
+        self.assertIsNone(validate_book_file(p, "djvu"))
 
     def test_djvu_even_form_extra_byte(self):
         p = self._write("extra.djvu", _make_djvu(b"XY") + b"\x00")
-        with self.assertRaises(InvalidManagedDocumentError):
-            analyze_managed_document(p, "djvu")
+        with self.assertRaises(InvalidBookFileError):
+            validate_book_file(p, "djvu")
 
     def test_djvu_truncated(self):
         p = self._write("trunc.djvu", _make_djvu()[:10])
-        with self.assertRaises(InvalidManagedDocumentError):
-            analyze_managed_document(p, "djvu")
+        with self.assertRaises(InvalidBookFileError):
+            validate_book_file(p, "djvu")
 
     def test_uvz_valid(self):
         p = _make_uvz({"0001.pdg": b"fake-page", "cover.jpg": b"jpegdata"})
         try:
-            self.assertIsNone(analyze_managed_document(p, "uvz"))
+            self.assertIsNone(validate_book_file(p, "uvz"))
         finally:
             os.remove(p)
 
     def test_uvz_not_zip(self):
         p = self._write("fake.uvz", b"not a zip file at all........")
-        with self.assertRaises(InvalidManagedDocumentError):
-            analyze_managed_document(p, "uvz")
+        with self.assertRaises(InvalidBookFileError):
+            validate_book_file(p, "uvz")
 
     def test_uvz_empty(self):
         p = _make_uvz({"dir_only": None})
         try:
-            with self.assertRaises(InvalidManagedDocumentError):
-                analyze_managed_document(p, "uvz")
+            with self.assertRaises(InvalidBookFileError):
+                validate_book_file(p, "uvz")
         finally:
             os.remove(p)
 
@@ -123,8 +125,8 @@ class TestAnalyzeManagedDocument(unittest.TestCase):
                 return infos
 
             with mock.patch.object(zipfile.ZipFile, "infolist", encrypted_infolist):
-                with self.assertRaises(InvalidManagedDocumentError):
-                    analyze_managed_document(p, "uvz")
+                with self.assertRaises(InvalidBookFileError):
+                    validate_book_file(p, "uvz")
         finally:
             os.remove(p)
 
@@ -132,41 +134,40 @@ class TestAnalyzeManagedDocument(unittest.TestCase):
         p = _make_uvz({"a.pdg": b"1", "b.pdg": b"2", "c.pdg": b"3"})
         try:
             with mock.patch.object(md, "MAX_ARCHIVE_ENTRIES", 2):
-                with self.assertRaises(InvalidManagedDocumentError):
-                    analyze_managed_document(p, "uvz")
+                with self.assertRaises(InvalidBookFileError):
+                    validate_book_file(p, "uvz")
         finally:
             os.remove(p)
 
-    def test_unsupported_format(self):
+    def test_format_without_validator_passes(self):
         p = self._write("x.txt", b"hello")
-        with self.assertRaises(InvalidManagedDocumentError):
-            analyze_managed_document(p, "txt")
+        self.assertIsNone(validate_book_file(p, "txt"))
 
     def test_unreadable_file_wrapped_as_invalid(self):
         # 文件不可读（不存在/权限）应转为校验错误而非 OSError 直抛
         p = os.path.join(self.tmp, "missing.djvu")
-        with self.assertRaises(InvalidManagedDocumentError):
-            analyze_managed_document(p, "djvu")
+        with self.assertRaises(InvalidBookFileError):
+            validate_book_file(p, "djvu")
 
     def test_cbz_valid(self):
         p = _make_zip({"010.jpg": b"fake-jpeg", "002.jpg": b"fake-jpeg", "ComicInfo.xml": b"<xml/>"})
         try:
-            self.assertIsNone(analyze_managed_document(p, "cbz"))
+            self.assertIsNone(validate_book_file(p, "cbz"))
         finally:
             os.remove(p)
 
     def test_cbz_without_images_rejected(self):
         p = _make_zip({"info.xml": b"<xml/>", "notes.txt": b"text"})
         try:
-            with self.assertRaises(InvalidManagedDocumentError):
-                analyze_managed_document(p, "cbz")
+            with self.assertRaises(InvalidBookFileError):
+                validate_book_file(p, "cbz")
         finally:
             os.remove(p)
 
     def test_cbz_not_zip_rejected(self):
         p = self._write("fake.cbz", b"not a zip file at all........")
-        with self.assertRaises(InvalidManagedDocumentError):
-            analyze_managed_document(p, "cbz")
+        with self.assertRaises(InvalidBookFileError):
+            validate_book_file(p, "cbz")
 
     def test_cbz_encrypted_entry_rejected(self):
         p = _make_zip({"0001.jpg": b"fake-jpeg"})
@@ -180,8 +181,8 @@ class TestAnalyzeManagedDocument(unittest.TestCase):
                 return infos
 
             with mock.patch.object(zipfile.ZipFile, "infolist", encrypted_infolist):
-                with self.assertRaises(InvalidManagedDocumentError):
-                    analyze_managed_document(p, "cbz")
+                with self.assertRaises(InvalidBookFileError):
+                    validate_book_file(p, "cbz")
         finally:
             os.remove(p)
 
@@ -202,7 +203,7 @@ class TestAnalyzeManagedDocument(unittest.TestCase):
         # 封面提取遇 NotImplementedError 降级为无封面，绝不让合法 CBZ 入库失败
         p = self._patch_zip_method(_make_zip({"0001.jpg": b"fake-jpeg-data"}), 98)
         try:
-            self.assertIsNone(analyze_managed_document(p, "cbz"))
+            self.assertIsNone(validate_book_file(p, "cbz"))
         finally:
             os.remove(p)
 
@@ -218,7 +219,7 @@ class TestAnalyzeManagedDocument(unittest.TestCase):
             for i in range(mid, mid + 4):
                 data[i] ^= 0xFF
             open(p, "wb").write(bytes(data))
-            self.assertIsNone(analyze_managed_document(p, "cbz"))
+            self.assertIsNone(validate_book_file(p, "cbz"))
         finally:
             os.remove(p)
 
@@ -243,20 +244,19 @@ class TestFilenameMetadata(unittest.TestCase):
         p = _make_zip({"0001.jpg": b"page-01"})
         try:
             with mock.patch("calibre.customize.ui.get_file_type_metadata", return_value=file_mi) as reader:
-                mi = build_managed_metadata(p, "cbz", "某漫画.cbz")
+                mi = read_book_metadata(p, "cbz", "某漫画.cbz")
             self.assertEqual(reader.call_args[0][1], "cbz")
             self.assertEqual((mi.title, list(mi.authors)), ("漫画标题", ["作者甲"]))
             self.assertEqual(mi.cover_data, ("jpg", b"page-01"))
         finally:
             os.remove(p)
 
-    def test_uvz_skips_plugin(self):
+    def test_uvz_without_plugin_uses_filename(self):
         p = _make_uvz({"0001.pdg": b"fake-page"})
         try:
-            with mock.patch("calibre.customize.ui.get_file_type_metadata") as reader:
-                mi = build_managed_metadata(p, "uvz", "某本无名扫描书.uvz")
-            reader.assert_not_called()
+            mi = read_book_metadata(p, "uvz", "某本无名扫描书.uvz")
             self.assertEqual(mi.title, "某本无名扫描书")
+            self.assertEqual(list(mi.authors), ["佚名"])
         finally:
             os.remove(p)
 

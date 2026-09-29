@@ -130,7 +130,7 @@ class TestDjVuMetaCore(unittest.TestCase):
         self.assertEqual(first, second)
 
     def test_shorter_write_truncates(self):
-        from webserver.services.managed_documents import analyze_managed_document
+        from webserver.base.book_files import validate_book_file
 
         _, first = self.write(make_djvu(), sample_mi())
         with tempfile.NamedTemporaryFile(suffix=".djvu", delete=False) as f:
@@ -138,21 +138,21 @@ class TestDjVuMetaCore(unittest.TestCase):
         try:
             with open(f.name, "rb+") as stream:
                 core.write_metadata(stream, Metadata("S", ["A"]), apply_null=True)
-            analyze_managed_document(f.name, "djvu")
+            validate_book_file(f.name, "djvu")
             with open(f.name, "rb") as stream:
                 self.assertEqual(core.read_metadata(stream, quick=True).title, "S")
         finally:
             os.remove(f.name)
 
     def test_odd_length_output_passes_container_check(self):
-        from webserver.services.managed_documents import analyze_managed_document
+        from webserver.base.book_files import validate_book_file
 
         for title in ("a", "ab", "abc", "测试"):
             _, out = self.write(make_djvu(), Metadata(title, ["A"]))
             with tempfile.NamedTemporaryFile(suffix=".djvu", delete=False) as f:
                 f.write(out)
             try:
-                analyze_managed_document(f.name, "djvu")
+                validate_book_file(f.name, "djvu")
             finally:
                 os.remove(f.name)
 
@@ -190,7 +190,7 @@ class TestDjVuMetaPlugins(unittest.TestCase):
 
 
 @unittest.skipUnless(_READY, "requires calibre and djvu_rs")
-class TestManagedDjVuMetadata(unittest.TestCase):
+class TestDjVuBookMetadata(unittest.TestCase):
     def setUp(self):
         with tempfile.NamedTemporaryFile(suffix=".djvu", delete=False) as f:
             f.write(make_djvu())
@@ -200,10 +200,10 @@ class TestManagedDjVuMetadata(unittest.TestCase):
         os.remove(self.path)
 
     def build(self, file_mi):
-        from webserver.services.managed_documents import build_managed_metadata
+        from webserver.base.book_files import read_book_metadata
 
         with mock.patch("calibre.customize.ui.get_file_type_metadata", return_value=file_mi):
-            return build_managed_metadata(self.path, "djvu", "SampleTitle.djvu")
+            return read_book_metadata(self.path, "djvu", "SampleTitle.djvu")
 
     def test_file_metadata_preferred(self):
         file_mi = Metadata("内嵌书名", ["内嵌作者"])
