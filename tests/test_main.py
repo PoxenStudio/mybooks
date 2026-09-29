@@ -528,6 +528,32 @@ class TestBook(TestWithUserLogin):
             rsp = self.fetch("/read/%s" % BID_EPUB, follow_redirects=False)
             self.assertEqual(rsp.code, 200)
 
+    def _mock_djvu_only_book(self):
+        # 测试库里没有 djvu 书籍：把 PDF 样书改造成只含 DJVU 格式的书
+        orig_get_book = BaseHandler.get_book
+
+        def fake_get_book(handler, book_id, *args, **kwargs):
+            book = orig_get_book(handler, book_id, *args, **kwargs)
+            if book and int(book_id) == BID_PDF:
+                book = dict(book)
+                book["fmt_djvu"] = book.pop("fmt_pdf")
+            return book
+
+        return mock.patch.object(BaseHandler, "get_book", fake_get_book)
+
+    def test_read_djvu(self):
+        with self._mock_djvu_only_book():
+            for url in ("/read/%s" % BID_PDF, "/read/%s?format=djvu" % BID_PDF):
+                rsp = self.fetch(url, follow_redirects=False)
+                self.assertEqual(rsp.code, 302)
+                location = rsp.headers["Location"]
+                self.assertTrue(location.startswith("/static/djvureader/index.html?file="), location)
+                self.assertIn(urllib.parse.quote_plus("/api/book/%s.djvu" % BID_PDF), location)
+
+            d = self.json("/api/book/%s/read" % BID_PDF, method="POST", body=json.dumps({"format": "djvu"}))
+            self.assertEqual(d["err"], "ok")
+            self.assertEqual(d["data"]["status"], "ready")
+
     def test_edit(self):
         body = {
             "id": 5,

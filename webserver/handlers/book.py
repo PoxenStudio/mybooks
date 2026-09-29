@@ -3413,7 +3413,7 @@ class BookRead(BaseHandler):
         if self.current_user:
             # 网页阅读器心跳不带阅读进度（epub.js 阅读器目前不回传阅读位置），格式取显式指定的
             # format 参数，缺省时按优先级挑书籍里第一个存在的格式，分格式时长统计使用。
-            stat_fmt = fmt_arg or next((f for f in ("epub", "pdf", "mobi", "azw3", "azw", "txt") if book.get("fmt_%s" % f)), None)
+            stat_fmt = fmt_arg or next((f for f in ("epub", "pdf", "mobi", "azw3", "azw", "txt", "djvu") if book.get("fmt_%s" % f)), None)
             ReadingStatsService.heartbeat(self.current_user.id, book_id, Reading.PROTOCOL_WEB, fmt=stat_fmt)
 
         book_reader = CONF.get("EPUB_VIEWER", "MyReader")
@@ -3448,6 +3448,9 @@ class BookRead(BaseHandler):
                 pdf_url = urllib.parse.quote_plus(self.api_url + "/api/book/%(id)d.pdf" % book)
                 pdf_reader_url = CONF["PDF_VIEWER"] % {"pdf_url": pdf_url}
                 return self.redirect(pdf_reader_url)
+
+            if fmt_arg == "djvu":
+                return self._redirect_djvu_reader(book)
 
             if fmt_arg in ("epub", "mobi", "azw", "azw3"):
                 if fmt_arg != 'epub':
@@ -3499,12 +3502,24 @@ class BookRead(BaseHandler):
             pdf_reader_url = CONF["PDF_VIEWER"] % {"pdf_url": pdf_url}
             return self.redirect(pdf_reader_url)
 
+        if 'fmt_djvu' in book:
+            return self._redirect_djvu_reader(book)
+
         if 'fmt_txt' in book:
             # TXT有专门的阅读器
             txt_reader_url = f'/read/txt/{book_id}'
             return self.redirect(txt_reader_url)
 
         raise web.HTTPError(404, reason=_("抱歉，在线阅读器暂不支持该格式的书籍，可以转为epub或者pdf后阅读"))
+
+    def _redirect_djvu_reader(self, book):
+        """跳转到 DjVu.js 阅读器（与 PDF 一样直接读取原文件，需下载权限）"""
+        if self.current_user and not self.current_user.can_save():
+            raise web.HTTPError(403, reason=_("无权在线阅读"))
+
+        djvu_url = urllib.parse.quote_plus(self.api_url + "/api/book/%(id)d.djvu" % book)
+        name = urllib.parse.quote_plus(book.get("title") or "")
+        return self.redirect(CONF["DJVU_VIEWER"] % {"djvu_url": djvu_url, "name": name})
 
     def _epub_conversion_source(self, book, fmt_arg=""):
         """返回需要转换为epub的源文件路径；如果无需转换（已就绪或该格式不需要转换）则返回None"""
@@ -3548,8 +3563,8 @@ class BookRead(BaseHandler):
         fpath = self._epub_conversion_source(book, fmt_arg)
         if not fpath:
             # _epub_conversion_source 返回 None 有两种含义：已可直接阅读，或没有任何可读格式。
-            # 仅含 DJVU/UVZ 等托管格式的书籍不允许进入阅读流程。
-            if not any(book.get("fmt_%s" % f) for f in constants.SUPPORTED_EBOOK_FORMATS):
+            # 仅含 UVZ/CBZ 等托管格式的书籍不允许进入阅读流程（DJVU 有专门的 DjVu.js 阅读器）。
+            if not any(book.get("fmt_%s" % f) for f in constants.SUPPORTED_EBOOK_FORMATS + ["djvu"]):
                 return {"err": "params.book.invalid", "msg": _("抱歉，在线阅读器暂不支持该格式的书籍，可以转为epub或者pdf后阅读")}
             return {"err": "ok", "msg": _("可以直接打开"), "data": {"status": "ready", "path": fpath}}
 
