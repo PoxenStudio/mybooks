@@ -581,7 +581,7 @@
     "selectStampPositionDesc": "请选择图章在封面上的位置：",
     "addStampSuccess": "图章已成功添加到封面",
     "addStampFailed": "添加图章失败",
-    "needEpubOrAzw3": "需要 EPUB 或 AZW3 格式才能同步元数据",
+    "needEpubOrAzw3": "需要 EPUB、AZW3、PDF 或 DJVU 格式才能同步元数据",
     "selectFormatToSeparate": "选择要抽出的格式：",
     "separateHint": "抽出后，选定的格式将从当前书籍中移除，并创建为一本新的独立书籍。",
     "needMultipleFormats": "书籍只有一个格式，无法处理",

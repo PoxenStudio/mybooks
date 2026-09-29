@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
-"""DJVU/UVZ/CBZ 托管文档（扫描版/漫画包）：容器校验与文件名编目。
+"""DJVU/UVZ/CBZ 托管文档（扫描版/漫画包）：容器校验与编目。
 
 这类格式无法解出可供在线阅读的电子书内容（UVZ 内页多为超星 PDG 等私有格式，
 CBZ 为漫画图片包，mybooks 无漫画阅读器），因此只入库保存原始文件供下载；
 BookRead 对无可读格式的书籍一律 404，天然禁读。
 校验只识别容器结构，不解压、不解码页面内容（CBZ 仅从首页图提取封面）。
+DJVU 另经 djvu_meta calibre 插件读取内嵌元数据并渲染首页作封面，插件缺失时退回文件名编目。
 """
 
 import logging
@@ -15,6 +16,7 @@ import struct
 import zipfile
 import zlib
 
+from webserver.constants import CALIBRE_ERROR_FLAG
 from webserver.i18n import _
 from webserver import utils
 
@@ -159,11 +161,30 @@ def filename_metadata(name):
     return Metadata(title or stem, [author] if author else [_("佚名")])
 
 
+def _read_djvu_metadata(fpath):
+    from calibre.customize.ui import get_file_type_metadata
+
+    try:
+        with open(fpath, "rb") as stream:
+            mi = get_file_type_metadata(stream, "djvu")
+    except Exception as err:
+        logging.info("DjVu metadata read failed for %s: %s", fpath, err)
+        return None
+    if mi.title == CALIBRE_ERROR_FLAG:
+        return None
+    return mi
+
+
 def build_managed_metadata(fpath, fmt, name):
-    """托管格式的完整编目：文件名元数据 + CBZ 首页图封面。"""
+    """托管格式的完整编目：文件名元数据 + CBZ 首页图封面 + DJVU 内嵌元数据与首页封面。"""
     mi = filename_metadata(name)
-    if (fmt or "").lower().lstrip(".") == "cbz":
+    fmt = (fmt or "").lower().lstrip(".")
+    if fmt == "cbz":
         cover = _extract_cbz_cover(fpath)
         if cover:
             mi.cover_data = cover
+    elif fmt == "djvu":
+        file_mi = _read_djvu_metadata(fpath)
+        if file_mi is not None:
+            mi.smart_update(file_mi)
     return mi

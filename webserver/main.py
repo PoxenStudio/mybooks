@@ -55,6 +55,12 @@ define(
     help=_("Path to calibre plugins."),
 )
 define(
+    "path-system-plugins",
+    default="/usr/lib/calibre/mybooks-plugins",
+    type=str,
+    help=_("Path to MyBooks calibre plugin zips (e.g. DjVu metadata)."),
+)
+define(
     "path-bin", default="/usr/bin", type=str, help=_("Path to calibre binary programs.")
 )
 define(
@@ -126,6 +132,7 @@ def init_calibre():
     sys.resources_location = options.path_resources
     sys.extensions_location = options.path_plugins
     sys.executables_location = options.path_bin
+    sys.system_plugins_location = options.path_system_plugins
     try:
         import calibre  # noqa: F401
     except Exception as e:
@@ -218,8 +225,10 @@ def configure_plugins():
       1. 配置 Amazon 插件，将 server 选项设置为 'amazon'
       2. 禁用TXT to TXTZ插件，避免不必要的TXT文件处理
     """
-    from calibre.customize.ui import metadata_plugins, disable_plugin, enable_plugin
+    from calibre.customize.ui import metadata_plugins, metadata_readers, disable_plugin, enable_plugin, can_set_metadata
     try:
+        djvu_reader = any("djvu" in p.file_types for p in metadata_readers())
+        logging.info("[INIT]DjVu metadata plugins: reader=%s, writer=%s", djvu_reader, can_set_metadata("djvu"))
         for plugin in metadata_plugins({"identify"}):
             if plugin.name == "Amazon.com":
                 plugin.prefs["server"] = "amazon"

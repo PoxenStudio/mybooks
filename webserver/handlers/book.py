@@ -854,7 +854,7 @@ class BookRefer(BaseHandler):
 
     def reset_book_meta(self, book_id):
         book = self.get_book(book_id)
-        for fmt in ["epub", "mobi", "azw", "azw3", "txt", "pdf"]:
+        for fmt in ["epub", "mobi", "azw", "azw3", "txt", "pdf", "djvu"]:
             book_path = book.get("fmt_%s" % fmt, None)
             if book_path:
                 break
@@ -2779,8 +2779,7 @@ class BookUpload(BaseHandler):
             logging.info(f"Successfully added {fmt.upper()} format to book {book_id}")
 
             try:
-                # 托管格式无法回写元数据，save_book_meta 仅支持 EPUB/AZW3/PDF
-                if update_metadata and fmt not in MANAGED_DOCUMENT_FORMATS:
+                if update_metadata and fmt in utils.meta_writable_formats():
                     self.save_book_meta(book_id, fmt=fmt)
                     logging.info(f"Metadata written to new format {fmt.upper()} for book {book_id}")
             except Exception as e:

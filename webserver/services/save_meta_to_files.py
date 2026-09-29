@@ -75,7 +75,7 @@ class SaveMetaToFilesService(AsyncService):
         logging.info(f"[MetaDataSave] save meta for book id:{book_id}, title:{book.get('title', '')}")
 
         supported_formats = []
-        for f in ["epub", "azw3", "pdf"]:
+        for f in utils.meta_writable_formats():
             fmt_key = f"fmt_{f}"
             if fmt_key in book:
                 supported_formats.append((f, book[fmt_key]))
