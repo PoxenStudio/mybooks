@@ -72,6 +72,8 @@ class ScanService(AsyncService):
         ScanFile.READY: 0,
     }
     invalid_folder: set[str] = set()
+    # 导入/批量删除/有声书导入"检查对方状态 + 置自己的运行位"必须在这把锁内原子完成
+    task_claim_lock = threading.Lock()
     static_bulk_delete: dict = {
         "running": False,
         "done": False,
@@ -520,17 +522,19 @@ class ScanService(AsyncService):
                       在后台服务线程解析出文件清单——全量 .all() + 逐行 stat 在百万行表上会
                       冻住 tornado ioloop，绝不能在 handler 里做（handler 只做 COUNT 预检）
         """
-        if ScanService.static_is_importing:
-            logging.error("Importing is running, please wait...")
-            return
-        if ScanService.is_bulk_deleting():
-            # 二道闸：handler 检查与异步入队之间存在窗口，服务线程入口再拦一次
-            logging.error("[IMPORT] Bulk deleting is running, import rejected")
-            return
+        with ScanService.task_claim_lock:
+            if ScanService.static_is_importing:
+                logging.error("Importing is running, please wait...")
+                return
+            if ScanService.is_bulk_deleting():
+                # 二道闸：handler 检查与异步入队之间存在窗口，服务线程入口再拦一次
+                logging.error("[IMPORT] Bulk deleting is running, import rejected")
+                self.add_msg(user_id=user_id, status="error", msg=_("已有批量删除任务正在运行，请稍后再试"))
+                return
+            ScanService.static_is_importing = True
 
         ScanService.invalid_folder.clear()
         ScanService.static_abort_flag = False
-        ScanService.static_is_importing = True
         ScanService.static_import_user_id = user_id
         start_time = time.time()
 
@@ -1220,6 +1224,13 @@ class ScanService(AsyncService):
         st["total"] = total
         st["deleted_files"] = deleted_files
         st["skipped"] = skipped
+        task_id = st.get("task_id")
+        if task_id:
+            BackgroundService().update_progress(
+                task_id,
+                int(processed * 100 / total) if total else 0,
+                progress_data={"stage": "deleting", "total": total, "processed": processed, "deleted_files": deleted_files},
+            )
 
     @AsyncService.register_service
     def do_bulk_delete(self, user_id, status, delete_files=False):
@@ -1230,32 +1241,46 @@ class ScanService(AsyncService):
         static_bulk_delete 供 /admin/import/bulk_delete/status 轮询。cancel 置位后批循环
         在批次边界停下（已提交批次不回滚），state.cancelled 供前端区分展示。
         """
-        if ScanService.static_is_importing:
-            self.add_msg(user_id=user_id, status="error", msg=_("已有导入任务正在运行，请稍后再试"))
-            return
-        if ScanService.is_bulk_deleting():
-            return
         # 有声书导入写同一张 scanfiles 表（import_type=2），与批量删除互斥；
         # 批删的作用范围也已排除有声书记录（_bulk_delete_core → status_filter）；
         # 延迟导入避免模块级循环（audios_import → scan_service）
         from webserver.services.audios_import import AudioBookImporter
 
-        if AudioBookImporter.is_running():
-            self.add_msg(user_id=user_id, status="error", msg=_("有声书导入任务正在运行，请稍后再试"))
-            return
-        ScanService.static_bulk_delete = {
-            "running": True,
-            "done": False,
-            "err": "",
-            "status": status,
-            "delete_files": bool(delete_files),
-            "cancel": False,
-            "cancelled": False,
-            "total": 0,
-            "processed": 0,
-            "deleted_files": 0,
-            "skipped": 0,
-        }
+        with ScanService.task_claim_lock:
+            if ScanService.static_is_importing:
+                self.add_msg(user_id=user_id, status="error", msg=_("已有导入任务正在运行，请稍后再试"))
+                return
+            if ScanService.is_bulk_deleting():
+                return
+            if AudioBookImporter.is_running():
+                self.add_msg(user_id=user_id, status="error", msg=_("有声书导入任务正在运行，请稍后再试"))
+                return
+            ScanService.static_bulk_delete = {
+                "running": True,
+                "done": False,
+                "err": "",
+                "status": status,
+                "delete_files": bool(delete_files),
+                "cancel": False,
+                "cancelled": False,
+                "total": 0,
+                "processed": 0,
+                "deleted_files": 0,
+                "skipped": 0,
+                "task_id": None,
+            }
+        task_id = None
+        try:
+            task = BackgroundService().update_task(
+                service_type=BackgroundTask.SERVICE_TYPE_BULK_DELETE,
+                service_item=_("批量删除导入记录"),
+                progress=0,
+                progress_data={"stage": "deleting", "total": 0, "processed": 0, "deleted_files": 0},
+            )
+            task_id = task.id
+            ScanService.static_bulk_delete["task_id"] = task_id
+        except Exception as e:
+            logging.error("[BULK-DELETE] Failed to create background task: %s", e)
         start_time = time.time()
         try:
             total, deleted_files, skipped = self._bulk_delete_core(
@@ -1287,10 +1312,14 @@ class ScanService(AsyncService):
                     "[BULK-DELETE] Done in %.3fs: status=%s total=%d files=%d skipped=%d",
                     time.time() - start_time, status, total, deleted_files, skipped,
                 )
+            if task_id:
+                BackgroundService().complete_task(task_id=task_id)
         except Exception as err:
             ScanService.static_bulk_delete["err"] = str(err)
             logging.error("[BULK-DELETE] Failed: %s", err)
             logging.error(traceback.format_exc())
+            if task_id:
+                BackgroundService().complete_task(task_id=task_id, error_message=str(err))
             self.add_msg(user_id=user_id, status="error", msg=_("批量删除失败: %s") % err)
         finally:
             ScanService.static_bulk_delete["running"] = False

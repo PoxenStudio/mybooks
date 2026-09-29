@@ -208,15 +208,17 @@ class AudioBookImporter(AsyncService):
 
     @AsyncService.register_service
     def do_import(self, user_id):
-        if AudioBookImporter.static_is_running:
-            logging.error("[AUDIO_IMPORT] already running, skip")
-            return
-        if ScanService.is_bulk_deleting():
-            # 二道闸：handler 检查与异步入队之间存在窗口，服务线程入口再拦一次
-            logging.error("[AUDIO_IMPORT] bulk deleting is running, skip")
-            return
+        with ScanService.task_claim_lock:
+            if AudioBookImporter.static_is_running:
+                logging.error("[AUDIO_IMPORT] already running, skip")
+                return
+            if ScanService.is_bulk_deleting():
+                # 二道闸：handler 检查与异步入队之间存在窗口，服务线程入口再拦一次
+                logging.error("[AUDIO_IMPORT] bulk deleting is running, skip")
+                self.add_msg(user_id=user_id, status="error", msg=_("已有批量删除任务正在运行，请稍后再试"))
+                return
+            AudioBookImporter.static_is_running = True
 
-        AudioBookImporter.static_is_running = True
         AudioBookImporter.static_status = {
             "total": 0,
             "imported": 0,

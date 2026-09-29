@@ -21,7 +21,7 @@
                     </v-btn>
                     <template v-if="bulkStatus">
                         <v-btn
-                            :disabled="loading"
+                            :disabled="loading || bulkDeleting"
                             :outlined="$vuetify.breakpoint.xs"
                             color="#2d6d4b"
                             @click="importBooks"
@@ -34,7 +34,7 @@
                     </template>
                     <template v-else-if="selected.length > 0">
                         <v-btn
-                            :disabled="loading"
+                            :disabled="loading || bulkDeleting"
                             :outlined="$vuetify.breakpoint.xs"
                             color="#2d6d4b"
                             @click="importBooks"
@@ -47,7 +47,7 @@
                     </template>
                     <template v-else>
                         <v-btn
-                            :disabled="loading"
+                            :disabled="loading || bulkDeleting"
                             :outlined="$vuetify.breakpoint.xs"
                             color="#2d6d4b"
                             @click="importBooks"
@@ -59,7 +59,7 @@
                         </v-btn>
                     </template>
                     <v-btn
-                        :disabled="loading"
+                        :disabled="loading || bulkDeleting"
                         :outlined="$vuetify.breakpoint.xs"
                         color="purple darken-1"
                         @click="importAudiobooks"
@@ -71,7 +71,7 @@
                     </v-btn>
                     <v-btn
                         v-if="allowPhysicalBooks"
-                        :disabled="loading"
+                        :disabled="loading || bulkDeleting"
                         :outlined="$vuetify.breakpoint.xs"
                         color="secondary"
                         @click="showBatchAddDialog"
@@ -94,7 +94,7 @@
                     </v-btn>
                     <template v-if="selected.length > 0">
                         <v-btn
-                            :disabled="loading"
+                            :disabled="loading || bulkDeleting"
                             :outlined="$vuetify.breakpoint.xs"
                             color="primary"
                             @click="deleteRecord"
@@ -533,6 +533,10 @@ export default {
             });
         },
         runImport(payload) {
+            if (this.bulkDeleting) {
+                this.$alert("warning", this.$t("imports.bulk_delete_running"));
+                return Promise.resolve(false);
+            }
             this.loading = true;
             return this.$backend("/admin/import/run", {
                 method: "POST",

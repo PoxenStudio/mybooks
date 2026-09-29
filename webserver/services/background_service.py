@@ -21,6 +21,7 @@ class BackgroundTask:
     SERVICE_TYPE_COVER_UPDATE = "cover_update"  # 更新图书封面
     SERVICE_TYPE_SAVE_META = "save_meta"  # 将图书元数据保存到文件中
     SERVICE_TYPE_CATALOG_EXTRACT = "catalog_extract"  # 目录提取
+    SERVICE_TYPE_BULK_DELETE = "bulk_delete"  # 批量删除导入记录
     SERVICE_TYPE_OTHER = "other"  # 其他任务类型
 
     # 任务状态
@@ -121,6 +122,7 @@ class BackgroundService:
                 BackgroundTask.SERVICE_TYPE_AI_FILL,
                 BackgroundTask.SERVICE_TYPE_AUDIO_IMPORT,
                 BackgroundTask.SERVICE_TYPE_METADATA_UPDATE,
+                BackgroundTask.SERVICE_TYPE_BULK_DELETE,
             ]:
                 # 删除该类型的现有运行中任务
                 tasks_to_remove = [
