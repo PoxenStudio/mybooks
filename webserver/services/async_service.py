@@ -26,19 +26,29 @@ def _ensure_scanfiles_indexes(session) -> bool:
     回表取 import_type。status 等值查询照样吃这个索引的最左前缀。
 
     调用方需保证 import_type 列已存在（adjust_scanfile_table 先 ALTER 再建索引）。
+
+    索引只是性能优化：先提交调用方已有的变更，每个索引单独提交，失败只回滚该索引并告警，
+    不能连累同一事务里其它表的补列迁移（SQLITE_FULL/BUSY 可能让 SQLite 回滚整个事务）。
     """
+    session.commit()
     existing = {}
-    for row in session.execute(text('PRAGMA index_list("scanfiles")')).fetchall():
-        idx_name = row[1]
-        # 防御性检查：索引名来自数据库目录，仍拒绝无法安全内插进 PRAGMA 的名字
-        if not isinstance(idx_name, str) or not re.fullmatch(r"[A-Za-z0-9_]+", idx_name):
-            logging.warning("[DB] Skip unsafe index name on scanfiles: %r", idx_name)
-            continue
-        cols = [
-            c[2]
-            for c in session.execute(text(f'PRAGMA index_info("{idx_name}")')).fetchall()
-        ]
-        existing[idx_name] = cols
+    try:
+        for row in session.execute(text('PRAGMA index_list("scanfiles")')).fetchall():
+            idx_name = row[1]
+            # 防御性检查：索引名来自数据库目录，仍拒绝无法安全内插进 PRAGMA 的名字
+            if not isinstance(idx_name, str) or not re.fullmatch(r"[A-Za-z0-9_]+", idx_name):
+                logging.warning("[DB] Skip unsafe index name on scanfiles: %r", idx_name)
+                continue
+            cols = [
+                c[2]
+                for c in session.execute(text(f'PRAGMA index_info("{idx_name}")')).fetchall()
+            ]
+            existing[idx_name] = cols
+    except Exception as err:
+        # 拿不到既有索引就无法判断旧库的 UNIQUE(hash)，宁可本次不建，下次启动再试
+        logging.warning("[DB] Failed to inspect scanfiles indexes, skip creating: %s", err)
+        session.rollback()
+        return False
     wanted = {
         "ix_scanfiles_path": ("path",),
         "ix_scanfiles_import_id": ("import_id",),
@@ -50,10 +60,15 @@ def _ensure_scanfiles_indexes(session) -> bool:
     for name, columns in wanted.items():
         if name in existing:
             continue
-        session.execute(
-            text(f"CREATE INDEX IF NOT EXISTS {name} ON scanfiles ({', '.join(columns)})")
-        )
-        changed = True
+        try:
+            session.execute(
+                text(f"CREATE INDEX IF NOT EXISTS {name} ON scanfiles ({', '.join(columns)})")
+            )
+            session.commit()
+            changed = True
+        except Exception as err:
+            logging.warning("[DB] Failed to create index %s on scanfiles: %s", name, err)
+            session.rollback()
     return changed
 
 

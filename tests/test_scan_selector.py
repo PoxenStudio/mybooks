@@ -552,6 +552,27 @@ class TestScanfilesIndexes(unittest.TestCase):
         self.assertIn("ix_scanfiles_import_id", cols)
         self.assertEqual(cols["ix_scanfiles_status_import_type"], ["status", "import_type"])
 
+    def test_failed_index_does_not_rollback_other_changes(self):
+        engine = create_engine("sqlite://")
+        session = scoped_session(sessionmaker(bind=engine))
+        models.bind_session(session)
+        session.execute(text(
+            "CREATE TABLE scanfiles ("
+            " id INTEGER PRIMARY KEY, name VARCHAR(512), path VARCHAR(1024),"
+            " hash VARCHAR(512), status VARCHAR(24), import_id INTEGER)"
+        ))
+        session.commit()
+        session.execute(text("CREATE TABLE pending_migration (id INTEGER)"))
+
+        self.assertTrue(_ensure_scanfiles_indexes(session))
+        session.rollback()
+        cols = self._index_columns(session)
+        self.assertNotIn("ix_scanfiles_status_import_type", cols)
+        for name in ("ix_scanfiles_path", "ix_scanfiles_hash", "ix_scanfiles_import_id"):
+            self.assertIn(name, cols)
+        tables = [r[0] for r in session.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))]
+        self.assertIn("pending_migration", tables)
+
 
 class TestScannerSummary(ScanSelectorTestBase):
     def test_ready_count_in_summary(self):
