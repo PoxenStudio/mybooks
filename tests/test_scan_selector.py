@@ -7,7 +7,7 @@
 - ScanService.resolve_ready_paths / resolve_filter_paths / resolve_dir_paths
 - handlers.scan.normalize_import_filelist
 - handlers.scan.Scanner.summary 的 ready 计数
-- async_service._ensure_scanfiles_indexes 的幂等与旧库 UNIQUE(hash) 兼容
+- async_service._ensure_scanfiles_indexes 的幂等、旧库 UNIQUE(hash) 兼容与 (status, import_type) 复合索引
 - 按状态的选择/批删/summary 一律排除有声书记录（import_type=2），NULL 视为电子书
 """
 
@@ -454,6 +454,8 @@ class TestScanfilesIndexes(unittest.TestCase):
         for name in ("ix_scanfiles_path", "ix_scanfiles_hash", "ix_scanfiles_import_id"):
             self.assertIn(name, cols)
             self.assertEqual(cols[name], [name.rsplit("ix_scanfiles_", 1)[1]])
+        # status 索引是 (status, import_type) 复合：按状态的查询一律带电子书口径过滤
+        self.assertEqual(cols["ix_scanfiles_status_import_type"], ["status", "import_type"])
 
         # 幂等：第二次不再新建
         self.assertFalse(_ensure_scanfiles_indexes(session))
@@ -468,6 +470,8 @@ class TestScanfilesIndexes(unittest.TestCase):
             " id INTEGER PRIMARY KEY, name VARCHAR(512), path VARCHAR(1024),"
             " hash VARCHAR(512) UNIQUE, status VARCHAR(24), import_id INTEGER)"
         ))
+        # 真实升级路径：adjust_scanfile_table 先补 import_type 列，再建索引
+        session.execute(text("ALTER TABLE scanfiles ADD COLUMN import_type INTEGER DEFAULT 0"))
 
         self.assertTrue(_ensure_scanfiles_indexes(session))
         cols = self._index_columns(session)
@@ -476,6 +480,7 @@ class TestScanfilesIndexes(unittest.TestCase):
         self.assertNotIn("ix_scanfiles_hash", cols)
         self.assertIn("ix_scanfiles_path", cols)
         self.assertIn("ix_scanfiles_import_id", cols)
+        self.assertEqual(cols["ix_scanfiles_status_import_type"], ["status", "import_type"])
 
 
 class TestScannerSummary(ScanSelectorTestBase):
