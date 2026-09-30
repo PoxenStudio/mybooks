@@ -2,7 +2,7 @@
 # -*- coding: UTF-8 -*-
 
 """
-Site-level dictionaries for the embedded MyReader (web build only).
+Site-level dictionaries for MyReader (web embed and Tauri apps).
 
 The admin configures them on the settings page (`READER_DICT_*` keys):
 whether the MyBooks dictionary and Baidu Baike are enabled by default, and a
@@ -202,11 +202,13 @@ class ReaderDictResource(ReaderDictBase):
     """`GET /api/reader/dict/<id>/res/dict-res/…` — relays an entry resource.
 
     The URL mirrors the upstream path so relative `url(…)` references inside a
-    dictionary's CSS keep resolving to their siblings."""
+    dictionary's CSS keep resolving to their siblings.
+
+    No login required: the Tauri apps load these from their webview, which
+    doesn't carry the MyBooks cookie. Only `dict-res/` of configured
+    dictionaries is relayed."""
 
     async def get(self, dict_id, res_path):
-        if not self._authorized():
-            return self._error(403, "Not authenticated")
         entry = find_mydict(dict_id)
         if not entry:
             return self._error(404, "Dictionary not found")
