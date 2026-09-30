@@ -1718,7 +1718,7 @@ class LibraryStats(BaseHandler):
         now = datetime.datetime.now()
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-        total_books = self.calibre_db_cache.all_book_ids(type=len)
+        total_books = len(self.calibre_db_cache.all_book_ids())
         ebook_count = 0
         physical_count = 0
         month_ebook_count = 0
@@ -1729,7 +1729,7 @@ class LibraryStats(BaseHandler):
             ebook_count = total_books - physical_count
 
             rows = (
-                self.sqlite_session.query(Item.book_type, func.count(Item.id), func.sum(Item.book_count))
+                self.sqlite_session.query(Item.book_type, func.count(Item.book_id), func.sum(Item.book_count))
                 .filter(Item.create_time >= month_start)
                 .group_by(Item.book_type)
                 .all()
