@@ -11,7 +11,7 @@
                 v-for="i in shades.length"
                 :key="i"
                 class="startup-cell"
-                :style="{ backgroundColor: shades[(i - 1 + offset) % shades.length] }"
+                :style="{ backgroundColor: shades[(i - 1 - offset + shades.length) % shades.length] }"
             ></span>
         </div>
         <div class="startup-task">{{ taskText }}</div>
