@@ -21,7 +21,8 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 from tornado import web
 from tornado.options import define, options
 
-from webserver import db_upgrade, loader, models, social_routes
+from webserver import loader, models, social_routes, startup_status
+from webserver.startup_status import StartupState
 from webserver.base.setting_saver import SettingsSaver
 from webserver.services import AsyncService
 from webserver.services.book_barn import BookBarnService
@@ -241,7 +242,7 @@ def configure_plugins():
         logging.error("[INIT]Failed to configure plugins: %s" % e)
 
 
-def make_app(upgrade_status_addr=None):
+def make_app():
     auth_db_path = CONF["user_database"]
     logging.info("Revision:: [%s]" % VERSION)
     logging.info("Init library with [%s]" % options.with_library)
@@ -277,6 +278,7 @@ def make_app(upgrade_status_addr=None):
         sys.exit(0)
 
     # build sql session factory
+    StartupState.enter("database")
     engine = create_engine(auth_db_path, **CONF["db_engine_args"])
 
     if auth_db_path.startswith("sqlite"):
@@ -315,6 +317,7 @@ def make_app(upgrade_status_addr=None):
 
     logging.info("\n%s", "\n".join(banner_lines))
 
+    StartupState.enter("calibre")
     try:
         init_calibre()
         config_calibre()
@@ -359,6 +362,7 @@ def make_app(upgrade_status_addr=None):
         sys.exit(1)
 
     # patch calibre plugins and config amazon plugins
+    StartupState.enter("plugins")
     patch_plugins()
     configure_plugins()
 
@@ -409,22 +413,12 @@ def make_app(upgrade_status_addr=None):
 
     is_upgrade = CONF.get("installed_version", "") != VERSION
     logging.info(f"The installed version is {CONF.get("installed_version", "NONE")}, {"" if is_upgrade else "no"} need to check or upgrade table structure.")
-    status_server = None
-    bound_sockets = None
-    if is_upgrade and upgrade_status_addr:
-        bound_sockets = db_upgrade.bind_service_sockets(*upgrade_status_addr)
-        if bound_sockets:
-            status_server = db_upgrade.UpgradeStatusServer(bound_sockets)
-            status_server.start()
-    try:
-        need_sync_item_time = AsyncService().setup(book_db, ScopedSession, need_check_db=is_upgrade)
-    finally:
-        if status_server:
-            status_server.stop()
+    need_sync_item_time = AsyncService().setup(book_db, ScopedSession, need_check_db=is_upgrade)
     if is_upgrade and CONF.get("installed", False):
         logging.info("Need to save the setting for initialized version")
         SettingsSaver().save_extra_settings(CONF)
 
+    StartupState.enter("services")
     logging.info("Now, Running...")
     # WebDAV route is always registered; the handler checks ENABLE_WEBDAV_SERVICE at
     # request time and lazily initialises the WSGI app on first use.
@@ -440,7 +434,7 @@ def make_app(upgrade_status_addr=None):
 
     app_routes = []
     app_routes += social_routes.SOCIAL_AUTH_ROUTES
-    app_routes += db_upgrade.routes()
+    app_routes += startup_status.routes()
     app_routes += assistant.routes()
     app_routes += mcp.routes()
     app_routes += admin.routes()
@@ -477,7 +471,6 @@ def make_app(upgrade_status_addr=None):
 
     app = web.Application(app_routes, **app_settings)
     app._engine = engine
-    app.bound_sockets = bound_sockets
 
     # Start background service
     BookBarnService().get_daily_books()
@@ -580,29 +573,53 @@ def main():
     # 配置异步 HTTP 客户端的最大连接数
     AsyncHTTPClient.configure(None, max_clients=200)
 
-    try:
-        app = make_app(upgrade_status_addr=(options.port, options.host))
-    except Exception as e:
-        logging.error(f"Error making app: {e}")
-        logging.error(traceback.format_exc())
-        sys.exit(1)
-
     from webserver.services.sync_service import MyReaderSyncService
-    if CONF.get("installed", False) and MyReaderSyncService.is_enabled() and not CONF.get("SYNC_LEGACY_MIGRATION_DONE", False):
-        # 不停机迁移旧版 <MYREADER_SYNC_PATH>/<uid>/<book_hash>/{kind}.json 文件到
-        # reading_records 表，见 plan/Social_Reading_Plan.md §7.1。只在真正的服务器启动
-        # 路径上跑一次（不在 make_app() 里，避免测试/工具脚本调用 make_app() 时意外扫描
-        # 本机磁盘上的旧同步目录）；扫描本身对已迁移完的用户是 O(1) 的空目录判断。
+    need_sync_migration = CONF.get("installed", False) and MyReaderSyncService.is_enabled() and not CONF.get("SYNC_LEGACY_MIGRATION_DONE", False)
+
+    # 启动全程先由临时状态服务占住端口应答进度，就绪后把同一组监听 socket 交给正式服务
+    sockets = None
+    status_server = None
+    if not (options.syncdb or options.update_config):
+        sockets = startup_status.bind_service_sockets(options.port, options.host)
+    if sockets:
+        steps = ["database", "calibre", "plugins"]
+        if CONF.get("installed_version", "") != VERSION:
+            steps += list(startup_status.UPGRADE_STEPS)
+        steps.append("services")
+        if need_sync_migration:
+            steps.append("sync_migration")
+        StartupState.plan(steps)
+        status_server = startup_status.StartupStatusServer(sockets)
+        status_server.start()
+
+    try:
         try:
-            MyReaderSyncService.migrate_legacy_data()
-        except Exception:
-            logging.error("[sync] legacy data migration failed, will retry on next startup", exc_info=True)
+            app = make_app()
+        except Exception as e:
+            logging.error(f"Error making app: {e}")
+            logging.error(traceback.format_exc())
+            sys.exit(1)
+
+        if need_sync_migration:
+            # 不停机迁移旧版 <MYREADER_SYNC_PATH>/<uid>/<book_hash>/{kind}.json 文件到
+            # reading_records 表，见 plan/Social_Reading_Plan.md §7.1。只在真正的服务器启动
+            # 路径上跑一次（不在 make_app() 里，避免测试/工具脚本调用 make_app() 时意外扫描
+            # 本机磁盘上的旧同步目录）；扫描本身对已迁移完的用户是 O(1) 的空目录判断。
+            StartupState.enter("sync_migration")
+            try:
+                MyReaderSyncService.migrate_legacy_data()
+            except Exception:
+                logging.error("[sync] legacy data migration failed, will retry on next startup", exc_info=True)
+    finally:
+        StartupState.finish()
+        if status_server:
+            status_server.stop()
 
     logging.info("Starting server...")
     logging.debug("Max upload size set to: %d bytes", get_upload_size())
     http_server = tornado.httpserver.HTTPServer(app, xheaders=True, max_buffer_size=get_upload_size())
-    if getattr(app, "bound_sockets", None):
-        http_server.add_sockets(app.bound_sockets)
+    if sockets:
+        http_server.add_sockets(sockets)
     else:
         http_server.listen(options.port, options.host)
     tornado.ioloop.IOLoop.instance().start()

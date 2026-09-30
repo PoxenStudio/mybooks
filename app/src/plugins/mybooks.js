@@ -38,6 +38,12 @@ export default ({ app }, inject) => {
         }
 
         var fullUrl = server + "/api" + url;
+        const goStarting = () => {
+            const { route, redirect } = app.context;
+            if (route.path !== "/starting") {
+                redirect(302, "/starting?next=" + encodeURIComponent(route.fullPath));
+            }
+        };
 
         if (options !== undefined) {
             Object.assign(args, options);
@@ -57,6 +63,10 @@ export default ({ app }, inject) => {
                 }
 
                 if (rsp.status === 502) {
+                    if (!process.server) {
+                        goStarting();
+                        return new Promise(() => {});
+                    }
                     msg = "服务器正在启动中...";
                     app.$alert("info", msg);
                     throw msg;
@@ -78,11 +88,9 @@ export default ({ app }, inject) => {
             })
             .then(rsp => {
                 const { route, redirect, res } = app.context;
-                if (rsp.err === 'db_upgrading') {
-                    if (route.path !== "/upgrading") {
-                        redirect(302, "/upgrading?next=" + encodeURIComponent(route.fullPath));
-                    }
-                    // 升级期间原请求不再回调，避免各页面把它当成错误弹框
+                if (rsp.err === 'server_starting') {
+                    goStarting();
+                    // 启动期间原请求不再回调，避免各页面把它当成错误弹框
                     return process.server ? rsp : new Promise(() => {});
                 }
                 if (rsp.err === 'not_installed') {

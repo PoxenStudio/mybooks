@@ -5,31 +5,40 @@ import asyncio
 import contextlib
 import logging
 import threading
+import time
 
 import tornado.httpserver
 import tornado.ioloop
 import tornado.netutil
 from tornado import web
 
-STEPS = ("items", "readers", "scanfiles", "readings")
+UPGRADE_STEPS = ("db_items", "db_readers", "db_scanfiles", "db_readings")
 PENDING, RUNNING, DONE, FAILED = "pending", "running", "done", "failed"
 
 
-class DbUpgradeState:
+class StartupState:
     lock = threading.Lock()
     running = False
-    steps = {name: PENDING for name in STEPS}
+    steps = {}
 
     @classmethod
-    def begin(cls):
+    def plan(cls, names):
         with cls.lock:
             cls.running = True
-            cls.steps = {name: PENDING for name in STEPS}
+            cls.steps = {name: PENDING for name in names}
 
     @classmethod
-    def finish(cls):
+    def _close_running(cls):
+        for name, status in cls.steps.items():
+            if status == RUNNING:
+                cls.steps[name] = DONE
+
+    @classmethod
+    def enter(cls, name):
+        """顺序阶段：结束当前阶段并进入下一个。"""
         with cls.lock:
-            cls.running = False
+            cls._close_running()
+            cls.steps[name] = RUNNING
 
     @classmethod
     def set_step(cls, name, status):
@@ -37,34 +46,41 @@ class DbUpgradeState:
             cls.steps[name] = status
 
     @classmethod
+    def finish(cls):
+        with cls.lock:
+            cls._close_running()
+            cls.running = False
+
+    @classmethod
     def snapshot(cls):
         with cls.lock:
-            steps = [{"name": name, "status": cls.steps.get(name, PENDING)} for name in STEPS]
+            steps = [{"name": name, "status": status} for name, status in cls.steps.items()]
             current = next((s["name"] for s in steps if s["status"] == RUNNING), "")
-            return {"upgrading": cls.running, "current": current, "steps": steps}
+            return {"starting": cls.running, "upgrading": current in UPGRADE_STEPS, "current": current, "steps": steps}
 
 
 @contextlib.contextmanager
-def step(name):
-    DbUpgradeState.set_step(name, RUNNING)
+def upgrade_step(name):
+    StartupState.enter(name)
     try:
+        time.sleep(10)  # TODO: 临时观察用，验证完删除
         yield
     except Exception:
-        DbUpgradeState.set_step(name, FAILED)
+        StartupState.set_step(name, FAILED)
         raise
-    DbUpgradeState.set_step(name, DONE)
+    StartupState.set_step(name, DONE)
 
 
-class DbUpgradeStatusHandler(web.RequestHandler):
+class StartupStatusHandler(web.RequestHandler):
     def get(self):
         self.set_header("Cache-Control", "no-cache")
-        self.write(dict(err="ok", **DbUpgradeState.snapshot()))
+        self.write(dict(err="ok", **StartupState.snapshot()))
 
 
-class _UpgradingApiHandler(web.RequestHandler):
+class _StartingApiHandler(web.RequestHandler):
     def _reply(self, *args):
         self.set_header("Cache-Control", "no-cache")
-        self.write(dict(err="db_upgrading", msg="Database upgrading, please do not restart the service", **DbUpgradeState.snapshot()))
+        self.write(dict(err="server_starting", msg="Service is starting, please wait", **StartupState.snapshot()))
 
     get = post = put = delete = patch = _reply
 
@@ -72,11 +88,11 @@ class _UpgradingApiHandler(web.RequestHandler):
 _FALLBACK_PAGE = """<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="5">
 <title>MyBooks</title></head><body style="font-family:sans-serif;text-align:center;padding-top:20vh">
-<h2>数据库升级中，请不要重启服务，等待任务完成</h2><p>Database upgrading, please do not restart the service.</p>
+<h2>系统启动中，请稍候；数据库升级期间请不要重启服务</h2><p>Service is starting, please wait. Do not restart during database upgrade.</p>
 </body></html>"""
 
 
-class _UpgradingPageHandler(web.RequestHandler):
+class _StartingPageHandler(web.RequestHandler):
     def _reply(self, *args):
         self.set_status(503)
         self.set_header("Retry-After", "5")
@@ -91,12 +107,12 @@ def bind_service_sockets(port, host=""):
     try:
         return tornado.netutil.bind_sockets(port, address=host or None)
     except Exception as err:
-        logging.warning("[DB-UPGRADE] Failed to bind %s:%s early: %s", host, port, err)
+        logging.warning("[STARTUP] Failed to bind %s:%s early: %s", host, port, err)
         return None
 
 
-class UpgradeStatusServer:
-    """数据库升级期间用 dup 出的监听 socket 应答进度，停止时只关闭副本，原 socket 留给正式服务。"""
+class StartupStatusServer:
+    """启动期间用 dup 出的监听 socket 应答进度，停止时只关闭副本，原 socket 留给正式服务。"""
 
     def __init__(self, sockets):
         self.sockets = sockets
@@ -109,25 +125,25 @@ class UpgradeStatusServer:
         asyncio.set_event_loop(asyncio.new_event_loop())
         self._loop = tornado.ioloop.IOLoop.current()
         app = web.Application([
-            (r"/api/.*", _UpgradingApiHandler),
-            (r"/.*", _UpgradingPageHandler),
+            (r"/api/.*", _StartingApiHandler),
+            (r"/.*", _StartingPageHandler),
         ])
         try:
             self._server = tornado.httpserver.HTTPServer(app, xheaders=True)
             self._server.add_sockets([sock.dup() for sock in self.sockets])
         except Exception as err:
-            logging.warning("[DB-UPGRADE] Status server failed to start: %s", err)
+            logging.warning("[STARTUP] Status server failed to start: %s", err)
             self._server = None
             self._ready.set()
             self._loop.close(all_fds=True)
             return
-        logging.info("[DB-UPGRADE] Status server started")
+        logging.info("[STARTUP] Status server started")
         self._ready.set()
         self._loop.start()
         self._loop.close(all_fds=True)
 
     def start(self):
-        self._thread = threading.Thread(target=self._run, name="db-upgrade-status", daemon=True)
+        self._thread = threading.Thread(target=self._run, name="startup-status", daemon=True)
         self._thread.start()
         self._ready.wait(5)
 
@@ -141,8 +157,8 @@ class UpgradeStatusServer:
             self._loop.add_callback(_shutdown)
         self._thread.join(10)
         self._thread = None
-        logging.info("[DB-UPGRADE] Status server stopped")
+        logging.info("[STARTUP] Status server stopped")
 
 
 def routes():
-    return [(r"/api/upgrade/status", DbUpgradeStatusHandler)]
+    return [(r"/api/startup/status", StartupStatusHandler)]
