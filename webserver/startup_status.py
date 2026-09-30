@@ -5,7 +5,6 @@ import asyncio
 import contextlib
 import logging
 import threading
-import time
 
 import tornado.httpserver
 import tornado.ioloop
@@ -63,7 +62,6 @@ class StartupState:
 def upgrade_step(name):
     StartupState.enter(name)
     try:
-        time.sleep(10)  # TODO: 临时观察用，验证完删除
         yield
     except Exception:
         StartupState.set_step(name, FAILED)
