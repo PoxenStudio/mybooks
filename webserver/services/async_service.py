@@ -7,7 +7,7 @@ import threading
 from queue import Queue
 
 from sqlalchemy.sql import text
-from webserver.db_upgrade import DbUpgradeState, step as upgrade_step
+from webserver.startup_status import upgrade_step
 from webserver.models import Message
 
 
@@ -101,15 +101,14 @@ class AsyncService(metaclass=SingletonType):
         if need_check_db and self.session is not None:
             logging.info("[AsyncService] Need to check db table.")
             # Alter the item table to add a new bool column sole if it doesn't exist
-            DbUpgradeState.begin()
             try:
-                with upgrade_step("items"):
+                with upgrade_step("db_items"):
                     need_sync_item_time, changed = self.adjust_item_table()
-                with upgrade_step("readers"):
+                with upgrade_step("db_readers"):
                     reader_changed = self.adjust_reader_table()
-                with upgrade_step("scanfiles"):
+                with upgrade_step("db_scanfiles"):
                     scanfile_changed = self.adjust_scanfile_table()
-                with upgrade_step("readings"):
+                with upgrade_step("db_readings"):
                     self.adjust_readings_table()
                 changed = changed or reader_changed or scanfile_changed or True  # readings index creation is idempotent but must always be committed
                 if changed:
@@ -117,8 +116,6 @@ class AsyncService(metaclass=SingletonType):
             except Exception as err:
                 logging.warning("Failed to alter tables: %s", err)
                 self.session.rollback()
-            finally:
-                DbUpgradeState.finish()
         # logging.info("<%s> setup: db=%s, session=%s", self, self.db, self.session)
         logging.info("AsyncService setup completed")
         return need_sync_item_time

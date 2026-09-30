@@ -226,16 +226,22 @@
     "registerButton": "註冊",
     "pageTitle": "註冊"
   },
-  "upgrading": {
-    "title": "正在執行資料庫升級，請不要重新啟動，等待任務完成",
-    "waiting": "服務啟動中…",
-    "finished": "升級完成，正在進入…",
+  "starting": {
+    "title": "系統啟動中，請稍候",
+    "upgradeTitle": "正在執行資料庫升級，請不要重新啟動，等待任務完成",
+    "waiting": "正在啟動服務…",
+    "finished": "啟動完成，正在進入…",
     "stepProgress": "第 {index} / {total} 步",
     "steps": {
-      "items": "升級圖書資訊表",
-      "readers": "升級使用者表",
-      "scanfiles": "升級掃描匯入記錄表",
-      "readings": "升級閱讀記錄表"
+      "database": "連接使用者資料庫",
+      "calibre": "載入書庫",
+      "plugins": "初始化元資料外掛",
+      "db_items": "升級圖書資訊表",
+      "db_readers": "升級使用者表",
+      "db_scanfiles": "升級掃描匯入記錄表",
+      "db_readings": "升級閱讀記錄表",
+      "services": "啟動背景服務",
+      "sync_migration": "遷移閱讀同步資料"
     }
   },
   "welcome": {

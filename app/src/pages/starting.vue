@@ -2,21 +2,21 @@
     <AppDialog
         :value="true"
         type="progress"
-        :title="$t('upgrading.title')"
+        :title="titleText"
         :max-width="640"
         hide-footer-button
     >
-        <div class="upgrade-spinner">
+        <div class="startup-spinner">
             <span
                 v-for="i in shades.length"
                 :key="i"
-                class="upgrade-cell"
+                class="startup-cell"
                 :style="{ backgroundColor: shades[(i - 1 + offset) % shades.length] }"
             ></span>
         </div>
-        <div class="upgrade-task">{{ taskText }}</div>
+        <div class="startup-task">{{ taskText }}</div>
         <div v-if="stepIndex > 0" class="text-center grey--text mt-2">
-            {{ $t('upgrading.stepProgress', { index: stepIndex, total: steps.length }) }}
+            {{ $t('starting.stepProgress', { index: stepIndex, total: steps.length }) }}
         </div>
     </AppDialog>
 </template>
@@ -31,7 +31,8 @@ export default {
         offset: 0,
         steps: [],
         current: "",
-        seenUpgrade: false,
+        upgrading: false,
+        seenStarting: false,
         finished: false,
         spinTimer: null,
         pollTimer: null,
@@ -40,16 +41,19 @@ export default {
         store.commit("navbar", false);
     },
     head() {
-        return { title: this.$t("upgrading.title") };
+        return { title: this.titleText };
     },
     computed: {
         stepIndex() {
             return this.steps.findIndex((s) => s.name === this.current) + 1;
         },
+        titleText() {
+            return this.upgrading ? this.$t("starting.upgradeTitle") : this.$t("starting.title");
+        },
         taskText() {
-            if (this.finished) return this.$t("upgrading.finished");
-            if (this.current) return this.$t("upgrading.steps." + this.current);
-            return this.$t("upgrading.waiting");
+            if (this.finished) return this.$t("starting.finished");
+            if (this.current) return this.$t("starting.steps." + this.current);
+            return this.$t("starting.waiting");
         },
     },
     created() {
@@ -67,23 +71,28 @@ export default {
     },
     methods: {
         poll() {
-            fetch(window.location.origin + "/api/upgrade/status", { credentials: "include", cache: "no-store" })
+            fetch(window.location.origin + "/api/startup/status", { credentials: "include", cache: "no-store" })
                 .then((rsp) => (rsp.ok ? rsp.json() : null))
                 .then((rsp) => {
-                    if (rsp && rsp.err === "db_upgrading") {
-                        this.seenUpgrade = true;
+                    if (rsp && rsp.err === "server_starting") {
+                        this.seenStarting = true;
                         this.steps = rsp.steps || [];
                         this.current = rsp.current || "";
-                    } else if (rsp && rsp.err === "ok" && !rsp.upgrading) {
+                        this.upgrading = !!rsp.upgrading;
+                    } else if (rsp && rsp.err === "ok" && !rsp.starting) {
                         this.leave();
                         return;
                     } else {
+                        this.seenStarting = true;
                         this.current = "";
+                        this.upgrading = false;
                     }
                     this.schedule();
                 })
                 .catch(() => {
+                    this.seenStarting = true;
                     this.current = "";
+                    this.upgrading = false;
                     this.schedule();
                 });
         },
@@ -97,26 +106,26 @@ export default {
             setTimeout(() => {
                 this.$store.commit("navbar", true);
                 window.location.replace(target);
-            }, this.seenUpgrade ? 800 : 0);
+            }, this.seenStarting ? 800 : 0);
         },
     },
 };
 </script>
 
 <style scoped>
-.upgrade-spinner {
+.startup-spinner {
     display: flex;
     justify-content: center;
     gap: 6px;
     padding: 16px 0 24px;
 }
-.upgrade-cell {
+.startup-cell {
     width: 20px;
     height: 20px;
     border-radius: 3px;
     transition: background-color 0.1s linear;
 }
-.upgrade-task {
+.startup-task {
     font-size: 28px;
     line-height: 1.4;
     text-align: center;

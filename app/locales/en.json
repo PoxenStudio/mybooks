@@ -227,16 +227,22 @@
     "registerButton": "Register",
     "pageTitle": "Sign Up"
   },
-  "upgrading": {
-    "title": "Upgrading the database. Please do not restart; wait for it to finish",
-    "waiting": "Service starting…",
-    "finished": "Upgrade finished, entering…",
+  "starting": {
+    "title": "Starting up, please wait",
+    "upgradeTitle": "Upgrading the database. Please do not restart; wait for it to finish",
+    "waiting": "Starting service…",
+    "finished": "Ready, entering…",
     "stepProgress": "Step {index} / {total}",
     "steps": {
-      "items": "Upgrading book info table",
-      "readers": "Upgrading user table",
-      "scanfiles": "Upgrading scan import records",
-      "readings": "Upgrading reading records"
+      "database": "Connecting user database",
+      "calibre": "Loading library",
+      "plugins": "Initializing metadata plugins",
+      "db_items": "Upgrading book info table",
+      "db_readers": "Upgrading user table",
+      "db_scanfiles": "Upgrading scan import records",
+      "db_readings": "Upgrading reading records",
+      "services": "Starting background services",
+      "sync_migration": "Migrating reading sync data"
     }
   },
   "welcome": {

@@ -227,16 +227,22 @@
     "registerButton": "注册",
     "pageTitle": "注册"
   },
-  "upgrading": {
-    "title": "正在执行数据库升级，请不要重启，等待任务完成",
-    "waiting": "服务启动中…",
-    "finished": "升级完成，正在进入…",
+  "starting": {
+    "title": "系统启动中，请稍候",
+    "upgradeTitle": "正在执行数据库升级，请不要重启，等待任务完成",
+    "waiting": "正在启动服务…",
+    "finished": "启动完成，正在进入…",
     "stepProgress": "第 {index} / {total} 步",
     "steps": {
-      "items": "升级图书信息表",
-      "readers": "升级用户表",
-      "scanfiles": "升级扫描导入记录表",
-      "readings": "升级阅读记录表"
+      "database": "连接用户数据库",
+      "calibre": "加载书库",
+      "plugins": "初始化元数据插件",
+      "db_items": "升级图书信息表",
+      "db_readers": "升级用户表",
+      "db_scanfiles": "升级扫描导入记录表",
+      "db_readings": "升级阅读记录表",
+      "services": "启动后台服务",
+      "sync_migration": "迁移阅读同步数据"
     }
   },
   "welcome": {
