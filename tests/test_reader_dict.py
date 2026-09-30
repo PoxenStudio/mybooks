@@ -6,7 +6,7 @@ from unittest import mock
 
 from tornado.httpclient import HTTPClientError
 
-from tests.test_main import TestWithAdminUser, TestWithUserLogin, setUpModule as init
+from tests.test_main import TestApp, TestWithAdminUser, TestWithUserLogin, setUpModule as init
 from webserver import loader
 from webserver.handlers import reader_dict
 
@@ -126,6 +126,31 @@ class TestReaderDictHandlers(TestWithUserLogin):
 
     def test_resource_outside_prefix_rejected(self):
         self.assertEqual(self.fetch("/api/reader/dict/d1/res/api/v1/query").code, 400)
+
+
+class TestReaderDictAnonymous(TestApp):
+    """Resources are loaded by the Tauri webview, which has no MyBooks cookie."""
+
+    def setUp(self):
+        super().setUp()
+        self._saved = {k: CONF.get(k) for k in ("READER_MYDICTS", "ALLOW_GUEST_READ")}
+        CONF["READER_MYDICTS"] = SITE_DICTS
+        CONF["ALLOW_GUEST_READ"] = False
+
+    def tearDown(self):
+        CONF.update(self._saved)
+        super().tearDown()
+
+    def test_resource_needs_no_login(self):
+        rsp_obj = FakeResponse(b"body{}", {"Content-Type": "text/css"})
+        with _upstream(return_value=_resolved(rsp_obj)):
+            rsp = self.fetch("/api/reader/dict/d1/res/dict-res/3/res/style.css")
+        self.assertEqual(rsp.code, 200)
+        self.assertEqual(self.fetch("/api/reader/dict/d1/res/api/v1/query").code, 400)
+
+    def test_query_and_config_still_need_login(self):
+        self.assertEqual(self.fetch("/api/reader/dict/d1/query?word=a").code, 403)
+        self.assertEqual(self.fetch("/api/reader/dict-config").code, 403)
 
 
 class TestReaderDictAdminTest(TestWithAdminUser):

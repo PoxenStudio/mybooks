@@ -433,36 +433,8 @@
                         <div style="position: relative; display: inline-block; width: 100%;">
                             <v-img class="book-img" :src="book.img" :aspect-ratio="11 / 15" max-height="500px"
                                    contain style="border-radius: 14px;"></v-img>
-                            <!-- 读完状态水印 -->
-                            <div
-                                v-if="book.state && book.state.read_state === this.READING_STATE.FINISHED"
-                                style="
-                                    position: absolute;
-                                    top: 95%;
-                                    left: 0;
-                                    right: 0;
-                                    height: 40px;
-                                    background: rgba(158, 158, 158, 0.7);
-                                    display: flex;
-                                    align-items: center;
-                                    justify-content: center;
-                                    z-index: 2;
-                                    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-                                    backdrop-filter: blur(2px);
-                                "
-                            >
-                                <span
-                                    style="
-                                        color: white;
-                                        font-size: 1.2rem;
-                                        font-weight: bold;
-                                        text-shadow: 1px 1px 3px rgba(0,0,0,0.7);
-                                        line-height: 1;
-                                        letter-spacing: 2px;
-                                    "
-                                >
-                                    {{ $t('readingState.finished') }}
-                                </span>
+                            <div v-if="book.state && book.state.read_state === READING_STATE.FINISHED" class="finished-mark">
+                                <img src="/icons/done.svg" :alt="$t('readingState.finished')" :title="$t('readingState.finished')" />
                             </div>
                         </div>
                         <div v-if="book.reading_stats && book.reading_stats.length" class="reading-stats-block">
@@ -3995,6 +3967,21 @@ export default {
     overflow-y: hidden !important;
 }
 
+.finished-mark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    width: 40%;
+    opacity: 0.8;
+    pointer-events: none;
+    line-height: 0;
+}
+.finished-mark img {
+    width: 100%;
+    height: auto;
+}
 .reading-stats-block {
     margin-top: 8px;
     width: 100%;
