@@ -97,6 +97,12 @@ def build_query_url(base_url, word):
     return f"{base}?{params}"
 
 
+def build_vocab_url(base_url):
+    """Python twin of myreader's `buildMyDictVocabUrl`."""
+    base = re.sub(r"/api/v1/(?:query|vocab)$", "", base_url.strip().rstrip("/"))
+    return base + "/api/v1/vocab"
+
+
 def mask_token(token):
     if not token:
         return "(none)"
@@ -244,6 +250,85 @@ class ReaderDictResource(ReaderDictBase):
         self.write(response.body)
 
 
+class ReaderDictVocabBase(ReaderDictBase):
+    """Wordbook (生词本) relay for a site MyDict, with the token kept here.
+
+    Which notebook a row lands in is decided by that token on the MyDict side,
+    so every reader shares the admin-configured token's wordbook."""
+
+    async def _relay(self, dict_id, method, path="", body=None, params=None):
+        if not self._authorized():
+            return self._error(403, "Not authenticated")
+        entry = find_mydict(dict_id)
+        if not entry:
+            return self._error(404, "Dictionary not found")
+
+        target = build_vocab_url(entry["url"]) + path
+        if params:
+            target += "?" + urllib.parse.urlencode(params)
+        headers = {"Accept": "application/json"}
+        if body is not None:
+            headers["Content-Type"] = "application/json"
+        if entry["token"]:
+            headers["Authorization"] = "Bearer " + entry["token"]
+        request = HTTPRequest(
+            url=target,
+            method=method,
+            headers=headers,
+            body=None if body is None else json.dumps(body),
+            validate_cert=False,
+            request_timeout=QUERY_TIMEOUT,
+            connect_timeout=10.0,
+        )
+        try:
+            response = await AsyncHTTPClient().fetch(request)
+        except HTTPClientError as e:
+            server, snippet = describe_upstream(e.response)
+            logging.warning("Site MyDict %s vocab %s failed: HTTP %s server=%s body=%s", dict_id, method, e.code, server, snippet)
+            if 400 <= e.code < 500 and e.response is not None and e.response.body:
+                # 409 already saved / 401 bad token: the reader phrases these itself.
+                self.set_status(e.code)
+                self.set_header("Content-Type", "application/json; charset=UTF-8")
+                return self.write(e.response.body)
+            return self._error(e.code if 400 <= e.code < 500 else 502, f"HTTP {e.code}")
+        except Exception as e:
+            logging.error("Site MyDict %s unreachable: %s", dict_id, e)
+            return self._error(502, str(e))
+
+        self.set_header("Content-Type", "application/json; charset=UTF-8")
+        self.set_header("Cache-Control", "no-store")
+        self.write(response.body or b"{}")
+
+
+class ReaderDictVocab(ReaderDictVocabBase):
+    """`GET /api/reader/dict/<id>/vocab?search=` lists; `POST {word, dictionary_id}` adds."""
+
+    async def get(self, dict_id):
+        search = self.get_argument("search", "").strip()
+        if not search:
+            return self._error(400, "Missing search")
+        await self._relay(dict_id, "GET", params={"search": search, "page_size": 50})
+
+    async def post(self, dict_id):
+        try:
+            data = json.loads(self.request.body or b"{}")
+        except ValueError:
+            return self._error(400, "Invalid JSON body")
+        word = data.get("word") if isinstance(data, dict) else None
+        dictionary_id = data.get("dictionary_id") if isinstance(data, dict) else None
+        # bool is an int subclass; only a real positive integer is a dictionary id.
+        if not isinstance(word, str) or not word.strip() or type(dictionary_id) is not int or dictionary_id <= 0:
+            return self._error(400, "Missing word or dictionary_id")
+        await self._relay(dict_id, "POST", body={"word": word.strip(), "dictionary_id": dictionary_id})
+
+
+class ReaderDictVocabItem(ReaderDictVocabBase):
+    """`DELETE /api/reader/dict/<id>/vocab/<item_id>` removes one row."""
+
+    async def delete(self, dict_id, item_id):
+        await self._relay(dict_id, "DELETE", path=f"/{int(item_id)}")
+
+
 class ReaderDictTest(BaseHandler):
     """`POST /api/admin/reader/dict/test` — tries one lookup against a MyDict
     address/token straight from the settings form, so the admin can check it
@@ -305,4 +390,6 @@ def routes():
         (r"/api/reader/dict-config", ReaderDictConfig),
         (r"/api/reader/dict/([A-Za-z0-9_-]{1,32})/query", ReaderDictQuery),
         (r"/api/reader/dict/([A-Za-z0-9_-]{1,32})/res/(.+)", ReaderDictResource),
+        (r"/api/reader/dict/([A-Za-z0-9_-]{1,32})/vocab", ReaderDictVocab),
+        (r"/api/reader/dict/([A-Za-z0-9_-]{1,32})/vocab/([1-9][0-9]{0,17})", ReaderDictVocabItem),
     ]

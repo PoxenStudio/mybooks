@@ -127,6 +127,62 @@ class TestReaderDictHandlers(TestWithUserLogin):
     def test_resource_outside_prefix_rejected(self):
         self.assertEqual(self.fetch("/api/reader/dict/d1/res/api/v1/query").code, 400)
 
+    def test_vocab_list_relays_with_token(self):
+        body = b'{"items": [{"id": 42, "word": "ran", "dictionary_id": 4}]}'
+        with _upstream(return_value=_resolved(FakeResponse(body))) as fetch:
+            rsp = self.fetch("/api/reader/dict/d1/vocab?search=ran")
+        self.assertEqual(rsp.code, 200)
+        self.assertEqual(json.loads(rsp.body)["items"][0]["id"], 42)
+        request = fetch.call_args[0][0]
+        self.assertEqual(request.method, "GET")
+        self.assertEqual(request.url, "https://dict.example.com/sub/api/v1/vocab?search=ran&page_size=50")
+        self.assertEqual(request.headers["Authorization"], "Bearer sk-secret")
+
+    def test_vocab_add_sends_only_word_and_dictionary(self):
+        with _upstream(return_value=_resolved(FakeResponse(b'{"id": 42}'))) as fetch:
+            rsp = self.fetch(
+                "/api/reader/dict/d1/vocab",
+                method="POST",
+                body=json.dumps({"word": " ran ", "dictionary_id": 4, "url": "http://evil"}),
+            )
+        self.assertEqual(rsp.code, 200)
+        request = fetch.call_args[0][0]
+        self.assertEqual(request.method, "POST")
+        self.assertEqual(request.url, "https://dict.example.com/sub/api/v1/vocab")
+        self.assertEqual(json.loads(request.body), {"word": "ran", "dictionary_id": 4})
+        self.assertEqual(request.headers["Authorization"], "Bearer sk-secret")
+
+    def test_vocab_conflict_passes_through(self):
+        err = HTTPClientError(409, response=FakeResponse(b'{"message": "already saved"}'))
+        with _upstream(side_effect=err):
+            rsp = self.fetch(
+                "/api/reader/dict/d1/vocab",
+                method="POST",
+                body=json.dumps({"word": "ran", "dictionary_id": 4}),
+            )
+        self.assertEqual(rsp.code, 409)
+        self.assertEqual(json.loads(rsp.body), {"message": "already saved"})
+
+    def test_vocab_rejects_bad_input(self):
+        with _upstream() as fetch:
+            for payload in ({"word": "ran", "dictionary_id": 1.5}, {"word": "", "dictionary_id": 4}, {"word": "ran", "dictionary_id": True}):
+                rsp = self.fetch("/api/reader/dict/d1/vocab", method="POST", body=json.dumps(payload))
+                self.assertEqual(rsp.code, 400, payload)
+            self.assertEqual(self.fetch("/api/reader/dict/d1/vocab").code, 400)
+        fetch.assert_not_called()
+
+    def test_vocab_remove(self):
+        with _upstream(return_value=_resolved(FakeResponse(b"{}"))) as fetch:
+            rsp = self.fetch("/api/reader/dict/d1/vocab/42", method="DELETE")
+        self.assertEqual(rsp.code, 200)
+        request = fetch.call_args[0][0]
+        self.assertEqual(request.method, "DELETE")
+        self.assertEqual(request.url, "https://dict.example.com/sub/api/v1/vocab/42")
+
+    def test_vocab_unknown_dict_404(self):
+        self.assertEqual(self.fetch("/api/reader/dict/nope/vocab?search=a").code, 404)
+        self.assertEqual(self.fetch("/api/reader/dict/nope/vocab/1", method="DELETE").code, 404)
+
 
 class TestReaderDictAnonymous(TestApp):
     """Resources are loaded by the Tauri webview, which has no MyBooks cookie."""
@@ -151,6 +207,8 @@ class TestReaderDictAnonymous(TestApp):
     def test_query_and_config_still_need_login(self):
         self.assertEqual(self.fetch("/api/reader/dict/d1/query?word=a").code, 403)
         self.assertEqual(self.fetch("/api/reader/dict-config").code, 403)
+        self.assertEqual(self.fetch("/api/reader/dict/d1/vocab?search=a").code, 403)
+        self.assertEqual(self.fetch("/api/reader/dict/d1/vocab/1", method="DELETE").code, 403)
 
 
 class TestReaderDictAdminTest(TestWithAdminUser):
