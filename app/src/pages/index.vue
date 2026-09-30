@@ -1,7 +1,7 @@
 <template>
     <div>
     <!-- 书库统计标题栏 -->
-    <v-row v-if="libraryStats" class="library-stats-bar">
+    <v-row class="library-stats-bar">
         <v-col cols="12">
             <div class="stats-container">
                 <v-btn icon x-small dark class="stats-toggle" :title="showDetail ? $t('index.detailHideDetail') : $t('index.detailShowDetail')" @click="showDetail = !showDetail">
@@ -10,26 +10,26 @@
                 <div class="stats-content">
                     <div class="stat-group">
                         <span class="stat-label">{{ $t('index.totalBooks') }}:</span>
-                        <span class="stat-value">{{ libraryStats.total_books }}</span>
+                        <span class="stat-value">{{ stats.total_books }}</span>
                     </div>
                     <div class="stat-separator">|</div>
                     <div class="stat-group">
                         <span class="stat-label">{{ $t('index.ebookCount') }}:</span>
-                        <span class="stat-value">{{ libraryStats.ebook_count }}</span>
+                        <span class="stat-value">{{ stats.ebook_count }}</span>
                     </div>
                     <template v-if="allowPhysicalBooks">
                         <div class="stat-separator">|</div>
                         <div class="stat-group">
                             <span class="stat-label">{{ $t('index.physicalCount') }}:</span>
-                            <span class="stat-value">{{ libraryStats.physical_count }}</span>
+                            <span class="stat-value">{{ stats.physical_count }}</span>
                         </div>
                     </template>
                     <div class="stat-separator">|</div>
                     <div class="stat-group">
                         <span class="stat-label">{{ $t('index.monthNewBooks') }}:</span>
                         <span class="stat-value month-new">
-                            {{ $t('index.ebookCount') }} {{ libraryStats.month_ebook_count }}
-                            <template v-if="allowPhysicalBooks">+ {{ $t('index.physicalCount') }} {{ libraryStats.month_physical_count }}</template>
+                            {{ $t('index.ebookCount') }} {{ stats.month_ebook_count }}
+                            <template v-if="allowPhysicalBooks">+ {{ $t('index.physicalCount') }} {{ stats.month_physical_count }}</template>
                         </span>
                     </div>
                 </div>
@@ -39,8 +39,8 @@
 
     <library-overview v-if="libraryStats && showDetail" :allow-physical-books="allowPhysicalBooks"></library-overview>
 
-    <div class="reading-stats-banner-wrapper" v-show="readingStatsHasData">
-        <reading-stats-banner :show-title="false" @has-stats="onReadingStatsHasData"></reading-stats-banner>
+    <div class="reading-stats-banner-wrapper" :class="{ 'is-pending': readingStatsPending }" v-show="readingStatsHasData || readingStatsPending">
+        <reading-stats-banner v-if="!$vuetify.breakpoint.xsOnly" :show-title="false" @has-stats="onReadingStatsHasData"></reading-stats-banner>
     </div>
 
     <div class="home-sections-container">
@@ -52,7 +52,23 @@
             @drop.prevent="onSectionDrop('index.myReading')"
         >
             <home-section-card
-                v-if="reading_books.length > 0"
+                v-if="readingLoading && isLoggedIn && reading_books.length === 0"
+                icon="mdi-book-open-page-variant-outline"
+                :title="$t('index.myReading')"
+                storage-key="index.myReading"
+            >
+                <v-row>
+                    <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="n in 12" :key="'reading-ph'+n" class="book-card">
+                        <v-card class="ma-1">
+                            <div class="book-img-container">
+                                <v-skeleton-loader type="image" class="cover-fill-img"></v-skeleton-loader>
+                            </div>
+                        </v-card>
+                    </v-col>
+                </v-row>
+            </home-section-card>
+            <home-section-card
+                v-else-if="reading_books.length > 0"
                 icon="mdi-book-open-page-variant-outline"
                 :title="$t('index.myReading')"
                 storage-key="index.myReading"
@@ -245,16 +261,14 @@
 
 <script>
 import BookCards from "~/components/BookCards.vue";
-import ReadingStatsBanner from "~/components/ReadingStatsBanner.vue";
-import LibraryOverview from "~/components/LibraryOverview.vue";
 import BookListCard from "~/components/BookListCard.vue";
 import HomeSectionCard from "~/components/HomeSectionCard.vue";
 export default {
     name: 'IndexPage',
     components: {
         BookCards,
-        ReadingStatsBanner,
-        LibraryOverview,
+        ReadingStatsBanner: () => import("~/components/ReadingStatsBanner.vue"),
+        LibraryOverview: () => import("~/components/LibraryOverview.vue"),
         BookListCard,
         HomeSectionCard,
     },
@@ -290,6 +304,14 @@ export default {
         isLoggedIn() {
             return !!(this.$store.state.user && this.$store.state.user.is_login);
         },
+        stats() {
+            return this.libraryStats || {
+                total_books: '-', ebook_count: '-', physical_count: '-', month_ebook_count: '-', month_physical_count: '-',
+            };
+        },
+        readingStatsPending() {
+            return this.isLoggedIn && !this.readingStatsResolved;
+        },
         allowPhysicalBooks() {
             return !!(this.$store.state.sys && this.$store.state.sys.allow && this.$store.state.sys.allow.physical_books);
         },
@@ -303,6 +325,7 @@ export default {
         },
         isLoggedIn(loggedIn) {
             if (loggedIn) {
+                this.readingStatsResolved = false;
                 this.loadReadingBooks();
             } else {
                 this.reading_books = [];
@@ -382,6 +405,7 @@ export default {
                 this.reading_books = [];
                 return;
             }
+            this.readingLoading = true;
             try {
                 // home=1 标记这是首页发起的请求，后台在 ENABLE_HOMEPAGE_READING_BOOKS=False
                 // 时会直接返回空列表（不影响 /reading 在读书籍列表页本身）
@@ -391,10 +415,15 @@ export default {
                 }
             } catch (error) {
                 console.warn('Failed to load reading books:', error);
+            } finally {
+                this.readingLoading = false;
             }
         },
         onReadingStatsHasData(hasData) {
             this.readingStatsHasData = hasData;
+            if (this.isLoggedIn) {
+                this.readingStatsResolved = true;
+            }
         },
         async loadBooklists() {
             try {
@@ -478,7 +507,7 @@ export default {
     },
     mounted() {
         this.loadLibraryStats();
-        this.checkReleaseNotes();
+        setTimeout(() => this.checkReleaseNotes(), 1500);
         this.loadReadingBooks();
         this.loadBooklists();
         // 强制重新渲染图片，修复从其他页面返回时的布局问题
@@ -500,6 +529,7 @@ export default {
     created() {
         this.$store.commit('navbar', true);
         this.sectionOrder = this.loadSectionOrder();
+        this.readingLoading = this.isLoggedIn;
     },
     async asyncData({ app, res }) {
         if ( res !== undefined ) {
@@ -514,6 +544,8 @@ export default {
         homepage_booklists: [],
         reading_books: [],
         readingStatsHasData: false,
+        readingStatsResolved: false,
+        readingLoading: false,
         libraryStats: null,
         showDetail: false,
         releaseNotesDialog: false,
@@ -543,6 +575,10 @@ export default {
     .reading-stats-banner-wrapper {
         display: none;
     }
+}
+
+.reading-stats-banner-wrapper.is-pending {
+    min-height: 198px;
 }
 
 /* 书库统计标题栏样式 */

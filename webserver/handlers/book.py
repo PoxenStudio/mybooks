@@ -74,8 +74,10 @@ SUGGESTION_SPARE = 4
 
 
 class Index(BaseHandler):
-    def fmt(self, b):
-        return BookFormatter(self, b).format()
+    def fmt(self, b, cover_only=False):
+        if cover_only:
+            return BookFormatter(self, b).format(include_comments=False)
+        return BookFormatter(self, b).format(strip_comments=True)
 
     def _reader_avatar_url(self, reader):
         if not reader or not reader.avatar:
@@ -105,7 +107,7 @@ class Index(BaseHandler):
             book = rec_books.get(row.book_id)
             if not book:
                 continue
-            book_data = self.fmt(book)
+            book_data = self.fmt(book, cover_only=True)
             reader = readers.get(row.reader_id)
             book_data["recommender"] = {
                 "nickname": (reader.name or reader.username) if reader else "",
@@ -157,15 +159,15 @@ class Index(BaseHandler):
             return None
         return (result.random_ids, result.new_ids, result.reasons) if result else None
 
-    def _fmt_with_reason(self, book, reasons):
-        data = self.fmt(book)
+    def _fmt_with_reason(self, book, reasons, cover_only=False):
+        data = self.fmt(book, cover_only=cover_only)
         reason = reasons.get(book["id"])
         if reason:
             data["reason"] = {"type": reason.type, "value": reason.value}
         return data
 
     def _books_in_order(self, ids):
-        books = {b["id"]: b for b in self.get_books(ids=ids)}
+        books = {b["id"]: b for b in self.get_books(ids=ids, convert_to_local_tz=False)}
         return [books[i] for i in ids if i in books]
 
     @js
@@ -176,7 +178,9 @@ class Index(BaseHandler):
         cnt_random = min(int(self.get_argument("random", setting_random_count)), setting_random_count)
         cnt_recent = min(int(self.get_argument("recent", setting_recent_count)), 200)
 
+        t0 = time.perf_counter()
         ids = list(self.calibre_db_cache.all_book_ids())
+        t_ids = time.perf_counter()
         if not ids:
             return {
                 "err": "nobooks",
@@ -189,22 +193,32 @@ class Index(BaseHandler):
         cnt_recent = min(cnt_recent, len(ids))
         cnt_random = min(cnt_random, len(ids))
         social_books = self._social_recommend_books()
+        t_social = time.perf_counter()
         reader_id = self.user_id() or None
         seed = self._home_seed(reader_id)
         home_ids = self._recommend_home_ids(cnt_random, cnt_recent, [b["id"] for b in social_books], seed, reader_id)
         random_ids, new_ids, reasons = home_ids or (*self._legacy_home_ids(ids, cnt_random, cnt_recent), {})
+        t_home = time.perf_counter()
         random_books = self._books_in_order(random_ids)
         new_books = self._books_in_order(new_ids)
+        t_books = time.perf_counter()
 
-        return {
+        result = {
             "err": "ok",
             "random_books_count": len(random_books),
             "new_books_count": len(new_books),
-            "random_books": [self._fmt_with_reason(b, reasons) for b in random_books],
+            "random_books": [self._fmt_with_reason(b, reasons, cover_only=True) for b in random_books],
             "new_books": [self._fmt_with_reason(b, reasons) for b in new_books],
             "social_recommend_books": social_books,
             "seed": seed if home_ids else "",
         }
+        t_fmt = time.perf_counter()
+        logging.info(
+            "[index timing] ids=%.0fms social=%.0fms home(%s)=%.0fms get_books=%.0fms fmt=%.0fms total=%.0fms",
+            (t_ids - t0) * 1000, (t_social - t_ids) * 1000, "recommend" if home_ids else "legacy",
+            (t_home - t_social) * 1000, (t_books - t_home) * 1000, (t_fmt - t_books) * 1000, (t_fmt - t0) * 1000,
+        )
+        return result
 
 
 class BookDetail(BaseHandler):
@@ -1383,7 +1397,6 @@ class BookReading(BaseHandler):
     def get(self):
         """获取当前用户的在读书籍（分页）"""
         user_id = self.user_id()
-        logging.info("User %d is fetching reading books." % user_id)
 
         # 首页"在读书籍"卡片会带上 home=1 请求这个接口；ENABLE_HOMEPAGE_READING_BOOKS=False
         # 时直接返回空列表，让首页不显示这个板块，但不影响 /reading 列表页本身。
@@ -1433,7 +1446,7 @@ class BookReading(BaseHandler):
             book = books_dict.get(book_id)
             if not book:
                 continue
-            book_data = BookFormatter(self, book).format()
+            book_data = BookFormatter(self, book).format(include_comments=not is_home_request)
             book_data["state"] = ReadingStateFormatter.format_reading_state(state_dict[book_id])
             reading_books.append(book_data)
 

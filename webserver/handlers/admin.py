@@ -14,7 +14,7 @@ import time
 import traceback
 import uuid
 from webserver.i18n import _, normalize_language
-from sqlalchemy import func, extract
+from sqlalchemy import func
 
 import tornado
 import tornado.ioloop
@@ -1715,43 +1715,30 @@ class LibraryStats(BaseHandler):
     _cache_time = 0
 
     def _get_stats(self):
-        # 获取当前月份和年份
         now = datetime.datetime.now()
-        current_year = now.year
-        current_month = now.month
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-        all_book_ids = list(self.calibre_db_cache.all_book_ids())
-        total_books = len(all_book_ids)
+        total_books = self.calibre_db_cache.all_book_ids(type=len)
         ebook_count = 0
         physical_count = 0
         month_ebook_count = 0
         month_physical_count = 0
 
-        if all_book_ids:
+        if total_books:
             physical_count = self.get_physical_books_count()
             ebook_count = total_books - physical_count
 
-            month_ebook_count = (
-                self.sqlite_session.query(Item)
-                .filter(
-                    Item.book_type == 0,
-                    extract("year", Item.create_time) == current_year,
-                    extract("month", Item.create_time) == current_month,
-                )
-                .count()
+            rows = (
+                self.sqlite_session.query(Item.book_type, func.count(Item.id), func.sum(Item.book_count))
+                .filter(Item.create_time >= month_start)
+                .group_by(Item.book_type)
+                .all()
             )
-
-            # 本月新增实体书数量 (加总book_count)
-            month_physical_books = (
-                self.sqlite_session.query(func.sum(Item.book_count))
-                .filter(
-                    Item.book_type == 1,
-                    extract("year", Item.create_time) == current_year,
-                    extract("month", Item.create_time) == current_month,
-                )
-                .scalar()
-            )
-            month_physical_count = month_physical_books if month_physical_books else 0
+            for book_type, cnt, phy_sum in rows:
+                if book_type == 0:
+                    month_ebook_count = cnt
+                elif book_type == 1:
+                    month_physical_count = phy_sum or 0
 
         return {
             "total_books": total_books,
