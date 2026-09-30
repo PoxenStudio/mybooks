@@ -24,10 +24,10 @@
   },
   "index": {
     "reason": {
-      "author": "因為你讀過{value}的書",
-      "series": "你讀過「{value}」系列",
-      "tag": "你喜歡的「{value}」",
-      "wants": "你標記過想讀",
+      "author": "讀過{value}的書",
+      "series": "讀過「{value}」系列",
+      "tag": "喜歡的「{value}」",
+      "wants": "標記過想讀",
       "series_next": "「{value}」系列新作",
       "co_read": "讀過《{value}》的人也在讀",
       "popular": "站內{value}人讀過",
