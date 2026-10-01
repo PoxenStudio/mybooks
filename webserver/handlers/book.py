@@ -3387,7 +3387,7 @@ class BookUploadBatchCancel(BaseHandler):
 
 
 class BookRead(BaseHandler):
-    READABLE_FORMATS = ("epub", "pdf", "mobi", "azw3", "azw", "txt", "djvu", "cbz")
+    READABLE_FORMATS = ("epub", "pdf", "mobi", "azw3", "azw", "txt", "djvu", "cbz", "fb2")
 
     def get(self, bid):
         if not CONF["ALLOW_GUEST_READ"] and not self.current_user:
@@ -3417,13 +3417,13 @@ class BookRead(BaseHandler):
 
         book_reader = CONF.get("EPUB_VIEWER", "MyReader")
 
-        # 用户在设置中选择了 MyReader 作为阅读器时，epub/pdf 直接跳转到 MyReader
+        # 用户在设置中选择了 MyReader 作为阅读器时，epub/pdf/cbz/fb2 直接跳转到 MyReader
         # 的内嵌阅读入口；其余格式（mobi/azw3/txt 等）沿用下面既有的转换+内置阅读器逻辑，
-        # 因为 MyReader 侧目前只支持 epub/pdf（见 document/MyReader_Embedded_WebApp.md）。
+        # 因为 MyReader 侧目前只支持 epub/pdf/cbz/fb2（见 document/MyReader_Embedded_WebApp.md）。
         if book_reader == "MyReader":
             myreader_format = None
             if fmt_arg:
-                if fmt_arg in ("epub", "pdf", "cbz") and fpath_arg:
+                if fmt_arg in ("epub", "pdf", "cbz", "fb2") and fpath_arg:
                     myreader_format = fmt_arg
             elif book.get("fmt_epub"):
                 myreader_format = "epub"
@@ -3431,6 +3431,8 @@ class BookRead(BaseHandler):
                 myreader_format = "pdf"
             elif "fmt_cbz" in book:
                 myreader_format = "cbz"
+            elif "fmt_fb2" in book:
+                myreader_format = "fb2"
             if myreader_format:
                 return self.redirect(
                     "/readerx/open?bookId=%s&format=%s" % (book_id, myreader_format)
@@ -3583,6 +3585,9 @@ class BookRead(BaseHandler):
 
 
 class BookFilePath(BaseHandler):
+    # MyReader 嵌入阅读经 /api/mybooks/local-file 服务端到服务端取物理路径的格式白名单
+    STREAMABLE_FORMATS = ("epub", "pdf", "fb2")
+
     @js
     def get(self, bid):
         if not CONF["ALLOW_GUEST_READ"] and not self.current_user:
@@ -3600,7 +3605,7 @@ class BookFilePath(BaseHandler):
             return {"err": "params.book.invalid", "msg": _("书籍已不存在")}
 
         fmt_arg = self.get_argument("format", "").lower()
-        if fmt_arg not in ("epub", "pdf"):
+        if fmt_arg not in self.STREAMABLE_FORMATS:
             return {"err": "params.format.invalid", "msg": _("格式参数无效")}
 
         fpath = book.get("fmt_%s" % fmt_arg)
@@ -4239,7 +4244,7 @@ class BookSaveMeta(BaseHandler):
     @js
     @auth
     def post(self, bid):
-        """将书籍的元数据保存到文件中（仅支持 epub/azw3/pdf）"""
+        """将书籍的元数据保存到文件中（支持 META_WRITABLE_FORMATS 中 calibre 可写回的格式）"""
         book_id = int(bid)
         if not self.is_admin() and not self.is_book_owner(book_id, self.user_id()):
             return {"err": "user.no_permission", "msg": _("无权限，非管理员或书籍所有者无法操作")}

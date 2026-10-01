@@ -1136,7 +1136,7 @@ class BaseHandler(web.RequestHandler):
                 }
             return {
                 "err": "format.not_supported",
-                "msg": _("书籍没有支持的格式（需要 EPUB、AZW3、PDF、DJVU 或 CBZ）"),
+                "msg": _("书籍没有支持的格式（需要 EPUB、AZW3、PDF、DJVU、CBZ 或 FB2）"),
             }
         try:
             from calibre.ebooks.metadata.meta import set_metadata
@@ -1176,6 +1176,10 @@ class BaseHandler(web.RequestHandler):
                     # 将元数据写入文件（包含封面）
                     with open(file_path, "rb+") as stream:
                         set_metadata(stream, mi, stream_type=f)
+                        if f == "fb2":
+                            from webserver.base.book_files import supplement_fb2_fields
+
+                            supplement_fb2_fields(stream, mi)
 
                     logging.info(
                         f"[SAVE_META] Successfully saved metadata to {f.upper()} file for book {book_id}"
