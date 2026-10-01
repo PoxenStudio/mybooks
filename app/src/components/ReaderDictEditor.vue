@@ -47,7 +47,7 @@
             hide-details
           ></v-text-field>
         </v-col>
-        <v-col class="py-0" cols="12" sm="4">
+        <v-col class="py-2 py-sm-0" cols="12" sm="4">
           <v-text-field
             v-model="dict.url"
             :name="'reader-dict-url-' + dict.id"
@@ -73,7 +73,7 @@
             </template>
           </v-text-field>
         </v-col>
-        <v-col class="py-0" cols="12" sm="4">
+        <v-col class="py-2 py-sm-0" cols="12" sm="4">
           <v-text-field
             v-model="dict.token"
             :label="$t('settings.reader_dict_token')"
