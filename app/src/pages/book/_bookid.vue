@@ -1136,7 +1136,7 @@
             outlined
             dense
             show-size
-            accept=".epub,.mobi,.azw,.azw3,.pdf,.txt,.djvu,.uvz,.cbz"
+            accept=".epub,.mobi,.azw,.azw3,.pdf,.txt,.fb2,.djvu,.uvz,.cbz"
             prepend-icon="mdi-file-document"
         ></v-file-input>
         <v-checkbox v-model="upload_format_force" :label="$t('book.forceReplaceFormat')" dense hide-details class="mt-0"></v-checkbox>
@@ -1593,7 +1593,7 @@ export default {
         // 与后端 webserver/constants.py 的 META_WRITABLE_FORMATS 保持一致
         hasMetaWritableFormat() {
             if (!this.book || !this.book.files) return false;
-            const writableFormats = ['epub', 'azw3', 'pdf', 'djvu', 'cbz'];
+            const writableFormats = ['epub', 'azw3', 'pdf', 'djvu', 'cbz', 'fb2'];
             return this.book.files.some(file => writableFormats.includes(file.format.toLowerCase()));
         },
 
@@ -1625,6 +1625,11 @@ export default {
         hasCbz() {
             if (!this.book || !this.book.files) return false;
             return this.book.files.some(file => file.format.toLowerCase() === 'cbz');
+        },
+
+        hasFb2() {
+            if (!this.book || !this.book.files) return false;
+            return this.book.files.some(file => file.format.toLowerCase() === 'fb2');
         },
 
         // 与后端 EPUB_VIEWER 默认值一致：未配置时视为 MyReader
@@ -1659,7 +1664,7 @@ export default {
             return ['epub', 'azw3', 'mobi', 'azw', 'docx'].some(format => formats.includes(format));
         },
 
-        // 可供在线阅读的格式列表，按优先级排列：TXT > EPUB > PDF > DJVU > CBZ（CBZ 仅 MyReader 支持）
+        // 可供在线阅读的格式列表，按优先级排列：TXT > EPUB > PDF > DJVU > CBZ > FB2（CBZ/FB2 仅 MyReader 支持）
         readFormats() {
             if (!this.book) return [];
             const formats = [];
@@ -1669,6 +1674,7 @@ export default {
             if (this.hasPDF) formats.push({ key: 'pdf', label: this.$t('book.pdfReader'), href: '/read/' + this.book.id + '?format=pdf' });
             if (this.hasDjvu) formats.push({ key: 'djvu', label: this.$t('book.djvuReader'), href: '/read/' + this.book.id + '?format=djvu' });
             if (this.hasCbz && this.isMyReader) formats.push({ key: 'cbz', label: this.$t('book.cbzReader'), href: '/read/' + this.book.id + '?format=cbz' });
+            if (this.hasFb2 && this.isMyReader) formats.push({ key: 'fb2', label: this.$t('book.fb2Reader'), href: '/read/' + this.book.id + '?format=fb2' });
             return formats;
         },
 

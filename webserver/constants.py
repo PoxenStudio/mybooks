@@ -17,12 +17,13 @@ CUSTOM_COVER_IMAGE = "/data/books/logo/default_cover.jpg"
 DEFAULT_ISBN = "0000000000001"
 
 CALIBRE_ERROR_FLAG = "<*ERROR*>"
-SUPPORTED_EBOOK_FORMATS = ["azw3", "epub", "mobi", "pdf", "txt", "azw", "docx"]
+# fb2（FictionBook2）为 calibre 内置元数据读写的 XML 电子书，MyReader 阅读器原生渲染
+SUPPORTED_EBOOK_FORMATS = ["azw3", "epub", "mobi", "pdf", "txt", "azw", "docx", "fb2"]
 # 扫描版/漫画包（DJVU/UVZ/CBZ）：入库前校验容器、以文件名编目为底、同名多候选按新书入库；不可转换。见 base/book_files.py
 SCANNED_DOCUMENT_FORMATS = ["djvu", "uvz", "cbz"]
 # 允许上传/扫描入库的全部格式
 ACCEPTED_BOOK_FORMATS = SUPPORTED_EBOOK_FORMATS + SCANNED_DOCUMENT_FORMATS
-META_WRITABLE_FORMATS = ["epub", "azw3", "pdf", "djvu", "cbz"]
+META_WRITABLE_FORMATS = ["epub", "azw3", "pdf", "djvu", "cbz", "fb2"]
 SUPPORTED_AUDIO_FORMATS = ['.mp3', ".m4a", ".m4b", ".wav", ".wma", ".opus"]
 # 有声书字幕文件格式（与音频文件同目录同名，如 0001_第一章.wav -> 0001_第一章.srt）
 SUPPORTED_SUBTITLE_FORMATS = ['.srt', '.vtt']
