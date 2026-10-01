@@ -1,7 +1,9 @@
 <template>
     <v-app>
         <loading/>
-        <app-header v-if="$store.state.nav"></app-header>
+        <client-only>
+            <app-header v-if="$store.state.nav"></app-header>
+        </client-only>
         <v-main>
             <v-container fluid>
                 <app-press v-if="$store.state.nav"></app-press>
