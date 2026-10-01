@@ -147,3 +147,101 @@ def read_book_metadata(fpath, fmt, name):
     if file_mi is not None:
         mi.smart_update(file_mi)
     return mi
+
+
+# calibre 内置 FB2MetadataWriter 只写 title/authors/series/tags/publisher/pubdate/comments/cover
+# 八项，lang/isbn 只读不写；FB2 规范本身无 rating 字段（rating 留在书库数据库，不落盘）
+FB2_NAMESPACES = (
+    "http://www.gribuser.ru/xml/fictionbook/2.0",
+    "http://www.gribuser.ru/xml/fictionbook/2.1",
+)
+
+
+def _fb2_lang_code(mi):
+    """mi.language 是 calibre 规范化语言码（eng/rus 等），FB2 惯用两位 ISO 639-1（en/ru）。"""
+    lang = (getattr(mi, "language", "") or "").strip()
+    if not lang or lang == "und":
+        return None
+    from calibre.utils.localization import lang_as_iso639_1
+
+    return lang_as_iso639_1(lang.lower()) or lang
+
+
+def _fb2_validated_isbn(mi):
+    """镜像 fb2 reader 侧 check_isbn 口径：无效 ISBN 不落盘。"""
+    from calibre.ebooks.metadata import check_isbn
+
+    return check_isbn(getattr(mi, "isbn", "") or "") or None
+
+
+def _fb2_inject_fields(stream, lang=None, isbn=None):
+    """在 calibre set_metadata 写出的裸 XML fb2 上补写 lang/isbn（stream 需 'rb+' 已写完）。
+
+    位置遵循 FB2 DTD：title-info/lang 在 sequence 之前、publish-info/isbn 在末尾；
+    前缀/命名空间保持解析原样（lxml），XML 声明用双引号（部分 fb2 阅读器解析不了
+    单引号声明，calibre 自身同款规避）。解析失败静默返回 False——主写入已成功。
+    """
+    from lxml import etree
+
+    stream.seek(0)
+    try:
+        root = etree.fromstring(stream.read())
+    except etree.XMLSyntaxError:
+        logging.info("fb2 supplement skipped: not bare XML (zip-wrapped or corrupt)")
+        return False
+    doc_ns = next((ns for ns in FB2_NAMESPACES if root.tag == "{%s}FictionBook" % ns), None)
+    desc = root.find("{%s}description" % doc_ns) if doc_ns else None
+    if desc is None:
+        logging.info("fb2 supplement skipped: no FictionBook description")
+        return False
+
+    changed = False
+    if lang:
+        title_info = desc.find("{%s}title-info" % doc_ns)
+        if title_info is None:
+            title_info = etree.Element("{%s}title-info" % doc_ns)
+            desc.insert(0, title_info)
+        lang_el = title_info.find("{%s}lang" % doc_ns)
+        if lang_el is None:
+            lang_el = etree.Element("{%s}lang" % doc_ns)
+            sequence = title_info.find("{%s}sequence" % doc_ns)
+            if sequence is not None:
+                sequence.addprevious(lang_el)
+            else:
+                title_info.append(lang_el)
+        if (lang_el.text or "").strip() != lang:
+            lang_el.text = lang
+            changed = True
+    if isbn:
+        publish_info = desc.find("{%s}publish-info" % doc_ns)
+        if publish_info is None:
+            publish_info = etree.SubElement(desc, "{%s}publish-info" % doc_ns)
+        isbn_el = publish_info.find("{%s}isbn" % doc_ns)
+        if isbn_el is None:
+            isbn_el = etree.SubElement(publish_info, "{%s}isbn" % doc_ns)
+        if (isbn_el.text or "").strip() != isbn:
+            isbn_el.text = isbn
+            changed = True
+    if not changed:
+        return False
+    stream.seek(0)
+    stream.truncate()
+    stream.write(b'<?xml version="1.0" encoding="UTF-8"?>\n')
+    stream.write(etree.tostring(root, encoding="utf-8", xml_declaration=False))
+    return True
+
+
+def supplement_fb2_fields(stream, mi):
+    """补齐 calibre FB2 writer 缺失的 lang/isbn（在 set_metadata(stream_type='fb2') 之后调用）。
+
+    best-effort：任何失败只记日志返回 False，不影响已完成的 calibre 主写入。
+    """
+    lang = _fb2_lang_code(mi)
+    isbn = _fb2_validated_isbn(mi)
+    if not lang and not isbn:
+        return False
+    try:
+        return _fb2_inject_fields(stream, lang=lang, isbn=isbn)
+    except Exception as err:
+        logging.info("fb2 supplement failed: %s", err)
+        return False
