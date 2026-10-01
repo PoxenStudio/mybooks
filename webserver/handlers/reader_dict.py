@@ -247,6 +247,8 @@ class ReaderDictResource(ReaderDictBase):
             "Cache-Control", response.headers.get("Cache-Control", "public, max-age=86400")
         )
         self.set_header("X-Content-Type-Options", "nosniff")
+        # The reader page is COEP: require-corp; cross-origin subresources need this.
+        self.set_header("Cross-Origin-Resource-Policy", "cross-origin")
         self.write(response.body)
 
 
