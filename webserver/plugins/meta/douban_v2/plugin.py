@@ -45,7 +45,7 @@ class DoubanV2MetaPlugin(MetaSourcePlugin):
         # 优先取标题完全匹配的，否则取首个结果
         best = next((i for i in items if i.get("title") == mi.title), items[0])
         try:
-            return api.build_metadata(best, search_url, isbn=getattr(mi, "isbn", None), copy_image=True, get_detail=(len(items) == 1))
+            return api.build_metadata(best, search_url, isbn=getattr(mi, "isbn", None), copy_image=True, get_detail=True)
         except Exception:
             logging.error(_("[DoubanV2]查询 %s 失败"), query)
             return None

@@ -379,10 +379,7 @@ def build_metadata(item, search_url, isbn=None, copy_image=False, get_detail=Fal
     elif detail:
         mi.isbn = detail.get("isbn", "")
 
-    if detail:
-        mi.comments = detail.get("intro", "")
-    else:
-        mi.comments = item.get("summary", ".....")
+    mi.comments = (detail and detail.get("intro")) or item.get("summary", "")
 
     rating = item.get("rating", {})
     rating_val = rating.get("value", 0) if isinstance(rating, dict) else rating
