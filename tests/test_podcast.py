@@ -12,6 +12,7 @@ import datetime
 import unittest
 import xml.etree.ElementTree as ET
 
+from webserver.handlers.podcast import PodcastBaseHandler
 from webserver.podcast.feed_builder import (
     build_book_feed,
     build_catalog_feed,
@@ -326,6 +327,21 @@ class TestBuildCatalogFeed(unittest.TestCase):
         channel = root.find("channel")
         self.assertEqual(channel.find("title").text, "我的目录")
         self.assertEqual(channel.find("description").text, "我的描述")
+
+
+class TestGetFullSiteUrl(unittest.TestCase):
+    """RSS/OPML 绝对链接的站点地址必须复用 set_hosts() 的反代感知结果。
+
+    此前 _get_full_site_url 独立解析请求头，漏掉 X-Forwarded-Port——反代外网
+    端口非 80/443 时（如 NPM 的域名:40443），生成的订阅链接会丢端口。
+    """
+
+    def test_reuses_set_hosts_site_url(self):
+        # 跳过 RequestHandler.__init__（需要 application/db），只验证方法契约：
+        # _get_full_site_url 应直接返回 prepare()→set_hosts() 算好的 self.site_url
+        handler = PodcastBaseHandler.__new__(PodcastBaseHandler)
+        handler.site_url = "https://books.example.com:40443"
+        self.assertEqual(handler._get_full_site_url(), "https://books.example.com:40443")
 
 
 if __name__ == "__main__":

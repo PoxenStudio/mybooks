@@ -51,10 +51,14 @@ class PodcastBaseHandler(BaseHandler):
         self.set_header("Cache-Control", "max-age=300")
 
     def _get_full_site_url(self):
-        """Get full site URL for building absolute URLs."""
-        host = self.request.headers.get("X-Forwarded-Host", self.request.host)
-        protocol = self.request.headers.get("X-Forwarded-Proto", self.request.protocol)
-        return protocol + "://" + host
+        """Get full site URL for building absolute URLs.
+
+        复用 BaseHandler.set_hosts() 的结果（prepare() 已按请求算好）：
+        它处理了 X-Forwarded-Host 多级代理、X-Forwarded-Port 补端口（含 IPv6、
+        标准端口不冗余）与 X-Forwarded-Proto/X-Scheme，此前的独立实现漏掉端口，
+        反代外网端口非 80/443 时生成的 RSS/OPML 链接会丢端口。
+        """
+        return self.site_url
 
     def _get_site_title(self):
         """Get configured site title."""
