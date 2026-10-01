@@ -4244,7 +4244,7 @@ class BookSaveMeta(BaseHandler):
     @js
     @auth
     def post(self, bid):
-        """将书籍的元数据保存到文件中（仅支持 epub/azw3/pdf）"""
+        """将书籍的元数据保存到文件中（支持 META_WRITABLE_FORMATS 中 calibre 可写回的格式）"""
         book_id = int(bid)
         if not self.is_admin() and not self.is_book_owner(book_id, self.user_id()):
             return {"err": "user.no_permission", "msg": _("无权限，非管理员或书籍所有者无法操作")}
