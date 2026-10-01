@@ -7,6 +7,7 @@ import traceback
 
 from webserver import loader
 from webserver.i18n import _
+from webserver.base.request_counter import RequestCounter
 from webserver.constants import META_SOURCE_DOUBAN_V2
 from webserver.plugins.meta.base import MetaSourcePlugin
 
@@ -26,16 +27,30 @@ class DoubanV2MetaPlugin(MetaSourcePlugin):
     SOURCE_KEYS: tuple = (META_SOURCE_DOUBAN_V2, )
     PROVIDER_KEY = KEY
 
+    MAX_REQUESTS_PER_HOUR = 180
+    # 插件每次调用都会新建实例，计数器必须挂在类上才能跨实例共享
+    _counter = RequestCounter(MAX_REQUESTS_PER_HOUR)
+
+    @classmethod
+    def _acquire(cls):
+        """未超限则计入一次请求并返回 True；超限返回 False"""
+        counter = cls._counter
+        if counter.is_exceeded():
+            logging.warning("[DoubanV2]请求频率已达上限（每小时 %d 次，每 %d 秒最多 %d 次），本次请求被跳过", cls.MAX_REQUESTS_PER_HOUR, counter.window_seconds, counter.limit)
+            return False
+        counter.record()
+        return True
+
     def search(self, title=None, isbn=None, publisher=None):
         query = isbn or title
-        if not query:
+        if not query or not self._acquire():
             return []
         items, search_url = api.search(query, max_count=_max_count())
         return api.build_metadata_batch(items, search_url, isbn=isbn, copy_image=False, get_detail=True)
 
     def search_best(self, mi):
         query = mi.isbn or mi.title
-        if not query:
+        if not query or not self._acquire():
             return None
         items, search_url = api.search(query, max_count=_max_count(), skip_error=True)
         if not items:
@@ -52,7 +67,7 @@ class DoubanV2MetaPlugin(MetaSourcePlugin):
 
     def get_metadata_by_provider(self, provider_value, item=None):
         # 按标题重新搜索，找到 provider_value 匹配的条目后下载封面
-        if not item:
+        if not item or not self._acquire():
             return None
         try:
             return api.build_metadata(
@@ -73,7 +88,7 @@ class DoubanV2MetaPlugin(MetaSourcePlugin):
 
     def search_physical_by_isbn(self, isbn):
         """按 ISBN 精确查询实体书信息（用于 BookSearch.find_physical_book_by_isbn 兜底链）"""
-        if not isbn:
+        if not isbn or not self._acquire():
             return None
         items, search_url = api.search(isbn, max_count=1)
         if not items:
