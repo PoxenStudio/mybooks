@@ -650,13 +650,20 @@ export default {
 /* 响应式设计 */
 @media (max-width: 768px) {
     .stats-container {
-        flex-direction: column;
+        flex-wrap: nowrap;
         align-items: flex-start;
+        gap: 8px;
+    }
+
+    .stats-toggle {
+        flex: none;
+        margin-left: 0;
+        margin-top: 2px;
     }
 
     .stats-content {
         justify-content: flex-start;
-        width: 100%;
+        min-width: 0;
     }
 
     .stat-separator {
