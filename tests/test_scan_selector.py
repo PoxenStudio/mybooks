@@ -594,8 +594,10 @@ class TestScannerSummary(ScanSelectorTestBase):
             scanner.close()
 
         self.assertEqual(summary["total"], 7)
-        self.assertEqual(summary["done"], 3)
-        self.assertEqual(summary["todo"], 4)
+        # todo/done 是列表页签口径（exist 归「待处理」、不做电子书过滤），不是 counts 那套口径
+        self.assertEqual(summary["done"], 2)
+        self.assertEqual(summary["todo"], 5)
+        self.assertEqual(summary["todo"] + summary["done"], summary["total"])
         self.assertEqual(summary["ready"], 3)
         self.assertEqual(summary["counts"].get(ScanFile.READY), 3)
         self.assertEqual(summary["counts"].get(ScanFile.IMPORTED), 2)
@@ -682,6 +684,63 @@ class TestScannerSummary(ScanSelectorTestBase):
 
         self.assertEqual(expected, 2)
         self.assertEqual(total, expected)
+
+
+class TestListCountMatchesSummary(ScanSelectorTestBase):
+    """页签数字（summary.todo/done）必须等于列表分页查询的行数。
+
+    ImportList 的分页查询与 Scanner.summary 各自 count，靠 ScanService.list_scan_filter
+    共用同一套口径。这里把两边都算一遍，任意一边再漂移（例如把 exist 挪回"已导入"、
+    或把有声书记录排除掉）立刻红。
+    """
+
+    def _list_total(self, filter_kind):
+        """复刻 ImportList.get 的 total（过滤后 count），即列表底部的「共 N」。"""
+        query = self.session.query(ScanFile)
+        return ScanService.list_scan_filter(query, filter_kind).count()
+
+    def test_tabs_match_list_totals(self):
+        for name, status in [
+            ("a.epub", ScanFile.NEW),
+            ("b.epub", ScanFile.READY),
+            ("c.epub", ScanFile.DROP),
+            ("d.epub", ScanFile.EXIST),
+            ("e.epub", ScanFile.EXIST),
+            ("f.epub", ScanFile.INVALID),
+            ("g.epub", ScanFile.MISSED),
+            ("h.epub", ScanFile.PERMISSION),
+            ("i.epub", ScanFile.IMPORTED),
+        ]:
+            self._row(os.path.join(self.tmpdir, name), status)
+        # 有声书记录在列表里照常显示（用户要看得到声书导入结果），也计入页签数字
+        self._audio_row(os.path.join(self.tmpdir, "audiobooks", "A1"), ScanFile.INVALID)
+        self._audio_row(os.path.join(self.tmpdir, "audiobooks", "A2"), ScanFile.IMPORTED)
+        self.session.commit()  # Scanner.close() 会回滚未提交事务
+
+        scanner = Scanner(None, self.session)
+        try:
+            summary = scanner.summary()
+        finally:
+            scanner.close()
+
+        # 页签数字 == 列表行数（回归：曾经「待处理」少 2 条 exist、「已导入」多这 2 条）
+        self.assertEqual(self._list_total("todo"), summary["todo"])
+        self.assertEqual(self._list_total("done"), summary["done"])
+        # 口径本身也钉死：todo = 非 IMPORTED（exist 必须在里面），与 list_scan_filter 的实现无关
+        self.assertEqual(
+            self.session.query(ScanFile)
+            .filter(ScanFile.status.not_in([ScanFile.IMPORTED]))
+            .count(),
+            summary["todo"],
+        )
+        # 两个页签是全部记录的一个划分
+        self.assertEqual(summary["todo"] + summary["done"], 11)
+        self.assertEqual(summary["todo"], 9)
+        self.assertEqual(summary["done"], 2)
+        # 批量删除确认框仍是电子书口径（排有声书），与声书记录无关
+        self.assertEqual(
+            sum(v for k, v in summary["counts"].items() if k != ScanFile.IMPORTED), 8
+        )
 
 
 if __name__ == "__main__":
