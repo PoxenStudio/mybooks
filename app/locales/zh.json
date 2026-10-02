@@ -460,6 +460,7 @@
     "bulk_delete_cancelled": "批量删除已取消: 已处理 {total} 条记录",
     "cancel_bulk_delete": "取消批量删除",
     "bulk_delete_files_option": "同时删除扫描目录内的源文件（不可恢复）",
+    "import_sole_option": "本次导入的书籍设为私藏（仅自己可见）",
     "bulk_delete_records_only": "仅删除扫描记录，源文件保留在扫描目录中；下次「全部导入」会重新扫描这些文件（重新计算哈希、重新查重，失败的文件会再尝试导入一次）。",
     "progressBulkDeleting": "批量删除中",
     "bulk_delete_status_failed": "获取批量删除状态失败，请刷新页面查看结果",

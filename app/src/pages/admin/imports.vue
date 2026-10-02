@@ -132,6 +132,15 @@
                         hide-details
                     ></v-select>
                 </v-col>
+                <v-col cols="12" sm="6" md="4" class="mb-2">
+                    <v-checkbox
+                        v-model="importSole"
+                        :label="$t('imports.import_sole_option')"
+                        :disabled="loading || bulkDeleting"
+                        hide-details
+                        class="mt-1"
+                    ></v-checkbox>
+                </v-col>
             </v-row>
         </v-card-actions>
         <v-progress-linear
@@ -326,6 +335,7 @@ export default {
         bulkDeleteDialog: false,
         bulkDeleting: false,
         bulkDeleteFiles: false,
+        importSole: false,
         statusCounts: {},
         scanScopeOptions: [
             { text: "imports.scan_scope_all", value: 0 },
@@ -538,9 +548,10 @@ export default {
                 return Promise.resolve(false);
             }
             this.loading = true;
+            // 本次导入的书籍全部设为私藏，作用于本次运行的所有导入形态（全部/勾选/状态筛选/按目录）
             return this.$backend("/admin/import/run", {
                 method: "POST",
-                body: JSON.stringify(payload),
+                body: JSON.stringify(Object.assign({ sole: this.importSole }, payload)),
             }).then((rsp) => {
                 if (rsp.err !== "ok") {
                     this.$alert("error", rsp.msg);
@@ -549,6 +560,7 @@ export default {
                 }
                 this.selected = [];
                 this.bulkStatus = null;
+                this.importSole = false;
                 this.beginImportPolling();
                 return true;
             }).catch(() => {

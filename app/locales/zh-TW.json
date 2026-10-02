@@ -459,6 +459,7 @@
     "bulk_delete_cancelled": "批次刪除已取消: 已處理 {total} 筆記錄",
     "cancel_bulk_delete": "取消批次刪除",
     "bulk_delete_files_option": "同時刪除掃描目錄內的原始檔（不可復原）",
+    "import_sole_option": "本次匯入的書籍設為私藏（僅自己可見）",
     "bulk_delete_records_only": "僅刪除掃描記錄，原始檔保留在掃描目錄中；下次「全部匯入」會重新掃描這些檔案（重新計算雜湊、重新查重，失敗的檔案會再嘗試匯入一次）。",
     "progressBulkDeleting": "批次刪除中",
     "bulk_delete_status_failed": "取得批次刪除狀態失敗，請重新整理頁面查看結果",

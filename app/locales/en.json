@@ -462,6 +462,7 @@
     "bulk_delete_cancelled": "Bulk delete cancelled: {total} record(s) processed",
     "cancel_bulk_delete": "Cancel Bulk Delete",
     "bulk_delete_files_option": "Also delete source files in the scan folder (irreversible)",
+    "import_sole_option": "Mark books imported this run as private (visible only to me)",
     "bulk_delete_records_only": "Only scan records are deleted; source files stay in the scan folder and will be scanned again on the next \"Import All\" (re-hashed, re-checked for duplicates, and failed files retried).",
     "progressBulkDeleting": "Bulk deleting",
     "bulk_delete_status_failed": "Failed to get bulk delete status; refresh the page to check the result",
