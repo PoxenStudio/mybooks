@@ -519,13 +519,16 @@ class TestScanfilesIndexes(unittest.TestCase):
         models.bind_session(session)
         models.Base.metadata.create_all(engine)
 
-        self.assertTrue(_ensure_scanfiles_indexes(session))
+        # 模型已声明全部索引（新库随 create_all 生成），ensure 首跑即无事可做
+        self.assertFalse(_ensure_scanfiles_indexes(session))
         cols = self._index_columns(session)
         for name in ("ix_scanfiles_path", "ix_scanfiles_hash", "ix_scanfiles_import_id"):
             self.assertIn(name, cols)
             self.assertEqual(cols[name], [name.rsplit("ix_scanfiles_", 1)[1]])
         # status 索引是 (status, import_type) 复合：按状态的查询一律带电子书口径过滤
         self.assertEqual(cols["ix_scanfiles_status_import_type"], ["status", "import_type"])
+        # 选择器/批删按 status 过滤 + id 排序，(status, id) 复合索引覆盖
+        self.assertEqual(cols["ix_scanfiles_status_id"], ["status", "id"])
 
         # 幂等：第二次不再新建
         self.assertFalse(_ensure_scanfiles_indexes(session))

@@ -421,6 +421,16 @@ class Item(Base, SQLAlchemyMixin):
 
 class ScanFile(Base, SQLAlchemyMixin):
     __tablename__ = "scanfiles"
+    # 扫描记录随导入量增长到几十万行以上，无索引时 path/hash 等值查询与按状态
+    # 的选择/批删/统计都是全表扫。新库随 create_all 生成；存量库由
+    # async_service._ensure_scanfiles_indexes 在启动时幂等补建。
+    __table_args__ = (
+        Index("ix_scanfiles_path", "path"),
+        Index("ix_scanfiles_import_id", "import_id"),
+        Index("ix_scanfiles_status_import_type", "status", "import_type"),
+        Index("ix_scanfiles_hash", "hash"),
+        Index("ix_scanfiles_status_id", "status", "id"),
+    )
     id = Column(Integer, primary_key=True)
     scan_id = Column(Integer, default=0)
     import_id = Column(Integer, default=0)

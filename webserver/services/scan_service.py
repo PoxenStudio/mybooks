@@ -9,20 +9,25 @@
 #   - 对每个文件计算部分 SHA-256 哈希（小于 10MB 取前 4MB；大于等于 10MB 取首尾各 3MB）。
 #   - 根据路径和哈希进行去重：
 #       * 已通过路径或哈希成功导入（状态 IMPORTED）且书库记录仍存在 → 跳过。
-#       * 存在 NEW/READY 状态的记录时复用缓存哈希，避免重复 I/O。
+#       * 存在 NEW/READY 状态的记录时，文件签名（dev/ino/size/mtime_ns/ctime_ns）一致
+#         才复用缓存哈希，避免重复 I/O；签名不符或缺失一律重算（文件可能已被替换）。
 #       * 否则清除同哈希的旧非导入记录，创建新 READY 状态的 ScanFile 行。
-#   - 将 READY 行的 ID 放入有界工作队列（最大 50），自然地对阶段二施加背压。
+#   - 将 READY 行的 ID 放入有界工作队列（最大 50），自然地对阶段二施加背压；
+#     同时把路径投入有界预取队列（最大 8），由预取线程提前解析元数据进缓存。
 #
 # 阶段二（Importing）：独立后台线程执行
 #   - 从工作队列中持续取出行 ID，加载对应 ScanFile 记录。
-#   - 读取书籍元数据（calibre get_metadata），并根据标题去重：
+#   - 读取书籍元数据（优先命中进程内 LRU 缓存，签名失效自动重读），并根据标题去重：
 #       * 标题已存在（电子书）→ 追加格式（add_format）。
 #       * 标题不存在 → 全新导入（import_book），同时创建 Item 关联记录。
 #       * DJVU/UVZ/CBZ 扫描版先校验容器，以文件名编目为底合并内嵌元数据；仅唯一同名候选才并入，多候选按新书入库。
+#   - 导入前复核扫描时的文件签名：文件已被替换的行回退 NEW，等下次扫描重新处理。
 #   - 若配置 IMPORT_CATEGORY_WITH_FOLDER=True，将文件所在上传目录的第一级子目录名
 #     作为书籍分类写入自定义字段。
-#   - 若配置 REMOVE_IMPORTED_FILE=True，导入后删除源文件（仅适用于全新导入或已存在的情况）。
-#   - 每 20 个文件批量提交一次事务，完成后执行最终提交并清理 scoped_session。
+#   - 若配置 REMOVE_IMPORTED_FILE=True，导入后删除源文件（仅适用于全新导入或已存在的情况）；
+#     删除前复核签名，且批量事务内推迟到批提交之后才执行。
+#   - 每 20 个文件一个外层事务批量提交，行级失败由 SAVEPOINT 回滚不拖垮整批；
+#     完成后执行最终提交并清理 scoped_session。
 #
 
 import datetime
@@ -36,7 +41,7 @@ import threading
 import time
 import traceback
 
-from sqlalchemy import or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 
 from webserver.i18n import _
@@ -54,6 +59,7 @@ from webserver.constants import BOOK_TYPE_EBOOK, BOOK_TYPE_PHYSICAL, CALIBRE_COL
 from webserver.constants import SCANNED_DOCUMENT_FORMATS
 from webserver.base.book_files import InvalidBookFileError, read_book_metadata, validate_book_file
 from webserver.services.background_service import BackgroundService, BackgroundTask
+from webserver.services.scan_runtime import MetadataCache, file_signature
 from webserver import loader
 
 CONF = loader.get_settings()
@@ -74,6 +80,11 @@ class ScanService(AsyncService):
     invalid_folder: set[str] = set()
     # 导入/批量删除/有声书导入"检查对方状态 + 置自己的运行位"必须在这把锁内原子完成
     task_claim_lock = threading.Lock()
+    # 线程本地批量事务状态（Phase2 worker 专用）与进程内元数据缓存（预取/消费线程共享）
+    _local = threading.local()
+    _metadata_cache = MetadataCache()
+    # Phase2 worker 线程的致命错误回传给 do_import_internal（单实例导入互斥，无并发写）
+    _worker_error = None
     static_bulk_delete: dict = {
         "running": False,
         "done": False,
@@ -152,43 +163,88 @@ class ScanService(AsyncService):
             logging.error(f"[IMPORT]访问目录时发生错误: {e.filename}, 错误码: {e.errno}")
 
     @staticmethod
-    def _remove_imported_file(fpath):
+    def _remove_imported_file(fpath, expected_signature=None):
+        """删除已导入的源文件；提供 expected_signature 时先复核，文件被替换过则保留。
+
+        判重/导入期间文件被替换是低概率但真实的竞态：不复核会把替换后的新内容
+        当成"已导入的书"删掉。签名无法校验（文件消失/符号链接）时不拦截，
+        交给 os.remove 自己报错，保持与旧行为一致的容错面。
+        """
         try:
+            if expected_signature:
+                current = file_signature(fpath)
+                if current is not None and current != expected_signature:
+                    logging.warning("[IMPORT] Source file changed after import; retained: %s", fpath)
+                    return False
             os.remove(fpath)
             logging.info(f"Removed imported file: {fpath}")
+            return True
         except Exception as e:
             logging.error(f"Failed to remove imported file {fpath}: {e}")
+            return False
 
     def save_or_rollback(self, row, session=None):
         session = session or self.session
         bid = "[ book-id=%s ]" % row.book_id if row.book_id else ""
         logging.info("update: status=%-5s, path=%s %s", row.status, row.path, bid)
+        batching = getattr(self._local, "import_batch", False)
         try:
-            row.save()
-            session.commit()
+            if batching:
+                # row.save() 内部会 commit（SQLAlchemyMixin.COMMIT_SESSION=True），
+                # 批量事务内提交权归批次包装器：只 add + flush，变更留在本批外层事务里
+                session.add(row)
+                session.flush()
+            else:
+                row.save()
+                session.commit()
             return True
         except IntegrityError as err:
             logging.error("IntegrityError: Duplicate hash detected: %s, %s", row.hash, err)
         except Exception as err:
             logging.exception("save error: %s", err)
+        if batching:
+            # 单行失败原样上抛给行级 SAVEPOINT 回滚，不能让一行把整批事务拖入异常态
+            raise
         session.rollback()
         return False
 
     def _mark_missing_scan_files(self):
-        """导入完成后，将源文件已不存在的 NEW/READY 记录标记为 MISSED，避免一直残留在待导入列表中"""
+        """导入完成后，将源文件已不存在的 NEW/READY 记录标记为 MISSED，避免一直残留在待导入列表中。
+
+        按 id 游标分批只取 (id, path) 两列，上界锁定开工时的 max(id)：不装实体、
+        内存与待处理记录数解耦（百万行残留时全量 .all() 的内存与耗时都不可接受）；
+        每批缺失的记录合并成一次 UPDATE。迭代中新扫描写入的行不进本轮清扫。
+        """
         start_time = time.time()
         session = self.session
+        missed = 0
+        checked = 0
         try:
-            rows = session.query(ScanFile).filter(ScanFile.status.in_([ScanFile.NEW, ScanFile.READY])).all()
-            missed = 0
-            for row in rows:
-                if row.path and not os.path.exists(row.path):
-                    row.status = ScanFile.MISSED
-                    row.update_time = datetime.datetime.now()
-                    missed += 1
-            if missed:
-                session.commit()
-            logging.info("[IMPORT] Checked %d NEW/READY records, marked %d as missed in %.3f seconds", len(rows), missed, time.time() - start_time)
+            base_query = session.query(ScanFile.id, ScanFile.path).filter(
+                ScanFile.status.in_([ScanFile.NEW, ScanFile.READY])
+            )
+            upper_id = base_query.order_by(None).with_entities(func.max(ScanFile.id)).scalar()
+            last_id = 0
+            while upper_id is not None:
+                rows = (
+                    base_query.filter(ScanFile.id > last_id, ScanFile.id <= upper_id)
+                    .order_by(ScanFile.id)
+                    .limit(500)
+                    .all()
+                )
+                if not rows:
+                    break
+                last_id = rows[-1][0]
+                checked += len(rows)
+                missing_ids = [rid for (rid, path) in rows if path and not os.path.exists(path)]
+                if missing_ids:
+                    session.query(ScanFile).filter(ScanFile.id.in_(missing_ids)).update(
+                        {ScanFile.status: ScanFile.MISSED, ScanFile.update_time: datetime.datetime.now()},
+                        synchronize_session=False,
+                    )
+                    missed += len(missing_ids)
+            session.commit()
+            logging.info("[IMPORT] Checked %d NEW/READY records, marked %d as missed in %.3f seconds", checked, missed, time.time() - start_time)
         except Exception as err:
             logging.error("[IMPORT] Failed to mark missing scan files: %s", err)
             session.rollback()
@@ -202,18 +258,41 @@ class ScanService(AsyncService):
         的清扫，在这里补上，避免一直残留在待导入列表。
 
         READY 只由电子书扫描阶段写入，这里仍走 status_filter 的电子书口径以防日后漂移。
+
+        按 id 游标分批只取 (id, path) 两列，上界锁定开工时的 max(id)：百万行 READY 时
+        全量实体 .all() 的内存与耗时不可接受；标 MISSED 按批合并成一次 UPDATE。
         """
         paths = []
         dirty = False
-        rows = ScanService.status_filter(session.query(ScanFile), ScanFile.READY).all()
-        for row in rows:
-            if not row.path:
-                continue
-            if os.path.isfile(row.path):
-                paths.append(row.path)
-            elif mark_missing:
-                row.status = ScanFile.MISSED
-                row.update_time = datetime.datetime.now()
+        checked = 0
+        base_query = ScanService.status_filter(session.query(ScanFile.id, ScanFile.path), ScanFile.READY)
+        upper_id = base_query.order_by(None).with_entities(func.max(ScanFile.id)).scalar()
+        last_id = 0
+        while upper_id is not None:
+            rows = (
+                ScanService.status_filter(session.query(ScanFile.id, ScanFile.path), ScanFile.READY)
+                .filter(ScanFile.id > last_id, ScanFile.id <= upper_id)
+                .order_by(ScanFile.id)
+                .limit(500)
+                .all()
+            )
+            if not rows:
+                break
+            last_id = rows[-1][0]
+            checked += len(rows)
+            missing_ids = []
+            for (row_id, path) in rows:
+                if not path:
+                    continue
+                if os.path.isfile(path):
+                    paths.append(path)
+                elif mark_missing:
+                    missing_ids.append(row_id)
+            if missing_ids:
+                session.query(ScanFile).filter(ScanFile.id.in_(missing_ids)).update(
+                    {ScanFile.status: ScanFile.MISSED, ScanFile.update_time: datetime.datetime.now()},
+                    synchronize_session=False,
+                )
                 dirty = True
         if dirty:
             try:
@@ -221,7 +300,7 @@ class ScanService(AsyncService):
             except Exception as err:
                 logging.error("[IMPORT] Failed to mark missing ready records: %s", err)
                 session.rollback()
-        logging.info("[IMPORT] Ready selector resolved %d paths (%d rows)", len(paths), len(rows))
+        logging.info("[IMPORT] Ready selector resolved %d paths (%d rows)", len(paths), checked)
         return paths
 
     @staticmethod
@@ -262,9 +341,25 @@ class ScanService(AsyncService):
         "todo" = 非 IMPORTED（管理页待导入语义）；其余取 ScanFile 状态常量做等值过滤
         （normalize_import_filelist 已挡掉 IMPORTED 与任意字符串）。已消失的文件不改
         状态（记录自身已带 invalid/missed 等状态），只从本次导入剔除。
+
+        按 id 游标分批只取 (id, path) 两列，上界锁定开工时的 max(id)，内存与记录数解耦。
         """
-        query = ScanService.status_filter(session.query(ScanFile.path), filter_kind)
-        paths = [p for (p,) in query.all() if p and os.path.isfile(p)]
+        paths = []
+        base_query = ScanService.status_filter(session.query(ScanFile.id, ScanFile.path), filter_kind)
+        upper_id = base_query.order_by(None).with_entities(func.max(ScanFile.id)).scalar()
+        last_id = 0
+        while upper_id is not None:
+            rows = (
+                ScanService.status_filter(session.query(ScanFile.id, ScanFile.path), filter_kind)
+                .filter(ScanFile.id > last_id, ScanFile.id <= upper_id)
+                .order_by(ScanFile.id)
+                .limit(500)
+                .all()
+            )
+            if not rows:
+                break
+            last_id = rows[-1][0]
+            paths.extend(path for (_, path) in rows if path and os.path.isfile(path))
         logging.info("[IMPORT] Filter selector (%s) resolved %d paths", filter_kind, len(paths))
         return paths
 
@@ -397,14 +492,15 @@ class ScanService(AsyncService):
     def _collect_imported_path(self, skip_last=False):
         start_time = time.time()
         base_query = (
-            self.session.query(ScanFile.path, ScanFile.import_id)
+            self.session.query(ScanFile.id, ScanFile.path, ScanFile.import_id)
             .filter(ScanFile.status.in_([ScanFile.IMPORTED, ScanFile.EXIST]))
             .filter(ScanFile.path.isnot(None))
         )
 
         last_import_id = 0
+        skip_last_rows = None
         if skip_last:
-            # Only skip last task's imported directories
+            # Only skip last task's imported directories——单批文件数有界，保持整批加载
             last_row = (
                 self.session.query(ScanFile.import_id)
                 .filter(ScanFile.status.in_([ScanFile.IMPORTED, ScanFile.EXIST]))
@@ -416,35 +512,61 @@ class ScanService(AsyncService):
             if not last_row:
                 return [], [], 0
             last_import_id = last_row[0]
-            imported_rows = (
+            skip_last_rows = (
                 base_query
                 .filter(ScanFile.import_id == last_import_id)
                 .order_by(ScanFile.id.desc())
                 .all()
             )
-        else:
-            imported_rows = base_query.order_by(ScanFile.import_id.desc(), ScanFile.id.desc()).all()
-
-        if not imported_rows:
-            return [], [], 0
 
         last_imported_dir = None
         imported_dirs = set()
         imported_files_in_last_dir = set()
 
-        for (path, import_id) in imported_rows:
-            if not path:
-                continue
-            if last_import_id == 0:
-                last_import_id = import_id
-            fpath = os.path.realpath(path)
-            fdir = os.path.dirname(fpath)
-            if last_imported_dir is None:
-                last_imported_dir = fdir
-            if fdir == last_imported_dir:
-                imported_files_in_last_dir.add(fpath)
-            elif fdir:
-                imported_dirs.add(fdir)
+        def absorb(rows):
+            nonlocal last_imported_dir, last_import_id
+            for (row_id, path, import_id) in rows:
+                if not path:
+                    continue
+                if last_import_id == 0:
+                    last_import_id = import_id
+                fpath = os.path.realpath(path)
+                fdir = os.path.dirname(fpath)
+                if last_imported_dir is None:
+                    last_imported_dir = fdir
+                if fdir == last_imported_dir:
+                    imported_files_in_last_dir.add(fpath)
+                elif fdir:
+                    imported_dirs.add(fdir)
+
+        if skip_last_rows is not None:
+            absorb(skip_last_rows)
+        else:
+            # 全量模式：复合键 (import_id, id) 倒序游标分批，内存与已导入记录数解耦；
+            # "最近导入的目录"仍由最新一行确定，语义与旧的全量倒序遍历一致
+            last_key = None
+            while True:
+                query = base_query
+                if last_key is not None:
+                    key_import_id, key_row_id = last_key
+                    query = query.filter(
+                        or_(
+                            ScanFile.import_id < key_import_id,
+                            and_(ScanFile.import_id == key_import_id, ScanFile.id < key_row_id),
+                        )
+                    )
+                rows = query.order_by(ScanFile.import_id.desc(), ScanFile.id.desc()).limit(500).all()
+                if not rows:
+                    break
+                last_key = (rows[-1][2], rows[-1][0])
+                absorb(rows)
+            # import_id 为 NULL 的存量行不参与键集比较，按 id 倒序兜底并入（等价旧排序中的末尾段）
+            absorb(
+                base_query
+                .filter(ScanFile.import_id.is_(None))
+                .order_by(ScanFile.id.desc())
+                .all()
+            )
 
         if last_imported_dir is None:
             return [], [], 0
@@ -653,6 +775,116 @@ class ScanService(AsyncService):
             logging.error("[IMPORT] Error reading file %s: %s", fpath, e)
             return None, ScanFile.INVALID
 
+    def _parse_metadata_cached(self, fpath, fmt, fname):
+        """元数据解析的进程内 LRU 缓存入口（签名失效自动重读）。
+
+        只缓存原始解析结果；super_strip/作者归一/封面补齐等改写全部发生在返回的
+        独立副本上，不污染缓存。txt 从文件名构造、零 IO，不占缓存名额。
+        """
+        signature = file_signature(fpath) if fmt != "txt" else None
+        if signature is not None:
+            cached = self._metadata_cache.get(fpath, signature)
+            if cached is not None:
+                logging.info("[IMPORT] Metadata cache hit: %s", fpath)
+                return cached["metadata"]
+        mi = read_book_metadata(fpath, fmt, fname)
+        if signature is not None:
+            self._metadata_cache.put(fpath, signature, {"metadata": mi})
+        return mi
+
+    def _metadata_prefetch_worker(self, prefetch_queue, prefetch_done):
+        """预取线程：把即将导入的文件的元数据提前解析进缓存。
+
+        纯文件 IO（read_book_metadata/容器校验不触碰 ORM 与书库），与消费线程的
+        数据库操作重叠执行。尽力而为语义：入队端队满即弃（消费线程自己解析兜底），
+        取消时快速排空不解析，任何单文件失败都只丢弃该条预取。
+        """
+        while True:
+            try:
+                item = prefetch_queue.get(timeout=0.5)
+            except _queue.Empty:
+                if prefetch_done.is_set() or ScanService.static_abort_flag:
+                    return
+                continue
+            if item is None:
+                return
+            if ScanService.static_abort_flag:
+                continue
+            fpath, fmt, fname = item
+            try:
+                self._parse_metadata_cached(fpath, fmt, fname)
+            except Exception:
+                logging.debug("[IMPORT] Metadata prefetch failed for %s", fpath, exc_info=True)
+
+    @staticmethod
+    def _put_work(work_queue, worker_thread, item):
+        """有界队列投递：worker 意外退出时不能让 Phase 1 永久阻塞在 put 上。
+
+        取消路径 worker 会继续排空队列，put 总能成功；这里只兜底 worker 线程
+        死亡的情形——立即失败上抛，让整次导入带着明确的错误结束而不是挂死。
+        """
+        while True:
+            try:
+                work_queue.put(item, timeout=0.5)
+                return
+            except _queue.Full:
+                if not worker_thread.is_alive():
+                    raise RuntimeError("importing worker thread exited unexpectedly")
+
+    def _begin_import_batch(self, session):
+        """开启一个批量事务窗口，并处理 pysqlite 的 SAVEPOINT 兼容问题。
+
+        pysqlite 默认事务模式下，外层没有真实 BEGIN 时 SAVEPOINT 的释放会被驱动
+        当成提交（每行一提交，批量窗口失效），所以先在驱动层显式 BEGIN。驱动已在
+        事务内（前一窗口后仍有未提交语句等）则不重复开，此时保存点天然被外层包住。
+        """
+        connection = session.connection()
+        if connection.dialect.name == "sqlite":
+            dbapi_conn = connection.connection
+            if hasattr(dbapi_conn, "driver_connection"):
+                dbapi_conn = dbapi_conn.driver_connection
+            if not dbapi_conn.in_transaction:
+                connection.exec_driver_sql("BEGIN")
+        self._local.import_batch = True
+        self._local.pending_source_deletes = []
+
+    def _commit_import_batch(self, session):
+        """批尾提交：应用库变更原子落库，随后执行本批登记的源文件删除（带签名复核）。
+
+        提交失败整批回滚：本批各行在应用库回到批前状态（书库侧副作用依赖重导查重
+        收敛），pending 的删源意图一并作废；失败上抛终结本次导入任务。
+        """
+        try:
+            session.commit()
+            logging.info("[IMPORT] Batch committed")
+        except Exception as err:
+            logging.error("[IMPORT] Batch commit error: %s", err)
+            session.rollback()
+            # 批已回滚：登记的删源意图一并作废
+            self._local.pending_source_deletes = []
+            raise
+        finally:
+            self._local.import_batch = False
+        self._drain_pending_source_deletes()
+
+    def _finish_import_batch(self, session):
+        """收尾未满一批的窗口（Phase 1 结束/任务终止时）：提交并执行延迟删源。"""
+        self._local.import_batch = False
+        try:
+            session.commit()
+        except Exception as err:
+            logging.error("[IMPORT] Final batch commit error: %s", err)
+            session.rollback()
+            self._local.pending_source_deletes = []
+            return
+        self._drain_pending_source_deletes()
+
+    def _drain_pending_source_deletes(self):
+        pending = getattr(self._local, "pending_source_deletes", None) or []
+        self._local.pending_source_deletes = []
+        for fpath, signature in pending:
+            self._remove_imported_file(fpath, expected_signature=signature)
+
     def _import_one_file(self, row, user_id, scan_upload_path, session, force):
         """
             Read metadata and import one READY ScanFile into calibre.
@@ -660,14 +892,27 @@ class ScanService(AsyncService):
             Handles all error paths internally (sets row.status, calls save_or_rollback).
             Returns book_id if a new book was successfully linked via Item, else None.
         """
-        from calibre.ebooks.metadata.book.base import Metadata
-
         fpath = row.path
         fname = os.path.basename(fpath)
         fmt = fpath.split(".")[-1].lower()
         start_time = time.time()
         _translators = []
         _authors = []
+
+        stored_signature = (row.data or {}).get("file_signature") if row.data else None
+        if stored_signature:
+            current_signature = file_signature(fpath)
+            if current_signature is not None and current_signature != stored_signature:
+                # 扫描之后文件被替换过：旧哈希/旧元数据都已失效，回退 NEW 等下次
+                # 扫描重新走判重，避免旧内容的判重结论套在被替换的新文件上
+                logging.warning("[IMPORT] Source file changed after scan; reverting to NEW: %s", fpath)
+                row.status = ScanFile.NEW
+                row.data = dict(row.data or {})
+                row.data["processing_error"] = _("文件在导入前已变化，请重新扫描")
+                self.save_or_rollback(row, session)
+                return None, ScanFile.NEW
+
+        from calibre.ebooks.metadata.book.base import Metadata
 
         try:
             validate_book_file(fpath, fmt)
@@ -686,7 +931,7 @@ class ScanService(AsyncService):
             logging.info("[IMPORT] Skipped metadata read for %s: %s", fmt, repr(title))
         else:
             try:
-                mi = read_book_metadata(fpath, fmt, fname)
+                mi = self._parse_metadata_cached(fpath, fmt, fname)
                 mi.title = utils.super_strip(mi.title)
                 if mi.authors:
                     _authors, _translators = guess_authors(mi.authors)
@@ -803,7 +1048,11 @@ class ScanService(AsyncService):
                 item.collector_id = user_id
                 item.src_path = fpath
                 try:
-                    item.save()
+                    if getattr(self._local, "import_batch", False):
+                        # 批量事务内 Item 的落库同样交给批提交（item.save() 内部会 commit）
+                        session.add(item)
+                    else:
+                        item.save()
                     new_book_id = row.book_id
                 except Exception as err:
                     logging.error("[IMPORT] save link error: %s", err)
@@ -821,7 +1070,14 @@ class ScanService(AsyncService):
                         logging.warning("[IMPORT] Skipping category for '%s': invalid dir name", first_dir)
 
             if CONF.get("REMOVE_IMPORTED_FILE", False) and (not existed_ebook or row.status == ScanFile.EXIST):
-                self._remove_imported_file(fpath)
+                if getattr(self._local, "import_batch", False):
+                    # 批量事务内只登记删源意图：推迟到本批提交之后执行（见 _commit_import_batch），
+                    # 批被回滚时登记一并作废，绝不删除"记录已回滚"的源文件
+                    self._local.pending_source_deletes.append(
+                        (fpath, (row.data or {}).get("file_signature"))
+                    )
+                else:
+                    self._remove_imported_file(fpath, expected_signature=(row.data or {}).get("file_signature"))
         except Exception as err:
             new_book_id = None
             row.status = ScanFile.INVALID
@@ -840,10 +1096,22 @@ class ScanService(AsyncService):
         return new_book_id, status
 
     def _importing_worker(self, work_queue, importing_imported, task_id, user_id, scan_upload_path, batch_size, force):
-        """Worker thread for Phase 2: consumes row IDs from work_queue and imports each file."""
+        """Worker thread for Phase 2: consumes row IDs from work_queue and imports each file.
+
+        每 batch_size 行一个外层事务：行级失败由 SAVEPOINT 回滚（只丢该行的应用库
+        变更），批尾统一提交——SQLite 逐行提交的 fsync 开销从 O(行数) 降到 O(批数)。
+        save_or_rollback 在批内只 flush，单行保存失败原样上抛给保存点。
+
+        Calibre 书库与应用库无跨库事务：批内崩溃时已完成的书库副作用依赖重导查重
+        收敛，这与旧行为的一致性模型相同，只是恢复粒度从行变为批。批尾提交成功后才
+        执行本批登记的源文件删除（REMOVE_IMPORTED_FILE），并复核文件签名。
+        """
         importing_session = self.scoped_session()
         importing_index = 0
         total_count = 0
+        self._local.import_batch = False
+        self._local.pending_source_deletes = []
+        self._worker_error = None
 
         try:
             while True:
@@ -854,6 +1122,9 @@ class ScanService(AsyncService):
                     if ScanService.static_abort_flag:
                         # Skip all to clear the queue
                         continue
+
+                    if not self._local.import_batch:
+                        self._begin_import_batch(importing_session)
 
                     row = importing_session.query(ScanFile).get(row_id)
                     if row is None:
@@ -876,7 +1147,20 @@ class ScanService(AsyncService):
                         except Exception as e:
                             logging.error("[IMPORT] Failed to update progress: %s", e)
 
-                    new_book_id, status = self._import_one_file(row, user_id, scan_upload_path, importing_session, force)
+                    # 上一行遗留的未 flush 变更（如 Item）先落进本批外层事务，
+                    # 避免被本行的 SAVEPOINT 回滚误伤
+                    importing_session.flush()
+                    try:
+                        with importing_session.begin_nested():
+                            new_book_id, status = self._import_one_file(row, user_id, scan_upload_path, importing_session, force)
+                    except Exception as err:
+                        # 保存点已回滚本行的应用库变更；行对象被 expire，重新标注
+                        # INVALID 落到批尾提交
+                        logging.exception("[IMPORT] Failed to process file %s: %s", row.path, err)
+                        new_book_id = None
+                        status = ScanFile.INVALID
+                        row.status = ScanFile.INVALID
+
                     if status:
                         if status in ScanService.static_status_cnt:
                             ScanService.static_status_cnt[status] += 1
@@ -887,18 +1171,17 @@ class ScanService(AsyncService):
                         importing_imported.append(new_book_id)
 
                     if importing_index % batch_size == 0:
-                        try:
-                            importing_session.commit()
-                            logging.info("[IMPORT] Batch committed at index %d", importing_index)
-                        except Exception as err:
-                            logging.error("[IMPORT] Batch commit error: %s", err)
-                            importing_session.rollback()
+                        self._commit_import_batch(importing_session)
                 finally:
                     work_queue.task_done()
         except Exception as err:
+            self._worker_error = err
             logging.error("[IMPORT] Fatal error in worker: %s", err)
             logging.error(traceback.format_exc())
         finally:
+            # 窗口里每一行都是完整处理过的，收尾提交保存已完成的工作（取消/致命错误同语义）
+            if self._local.import_batch:
+                self._finish_import_batch(importing_session)
             try:
                 importing_session.commit()
                 logging.info("[IMPORT] Final commit completed")
@@ -941,14 +1224,21 @@ class ScanService(AsyncService):
 
         # (PoxenStudio) Reuse cached hash if available (NEW/READY record from a previous interrupted run).
         # MISSED/PERMISSION: file was previously inaccessible, reprocess from scratch (no reuse).
+        # 签名一致才允许复用：中断续导期间文件被替换时，旧哈希指向旧内容，拿它判重
+        # 会把新文件误判成重复；旧记录没有签名（本功能之前的存量行）也一律重算。
+        reuse_hash = None
         if not force:
-            reuse_hash = next(
-                (r.hash for r in same_path_rows
-                    if r.status in (ScanFile.NEW, ScanFile.READY) and r.hash and r.hash.startswith("sha256:")),
-                None,
-            )
-        else:
-            reuse_hash = None
+            current_signature = file_signature(fpath)
+
+            def _reusable(r):
+                if r.status not in (ScanFile.NEW, ScanFile.READY):
+                    return False
+                if not r.hash or not r.hash.startswith("sha256:"):
+                    return False
+                return bool(r.data) and r.data.get("file_signature") == current_signature
+
+            if current_signature is not None:
+                reuse_hash = next((r.hash for r in same_path_rows if _reusable(r)), None)
         if reuse_hash:
             logging.info("[SCAN] Reusing cached hash for: %s", fpath)
 
@@ -967,6 +1257,10 @@ class ScanService(AsyncService):
             return None, bad_reason
 
         row = ScanFile(fpath, hash_val, import_id)
+        signature = file_signature(fpath)
+        if signature is not None:
+            # 持久化文件签名：下次扫描的哈希复用与导入前的变化检测都以此为基准
+            row.data = {"file_signature": signature}
         if hash_val in processed_hashes:
             # Keep back compatibility to set unique hash.
             row.hash = hashlib.md5(fpath.encode("utf-8")).hexdigest()
@@ -1012,7 +1306,9 @@ class ScanService(AsyncService):
         total_count = len(filelist)
         batch_size = 20
 
-        work_queue = _queue.Queue()
+        work_queue = _queue.Queue(maxsize=50)
+        prefetch_queue = _queue.Queue(maxsize=8)
+        prefetch_done = threading.Event()
         importing_imported = []
 
         start_time = time.time()
@@ -1021,6 +1317,14 @@ class ScanService(AsyncService):
         ScanService.static_status_cnt = {
             ScanFile.READY: 0
         }
+
+        prefetch_thread = threading.Thread(
+            target=self._metadata_prefetch_worker,
+            args=(prefetch_queue, prefetch_done),
+            name="ScanService.prefetch",
+            daemon=True,
+        )
+        prefetch_thread.start()
 
         importing_thread = threading.Thread(
             target=self._importing_worker,
@@ -1042,7 +1346,13 @@ class ScanService(AsyncService):
                     break
                 row_id, state = self._scan_one_file(fpath, session, import_id, processed_paths, processed_hashes, force)
                 if row_id is not None:
-                    work_queue.put(row_id)
+                    fmt = fpath.split(".")[-1].lower()
+                    try:
+                        # 尽力而为预取：队满即弃，消费线程未命中缓存时会自己解析
+                        prefetch_queue.put_nowait((fpath, fmt, os.path.basename(fpath)))
+                    except _queue.Full:
+                        pass
+                    self._put_work(work_queue, importing_thread, row_id)
                     queued_count += 1
                 if state:
                     if state in ScanService.static_status_cnt:
@@ -1050,12 +1360,18 @@ class ScanService(AsyncService):
                     else:
                         ScanService.static_status_cnt[state] = 1
         finally:
-            work_queue.put(None)  # sentinel: Phase 1 done
+            self._put_work(work_queue, importing_thread, None)  # sentinel: Phase 1 done
+            prefetch_done.set()
 
         logging.info("[IMPORT] Phase 1 done: %d files queued. Waiting for Phase 2...", queued_count)
 
         # Wait for Phase 2 to finish gracefully
         importing_thread.join()
+        worker_error = self._worker_error
+        self._worker_error = None
+        if worker_error is not None:
+            # worker 半路死亡：明确报错结束，不能静默当作"导入完成"
+            raise RuntimeError(f"[IMPORT] Import worker failed: {worker_error}") from worker_error
         logging.info("[IMPORT] Both phases done in %.3fs. Queued: %d, Imported: %d",
                      time.time() - start_time, queued_count, len(importing_imported))
 

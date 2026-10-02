@@ -54,6 +54,9 @@ def _ensure_scanfiles_indexes(session) -> bool:
         "ix_scanfiles_path": ("path",),
         "ix_scanfiles_import_id": ("import_id",),
         "ix_scanfiles_status_import_type": ("status", "import_type"),
+        # 选择器解析/批删/漏失清扫都按 status 过滤 + id 排序分批，复合索引让每批
+        # 直接走索引序，免掉整段 status 命中集的排序
+        "ix_scanfiles_status_id": ("status", "id"),
     }
     if not any(cols and cols[0] == "hash" for cols in existing.values()):
         wanted["ix_scanfiles_hash"] = ("hash",)
