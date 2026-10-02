@@ -411,8 +411,13 @@ class MCPService:
                     "message": "At least one of 'title' or 'isbn' is required"
                 }))]
 
-            # 使用BookSearch查询图书元数据
-            books = BookSearch.search_books(title=title if title else None, isbn=isbn if isbn else None)
+            # 使用BookSearch查询图书元数据。search_books 同步等待各信息源插件（最长
+            # 60s），直接调用会冻住 tornado ioloop，下放线程池执行
+            books = await utils.run_in_threadpool(
+                BookSearch.search_books,
+                title=title if title else None,
+                isbn=isbn if isbn else None,
+            )
 
             if not books:
                 return [TextContent(type="text", text=json.dumps({
@@ -567,8 +572,14 @@ class MCPService:
                         skipped_count += 1
                         continue
 
-                    # 执行自动填充
-                    success = autofill_service.auto_fill(book_id, only_tags=only_tags, force_update=True)
+                    # 执行自动填充。auto_fill 内含联网搜索与 AI 请求，同步等待会冻住
+                    # ioloop，下放线程池执行
+                    success = await utils.run_in_threadpool(
+                        autofill_service.auto_fill,
+                        book_id,
+                        only_tags=only_tags,
+                        force_update=True,
+                    )
                     if success:
                         results.append({
                             "book_id": book_id,

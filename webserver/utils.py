@@ -1,10 +1,34 @@
 #!/usr/bin/env python3
+import asyncio
 import datetime
+import functools
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 from webserver import constants
+
+# 联网任务线程池：信息源插件搜索、AI 请求等长任务（单次可达分钟级）放这里执行。
+# tornado 是单线程事件循环，在 handler 里同步等一次网络请求会把全站请求（包括不碰
+# 数据库的 /api/user/info）一起冻住。
+blocking_pool = ThreadPoolExecutor(max_workers=20, thread_name_prefix="mybooks-blocking")
+
+# calibre 查询专用池：与联网长任务隔离。若混用一池，20 个并发联网搜索打满时，
+# 阅读链路的毫秒级 calibre 查询（get_book_async）要排在网络任务后面，最坏等分钟级。
+calibre_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="mybooks-calibre")
+
+
+async def run_in_threadpool(func, *args, **kwargs):
+    """把联网等长阻塞任务丢到 blocking_pool 执行并返回结果。
+
+    calibre 数据库调用走 BaseHandler.run_calibre_async（calibre_pool），不与本池混跑。
+    注意：工作线程里绝不能触碰 handler 的 sqlite_session——SQLAlchemy scoped_session
+    是线程本地的，mybooks 自身的 sqlite 查询必须留在 ioloop 线程；本池里的 calibre
+    调用不持 db_lock，正确性由 calibre Cache 自带的读写锁保证。
+    """
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(blocking_pool, functools.partial(func, *args, **kwargs))
 
 
 # 匹配包含z-library的括号内容，例如 (z-library.sk, 1lib.sk, z-lib.sk)
