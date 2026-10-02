@@ -1297,6 +1297,7 @@ class BaseHandler(web.RequestHandler):
                 "folder": CONF.get("ENABLE_FOLDER_BROWSE", False),
                 "download_quota": CONF.get("ENABLE_DOWNLOAD_QUOTA", False),
                 "upload": CONF.get("ALLOW_GUEST_UPLOAD", False),
+                "server_import": CONF.get("ENABLE_SERVER_FILE_IMPORT", False),
                 "sync": CONF.get("ENABLE_DATA_SYNC", False),
                 "book_review": CONF.get("ENABLE_BOOK_REVIEW", True),
                 "book_recommend": CONF.get("ENABLE_BOOK_RECOMMEND_TO_OTHERS", True),

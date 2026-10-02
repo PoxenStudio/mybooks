@@ -52,6 +52,10 @@
   - footer 按钮随状态变化、需要多个按钮（如 `dialog_audiolist`）：用 `actions` 具名插槽整体接管 footer。
 - 例外（不套用以上规则，维持现状）：`book/_bookid.vue` 的 `dialog_audiolist`（footer 按钮随状态变化，用组件的 `actions` 插槽承接）、`AppHeader.vue` 的 `ai_enabled`（聊天式常驻界面，不是操作/确认对话框）。
 
+### 按钮
+
+- **不要使用 `outlined` 样式**（`<v-btn outlined>`）。次要操作用 `text`，主要操作用默认填充样式或 `color`。
+
 ### 其它 UI 规范
 
 （待补充）

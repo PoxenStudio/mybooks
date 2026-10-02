@@ -613,6 +613,7 @@
     "auto_importing": "Monitor importing folder and import automatically (only process new books, deleting files has no effect)",
     "update_category_with_folder_rename": "After monitoring the import directory, when renaming the first-level directory or moving files to a new directory, use the latest first-level directory name to update the category of the imported books",
     "remove_imported_file": "Remove original files after import (will be ineffective if monitoring import directory is enabled)",
+    "enable_server_file_import": "Enable server directory browsing and import (bind a directory under /data to browse and import, admin only)",
     "keep_upload_source_file": "Keep the staged source file after upload (deleted automatically after processing by default)",
     "batch_add_in_force": "Force add book during batch import (even if book information cannot be fetched from the internet)",
     "send_mail_for_new_books": "Send email notifications for new books (combined send after 15 mins)",
@@ -1288,6 +1289,14 @@
     "uploadSuccess": "Upload successful!"
   },
   "upload": {
+    "serverBrowse": "Server files",
+    "serverBrowseTitle": "Browse server files",
+    "serverBrowseHint": "Select books from server",
+    "serverBrowseName": "Name",
+    "serverBrowseModified": "Modified",
+    "serverBrowseEmpty": "No importable files in this directory",
+    "serverBrowseImport": "Import {count} file(s)",
+    "serverBrowseFailed": "Failed to read server directory",
     "title": "Upload Book",
     "close": "Close",
     "warning": "Due to server limitations, please do not upload books larger than  {max_size} .",

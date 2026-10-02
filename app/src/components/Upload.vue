@@ -50,13 +50,19 @@
                     counter
                     :label="$t('upload.selectFile')"
                 ></v-file-input>
+                <v-btn v-if="$store.state.user.is_admin && $store.state.sys.allow.server_import" small @click="openServerBrowser">
+                    <v-icon left small>mdi-server</v-icon>
+                    {{ $t('upload.serverBrowse') }}
+                </v-btn>
             </v-form>
         </AppDialog>
+
+        <ServerFileBrowser v-model="serverBrowserDialog" @imported="onServerImported" />
 
         <BatchImportDialog
             v-model="batchDialog"
             :import-id="batchImportId"
-            :file-count="ebooks.length"
+            :file-count="serverImportCount || ebooks.length"
         />
 
 
@@ -163,9 +169,10 @@
 
 <script>
 import BatchImportDialog from '~/components/BatchImportDialog.vue';
+import ServerFileBrowser from '~/components/ServerFileBrowser.vue';
 
 export default {
-    components: { BatchImportDialog },
+    components: { BatchImportDialog, ServerFileBrowser },
     data: () => ({
         loading: false,
         dialog: false,
@@ -173,6 +180,8 @@ export default {
         ebooks: [],
         batchDialog: false,
         batchImportId: null,
+        serverBrowserDialog: false,
+        serverImportCount: 0,
         // 添加实体书相关数据
         isbn_dialog: false,
         adding_book: false,
@@ -345,6 +354,17 @@ export default {
                 },
             ];
         },
+        openServerBrowser() {
+            this.dialog = false;
+            this.serverBrowserDialog = true;
+        },
+
+        onServerImported({ importId, count }) {
+            this.serverImportCount = count;
+            this.batchImportId = importId;
+            this.batchDialog = true;
+        },
+
         async do_upload() {
             // 未选择文件
             if (!this.ebooks || this.ebooks.length === 0) {
@@ -451,6 +471,7 @@ export default {
         // 多文件批量上传：暂存到服务器后触发扫描导入，弹出进度对话框轮询逐文件结果
         async do_batch_upload() {
             this.loading = true;
+            this.serverImportCount = 0;
             try {
                 const data = new FormData();
                 this.ebooks.forEach((file) => {

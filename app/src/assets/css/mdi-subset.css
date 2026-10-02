@@ -110,6 +110,10 @@
   content: "\F1752";
 }
 
+.mdi-arrow-down::before {
+  content: "\F0045";
+}
+
 .mdi-arrow-left-circle::before {
   content: "\F0CDD";
 }
@@ -554,6 +558,10 @@
   content: "\F024B";
 }
 
+.mdi-folder-arrow-up::before {
+  content: "\F19F0";
+}
+
 .mdi-folder-edit-outline::before {
   content: "\F0DCE";
 }
@@ -902,6 +910,10 @@
   content: "\F048A";
 }
 
+.mdi-server::before {
+  content: "\F048B";
+}
+
 .mdi-shape::before {
   content: "\F0831";
 }
@@ -1000,6 +1012,10 @@
 
 .mdi-swap-horizontal-bold::before {
   content: "\F0BCD";
+}
+
+.mdi-swap-vertical::before {
+  content: "\F04E2";
 }
 
 .mdi-sync::before {

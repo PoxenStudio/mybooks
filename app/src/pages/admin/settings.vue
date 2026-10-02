@@ -1409,6 +1409,12 @@ export default {
             type: "checkbox",
           },
           {
+            icon: "mdi-server",
+            key: "ENABLE_SERVER_FILE_IMPORT",
+            label: "settings.enable_server_file_import",
+            type: "checkbox",
+          },
+          {
             icon: "mdi-file-lock-outline",
             key: "KEEP_UPLOAD_SOURCE_FILE",
             label: "settings.keep_upload_source_file",

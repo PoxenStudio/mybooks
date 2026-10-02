@@ -3,6 +3,7 @@
 
 import logging
 import os
+import time
 import traceback
 from sqlalchemy import func
 
@@ -13,7 +14,7 @@ import tornado
 from webserver import loader
 from webserver.handlers.base import BaseHandler, auth, js, is_admin
 from webserver.models import ScanFile
-from webserver.services.scan_service import ScanService
+from webserver.services.scan_service import ScanService, SCAN_EXT as SERVER_SCAN_EXT
 from webserver.services.audios_import import AudioBookImporter
 
 CONF = loader.get_settings()
@@ -610,6 +611,106 @@ class ImportBulkDeleteStatus(BaseHandler):
         }
 
 
+SERVER_BROWSE_ROOT = "/data"
+SERVER_BROWSE_HIDDEN = ("reader", "sync", "toolbox", "books", "log")
+
+
+def _server_browse_root():
+    return os.path.realpath(SERVER_BROWSE_ROOT)
+
+
+def _is_hidden_entry(rel_path):
+    parts = [p for p in rel_path.split(os.sep) if p]
+    return bool(parts) and (parts[0] in SERVER_BROWSE_HIDDEN or any(p.startswith(".") for p in parts))
+
+
+def resolve_server_path(rel_path):
+    """把前端传来的相对路径解析为 /data 内的真实路径；越界、命中系统目录或隐藏项时返回 None"""
+    root = _server_browse_root()
+    rel = (rel_path or "").replace("\\", "/").strip("/")
+    target = os.path.realpath(os.path.join(root, rel))
+    if target != root and os.path.commonpath([root, target]) != root:
+        return None
+    real_rel = os.path.relpath(target, root)
+    if real_rel != "." and _is_hidden_entry(real_rel):
+        return None
+    if rel and _is_hidden_entry(rel.replace("/", os.sep)):
+        return None
+    return target
+
+
+class ServerFileList(BaseHandler):
+    @js
+    @is_admin
+    def get(self):
+        if not CONF.get("ENABLE_SERVER_FILE_IMPORT", False):
+            return {"err": "permission", "msg": _("未启用服务端目录浏览与导入")}
+        root = _server_browse_root()
+        target = resolve_server_path(self.get_argument("path", ""))
+        if target is None or not os.path.isdir(target):
+            return {"err": "params.error", "msg": _("目录不存在或无权访问")}
+
+        entries = []
+        try:
+            names = os.listdir(target)
+        except OSError as e:
+            logging.warning("[SERVER BROWSE] list %s failed: %s", target, e)
+            return {"err": "permission", "msg": _("无法读取该目录")}
+        for name in names:
+            full = os.path.join(target, name)
+            rel = os.path.relpath(os.path.realpath(full), root)
+            if rel.startswith("..") or _is_hidden_entry(rel) or name.startswith("."):
+                continue
+            try:
+                st = os.stat(full)
+            except OSError:
+                continue
+            is_dir = os.path.isdir(full)
+            if not is_dir:
+                if not os.path.isfile(full) or name.rsplit(".", 1)[-1].lower() not in SERVER_SCAN_EXT:
+                    continue
+            entries.append({"name": name, "is_dir": is_dir, "size": 0 if is_dir else st.st_size, "mtime": int(st.st_mtime)})
+
+        rel_path = os.path.relpath(target, root)
+        return {"err": "ok", "path": "" if rel_path == "." else rel_path.replace(os.sep, "/"), "entries": entries}
+
+
+class ServerFileImport(BaseHandler):
+    @js
+    @is_admin
+    def post(self):
+        if not CONF.get("ENABLE_SERVER_FILE_IMPORT", False):
+            return {"err": "permission", "msg": _("未启用服务端目录浏览与导入")}
+        if ScanService.is_importing():
+            return {"err": "importing", "msg": _("有其它扫描任务正在运行，请稍后再试")}
+        if ScanService.is_bulk_deleting():
+            return {"err": "importing", "msg": _("已有批量删除任务正在运行，请稍后再试")}
+        try:
+            req = tornado.escape.json_decode(self.request.body or b"{}")
+        except ValueError:
+            return {"err": "params.error", "msg": _("参数错误")}
+        paths = req.get("paths")
+        if not isinstance(paths, list) or not paths or len(paths) > 2000 or not all(isinstance(p, str) for p in paths):
+            return {"err": "params.error", "msg": _("参数错误")}
+
+        files = []
+        for rel in paths:
+            target = resolve_server_path(rel)
+            if target is None or not os.path.isfile(target):
+                continue
+            if target.rsplit(".", 1)[-1].lower() not in SERVER_SCAN_EXT:
+                continue
+            files.append(target)
+        if not files:
+            return {"err": "params.format.unsupported", "msg": _("未找到支持的书籍格式文件")}
+
+        from webserver.handlers.book import BookUploadBatch
+        import_id = int(time.time() * 1000)
+        BookUploadBatch._remember_owner(import_id, self.user_id())
+        ScanService().do_import(files, self.user_id(), import_id=import_id)
+        return {"err": "ok", "msg": _("已开始导入"), "import_id": import_id, "file_count": len(files)}
+
+
 def routes():
     return [
         (r"/api/admin/import/list", ImportList),
@@ -624,4 +725,6 @@ def routes():
         (r"/api/admin/audio_import/run", AudioImportRun),
         (r"/api/admin/audio_import/status", AudioImportStatus),
         (r"/api/admin/import/cancel", ImportCancel),
+        (r"/api/admin/server_files/list", ServerFileList),
+        (r"/api/admin/server_files/import", ServerFileImport),
     ]

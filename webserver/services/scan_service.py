@@ -811,7 +811,7 @@ class ScanService(AsyncService):
                 if CONF.get("IMPORT_CATEGORY_WITH_FOLDER", False):
                     rel = os.path.relpath(os.path.realpath(fpath), scan_upload_path)
                     first_dir = rel.split(os.sep, maxsplit=1)[0] if os.sep in rel else ""
-                    if first_dir and len(first_dir) < 10 and not any(c in first_dir for c in ',:;|/\\\'"\t '):
+                    if first_dir and first_dir != ".." and len(first_dir) < 10 and not any(c in first_dir for c in ',:;|/\\\'"\t '):
                         try:
                             self.db.new_api.set_field(CALIBRE_COLUMN_CATEGORY, {row.book_id: first_dir})
                             logging.info("[IMPORT] Set category '%s' for book_id=%d", first_dir, row.book_id)

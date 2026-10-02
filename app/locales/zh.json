@@ -878,6 +878,7 @@
     "auto_importing": "监控导入目录，自动进行导入 (只处理新增入库，删除文件没有影响。如果放入的文件不完整，会被忽略。尽量保留导入记录，避免重复处理)",
     "update_category_with_folder_rename": "监控导入目录后，重命名第一级目录或文件移动到新的目录时使用最新的一级目录名更新已导入书籍的类别",
     "remove_imported_file": "导入完成后删除源文件 (开启监控导入目录后将失效)",
+    "enable_server_file_import": "启用服务端目录浏览与导入（通过绑定目录到 /data 下进行浏览上传，仅管理员可用）",
     "keep_upload_source_file": "上传后保留暂存源文件（默认上传后自动删除）",
     "batch_add_in_force": "批量添加实体书时，强制添加无法识别的ISBN书籍（即使无法从互联网获取书籍信息，书名为[无效]:<ISBN>）",
     "send_mail_for_new_books": "在上传及导入后发送邮箱提醒(15分钟合并发送)",
@@ -1289,6 +1290,14 @@
     "uploadSuccess": "上传成功！"
   },
   "upload": {
+    "serverBrowse": "服务端文件",
+    "serverBrowseTitle": "浏览服务端文件",
+    "serverBrowseHint": "从服务端选择书籍",
+    "serverBrowseName": "名称",
+    "serverBrowseModified": "修改时间",
+    "serverBrowseEmpty": "该目录下没有可导入的文件",
+    "serverBrowseImport": "导入 {count} 个文件",
+    "serverBrowseFailed": "读取服务端目录失败",
     "title": "上传书籍",
     "close": "关闭",
     "warning": "受限于服务器能力，请勿上传超过 {max_size} 文件书籍。",

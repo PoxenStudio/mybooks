@@ -873,6 +873,7 @@
     "auto_importing": "監控匯入目錄，自動進行匯入 (只處理新增入庫，刪除檔案沒有影響。如果放入的檔案不完整，會被忽略。盡量保留匯入記錄，避免重複處理)",
     "update_category_with_folder_rename": "監控匯入目錄後，重新命名第一層目錄或檔案移動到新的目錄時使用最新的第一層目錄名更新已匯入書籍的類別",
     "remove_imported_file": "匯入完成後刪除原始檔案 (啟用監控匯入目錄後將失效)",
+    "enable_server_file_import": "啟用伺服器目錄瀏覽與匯入（透過綁定目錄到 /data 下進行瀏覽上傳，僅管理員可用）",
     "keep_upload_source_file": "上傳後保留暫存來源檔案（預設匯入完成後自動刪除）",
     "batch_add_in_force": "批次匯入時強制添加書籍（即使無法從網路獲取書籍資訊）",
     "send_mail_for_new_books": "在上傳及匯入後發送信箱提醒(15分鐘合併發送)",
@@ -1282,6 +1283,14 @@
     "uploadSuccess": "上傳成功！"
   },
   "upload": {
+    "serverBrowse": "伺服器檔案",
+    "serverBrowseTitle": "瀏覽伺服器檔案",
+    "serverBrowseHint": "從伺服器選擇書籍",
+    "serverBrowseName": "名稱",
+    "serverBrowseModified": "修改時間",
+    "serverBrowseEmpty": "該目錄下沒有可匯入的檔案",
+    "serverBrowseImport": "匯入 {count} 個檔案",
+    "serverBrowseFailed": "讀取伺服器目錄失敗",
     "title": "上傳書籍",
     "close": "關閉",
     "warning": "受限於伺服器能力，請勿上傳超過 {max_size} 檔案書籍。",
