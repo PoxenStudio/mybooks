@@ -349,6 +349,7 @@ class CollectImportedPathTest(ScanServiceBatchTestBase):
         row = ScanFile(path, "sha256:%d" % abs(hash(path)), import_id)
         row.status = ScanFile.IMPORTED
         self.session.add(row)
+        return row
 
     def test_keyset_pagination_matches_legacy_semantics(self):
         dir_a = os.path.join(self.tmpdir, "a")
@@ -382,18 +383,28 @@ class CollectImportedPathTest(ScanServiceBatchTestBase):
         self.assertEqual(last_import_id, 100)
         self.assertEqual(len(files_in_last_dir), 3)
 
-    def test_null_import_id_rows_still_contribute_dirs(self):
-        # NULL import_id 的存量行不参与 (import_id, id) 键集比较，单独兜底并入：
-        # 更新的非 NULL 批次确定 last 目录，NULL 行所在目录进 dirs（等价旧排序中的末尾段）
+    def test_true_null_import_id_rows_survive_keyset_pagination(self):
+        """真实 NULL import_id 存量行（裸 SQL 造，列默认值救不了）不进键集比较。
+
+        SQLite DESC 排序 NULL 恒在末尾 → NULL 行必然作为批末行产生 (None, id)
+        键；键集查询必须显式排除 NULL，否则下一轮 `import_id < None` 直接
+        ArgumentError 炸掉整个导入任务。构造器传 None 会被列默认值
+        default=0 覆盖，故用裸 SQL 强制 NULL。
+        """
         dir_a = os.path.join(self.tmpdir, "a")
         dir_c = os.path.join(self.tmpdir, "c")
         os.makedirs(dir_a)
         os.makedirs(dir_c)
         self._imported(os.path.join(dir_a, "x.epub"), import_id=100)
-        row = ScanFile(os.path.join(dir_c, "n.epub"), "sha256:n", None)
-        row.status = ScanFile.IMPORTED
-        self.session.add(row)
+        row = self._imported(os.path.join(dir_c, "n.epub"), import_id=7)
         self.session.commit()
+        self.session.execute(
+            text("UPDATE scanfiles SET import_id = NULL WHERE id = :i"), {"i": row.id}
+        )
+        self.session.commit()
+        self.session.expire_all()
+        self.assertIsNone(self.session.query(ScanFile.import_id).filter(ScanFile.id == row.id).scalar())
+
         dirs, files_in_last_dir, last_import_id = self.service._collect_imported_path(skip_last=False)
         self.assertEqual(last_import_id, 100)
         self.assertIn(os.path.realpath(dir_c), dirs)

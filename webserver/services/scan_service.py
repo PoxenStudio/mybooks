@@ -37,6 +37,7 @@ import os
 import logging
 import queue as _queue
 import shutil
+import sys
 import threading
 import time
 import traceback
@@ -543,10 +544,13 @@ class ScanService(AsyncService):
             absorb(skip_last_rows)
         else:
             # 全量模式：复合键 (import_id, id) 倒序游标分批，内存与已导入记录数解耦；
-            # "最近导入的目录"仍由最新一行确定，语义与旧的全量倒序遍历一致
+            # "最近导入的目录"仍由最新一行确定，语义与旧的全量倒序遍历一致。
+            # 键集查询必须排除 NULL import_id 存量行：SQLite DESC 排序 NULL 恒在
+            # 末尾，混进来会产生 (None, id) 键，下一轮 `import_id < None` 直接
+            # ArgumentError；NULL 行由循环后的兜底段并入
             last_key = None
             while True:
-                query = base_query
+                query = base_query.filter(ScanFile.import_id.isnot(None))
                 if last_key is not None:
                     key_import_id, key_row_id = last_key
                     query = query.filter(
@@ -1360,8 +1364,17 @@ class ScanService(AsyncService):
                     else:
                         ScanService.static_status_cnt[state] = 1
         finally:
-            self._put_work(work_queue, importing_thread, None)  # sentinel: Phase 1 done
+            # 先置完成位再投 sentinel：worker 死亡 + 队列满时 _put_work 会 raise，
+            # 顺序反了会让预取线程永远等不到完成位而泄漏
             prefetch_done.set()
+            try:
+                self._put_work(work_queue, importing_thread, None)  # sentinel: Phase 1 done
+            except Exception:
+                if sys.exc_info()[0] is not None:
+                    # try 体内已有原始异常在传播：保留它，投递失败只记日志
+                    logging.exception("[IMPORT] Failed to deliver Phase-1 sentinel")
+                else:
+                    raise
 
         logging.info("[IMPORT] Phase 1 done: %d files queued. Waiting for Phase 2...", queued_count)
 
