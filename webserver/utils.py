@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import asyncio
+import contextvars
 import datetime
 import functools
 import logging
@@ -19,6 +20,20 @@ blocking_pool = ThreadPoolExecutor(max_workers=20, thread_name_prefix="mybooks-b
 calibre_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="mybooks-calibre")
 
 
+def bind_threadpool_call(func, *args, **kwargs):
+    """把「提交时刻的 contextvars 快照」绑定到调用上，返回可直接交给 run_in_executor 的
+    无参 callable。
+
+    ``loop.run_in_executor()`` **不会**把 contextvars 带进工作线程。mybooks 里依赖它的有
+    ``webserver/i18n.py`` 的 ``_current_language``（请求语言）：不带过去的话，线程池里调
+    ``_()`` 会退回 ``DEFAULT_LANGUAGE``，返回给客户端的消息就变成另一种语言（站点语言设为
+    en 而系统默认 zh 时尤其明显）。每个调用都取一份新快照，用完即弃，不会污染池线程。
+    """
+    ctx = contextvars.copy_context()
+    call = functools.partial(func, *args, **kwargs)
+    return lambda: ctx.run(call)
+
+
 async def run_in_threadpool(func, *args, **kwargs):
     """把联网等长阻塞任务丢到 blocking_pool 执行并返回结果。
 
@@ -26,9 +41,12 @@ async def run_in_threadpool(func, *args, **kwargs):
     注意：工作线程里绝不能触碰 handler 的 sqlite_session——SQLAlchemy scoped_session
     是线程本地的，mybooks 自身的 sqlite 查询必须留在 ioloop 线程；本池里的 calibre
     调用不持 db_lock，正确性由 calibre Cache 自带的读写锁保证。
+    请求上下文（contextvars，含 i18n 请求语言）由 bind_threadpool_call 显式带进线程。
     """
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(blocking_pool, functools.partial(func, *args, **kwargs))
+    return await loop.run_in_executor(
+        blocking_pool, bind_threadpool_call(func, *args, **kwargs)
+    )
 
 
 # 匹配包含z-library的括号内容，例如 (z-library.sk, 1lib.sk, z-lib.sk)

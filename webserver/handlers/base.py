@@ -690,11 +690,14 @@ class BaseHandler(web.RequestHandler):
         ImageHandler 等线程化 calibre 访问共用的串行纪律（写者优先场景下避免读请求
         无序插队），不是正确性依赖。走 calibre_pool 专用池，与联网长任务隔离。
         func 内只允许 calibre 侧操作，绝不能触碰 sqlite_session（线程本地）。
+        请求上下文（contextvars，含 i18n 请求语言）经 bind_threadpool_call 显式带入。
         """
+
+        call = utils.bind_threadpool_call(func, *args, **kwargs)
 
         def _runner():
             with self.db_lock:
-                return func(*args, **kwargs)
+                return call()
 
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(utils.calibre_pool, _runner)

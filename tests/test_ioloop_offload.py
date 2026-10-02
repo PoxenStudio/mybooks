@@ -8,11 +8,14 @@ BaseHandler.run_calibre_async/get_book_async.
 连带冻住全站请求（Tornado 单线程事件循环）。这里用假 handler/假数据库验证：
 1. run_in_threadpool 确实把调用送到共享线程池并透传参数/结果/异常；
 2. get_book_async 的 calibre 段在工作线程执行、sqlite 合并段留在调用线程，
-   且与同步 get_book 的合并结果一致（拆分无行为回归）。
+   且与同步 get_book 的合并结果一致（拆分无行为回归）；
+3. 提交时刻的 contextvars（含 i18n 请求语言）随调用带进工作线程，
+   不会退回 DEFAULT_LANGUAGE。
 不启动真实服务，不依赖 calibre 安装。
 """
 
 import asyncio
+import contextvars
 import threading
 import unittest
 
@@ -185,6 +188,54 @@ class TestGetBookAsync(unittest.TestCase):
         sync_book = self.handler.get_book(7, fully=False, raise_exception=False)
         async_book = asyncio.run(self.handler.get_book_async(7, fully=False))
         self.assertEqual(sync_book, async_book)
+
+
+async def _language_in_both_contexts():
+    from webserver.i18n import get_language
+
+    return get_language(), await run_in_threadpool(get_language)
+
+
+class TestContextVarPropagation(unittest.TestCase):
+    """请求上下文必须跟进工作线程。
+
+    ``loop.run_in_executor()`` 不传 contextvars：i18n 的 ``_current_language``（请求语言）
+    若丢在 ioloop 上，线程池里调 ``_()`` 会退回 ``DEFAULT_LANGUAGE``，返回给客户端的消息
+    语言就错了。两条池路径（run_in_threadpool / run_calibre_async）都要带上快照。
+    """
+
+    def test_custom_contextvar_reaches_worker(self):
+        var = contextvars.ContextVar("ioloop_offload_probe", default="unset")
+        token = var.set("propagated")
+        try:
+            self.assertEqual(asyncio.run(run_in_threadpool(var.get)), "propagated")
+        finally:
+            var.reset(token)
+
+    def test_i18n_language_reaches_worker(self):
+        from webserver.i18n import _current_language, get_language, set_language
+
+        raw_before = _current_language.get()
+        # 取一个与当前生效语言不同的目标，确保断言真能失败（而非巧合相等）
+        target = "zh-TW" if get_language() != "zh-TW" else "en"
+        set_language(target)
+        try:
+            in_loop, in_worker = asyncio.run(_language_in_both_contexts())
+        finally:
+            _current_language.set(raw_before)
+        self.assertEqual(in_loop, target)
+        self.assertEqual(
+            in_worker, target, "线程池里丢了请求语言，_() 会退回 DEFAULT_LANGUAGE"
+        )
+
+    def test_calibre_worker_sees_contextvars(self):
+        var = contextvars.ContextVar("ioloop_offload_probe_calibre", default="unset")
+        token = var.set("propagated")
+        try:
+            handler = _make_handler([])
+            self.assertEqual(asyncio.run(handler.run_calibre_async(var.get)), "propagated")
+        finally:
+            var.reset(token)
 
 
 if __name__ == "__main__":
