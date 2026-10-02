@@ -3566,24 +3566,34 @@ user.appearance为外观设置（顶栏品牌色、侧栏图标配色、深浅�
   - `num` (int, 可选): 每页数量
   - `sort` (string, 可选): 排序字段
   - `desc` (string, 可选): 是否降序
-  - `filter` (string, 可选): 过滤条件（all/todo/done）
+  - `filter` (string, 可选): 页签过滤（all/todo/done）。`todo` = 全部扫描记录中非 IMPORTED，`done` = IMPORTED
 - **响应示例**：
 
 ```json
 {
   "err": "ok",
   "items": [...],
-  "total": 100,
+  "total": 65,
   "scanning": false,
   "importing": false,
   "summary": {
     "total": 100,
     "done": 50,
-    "todo": 50
+    "todo": 65,
+    "ready": 12,
+    "counts": {"new": 3, "ready": 12, "drop": 5, "exist": 30, "imported": 40, "invalid": 10}
   },
   "scan_dir": "/data/books/import"
 }
 ```
+
+- **计数口径**（两套，勿混用）：
+  - `summary.todo` / `summary.done`：**列表页签口径**，统计全部扫描记录（含有声书 `import_type=2`），
+    与 `filter=todo|done` 时返回的 `total` 恒等——页签上的数字就是该页签下列表的行数（上例 `total` = `todo` = 65）；
+  - `summary.total` / `summary.ready` / `summary.counts`：**电子书口径**（排除有声书记录），
+    与按状态的导入/批量删除动作一致，`counts` 供批量删除确认框显示条数，故 `total == sum(counts)`；
+  - 注意 `summary.total`（电子书）与 `summary.todo + summary.done`（全部记录）**不相等是正常的**，
+    两者相差有声书记录。
 
 ### 8.2 删除导入项
 
