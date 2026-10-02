@@ -275,6 +275,7 @@ class ImportRun(BaseHandler):
             filelist = req.get("filelist", "all")
             skip_last_dirs = req.get("skip_last_dirs", 0)
             force = req.get("force", False)
+            sole = bool(req.get("sole", False))
             if not filelist:
                 return {"err": "params.error", "msg": _("参数错误")}
             if ScanService.is_importing():
@@ -315,7 +316,7 @@ class ImportRun(BaseHandler):
                 if not query.count():
                     return {"err": "empty", "msg": _("没有可导入的文件")}
 
-            ScanService().do_import(paths, self.user_id(), skip_last_dirs, force, selector=selector)
+            ScanService().do_import(paths, self.user_id(), skip_last_dirs, force, selector=selector, sole=sole)
             return {"err": "ok", "msg": _("扫描成功")}
         except Exception as e:
             logging.error(f"ImportRun error: {e}")
