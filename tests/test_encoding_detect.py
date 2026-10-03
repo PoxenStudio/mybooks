@@ -606,5 +606,55 @@ class TestFixToUtf8Garbage(unittest.TestCase):
         self.assertTrue(r["garbage"])
 
 
+class TestTailTruncation(unittest.TestCase):
+    """尾部截断：analyze 只读 2MB 前缀，边界切断多字节字符不得误判垃圾（P0 回归）。
+
+    候选阶段有 _strict_decode_tail（≤8 字节尾部回退）兜底，而全量解码阶段
+    原本没有——2MB 边界切中字符时 analyze 会自相矛盾地报 garbage（fix 全量
+    却正常）。修复后两阶段口径一致。
+    """
+
+    def test_utf8_prefix_truncated_mid_char(self):
+        # 复刻 analyze()：2MB 前缀恰在 3 字节汉字中段截断
+        text = "人工智能的发展历程。" * 300000  # 30 字节/重复
+        data = text.encode("utf-8")[:2 * 1024 * 1024]
+        self.assertEqual(len(data) % 30, 2)  # 边界确实切在字符中间
+        r = detect_encoding(data)
+        self.assertFalse(r["garbage"], r["reasons"])
+        self.assertEqual(r["encoding"], "utf-8")
+        out, _ = fix_to_utf8(data)
+        self.assertEqual(out.decode("utf-8"), text[:len(data) // 3])
+
+    def test_gb18030_prefix_truncated_mid_char(self):
+        text = "人工智能的发展历程，包括机器学习与深度学习。" * 100000  # 44 字节/重复
+        data = text.encode("gb18030")[:2 * 1024 * 1024 - 1]  # 奇数边界切断 2 字节字符
+        self.assertEqual(len(data) % 2, 1)
+        r = detect_encoding(data)
+        self.assertFalse(r["garbage"], r["reasons"])
+        self.assertEqual(r["encoding"], "gb18030")
+        text_out, _ = decode_with_report(data)
+        self.assertEqual(text_out, text[:len(data) // 2])
+
+    def test_small_tail_truncation(self):
+        # 与文件大小无关：任何尾部切断的多字节流都不再误判垃圾
+        data = GBK_TEXT.encode("utf-8")[:-1]
+        r = detect_encoding(data)
+        self.assertFalse(r["garbage"], r["reasons"])
+        out, _ = fix_to_utf8(data)
+        self.assertEqual(out.decode("utf-8"), GBK_TEXT[:-1])
+
+    def test_tail_damage_beyond_fallback_still_rejected(self):
+        # 2MB 采样内干净、尾部 >8 字节垃圾：尾部回退救不了 → 维持垃圾判定
+        data = ("人工智能的发展历程。" * 70000).encode("utf-8") + bytes([0xFF] * 9)
+        r = detect_encoding(data)
+        self.assertTrue(r["garbage"], r["reasons"])
+
+    def test_tiny_fragment_still_rejected(self):
+        # 超短残片（截断的 emoji）：尾部回退产物 <8 字符时编码判定不可信，维持垃圾
+        data = b"\xf0\x9f\x98"
+        r = detect_encoding(data)
+        self.assertTrue(r["garbage"], r["reasons"])
+
+
 if __name__ == "__main__":
     unittest.main()

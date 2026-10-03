@@ -27,7 +27,10 @@ from webserver.toolbox.utils import epub_fixer_lib
 from webserver.toolbox.epub_split import EpubSplitTool
 from webserver.toolbox.author_clean_tool import AuthorCleanTool
 from webserver.toolbox.mimo_tts import MimoTTSTool
-from webserver.toolbox.text_replace import TextReplaceTool
+try:
+    from webserver.toolbox.text_replace import TextReplaceTool
+except ImportError:  # 未安装「正文查找替换」插件时优雅降级（相关路由调用会报错，其余不受影响）
+    TextReplaceTool = None
 from webserver.toolbox.txt_encoding_fixer import TxtEncodingFixerTool
 from webserver.toolbox.chinese_converter_tool import ChineseConverterTool, DIRECTIONS
 from webserver.toolbox.bookbarn_acceptor_tool import BookBarnAcceptorTool
@@ -1043,11 +1046,11 @@ class AdminTxtEncodingFixerAnalyze(BaseHandler):
     def post(self):
         data = tornado.escape.json_decode(self.request.body)
         book_id = data.get("book_id")
-        if not book_id:
-            return {"err": "params.missing", "msg": _("请提供书籍ID")}
+        if not isinstance(book_id, int) or book_id <= 0:
+            return {"err": "params.invalid", "msg": _("请提供有效的书籍ID")}
 
         try:
-            report = TxtEncodingFixerTool().analyze(int(book_id))
+            report = TxtEncodingFixerTool().analyze(book_id)
         except RuntimeError as err:
             return {"err": "txt_encoding_fixer.analyze_failed", "msg": str(err)}
 
@@ -1060,14 +1063,14 @@ class AdminTxtEncodingFixerFix(BaseHandler):
     def post(self):
         data = tornado.escape.json_decode(self.request.body)
         book_id = data.get("book_id")
-        if not book_id:
-            return {"err": "params.missing", "msg": _("请提供书籍ID")}
+        if not isinstance(book_id, int) or book_id <= 0:
+            return {"err": "params.invalid", "msg": _("请提供有效的书籍ID")}
 
         tool = TxtEncodingFixerTool()
         if tool.is_running():
             return {"err": "task.running", "msg": _("已有 TXT 编码修复任务正在执行，请稍后再试")}
 
-        tool.fix(int(book_id), self.user_id())
+        tool.fix(book_id, self.user_id())
         return {"err": "ok", "msg": _("TXT 编码修复任务已启动，注意查看消息通知中的处理结果")}
 
 

@@ -27,6 +27,7 @@ from webserver.toolbox.utils import encoding_detect
 
 PREVIEW_CHARS = 500  # analyze 报告中的修复预览长度
 ANALYZE_LIMIT = 2 * 1024 * 1024  # analyze 检测读取上限（编码检测取前缀即可，防大文件阻塞请求线程）
+WRITE_CHUNK_CHARS = 1 << 20  # fix 分块写出的字符数（压低「文本+编码字节」同时在内存的峰值）
 
 
 class TxtEncodingFixerTool(BaseTool):
@@ -74,6 +75,9 @@ class TxtEncodingFixerTool(BaseTool):
             data = f.read(ANALYZE_LIMIT)
 
         text, report = encoding_detect.decode_with_report(data)
+        if os.path.getsize(txt_path) > ANALYZE_LIMIT:
+            report["reasons"].append(
+                "文件超过 2MB，本次检测基于前 2MB 采样（执行修复时按全量解码）")
         report["preview"] = text[:PREVIEW_CHARS]
         report["book_id"] = book_id
         return report
@@ -109,7 +113,6 @@ class TxtEncodingFixerTool(BaseTool):
         try:
             task_id = self.create_task(progress_data={"status": "starting", "book_id": book_id})
             TxtEncodingFixerTool._last_task_id = task_id
-            progress_callback = self.make_progress_callback(task_id)
 
             # 与 analyze 共用同一校验入口（错误消息一致，且多含普通文件/可读性检查）
             try:
@@ -124,16 +127,19 @@ class TxtEncodingFixerTool(BaseTool):
             book_title = books[0].get("title", "Unknown") if books else "Unknown"
 
             self.update_task_progress(task_id, 10, {"status": "running", "stage": "reading", "book_id": book_id})
-            progress_callback(10)
 
             with open(txt_path, "rb") as f:
                 data = f.read()
 
             self.update_task_progress(task_id, 40, {"status": "running", "stage": "detecting", "book_id": book_id})
-            progress_callback(40)
 
             text, report = encoding_detect.decode_with_report(data)
             replacement_chars = int(report.get("replacement_chars") or 0)
+            if not text.strip():
+                error_message = _("TXT 文件为空或仅含空白字符，无需修复")
+                self.update_task_progress(task_id, 0, {"status": "failed", "stage": "failed", "book_id": book_id})
+                logging.error("[TxtEncodingFixerTool] Empty text for book_id=%d [uid:%d]", book_id, user_id)
+                return
             if report.get("irreversible"):
                 error_message = _("乱码链路不可逆（字节级信息已毁），无法自动修复")
                 self.update_task_progress(task_id, 0, {"status": "failed", "stage": "failed", "book_id": book_id})
@@ -151,12 +157,14 @@ class TxtEncodingFixerTool(BaseTool):
                 return
 
             self.update_task_progress(task_id, 70, {"status": "running", "stage": "saving", "book_id": book_id})
-            progress_callback(70)
+            del data  # 解码完成后原始字节不再需要，先释放（大文件内存峰值 ~2× 而非 3×）
 
             work_dir = self.get_work_dir(str(book_id))
             out_path = os.path.join(work_dir, "fixed_%d.txt" % int(time.time()))
             with open(out_path, "wb") as f:
-                f.write(text.encode("utf-8"))  # UTF-8 无 BOM
+                for i in range(0, len(text), WRITE_CHUNK_CHARS):
+                    # UTF-8 无 BOM；分块编码写出，避免整本再复制一份 bytes
+                    f.write(text[i:i + WRITE_CHUNK_CHARS].encode("utf-8"))
 
             new_book_id = book_utils.import_as_new_book(
                 self, book_id, out_path, _("（编码修复版）"), user_id,
