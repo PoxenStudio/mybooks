@@ -87,12 +87,17 @@ def import_as_new_book(
     mi.publisher = src_mi.publisher
     mi.series = src_mi.series
     mi.comments = src_mi.comments
+    if src_mi.pubdate:
+        mi.pubdate = src_mi.pubdate
+    if src_mi.identifiers:
+        mi.identifiers = dict(src_mi.identifiers)  # 含 ISBN 等全部外部标识
+    if src_mi.rating:
+        mi.rating = src_mi.rating
     if language:
         mi.languages = [language]
     elif src_mi.languages:
         mi.languages = list(src_mi.languages)
-    else:
-        mi.languages = ["zho"]
+    # 原书无语言时留空：猜测 "zho" 会把英文书误标中文，交给用户/刮削补全更诚实
     if cover_data:
         mi.cover_data = cover_data
 
