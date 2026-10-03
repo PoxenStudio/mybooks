@@ -1085,6 +1085,7 @@ class AdminTxtEncodingFixerProgress(BaseHandler):
             "progress": task.get("progress", 0),
             "book_id": progress_data.get("book_id", 0),
             "stage": progress_data.get("stage", ""),
+            "replacement_chars": progress_data.get("replacement_chars", 0),
         }
 
         if task.get("status") == BackgroundTask.STATUS_FAILED:
