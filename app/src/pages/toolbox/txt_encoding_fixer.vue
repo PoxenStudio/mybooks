@@ -298,8 +298,13 @@ export default {
           return;
         }
         const data = rsp.data || {};
-        // 轮询的是全局最近任务：不属于当前选中书的任务状态一律忽略，防止误报
+        // 轮询的是全局最近任务：不属于当前选中书的任务一律忽略；
+        // 若在其终态仍不匹配，说明本书任务已被后续任务覆盖，停止轮询（结果仍走消息通知）
         if (data.book_id && this.selected && data.book_id !== this.selected.id) {
+          if (rsp.err === 'task.failed' || data.status === 'completed') {
+            this.stopPolling();
+            this.processing = false;
+          }
           return;
         }
         this.progress = data.progress || 0;
