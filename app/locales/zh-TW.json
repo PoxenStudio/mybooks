@@ -2029,6 +2029,8 @@
     "stageCompleted": "已完成",
     "convertCompleted": "轉換完成！可在書庫中查看結果",
     "convertFailed": "轉換失敗",
+    "pollLost": "無法取得任務狀態（可能已被重置），請稍後重試",
+    "pollTimeout": "等待逾時，任務可能仍在背景執行，完成後會有訊息通知",
     "dirTW2SP": "台灣繁體（含台灣用詞）→ 簡體",
     "dirS2TWP": "簡體 → 台灣繁體（含台灣用詞）"
   },

@@ -2035,6 +2035,8 @@
     "stageCompleted": "Completed",
     "convertCompleted": "Conversion finished! Check your library for the result",
     "convertFailed": "Conversion failed",
+    "pollLost": "Could not fetch task status (it may have been reset). Please try again later",
+    "pollTimeout": "Timed out waiting for the task — it may still be running in the background and will notify you when done",
     "dirTW2SP": "Taiwan Traditional (with phrases) → Simplified",
     "dirS2TWP": "Simplified → Taiwan Traditional (with phrases)"
   },

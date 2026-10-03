@@ -60,7 +60,7 @@
 | `webserver/handlers/toolbox.py` | 修改 | +2 handler +2 路由 |
 | `app/src/pages/toolbox/chinese_converter.vue` | 新增 | Vuetify 2 页面 |
 | `app/locales/{en,zh,zh-TW}.json` | 修改 | +`chineseConverter` 块 |
-| `tests/test_converter_core.py` | 新增 | 16 个单元测试（standalone） |
+| `tests/test_converter_core.py` | 新增 | 27 个单元测试（standalone） |
 
 ## 三、接口
 
@@ -91,7 +91,7 @@
 ## 六、测试
 
 ```bash
-python tests/test_converter_core.py   # 20/20 passed
+python tests/test_converter_core.py   # 27/27 passed
 ```
 
 覆盖：8 方向转换（含 s2twp/tw2sp 台湾用词）、词组优先、标点保留、
@@ -103,9 +103,10 @@ TXT UTF-8/GB18030 探测、非法方向报错。
 
 - s2t 多候选取词典第一个候选（与原版 opencc-python 行为一致）
 - 台湾用词表（TWPhrases）随 OpenCC 上游数据版本更新，个别新词可能滞后
+- OPF/NCX 重新打包时 lxml 序列化会重写 XML 声明，standalone 属性不保留（仅影响外部 DTD 依赖声明，阅读器实际解码不受影响）
 
 ## 八、许可
 
 - 引擎与字典数据：Apache License 2.0（opencc-python / OpenCC，保留头部注释）
-- 增强词表：a5566123s 个人修正版（来源注明，见 LICENSE.md）
-- 工具集成代码：GPLv3
+- 增强词表：a5566123s 个人修正版（来源注明）
+- 工具集成代码：随 MyBooks 主仓分发（BSD 2-Clause，见仓库根 LICENSE）
