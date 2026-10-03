@@ -683,7 +683,7 @@ def _analyze(data):
         if recovered:
             text, rep = recovered
             rep["reasons"] = reasons + rep["reasons"]
-            return text, rep
+            return _finalize_report(text, rep)
 
     return _finalize_report(full_text, {
         "encoding": enc,

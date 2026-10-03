@@ -116,41 +116,41 @@ class TxtEncodingFixerTool(BaseTool):
                 txt_path = book_utils.get_book_file(self, book_id, "TXT")
             except RuntimeError as err:
                 error_message = str(err)
-                self.update_task_progress(task_id, 0, {"status": "failed", "stage": "failed"})
+                self.update_task_progress(task_id, 0, {"status": "failed", "stage": "failed", "book_id": book_id})
                 logging.error("[TxtEncodingFixerTool] Validate book_id=%d failed: %s", book_id, err)
                 return
 
             books = self.api.calibre.get_data_as_dict([book_id])
             book_title = books[0].get("title", "Unknown") if books else "Unknown"
 
-            self.update_task_progress(task_id, 10, {"status": "running", "stage": "reading"})
+            self.update_task_progress(task_id, 10, {"status": "running", "stage": "reading", "book_id": book_id})
             progress_callback(10)
 
             with open(txt_path, "rb") as f:
                 data = f.read()
 
-            self.update_task_progress(task_id, 40, {"status": "running", "stage": "detecting"})
+            self.update_task_progress(task_id, 40, {"status": "running", "stage": "detecting", "book_id": book_id})
             progress_callback(40)
 
             text, report = encoding_detect.decode_with_report(data)
             replacement_chars = int(report.get("replacement_chars") or 0)
             if report.get("irreversible"):
                 error_message = _("乱码链路不可逆（字节级信息已毁），无法自动修复")
-                self.update_task_progress(task_id, 0, {"status": "failed", "stage": "failed"})
+                self.update_task_progress(task_id, 0, {"status": "failed", "stage": "failed", "book_id": book_id})
                 logging.error("[TxtEncodingFixerTool] Irreversible encoding chain for book_id=%d", book_id)
                 return
             if report["unrecoverable"]:
                 error_message = _("文件疑似多重误读乱码（反转循环），无法自动修复")
-                self.update_task_progress(task_id, 0, {"status": "failed", "stage": "failed"})
+                self.update_task_progress(task_id, 0, {"status": "failed", "stage": "failed", "book_id": book_id})
                 logging.error("[TxtEncodingFixerTool] Unrecoverable mojibake cycle for book_id=%d", book_id)
                 return
             if report["garbage"]:
                 error_message = _("文件疑似二进制或混用编码，无法安全修复（编码：%s）") % report["encoding"]
-                self.update_task_progress(task_id, 0, {"status": "failed", "stage": "failed"})
+                self.update_task_progress(task_id, 0, {"status": "failed", "stage": "failed", "book_id": book_id})
                 logging.error("[TxtEncodingFixerTool] Garbage content for book_id=%d: %s", book_id, report["encoding"])
                 return
 
-            self.update_task_progress(task_id, 70, {"status": "running", "stage": "saving"})
+            self.update_task_progress(task_id, 70, {"status": "running", "stage": "saving", "book_id": book_id})
             progress_callback(70)
 
             work_dir = self.get_work_dir(str(book_id))
