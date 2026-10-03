@@ -1102,13 +1102,17 @@ class AdminTextReplacePreview(BaseHandler):
     def post(self):
         data = tornado.escape.json_decode(self.request.body)
         book_id = data.get("book_id")
-        pattern = (data.get("pattern") or "").strip()
+        # 查找内容不做 strip：首尾空格可能是用户刻意要替换的一部分
+        pattern = data.get("pattern") or ""
         replacement = data.get("replacement") or ""
         use_regex = bool(data.get("use_regex", False))
         fmt = (data.get("format") or "").strip().upper()
 
         if not book_id:
             return {"err": "params.missing", "msg": _("请提供书籍ID")}
+        # 空 pattern 与 run 同口径走 params.missing（而非 preview 的 regex_error 通道）
+        if not pattern:
+            return {"err": "params.missing", "msg": _("查找内容不能为空")}
 
         try:
             result = TextReplaceTool().preview(int(book_id), pattern, replacement, use_regex, fmt)
@@ -1124,7 +1128,8 @@ class AdminTextReplaceRun(BaseHandler):
     def post(self):
         data = tornado.escape.json_decode(self.request.body)
         book_id = data.get("book_id")
-        pattern = (data.get("pattern") or "").strip()
+        # 查找内容不做 strip：首尾空格可能是用户刻意要替换的一部分
+        pattern = data.get("pattern") or ""
         replacement = data.get("replacement") or ""
         use_regex = bool(data.get("use_regex", False))
         # P7：防超长串落库（前端 v-model counter 同限 30）

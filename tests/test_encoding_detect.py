@@ -7,7 +7,7 @@ import os
 import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "webserver", "toolbox"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "webserver", "toolbox", "utils"))
 
 from encoding_detect import (  # noqa: E402
     detect_encoding,
