@@ -1995,6 +1995,8 @@
     "fixBtn": "执行修复并生成新书",
     "fixStarted": "修复任务已启动，注意查看消息通知中的处理结果",
     "fixCompleted": "修复完成，已生成新书，原书保持不变",
+    "fixCompletedDamage": "修复完成，已生成新书，但输出含 {n} 处无法还原的替换符，建议检查新书内容",
+    "replacementAlert": "文本含 {n} 处无法还原的替换符（字节级信息已损坏），修复将在这些位置保留占位符。",
     "fixFailed": "修复失败",
     "progressReading": "正在读取文件…",
     "progressDetecting": "正在检测编码…",

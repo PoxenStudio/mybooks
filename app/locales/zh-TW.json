@@ -1988,6 +1988,8 @@
     "fixBtn": "執行修復並生成新書",
     "fixStarted": "修復任務已啟動，請查看訊息通知中的處理結果",
     "fixCompleted": "修復完成，已生成新書，原書保持不變",
+    "fixCompletedDamage": "修復完成，已生成新書，但輸出含 {n} 處無法還原的替換符，建議檢查新書內容",
+    "replacementAlert": "文本含 {n} 處無法還原的替換符（位元組級資訊已損壞），修復將在這些位置保留佔位符。",
     "fixFailed": "修復失敗",
     "progressReading": "正在讀取檔案…",
     "progressDetecting": "正在偵測編碼…",
