@@ -296,24 +296,28 @@ def test_xml_ncx_navlabel_converted():
 
 
 def test_html_gbk_entry_roundtrip():
-    # 非 UTF-8 条目（GB18030 繁体）：解码兜底 + 原编码写回，不产生替换符，
-    # XML 声明同步为实际写回编码（bs4 序列化会把声明改成 utf-8）
+    # 非 UTF-8 条目（GB18030 繁体）：解码兜底后统一以 UTF-8 回写——bs4 会把
+    # <meta charset> 重写为 utf-8，字节若按原编码写回会产生"声明 utf-8、
+    # 字节 gb18030"的矛盾（按声明解码即乱码），故声明与字节一并统一
     html = (
         '<?xml version="1.0" encoding="gbk"?>\n'
-        '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+        '<html xmlns="http://www.w3.org/1999/xhtml"><head>'
+        '<meta charset="gbk"/></head><body>'
         '<p>作為一個發展中的國家，電腦產業蓬勃發展。</p>'
         '</body></html>'
     ).encode("gb18030")
     oc = OpenCC("t2s")
     out = epub_converter._convert_html_doc(html, oc.convert)
-    text = out.decode("gb18030")
+    text = out.decode("utf-8")  # 回写必为 UTF-8
     assert "作为一个发展中的国家，电脑产业蓬勃发展。" in text
     assert "\ufffd" not in text
-    assert 'encoding="gb18030"' in text.split("?>")[0]
+    assert 'encoding="utf-8"' in text.split("?>")[0]
+    assert 'charset="utf-8"' in text
+    assert 'charset="gbk"' not in text
 
 
-def test_html_big5_entry_falls_back_utf8():
-    # BIG5 繁体条目繁→简后简体字 BIG5 无法表示：降级 UTF-8 并同步 XML 声明
+def test_html_big5_entry_utf8_writeback():
+    # BIG5 繁体条目：统一 UTF-8 回写，XML 声明与字节一致
     html = (
         '<?xml version="1.0" encoding="big5"?>\n'
         '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
@@ -324,8 +328,28 @@ def test_html_big5_entry_falls_back_utf8():
     out = epub_converter._convert_html_doc(html, oc.convert)
     text = out.decode("utf-8")
     assert "电脑产业蓬勃发展。" in text
-    assert 'encoding="utf-8"' in text
+    assert 'encoding="utf-8"' in text.split("?>")[0]
     assert "big5" not in text.split("?>")[0]
+
+
+def test_official_semantics_maxmatch():
+    # 对齐 OpenCC 官方 mmseg 逐位置贪心最长匹配。此前 Hopkins 树版是
+    # "全局最长（先长度后最左）"：位置靠后的长词条会抢走位置靠前的词组
+    # 命中（如"沈詩任筆"抢掉"陰沈→阴沉"、"一丝不挂"抢掉"周一→週一"）
+    assert OpenCC("s2t").convert("周一丝不挂") == "週一絲不掛"
+    assert OpenCC("t2s").convert("陰沈詩任筆") == "阴沉诗任笔"
+    assert OpenCC("t2s").convert("藉以免藉口") == "借以免借口"
+    # multiple mapping 取第一候选：单字"沈"保持（姓氏），词组"陰沈"才转
+    assert OpenCC("t2s").convert("沈") == "沈"
+
+
+def test_long_text_no_recursion():
+    # 无分隔符长段：此前树递归深度≈段长，约 2000 字即 RecursionError
+    # 导致整本书转换失败；线性匹配后不再受段长限制
+    oc = OpenCC("t2s")
+    out = oc.convert("發展國家" * 2500)
+    assert len(out) == 10000
+    assert "发展国家" in out
 
 
 def test_direction_label_new_directions():

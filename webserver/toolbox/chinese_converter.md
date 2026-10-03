@@ -11,11 +11,13 @@
 
 ### 1. 转换引擎（移植 opencc-python，Apache 2.0）
 - 移植 Hopkins1/TradSimpChinese（calibre 插件）内的 opencc-python 引擎：
-  StringTree **最长匹配**、多字典 group 链、词典缓存
+  多字典 group 链、词典缓存；匹配算法已对齐 OpenCC 官方 mmseg 语义
+  （逐位置贪心最长匹配、组内词典合并视图、线性无递归），替代原移植版的
+  "全局最长（先长度后最左）"树匹配
 - 支持 8 个 OpenCC 标准方向：`t2s / tw2s / tw2sp / s2t / s2tw / s2twp / t2tw / tw2t`
   （`s2twp` / `tw2sp` 为含台湾地区用词的简↔台繁方向，词表为官方 OpenCC
   `TWPhrases.txt` / `TWPhrasesRev.txt`，如 `軟件→軟體`、`滑鼠→鼠標`）
-- 字典与配置数据直接复制自 OpenCC（文件头保留 License 注释），**零新增依赖**
+- 字典与配置数据直接复制自 OpenCC（文件头保留 License 注释），**复用 mybooks 运行环境已有依赖（bs4 + lxml）**，不新增第三方包
   （引擎仅用标准库，HTML 解析复用 mybooks 已有的 beautifulsoup4）
 
 ### 2. 增强词表（a5566123s 个人修正版）
@@ -82,7 +84,7 @@
 
 ## 五、安全与健壮性
 
-- 无新增第三方依赖；转换在后台线程执行，不阻塞请求
+- 复用运行环境已有依赖（bs4 + lxml，OPF/NCX 的 XML 解析需 lxml）；转换在后台线程执行，不阻塞请求
 - 工作目录按 `get_work_dir(str(book_id))` 隔离（`/data/toolbox/chinese_converter/<md5>`）
 - 书籍 ID、方向、模式均在 handler 层校验；方向白名单校验
 - EPUB 重打包仅改写文本条目，二进制条目原样透传，降低损坏风险
@@ -104,6 +106,13 @@ TXT UTF-8/GB18030 探测、非法方向报错。
 - s2t 多候选取词典第一个候选（与原版 opencc-python 行为一致）
 - 台湾用词表（TWPhrases）随 OpenCC 上游数据版本更新，个别新词可能滞后
 - OPF/NCX 重新打包时 lxml 序列化会重写 XML 声明，standalone 属性不保留（仅影响外部 DTD 依赖声明，阅读器实际解码不受影响）
+- 库内元数据 comments 为 HTML 时按整串转换：标签与实体为 ASCII 不受影响，
+  但属性值中的 CJK（如中文文件名的 href/alt）会被转换，与 EPUB 正文
+  「仅转换文本节点」的策略不同（罕见场景，属已知取舍）
+- GB18030 与 BIG5 存在字节重叠区：真·GBK 编码的纯繁体 TXT 可能被判为
+  BIG5（检测启发式的已知边界，误判时按 BIG5 解码失败会回落 GB18030）
+- 非 UTF-8 的 HTML 条目转换后统一以 UTF-8 回写（同时重写 meta charset
+  与 XML 声明，保证声明与字节一致），原编码不再保留
 
 ## 八、许可
 

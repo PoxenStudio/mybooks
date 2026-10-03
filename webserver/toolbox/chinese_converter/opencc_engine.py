@@ -27,6 +27,11 @@
 # - 新增 extra_dicts 参数：将额外字典注入每个转换链 group 的“最前位置”，
 #   用于“增强词表”（a5566123s 个人修正版）优先于 OpenCC 默认词表匹配。
 # - 字典与配置数据来自 OpenCC (https://github.com/BYVoid/OpenCC)，Apache License 2.0。
+# - 匹配算法对齐 OpenCC 官方 mmseg 语义：逐位置贪心最长匹配（组内词典
+#   合并视图、键冲突按词典序先者胜），替代 Hopkins 版的“全局最长（先长度
+#   后最左）”树匹配——后者会让位置靠后的长词条抢走位置靠前的词组命中
+#   （如“陰沈詩任筆”中“沈詩任筆”抢掉“陰沈→阴沉”），且树递归深度随
+#   段长线性增长（无标点长段会 RecursionError）。
 ##########################################################
 
 import json
@@ -104,17 +109,40 @@ class OpenCC:
                 result.append(split_string_list[i])
         return "".join(result)
 
-    def _convert(self, string, dictionary=(), is_dict_group=False):
-        """按字典链转换；group 内命中即停，group 之间依次应用。"""
-        tree = StringTree(string)
-        for c_dict in dictionary:
-            if isinstance(c_dict, tuple):
-                tree.convert_tree(c_dict)
-                if not is_dict_group:
-                    tree = StringTree("".join(tree.inorder()))
+    def _convert(self, string, dictionary=()):
+        """按字典链转换：链上级联（上一本输出作为下一本输入）。
+
+        group 已在 :meth:`_add_dictionaries` 阶段合并为单个 ``(max_len,
+        map_dict)`` 视图（官方 mmseg 语义：组内词典合并匹配、键冲突按
+        词典序先者胜），因此链上元素均为单词典元组。
+        """
+        result = string
+        for entry in dictionary:
+            result = self._apply_dict(result, entry)
+        return result
+
+    @staticmethod
+    def _apply_dict(string, test_dict):
+        """官方 mmseg 逐位置贪心最长匹配：每个位置取该处能命中的最长
+        词条，命中跳到词尾，否则单字符原样保留。线性扫描、无递归。"""
+        max_len, map_dict = test_dict
+        out = []
+        i = 0
+        n = len(string)
+        while i < n:
+            for length in range(min(max_len, n - i), 0, -1):
+                value = map_dict.get(string[i:i + length])
+                if value is not None:
+                    if len(value.split(" ")) > 1:
+                        # multiple mapping, use the first one for now
+                        value = value.split(" ")[0]
+                    out.append(value)
+                    i += length
+                    break
             else:
-                tree = StringTree(self._convert("".join(tree.inorder()), c_dict, True))
-        return "".join(tree.inorder())
+                out.append(string[i])
+                i += 1
+        return "".join(out)
 
     def _init_dict(self):
         if self.conversion is None:
@@ -155,7 +183,17 @@ class OpenCC:
             if isinstance(item, list):
                 chain = []
                 self._add_dictionaries(item, chain)
-                chain_data.append(chain)
+                # 官方 mmseg 语义：组内词典合并为一个匹配视图，键冲突按
+                # 词典序先者胜（extra_dicts 注入在组前，故其键覆盖默认词表）
+                merged = {}
+                max_len = 1
+                for member_len, member_dict in chain:
+                    for key, value in member_dict.items():
+                        if key not in merged:
+                            merged[key] = value
+                    if member_len > max_len:
+                        max_len = member_len
+                chain_data.append((max_len, merged))
             else:
                 if isinstance(item, str) and os.path.isabs(item):
                     cache_key = item
@@ -204,52 +242,3 @@ class OpenCC:
         else:
             self._dict_init_done = False
             self.conversion = conversion
-
-
-class StringTree:
-    """转换过程使用的树结构：最长匹配 + 左右子树递归。"""
-
-    def __init__(self, string):
-        self.string = string
-        self.left = None
-        self.right = None
-        self.string_len = len(string)
-        self.matched = False
-
-    def convert_tree(self, test_dict):
-        """从左到右尝试最长匹配；命中后剩余部分递归处理。"""
-        if self.matched:
-            if self.left is not None:
-                self.left.convert_tree(test_dict)
-            if self.right is not None:
-                self.right.convert_tree(test_dict)
-        else:
-            test_len = min(self.string_len, test_dict[0])
-            while test_len != 0:
-                for i in range(0, self.string_len - test_len + 1):
-                    if self.string[i:i + test_len] in test_dict[1]:
-                        if i > 0:
-                            self.left = StringTree(self.string[:i])
-                            self.left.convert_tree(test_dict)
-                        if (i + test_len) < self.string_len:
-                            self.right = StringTree(self.string[i + test_len:])
-                            self.right.convert_tree(test_dict)
-                        value = test_dict[1][self.string[i:i + test_len]]
-                        if len(value.split(" ")) > 1:
-                            # multiple mapping, use the first one for now
-                            value = value.split(" ")[0]
-                        self.string = value
-                        self.string_len = len(self.string)
-                        self.matched = True
-                        return
-                test_len -= 1
-
-    def inorder(self):
-        """中序遍历：还原为字符串列表。"""
-        result = []
-        if self.left is not None:
-            result += self.left.inorder()
-        result.append(self.string)
-        if self.right is not None:
-            result += self.right.inorder()
-        return result

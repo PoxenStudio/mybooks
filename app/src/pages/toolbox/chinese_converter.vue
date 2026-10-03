@@ -186,7 +186,8 @@ export default {
     selected: null,
 
     direction: 't2s',
-    useA5: true,
+    // 增强词表默认关闭：含专名改写等激进词条，是否启用交由用户决定
+    useA5: false,
     convertTitle: true,
     mode: 'book',
     backup: false,
