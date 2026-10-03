@@ -15,7 +15,7 @@ EPUB 本质是 ZIP 容器，这里采用“条目级”处理保证无损：
   其余条目统一以 ``ZIP_DEFLATED`` 重新压缩（内容字节不变，原 STORED
   条目也会被重压；lxml 序列化会重写 XML 声明，``standalone`` 属性不保留）。
 
-TXT 为纯文本：自动探测编码（UTF-8 → GB18030 / BIG5 择优），转换后统一以
+TXT 为纯文本：自动探测编码（UTF-16/32 → UTF-8 → GB18030 / BIG5 择优），转换后统一以
 UTF-8 输出。
 
 转换逻辑通过 ``converter`` 可调用对象注入（``text -> text``），
@@ -216,9 +216,10 @@ def _write_epub(out_path, entries, mimetype_data):
 
 
 def convert_txt_file(src_path, out_path, converter):
-    """转换 TXT 文件；编码自动探测（UTF-8 → GB18030 / BIG5），输出统一 UTF-8。
+    """转换 TXT 文件；编码自动探测（UTF-16/32 / UTF-8 → GB18030 / BIG5 择优），
+    输出统一 UTF-8。
 
-    :return: 检测到的源编码（如 'utf-8' / 'gb18030' / 'big5'）
+    :return: 检测到的源编码（如 'utf-8' / 'gb18030' / 'big5' / 'utf-16'）
     """
     with open(src_path, "rb") as f:
         data = f.read()
@@ -241,14 +242,29 @@ _SIMPLE_ONLY_CHARS = frozenset(
 
 
 def detect_encoding(data: bytes) -> str:
-    """探测文本编码：UTF-8（含 BOM）→ GB18030 / BIG5 择一 → UTF-8 兜底。
+    """探测文本编码：UTF-16/32（BOM、\\x00 密度启发式）→ UTF-8（含 BOM）→
+    GB18030 / BIG5 择一 → UTF-8 兜底。
 
     GB18030 与 BIG5 都能严格解码大部分 CJK 字节流，先用高频简体独有字形
     判断是否为简体文本（简体 GBK），否则按 BIG5 解读（繁体书）；仅当
     BIG5 也无法严格解码时才回落到 GB18030。
     """
+    # UTF-32 BOM 必须先于 UTF-16 判断（UTF-32LE BOM 以 UTF-16LE BOM 开头）。
+    # 返回 BOM 感知编码名，decode 时自动处理字节序并剥离 BOM
+    if data.startswith((b"\xff\xfe\x00\x00", b"\x00\x00\xfe\xff")):
+        return "utf-32"
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return "utf-16"
     if data.startswith(b"\xef\xbb\xbf"):
         return "utf-8-sig"
+    # 无 BOM 的 UTF-16/32：ASCII 字符的高字节为 \x00（Windows 导出常见）。
+    # 文本类单字节编码（UTF-8/GB18030/BIG5）中 \x00 极罕见，高密度即可判；
+    # 必须先于 UTF-8 尝试——纯 ASCII 的 UTF-16 是合法 UTF-8（NUL），会被误判
+    head = data[:8192]
+    if head.count(b"\x00") > len(head) // 100:
+        even = head[0::2].count(b"\x00")
+        odd = head[1::2].count(b"\x00")
+        return "utf-16-be" if even > odd else "utf-16-le"
     try:
         data.decode("utf-8")
         return "utf-8"
