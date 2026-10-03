@@ -297,6 +297,23 @@ class TestRobustness(unittest.TestCase):
         text, _ = decode_with_report("你好世界".encode("utf-16-le"))
         self.assertEqual(text, "你好世界")
 
+    def test_utf16_32_with_bom_roundtrip(self):
+        # 带 BOM 的 UTF-16/32（Windows 导出常见）：四种组合都必须正确解码并
+        # 字节级还原——绝不允许回落 utf-8 replace 产出替换符（P1 回归钉）
+        src = GBK_TEXT + "The river flows quietly.\n"
+        for bom, enc in ((b"\xff\xfe", "utf-16-le"), (b"\xfe\xff", "utf-16-be"),
+                         (b"\xff\xfe\x00\x00", "utf-32-le"), (b"\x00\x00\xfe\xff", "utf-32-be")):
+            with self.subTest(enc=enc):
+                data = bom + src.encode(enc)
+                r = detect_encoding(data)
+                self.assertFalse(r["garbage"], r["reasons"])
+                self.assertEqual(r["confidence"], 1.0)
+                text, _ = decode_with_report(data)
+                self.assertEqual(text, src)
+                self.assertEqual(text.count("\ufffd"), 0)
+                out, _ = fix_to_utf8(data)
+                self.assertEqual(out.decode("utf-8"), src)
+
     def test_single_gbk_char_no_cycle(self):
         # 合法 GBK 单字：不得因反转 A↔B 摇摆被误判"多重误读循环"而拒绝
         r = detect_encoding("你".encode("gb18030"))
