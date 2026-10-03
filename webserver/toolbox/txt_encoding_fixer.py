@@ -54,7 +54,7 @@ class TxtEncodingFixerTool(BaseTool):
             "tool_id": "txt_encoding_fixer",
             "name": "TXT编码修复",
             "description": "检测 TXT 电子书编码（含乱码反转恢复），修复为 UTF-8 并另存为新书",
-            "revision": "0.1.0",
+            "revision": "0.1.1",
             "author": "黏菌",
             "publish_date": "2026-08-09",
         }
@@ -86,10 +86,16 @@ class TxtEncodingFixerTool(BaseTool):
         :param user_id: 操作用户 ID（记录日志 / 创建 Item 记录）。
         """
         if not TxtEncodingFixerTool._fix_lock.acquire(blocking=False):
+            # 正常情况下 AsyncService 对同一服务函数串行执行，此分支几乎不可达；
+            # 一旦命中必须让用户可见：建一个失败任务供前端轮询，而不是静默跳过
+            # 让用户拿着「任务已启动」的回执干等
             logging.warning(
-                "[TxtEncodingFixerTool] Already running, skipping fix for book_id=%d [uid:%d]",
+                "[TxtEncodingFixerTool] Already running, rejecting fix for book_id=%d [uid:%d]",
                 book_id, user_id,
             )
+            reject_task_id = self.create_task(progress_data={"status": "failed", "book_id": book_id})
+            TxtEncodingFixerTool._last_task_id = reject_task_id
+            self.complete_task(reject_task_id, error_message=_("已有 TXT 编码修复任务正在执行，请稍后再试"))
             return
 
         # create_task 等全部放入 try：若中途抛异常，finally 仍会释放锁，
@@ -97,34 +103,25 @@ class TxtEncodingFixerTool(BaseTool):
         task_id = None
         error_message = None
         book_title = "Unknown"
+        replacement_chars = 0
+        work_dir = None
 
         try:
             task_id = self.create_task(progress_data={"status": "starting", "book_id": book_id})
             TxtEncodingFixerTool._last_task_id = task_id
             progress_callback = self.make_progress_callback(task_id)
 
+            # 与 analyze 共用同一校验入口（错误消息一致，且多含普通文件/可读性检查）
+            try:
+                txt_path = book_utils.get_book_file(self, book_id, "TXT")
+            except RuntimeError as err:
+                error_message = str(err)
+                self.update_task_progress(task_id, 0, {"status": "failed", "stage": "failed"})
+                logging.error("[TxtEncodingFixerTool] Validate book_id=%d failed: %s", book_id, err)
+                return
+
             books = self.api.calibre.get_data_as_dict([book_id])
-            if not books:
-                error_message = _("书籍不存在：ID=%d") % book_id
-                self.update_task_progress(task_id, 0, {"status": "failed", "stage": "failed"})
-                logging.error("[TxtEncodingFixerTool] Book not found: ID=%d [uid:%d]", book_id, user_id)
-                return
-
-            book = books[0]
-            book_title = book.get("title", "Unknown")
-            fmts = [f.upper() for f in (book.get("available_formats") or [])]
-            if "TXT" not in fmts:
-                error_message = _("该书籍没有 TXT 格式，无法执行修复")
-                self.update_task_progress(task_id, 0, {"status": "failed", "stage": "failed"})
-                logging.error("[TxtEncodingFixerTool] No TXT format for book_id=%d [uid:%d]", book_id, user_id)
-                return
-
-            txt_path = self.api.calibre.format_abspath(book_id, "TXT")
-            if not txt_path or not os.path.exists(txt_path):
-                error_message = _("找不到 TXT 文件，可能已被移除")
-                self.update_task_progress(task_id, 0, {"status": "failed", "stage": "failed"})
-                logging.error("[TxtEncodingFixerTool] TXT file missing for book_id=%d [uid:%d]", book_id, user_id)
-                return
+            book_title = books[0].get("title", "Unknown") if books else "Unknown"
 
             self.update_task_progress(task_id, 10, {"status": "running", "stage": "reading"})
             progress_callback(10)
@@ -136,6 +133,7 @@ class TxtEncodingFixerTool(BaseTool):
             progress_callback(40)
 
             text, report = encoding_detect.decode_with_report(data)
+            replacement_chars = int(report.get("replacement_chars") or 0)
             if report.get("irreversible"):
                 error_message = _("乱码链路不可逆（字节级信息已毁），无法自动修复")
                 self.update_task_progress(task_id, 0, {"status": "failed", "stage": "failed"})
@@ -146,7 +144,7 @@ class TxtEncodingFixerTool(BaseTool):
                 self.update_task_progress(task_id, 0, {"status": "failed", "stage": "failed"})
                 logging.error("[TxtEncodingFixerTool] Unrecoverable mojibake cycle for book_id=%d", book_id)
                 return
-            if report["garbage"] and not report["mojibake"]:
+            if report["garbage"]:
                 error_message = _("文件疑似二进制或混用编码，无法安全修复（编码：%s）") % report["encoding"]
                 self.update_task_progress(task_id, 0, {"status": "failed", "stage": "failed"})
                 logging.error("[TxtEncodingFixerTool] Garbage content for book_id=%d: %s", book_id, report["encoding"])
@@ -167,12 +165,18 @@ class TxtEncodingFixerTool(BaseTool):
                 "[TxtEncodingFixerTool] Fixed book_id=%d (%s) -> new book_id=%d [uid:%d]",
                 book_id, report["encoding"], new_book_id, user_id,
             )
-            self.cleanup_work_dir(work_dir)
 
-            self.add_msg(
-                user_id, "success",
-                _(u"书籍 [%s] TXT 编码修复成功！已生成新书（编码：%s）") % (book_title, report["encoding"]),
-            )
+            if replacement_chars:
+                self.add_msg(
+                    user_id, "success",
+                    _(u"书籍 [%s] TXT 编码修复完成！已生成新书（编码：%s），但输出含 %d 处无法还原的替换符，建议检查新书内容")
+                    % (book_title, report["encoding"], replacement_chars),
+                )
+            else:
+                self.add_msg(
+                    user_id, "success",
+                    _(u"书籍 [%s] TXT 编码修复成功！已生成新书（编码：%s）") % (book_title, report["encoding"]),
+                )
 
         except Exception as err:
             error_message = str(err)
@@ -180,9 +184,17 @@ class TxtEncodingFixerTool(BaseTool):
             logging.error("[TxtEncodingFixerTool] Unexpected error for book_id=%d: %s", book_id, err)
             logging.error(traceback.format_exc())
         finally:
-            # create_task 失败时 task_id 为 None，跳过任务收尾（锁仍必须释放）
+            # 锁必须最先释放：complete_task / update_task_progress 走数据库可能抛异常，
+            # 若它们在 release 之前抛出，锁将永久泄漏（工具卡死到重启）
+            TxtEncodingFixerTool._fix_lock.release()
+            if work_dir is not None:
+                self.cleanup_work_dir(work_dir)
+            # create_task 失败时 task_id 为 None，跳过任务收尾
             if task_id is not None:
                 self.complete_task(task_id, error_message=error_message)
                 if error_message is None:
-                    self.update_task_progress(task_id, 100, {"status": "completed", "book_id": book_id})
-            TxtEncodingFixerTool._fix_lock.release()
+                    self.update_task_progress(
+                        task_id, 100,
+                        {"status": "completed", "book_id": book_id,
+                         "replacement_chars": replacement_chars},
+                    )
