@@ -1969,6 +1969,7 @@
     "runStarted": "Replacement task started. Check the message notifications for the result.",
     "runCompleted": "Replacement completed, new book created. The original book is unchanged.",
     "runFailed": "Replacement failed",
+    "taskLost": "The replacement task was lost (the service may have restarted). Progress polling stopped; please refresh and retry.",
     "defaultSuffix": "Replaced",
     "progressReading": "Reading file...",
     "progressProcessing": "Replacing...",

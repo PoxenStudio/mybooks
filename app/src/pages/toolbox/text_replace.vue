@@ -362,6 +362,11 @@ export default {
       try {
         const rsp = await this.$backend('/toolbox/text_replace/progress');
         if (rsp.err === 'task.not_found') {
+          // 任务已不在（如服务重启后内存任务丢失）：停止轮询，避免每 2s 空转
+          this.stopPolling();
+          this.processing = false;
+          this.resultMsg = this.$t('textReplace.taskLost');
+          this.resultType = 'error';
           return;
         }
         const data = rsp.data || {};

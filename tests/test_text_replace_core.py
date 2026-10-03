@@ -1,13 +1,18 @@
 # -*- coding: utf-8 -*-
 """text_replace 核心单元测试（standalone，stub 掉 webserver / calibre 依赖）。
 
-覆盖：替换规则编译、样本收集、TXT 原编码写回、EPUB 条目定位与规范重写。
+覆盖：替换规则编译、样本收集、TXT 原编码写回（含 UTF-16/32 BOM 字节序保持）、
+EPUB 条目定位与规范重写（单引号属性 / 百分号编码 href / 非良构 OPF 回退）、
+run() 命中 0 处不生成新书。
 
 运行：python -m unittest discover -s tests 或 python tests/test_text_replace_core.py
 """
+import codecs
 import io
 import os
+import shutil
 import sys
+import tempfile
 import types
 import unittest
 import zipfile
@@ -401,6 +406,151 @@ class TestEpubReplace(unittest.TestCase):
         out = raw.decode("utf-8")
         self.assertIn('encoding="utf-8"', out)
         self.assertNotIn("big5", out)
+
+    def test_encode_entry_utf16_bom(self):
+        # UTF-16 按检测出的字节序写回并保留 BOM（encode 本身不输出 BOM）
+        self.assertEqual(_encode_entry("文本", "utf-16-be"),
+                         codecs.BOM_UTF16_BE + "文本".encode("utf-16-be"))
+        self.assertEqual(_encode_entry("文本", "utf-16-le"),
+                         codecs.BOM_UTF16_LE + "文本".encode("utf-16-le"))
+
+
+class TestEpubEntryLocation(unittest.TestCase):
+    """OPF 解析健壮性：单引号属性 / 百分号编码 href / 非良构回退。"""
+
+    @staticmethod
+    def _entries(container_xml, opf_xml, ch1_name="OEBPS/ch1.xhtml"):
+        return {
+            "META-INF/container.xml": container_xml.encode("utf-8"),
+            "OEBPS/content.opf": opf_xml.encode("utf-8"),
+            ch1_name: CH1.encode("utf-8"),
+            "OEBPS/ch2.xhtml": CH2.encode("utf-8"),
+        }
+
+    def test_single_quoted_attributes(self):
+        # 单引号属性是合法 XML：旧正则（只认双引号）会静默命中 0 条
+        entries = self._entries(CONTAINER.replace('"', "'"), OPF.replace('"', "'"))
+        self.assertEqual(sorted(_find_text_entries(entries)),
+                         ["OEBPS/ch1.xhtml", "OEBPS/ch2.xhtml"])
+
+    def test_percent_encoded_href(self):
+        # href 是 URI：文件名含空格写作 %20，unquote 后才能对上 zip 条目名
+        opf = OPF.replace('href="ch1.xhtml"', 'href="ch%201.xhtml"')
+        entries = self._entries(CONTAINER, opf, ch1_name="OEBPS/ch 1.xhtml")
+        self.assertEqual(sorted(_find_text_entries(entries)),
+                         ["OEBPS/ch 1.xhtml", "OEBPS/ch2.xhtml"])
+
+    def test_malformed_opf_regex_fallback(self):
+        # 非良构 OPF（未声明实体 &nbsp;）ET 解析失败，回退正则仍能定位条目
+        opf_bad = OPF.replace("<manifest>", "<manifest>&nbsp;")
+        entries = self._entries(CONTAINER, opf_bad)
+        self.assertEqual(sorted(_find_text_entries(entries)),
+                         ["OEBPS/ch1.xhtml", "OEBPS/ch2.xhtml"])
+
+    def test_fragment_and_root_href(self):
+        # href 带 #fragment、以 / 开头，归一化后仍能定位
+        opf = OPF.replace('href="ch1.xhtml"', 'href="ch1.xhtml#p1"').replace(
+            'href="ch2.xhtml"', 'href="/OEBPS/ch2.xhtml"')
+        entries = self._entries(CONTAINER, opf)
+        self.assertEqual(sorted(_find_text_entries(entries)),
+                         ["OEBPS/ch1.xhtml", "OEBPS/ch2.xhtml"])
+
+
+class TestTxtUtf16WriteBack(unittest.TestCase):
+    """TXT：UTF-16/32 按 BOM 字节序写回（BOM 保持，不翻转字节序）。"""
+
+    def _roundtrip(self, bom, enc, label):
+        tmp = os.path.join(TESTS_DIR, "_tmp_utf16.txt")
+        out = os.path.join(TESTS_DIR, "_tmp_utf16_out.txt")
+        with io.open(tmp, "wb") as f:
+            f.write(bom + GBK_TEXT.encode(enc))
+        try:
+            tool = TextReplaceTool()
+            tool.api = FakeAPI(FakeDB("TXT", tmp))
+            apply_fn, _ = TextReplaceTool._compile("人工智能", "AI", False)
+            count = tool._replace_txt(0, apply_fn, out)
+            self.assertEqual(count, 1)
+            with io.open(out, "rb") as f:
+                data = f.read()
+            self.assertEqual(data[:len(bom)], bom, "%s 写回后 BOM 应保持" % label)
+            self.assertEqual(data[len(bom):].decode(enc),
+                             GBK_TEXT.replace("人工智能", "AI"))
+        finally:
+            os.remove(tmp)
+            if os.path.exists(out):
+                os.remove(out)
+
+    def test_utf16be_write_back(self):
+        # 回归：此前 encode("utf-16") 恒按本机字节序写回，BE 文件被翻转成 LE
+        self._roundtrip(codecs.BOM_UTF16_BE, "utf-16-be", "UTF-16BE")
+
+    def test_utf16le_write_back(self):
+        self._roundtrip(codecs.BOM_UTF16_LE, "utf-16-le", "UTF-16LE")
+
+    def test_utf32be_write_back(self):
+        self._roundtrip(codecs.BOM_UTF32_BE, "utf-32-be", "UTF-32BE")
+
+
+class TestRunZeroMatch(unittest.TestCase):
+    """run()：命中 0 处时不生成新书（此前会入库一本内容相同的副本）。"""
+
+    @staticmethod
+    def _make_tool(db, msgs):
+        work = tempfile.mkdtemp(dir=TESTS_DIR)
+        tool = TextReplaceTool()
+        tool.api = FakeAPI(db)
+        tool.create_task = lambda **kw: 1
+        tool.make_progress_callback = lambda tid: (lambda p: None)
+        tool.update_task_progress = lambda *a, **k: None
+        tool.complete_task = lambda *a, **k: None
+        tool.add_msg = lambda uid, kind, msg: msgs.append((kind, msg))
+        tool.get_work_dir = lambda x: work
+        tool.cleanup_work_dir = lambda p: shutil.rmtree(p, ignore_errors=True)
+        return tool, work
+
+    def _patch_import(self, fake):
+        """替换 text_replace 模块命名空间里的 book_utils.import_as_new_book。"""
+        book_utils_mod = TextReplaceTool.run.__globals__["book_utils"]
+        original = book_utils_mod.import_as_new_book
+        book_utils_mod.import_as_new_book = fake
+        self.addCleanup(setattr, book_utils_mod, "import_as_new_book", original)
+        return book_utils_mod
+
+    def test_zero_match_skips_import(self):
+        tmp = os.path.join(TESTS_DIR, "_tmp_zero.epub")
+        build_mini_epub(tmp)
+        try:
+            msgs = []
+            tool, work = self._make_tool(FakeDB("EPUB", tmp), msgs)
+            calls = []
+            self._patch_import(lambda *a, **kw: calls.append(a) or 999)
+            try:
+                tool.run(0, "不存在的查找串XYZ", "x", False, "后缀", 1)
+            finally:
+                shutil.rmtree(work, ignore_errors=True)
+            self.assertEqual(calls, [], "命中 0 处不应调用 import_as_new_book")
+            kinds = [k for k, _ in msgs]
+            self.assertIn("warning", kinds)
+            self.assertNotIn("success", kinds)
+        finally:
+            os.remove(tmp)
+
+    def test_match_imports_new_book(self):
+        tmp = os.path.join(TESTS_DIR, "_tmp_match.epub")
+        build_mini_epub(tmp)
+        try:
+            msgs = []
+            tool, work = self._make_tool(FakeDB("EPUB", tmp), msgs)
+            calls = []
+            self._patch_import(lambda *a, **kw: calls.append(a) or 999)
+            try:
+                tool.run(0, "机器学习", "AI", False, "后缀", 1)
+            finally:
+                shutil.rmtree(work, ignore_errors=True)
+            self.assertEqual(len(calls), 1)
+            self.assertIn(("success",), [(k,) for k, _ in msgs])
+        finally:
+            os.remove(tmp)
 
 
 if __name__ == "__main__":

@@ -33,13 +33,16 @@ except ImportError:  # chardet 缺失时退化为纯规则检测
 # 双字节序列（如 0x82A0 系平假名映射为冷僻汉字），若不入候选会被整体误译成
 # 中文；识别依赖脚本一致性加分（见 _script_bonus），中文文件不受影响。
 CANDIDATE_ENCODINGS = ("utf-8", "gb18030", "big5", "shift_jis", "euc_kr")
-# BOM → 编码
+# BOM → 编码。UTF-16/32 按字节序精确报告（而非 BOM 自适应的 "utf-16"/"utf-32"）：
+# 写回方（如 text_replace 原编码写回）需要据此还原 BOM 与字节序——用 "utf-16"
+# encode 恒为本机字节序，会把 UTF-16BE 文件翻转成 LE；decode 侧对 -le/-be 变体
+# 解出的行首 U+FEFF 由调用方 lstrip 剥离，行为不变。
 _BOM_TABLE = (
     (b"\xef\xbb\xbf", "utf-8-sig"),
-    (b"\xff\xfe\x00\x00", "utf-32"),
-    (b"\x00\x00\xfe\xff", "utf-32"),
-    (b"\xff\xfe", "utf-16"),
-    (b"\xfe\xff", "utf-16"),
+    (b"\xff\xfe\x00\x00", "utf-32-le"),
+    (b"\x00\x00\xfe\xff", "utf-32-be"),
+    (b"\xff\xfe", "utf-16-le"),
+    (b"\xfe\xff", "utf-16-be"),
 )
 
 # 乱码反转链：对解码文本尝试 ``text.encode(中间编码).decode(真实编码)`` 组合，
