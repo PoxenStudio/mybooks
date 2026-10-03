@@ -526,6 +526,25 @@ def _finalize_report(text, report):
     return text, report
 
 
+def _full_decode(data, enc, reasons):
+    """全量严格解码；尾部 ≤8 字节不完整时按采样阶段同款回退截断处理。
+
+    analyze 只读 2MB 前缀，边界恰好切断多字节字符是常态（UTF-8 三字节汉字
+    概率 2/3）——不得因调用方自身的截断把整本书误判为垃圾。真正的混用编码
+    （回退 ≤8 字节仍无法解码）原样抛出，由调用方维持垃圾判定；回退产物过短
+    （超短残片在任意双字节编码间几乎必然"可解"为错字，编码判定不可信）同样
+    抛出维持垃圾判定——与 MIN_MOJIBAKE_LEN 同一哲学。
+    """
+    try:
+        return data.decode(enc)
+    except UnicodeDecodeError:
+        text = _strict_decode_tail(data, enc)
+        if text is None or len(text) < MIN_MOJIBAKE_LEN:
+            raise
+        reasons.append("文件尾部存在不完整的多字节字符，已截断处理（≤8 字节）")
+        return text
+
+
 def _analyze(data):
     """内部完整分析：返回 (text, report)。
 
@@ -643,15 +662,18 @@ def _analyze(data):
         # 正常文本的候选环不构成拒绝理由（见下方 unrecoverable 门槛）
         reasons.append("检测到乱码反转候选循环（疑似多重误读，视可读性判定是否拒绝）")
 
-    # 5. 全量解码最终方案（仅一次）；反转链按序逐层重放（支持多层误读）
+    # 5. 全量解码最终方案（仅一次）；反转链按序逐层重放（支持多层误读）。
+    #    尾部 ≤8 字节不完整（analyze 的 2MB 前缀截断 / 文件尾损坏）走回退，
+    #    不因调用方自身的截断误判垃圾（P0：候选阶段有 _strict_decode_tail
+    #    兜底而全量阶段没有，2MB 边界切中字符时 analyze 会自相矛盾地报垃圾）
     try:
         if mojibake:
-            full_text = data.decode(cand_enc)
+            full_text = _full_decode(data, cand_enc, reasons)
             for mid, real in chain:
                 full_text = full_text.encode(mid).decode(real)
             score = _readability_score(full_text)
         else:
-            full_text = data.decode(enc)
+            full_text = _full_decode(data, enc, reasons)
             score = _readability_score(full_text)
     except (UnicodeDecodeError, UnicodeEncodeError):
         # 采样与全量不一致（尾部截断 / 混用编码 / 采样外字符无法往返）：
