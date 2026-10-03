@@ -240,6 +240,61 @@ def test_html_cdata_preserved():
     assert "MYBOOKS_CDATA" not in out
 
 
+def test_html_comment_preserved():
+    # 注释类节点（Comment / IE 条件注释 / Doctype）必须整体保留：bs4 中它们是
+    # NavigableString 的子类，会被 string=True 匹配到——replace_with 会剥掉
+    # 注释标记使内容变成可见正文（条件注释还会遭转义），且内容不应参与繁简转换
+    html = (
+        '<!DOCTYPE html><html><body>'
+        '<!-- 這是註釋請勿轉換 -->'
+        '<p>作為正文。</p>'
+        '<!--[if IE]>老舊瀏覽器<![endif]-->'
+        '</body></html>'
+    ).encode("utf-8")
+    oc = OpenCC("t2s")
+    out = epub_converter._convert_html_doc(html, oc.convert).decode("utf-8")
+    assert "<!-- 這是註釋請勿轉換 -->" in out
+    assert "<!--[if IE]>老舊瀏覽器<![endif]-->" in out
+    assert out.lstrip().startswith("<!DOCTYPE html>")
+    assert "作为正文。" in out
+
+
+def test_xml_identifier_not_converted():
+    # OPF 元数据文本参与转换（与库内元数据同步转换的产品语义一致），
+    # 但机器标识符 dc:identifier 除外——转换会破坏 UUID/来源引用与跨书去重
+    opf = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">'
+        '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+        '<dc:identifier id="uid">urn:uuid:繁體編號-123</dc:identifier>'
+        '<dc:title>繁體測試書</dc:title>'
+        '<dc:description>這是簡介，含繁體。</dc:description>'
+        '</metadata></package>'
+    ).encode("utf-8")
+    oc = OpenCC("t2s")
+    out = epub_converter._convert_xml_doc(opf, oc.convert).decode("utf-8")
+    assert "urn:uuid:繁體編號-123" in out
+    assert "繁体测试书" in out
+    assert "这是简介，含繁体。" in out
+
+
+def test_xml_ncx_navlabel_converted():
+    # NCX 的 docTitle/navLabel 文本参与转换；meta dtb:uid 是属性、不受影响
+    ncx = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">'
+        '<head><meta name="dtb:uid" content="urn:uuid:繁體編號-999"/></head>'
+        '<docTitle><text>繁體書名</text></docTitle>'
+        '<navMap><navPoint id="n1"><navLabel><text>第一章 繁體標題</text></navLabel>'
+        '<content src="ch1.xhtml"/></navPoint></navMap></ncx>'
+    ).encode("utf-8")
+    oc = OpenCC("t2s")
+    out = epub_converter._convert_xml_doc(ncx, oc.convert).decode("utf-8")
+    assert "繁体书名" in out
+    assert "第一章 繁体标题" in out
+    assert "urn:uuid:繁體編號-999" in out
+
+
 def test_html_gbk_entry_roundtrip():
     # 非 UTF-8 条目（GB18030 繁体）：解码兜底 + 原编码写回，不产生替换符，
     # XML 声明同步为实际写回编码（bs4 序列化会把声明改成 utf-8）

@@ -197,6 +197,9 @@ export default {
     resultMsg: '',
     resultType: 'success',
     pollTimer: null,
+    // 轮询护栏：连续未取到状态次数（not_found / 网络异常共享计数）与启动时刻
+    pollRetries: 0,
+    pollStartedAt: 0,
   }),
   computed: {
     directionOptions() {
@@ -267,7 +270,17 @@ export default {
     },
     startPolling() {
       this.stopPolling();
+      this.pollRetries = 0;
+      this.pollStartedAt = Date.now();
       this.pollTimer = setInterval(this.pollProgress, 2000);
+    },
+    // 护栏终止：结束轮询并给出提示，避免永远不动的进度条。
+    // 任务本身仍在后台线程执行，完成后会有右上角消息通知。
+    stopPollingWithError(msgKey) {
+      this.stopPolling();
+      this.processing = false;
+      this.resultMsg = this.$t(msgKey);
+      this.resultType = 'error';
     },
     stopPolling() {
       if (this.pollTimer) {
@@ -285,12 +298,22 @@ export default {
       return map[stage] || '';
     },
     async pollProgress() {
+      // 总时长兜底（约 60 分钟）：防止任务异常时前端无限轮询
+      if (Date.now() - this.pollStartedAt > 60 * 60 * 1000) {
+        this.stopPollingWithError('chineseConverter.pollTimeout');
+        return;
+      }
       try {
         const rsp = await this.$backend('/toolbox/chinese_converter/progress');
         if (rsp.err === 'task.not_found') {
-          // 任务尚未创建，继续等待
+          // 任务尚未创建，短时等待；连续多次（约 30s）仍找不到视为任务丢失
+          this.pollRetries += 1;
+          if (this.pollRetries > 15) {
+            this.stopPollingWithError('chineseConverter.pollLost');
+          }
           return;
         }
+        this.pollRetries = 0;
         const data = rsp.data || {};
         this.progress = data.progress || 0;
         this.progressMsg = this.stageText(data.stage);
@@ -311,7 +334,11 @@ export default {
           this.resultType = 'success';
         }
       } catch (e) {
-        // 网络抖动时忽略，继续轮询
+        // 网络抖动时忽略，继续轮询；连续多次失败（约 1 分钟）才终止
+        this.pollRetries += 1;
+        if (this.pollRetries > 30) {
+          this.stopPollingWithError('chineseConverter.pollTimeout');
+        }
       }
     },
     async startConvert() {
