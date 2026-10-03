@@ -409,6 +409,51 @@ def test_detect_encoding():
     assert epub_converter.detect_encoding("简体中文".encode("gb18030")) == "gb18030"
 
 
+def test_detect_encoding_utf16_32():
+    # UTF-16/32 BOM（Windows 导出 TXT 常见形态）：此前回落 utf-8 + replace
+    # 静默毁坏（gb18030 甚至能"成功"解码部分 UTF-16 字节产出更隐蔽的乱码）
+    assert epub_converter.detect_encoding(b"\xff\xfe" + "你好".encode("utf-16-le")) == "utf-16"
+    assert epub_converter.detect_encoding(b"\xfe\xff" + "你好".encode("utf-16-be")) == "utf-16"
+    # UTF-32LE BOM 以 UTF-16LE BOM 开头，必须先判 UTF-32
+    assert epub_converter.detect_encoding(b"\xff\xfe\x00\x00" + "你好".encode("utf-32-le")) == "utf-32"
+    assert epub_converter.detect_encoding(b"\x00\x00\xfe\xff" + "你好".encode("utf-32-be")) == "utf-32"
+    # 无 BOM：靠 \x00 密度启发式（ASCII 字符高字节），且须先于 UTF-8 尝试——
+    # 纯 ASCII 的 UTF-16 是合法 UTF-8（NUL）
+    assert epub_converter.detect_encoding("Hello".encode("utf-16-le")) == "utf-16-le"
+    assert epub_converter.detect_encoding("Hello 世界 123".encode("utf-16-le")) == "utf-16-le"
+    assert epub_converter.detect_encoding("Hello 世界 123".encode("utf-16-be")) == "utf-16-be"
+
+
+def test_txt_utf16_roundtrip():
+    # Windows 导出的 UTF-16（带 BOM）TXT：完整转换 + 输出统一 UTF-8
+    with tempfile.TemporaryDirectory() as tmp:
+        src = os.path.join(tmp, "in.txt")
+        out = os.path.join(tmp, "out.txt")
+        with open(src, "wb") as f:
+            f.write("作為一個發展中的國家。\n後台管理員的頭髮很長。".encode("utf-16"))
+        oc = OpenCC("t2s")
+        enc = epub_converter.convert_txt_file(src, out, oc.convert)
+        assert enc == "utf-16"
+        with open(out, encoding="utf-8") as f:
+            assert f.read() == "作为一个发展中的国家。\n后台管理员的头发很长。"
+
+
+def test_html_utf16_entry_writeback():
+    # EPUB 内 UTF-16 条目（OPF 规范允许 UTF-16）：解码转换后统一 UTF-8 回写
+    html = (
+        '<?xml version="1.0" encoding="UTF-16"?>\n'
+        '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+        '<p>電腦產業蓬勃發展。</p>'
+        '</body></html>'
+    ).encode("utf-16")
+    oc = OpenCC("t2s")
+    out = epub_converter._convert_html_doc(html, oc.convert)
+    text = out.decode("utf-8")
+    assert "电脑产业蓬勃发展。" in text
+    assert 'encoding="utf-8"' in text.split("?>")[0]
+    assert "\x00" not in text
+
+
 if __name__ == "__main__":
     failures = 0
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
