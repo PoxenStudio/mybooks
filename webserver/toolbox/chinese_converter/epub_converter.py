@@ -147,16 +147,20 @@ def _set_xml_encoding(text: str, enc: str) -> str:
 
 
 def _convert_html_doc(data, converter):
-    """转换单个 HTML/XHTML 文档的所有文本节点（CDATA 段原样保留）。"""
+    """转换单个 HTML/XHTML 文档的所有文本节点（CDATA 段原样保留）。
+
+    非 UTF-8 输入统一以 UTF-8 回写：bs4 序列化会把 <meta charset> 重写为
+    utf-8，若按原编码写回字节会产生“声明 utf-8、字节 gb18030”的矛盾
+    （按声明解码即乱码），故字节与声明一并统一为 UTF-8。"""
     if not data.strip():
         return data
-    text, enc = _decode_entry(data)
+    text, _enc = _decode_entry(data)
     text, cdata_parts = _extract_cdata(text)
     soup = BeautifulSoup(text, "html.parser")
     _convert_text_nodes(soup, converter)
     html = soup.encode("utf-8").decode("utf-8")
     html = _restore_cdata(html, cdata_parts)
-    return _encode_entry(html, enc)
+    return _set_xml_encoding(html, "utf-8").encode("utf-8")
 
 
 def _convert_xml_doc(data, converter):
