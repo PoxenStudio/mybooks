@@ -1996,6 +1996,8 @@
     "fixBtn": "Fix and save as new book",
     "fixStarted": "Fix task started. Check the message notifications for the result.",
     "fixCompleted": "Fix completed, new book created. The original book is unchanged.",
+    "fixCompletedDamage": "Fix completed and a new book was created, but the output contains {n} unrecoverable replacement characters. Please review the new book.",
+    "replacementAlert": "The text contains {n} unrecoverable replacement characters (byte-level information lost). The fix will keep placeholders at these positions.",
     "fixFailed": "Fix failed",
     "progressReading": "Reading file...",
     "progressDetecting": "Detecting encoding...",
