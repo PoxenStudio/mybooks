@@ -2032,6 +2032,8 @@
     "stageCompleted": "已完成",
     "convertCompleted": "转换完成！可在书库中查看结果",
     "convertFailed": "转换失败",
+    "pollLost": "未能获取任务状态（可能已被重置），请稍后重试",
+    "pollTimeout": "等待超时，任务可能仍在后台进行，完成后会有消息通知",
     "dirTW2SP": "台湾繁体（含台湾用词）→ 简体",
     "dirS2TWP": "简体 → 台湾繁体（含台湾用词）"
   },
