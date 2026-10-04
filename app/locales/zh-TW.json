@@ -1964,6 +1964,7 @@
     "runStarted": "替換任務已啟動，請查看訊息通知中的處理結果",
     "runCompleted": "替換完成，已生成新書，原書保持不變",
     "runFailed": "替換失敗",
+    "taskLost": "替換任務已遺失（服務可能已重啟），已停止進度查詢，請重新整理後再試。",
     "defaultSuffix": "正文替換版",
     "progressReading": "正在讀取檔案…",
     "progressProcessing": "正在替換…",

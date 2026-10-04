@@ -1971,6 +1971,7 @@
     "runStarted": "替换任务已启动，注意查看消息通知中的处理结果",
     "runCompleted": "替换完成，已生成新书，原书保持不变",
     "runFailed": "替换失败",
+    "taskLost": "替换任务已丢失（服务可能已重启），已停止进度查询，请刷新后重试。",
     "defaultSuffix": "正文替换版",
     "progressReading": "正在读取文件…",
     "progressProcessing": "正在替换…",

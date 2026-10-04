@@ -4,24 +4,30 @@
 对书籍的 TXT / EPUB 格式执行正文级字符串替换（支持普通文本与正则两种模式），
 以「生成新书」模式入库，原书零改动。
 
-- **TXT**：检测编码 → str 层替换 → 原编码写回 → 新书入库；
+- **TXT**：检测编码 → str 层替换 → 原编码写回（UTF-16/32 按 BOM 字节序并保留 BOM）
+  → 新书入库；
 - **EPUB**：zipfile 遍历（container → OPF → xhtml 条目）逐文件 str 替换，
   未修改条目字节原样保留，mimetype 置首且 ZIP_STORED 规范重写 → 新书入库。
+  container / OPF 按规范 XML 解析（ElementTree 优先、正则兜底），href 按 URI
+  unquote 后与 zip 条目名比对，单引号属性 / 百分号编码文件名均可定位。
 
 对外接口：
 - :meth:`preview` 同步返回匹配数 + 上下文样本 + 正则错误；
-- :meth:`run` 后台执行替换并入库。
+- :meth:`run` 后台执行替换并入库（未命中任何匹配时不生成新书）。
 
 @author: 黏菌, 2026
 """
+import codecs
 import logging
 import os
 import re
 import threading
 import time
 import traceback
+import xml.etree.ElementTree as ET
 import zipfile
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, Iterator, List, Optional, Tuple
+from urllib.parse import unquote
 
 from webserver.i18n import _
 from webserver.services import AsyncService
@@ -33,9 +39,12 @@ from webserver.toolbox.utils import encoding_detect
 
 # EPUB 文本条目（正文）的 media-type
 _TEXT_MEDIA_TYPES = ("application/xhtml+xml", "text/html")
+# 以下正则仅作非良构 OPF 的兜底解析（ET 解析失败时启用），属性单双引号都认；
+# 负向环视避免把 data-href 之类的属性误当 href
 _ITEM_RE = re.compile(r"<item\b[^>]*?>", re.IGNORECASE)
-_ITEM_HREF_RE = re.compile(r'href\s*=\s*"([^"]+)"', re.IGNORECASE)
-_ITEM_MT_RE = re.compile(r'media-type\s*=\s*"([^"]+)"', re.IGNORECASE)
+_ITEM_HREF_RE = re.compile(r"""(?<![\w-])href\s*=\s*(?:"([^"]+)"|'([^']+)')""", re.IGNORECASE)
+_ITEM_MT_RE = re.compile(r"""(?<![\w-])media-type\s*=\s*(?:"([^"]+)"|'([^']+)')""", re.IGNORECASE)
+_FULL_PATH_RE = re.compile(r"""(?<![\w-])full-path\s*=\s*(?:"([^"]+)"|'([^']+)')""", re.IGNORECASE)
 
 SAMPLE_CTX = 50   # 预览上下文（前后各 N 字符）
 SAMPLE_MAX = 5    # 预览样本条数上限
@@ -192,6 +201,9 @@ class TextReplaceTool(BaseTool):
             fmt: Optional[str] = None) -> None:
         """后台执行查找替换并生成新书。
 
+        未命中任何匹配（count == 0）时不生成新书——那只会得到一本与原书
+        内容完全相同的副本，改为直接结束任务并发出提示。
+
         :param book_id:    Calibre 书籍 ID。
         :param pattern:    查找内容（普通文本或正则表达式）。
         :param replacement: 替换内容。
@@ -255,6 +267,18 @@ class TextReplaceTool(BaseTool):
                 count = self._replace_txt(book_id, apply_fn, out_path)
             else:
                 count = self._replace_epub(book_id, apply_fn, out_path)
+
+            if count == 0:
+                self.cleanup_work_dir(work_dir)
+                logging.info(
+                    "[TextReplaceTool] No matches for %s book_id=%d, skip import [uid:%d]",
+                    fmt, book_id, user_id,
+                )
+                self.add_msg(
+                    user_id, "warning",
+                    _(u"书籍 [%s] 未找到任何匹配内容，未生成新书") % book_title,
+                )
+                return
 
             self.update_task_progress(task_id, 80, {"status": "running", "stage": "saving"})
             progress_callback(80)
@@ -419,12 +443,27 @@ def _decode_entry(data: bytes) -> Tuple[str, str]:
         return text, report["encoding"]
 
 
+# 按 BOM 字节序精确报告的编码写回时需补对应 BOM（utf-16-le 等编解码器
+# 本身不输出 BOM；用 "utf-16" 写回则恒为本机字节序，会把 UTF-16BE 翻转成 LE）
+_BOM_PREFIX = {
+    "utf-16-le": codecs.BOM_UTF16_LE,
+    "utf-16-be": codecs.BOM_UTF16_BE,
+    "utf-32-le": codecs.BOM_UTF32_LE,
+    "utf-32-be": codecs.BOM_UTF32_BE,
+}
+
+
 def _encode_entry(text: str, enc: str) -> bytes:
     """按原编码写回；原编码无法表示文本（如 BIG5 遇简体/生僻字）时降级 UTF-8，
-    并同步改写 XML 声明（如有），避免阅读器按声明解码出错。"""
+    并同步改写 XML 声明（如有），避免阅读器按声明解码出错。
+
+    UTF-16/32 按检测报告的精确字节序（utf-16-le / utf-16-be / …）写回并保留 BOM。
+    """
     if enc in ("utf-8", "utf-8-sig"):
         return text.encode(enc)
     try:
+        if enc in _BOM_PREFIX:
+            return _BOM_PREFIX[enc] + text.encode(enc)
         return text.encode(enc)
     except (UnicodeEncodeError, LookupError):
         return _set_xml_encoding(text, "utf-8").encode("utf-8")
@@ -438,53 +477,101 @@ def _set_xml_encoding(text: str, enc: str) -> str:
     )
 
 
+def _quoted_value(match: Optional["re.Match"]) -> Optional[str]:
+    """取单/双引号二选一分组捕获的属性值。"""
+    if match is None:
+        return None
+    return match.group(1) if match.group(1) is not None else match.group(2)
+
+
 def _find_text_entries(entries: dict) -> List[str]:
-    """按 container.xml → OPF 的 manifest 定位正文（xhtml/html）条目名。"""
+    """按 container.xml → OPF 的 manifest 定位正文（xhtml/html）条目名。
+
+    container 与 OPF 都是规范 XML，优先 ElementTree 解析（单/双引号属性、
+    命名空间、属性顺序均不影响），含未声明实体等非良构形态时回退正则。
+    manifest href 是 URI（RFC 3986）：文件名含空格等字符时写作 %20，
+    与 zip 内真实条目名比对前先 unquote；大小写不敏感兜底。
+    """
     container = entries.get("META-INF/container.xml")
     if not container:
         return []
     opf_path = _opf_path_from_container(container.decode("utf-8", errors="replace"))
-    if not opf_path or opf_path not in entries:
+    if not opf_path:
         return []
-    opf_text = _decode_entry(entries[opf_path])[0]
+    opf_path = _resolve_href(unquote(opf_path), "")
     # 大小写不敏感查找（zip 条目名大小写与 manifest 引用可能不一致）
     lower_map = {k.lower(): k for k in entries}
+    opf_entry = opf_path if opf_path in entries else lower_map.get(opf_path.lower())
+    if opf_entry is None:
+        return []
+    opf_text = _decode_entry(entries[opf_entry])[0]
+    base_dir = opf_entry.rsplit("/", 1)[0] if "/" in opf_entry else ""
     names = []
-    base_dir = opf_path.rsplit("/", 1)[0] if "/" in opf_path else ""
-    for tag in _ITEM_RE.findall(opf_text):
-        mt = _ITEM_MT_RE.search(tag)
-        href = _ITEM_HREF_RE.search(tag)
-        if not mt or not href:
+    for href, mt in _iter_manifest_items(opf_text):
+        if not href or (mt or "").lower() not in _TEXT_MEDIA_TYPES:
             continue
-        if mt.group(1).lower() not in _TEXT_MEDIA_TYPES:
-            continue
-        # 去掉 fragment / query（如 ch1.xhtml#p1）
-        href = href.group(1).split("#", 1)[0].split("?", 1)[0]
-        if href.startswith("/"):
-            href = href.lstrip("/")
-        elif base_dir:
-            href = "%s/%s" % (base_dir, href)
-        # 归一化路径（去 ./ 与 ../）
-        parts = []
-        for seg in href.replace("\\", "/").split("/"):
-            if seg in ("", "."):
-                continue
-            if seg == "..":
-                if parts:
-                    parts.pop()
-                continue
-            parts.append(seg)
-        name = "/".join(parts)
+        name = _resolve_href(unquote(href), base_dir)
         real = lower_map.get(name.lower())
-        if real:
+        if real and real not in names:
             names.append(real)
     return names
 
 
+def _iter_manifest_items(opf_text: str) -> Iterator[Tuple[Optional[str], Optional[str]]]:
+    """遍历 OPF manifest，逐项 yield (href, media-type)。
+
+    ElementTree 解析成功即信任其结构（含「解析正常但无 manifest」的形态）；
+    仅在解析失败（未声明实体等）时回退正则，正则对单/双引号属性都能识别。
+    """
+    try:
+        root = ET.fromstring(opf_text)
+    except ET.ParseError:
+        for tag in _ITEM_RE.findall(opf_text):
+            mh = _ITEM_HREF_RE.search(tag)
+            mm = _ITEM_MT_RE.search(tag)
+            yield _quoted_value(mh), _quoted_value(mm)
+        return
+    for el in root.iter():
+        if el.tag.rsplit("}", 1)[-1] != "manifest":
+            continue
+        for child in el:
+            if child.tag.rsplit("}", 1)[-1] == "item":
+                yield child.get("href"), child.get("media-type")
+
+
+def _resolve_href(href: str, base_dir: str) -> str:
+    """href → zip 条目名：剥 fragment/query、剥根斜杠、拼 base_dir、
+    归一化 ./ 与 ../、反斜杠统一为正斜杠。"""
+    href = href.split("#", 1)[0].split("?", 1)[0]
+    if href.startswith("/"):
+        href = href.lstrip("/")
+    elif base_dir:
+        href = "%s/%s" % (base_dir, href)
+    parts = []
+    for seg in href.replace("\\", "/").split("/"):
+        if seg in ("", "."):
+            continue
+        if seg == "..":
+            if parts:
+                parts.pop()
+            continue
+        parts.append(seg)
+    return "/".join(parts)
+
+
 def _opf_path_from_container(container_text: str) -> Optional[str]:
-    """从 container.xml 提取 OPF 路径（rootfile full-path）。"""
-    m = re.search(r'full-path\s*=\s*"([^"]+)"', container_text, re.IGNORECASE)
-    return m.group(1) if m else None
+    """从 container.xml 提取 OPF 路径（首个 rootfile 的 full-path）。
+
+    ElementTree 优先；非良构时回退正则（单/双引号都认）。
+    """
+    try:
+        root = ET.fromstring(container_text)
+    except ET.ParseError:
+        return _quoted_value(_FULL_PATH_RE.search(container_text))
+    for el in root.iter():
+        if el.tag.rsplit("}", 1)[-1] == "rootfile" and el.get("full-path"):
+            return el.get("full-path")
+    return None
 
 
 def _write_zip(entries: dict, out_path: str) -> None:
