@@ -319,16 +319,17 @@ class BookAIFill(BaseHandler):
     """使用 AI 同步更新单本书的分类、标签、简介和作者介绍"""
     @js
     @auth
-    def post(self, id):
+    async def post(self, id):
         book_id = int(id)
-        book = self.get_book(book_id, raise_exception=False)
+        book = await self.get_book_async(book_id, raise_exception=False)
         if not book:
             return {"err": "params.book.invalid", "msg": _("书籍不存在")}
 
         if not self.is_admin() and not self.is_book_owner(book_id, self.user_id()):
             return {"err": "user.no_permission", "msg": _("无权限")}
 
-        result = AIFillInfoService().fill_one(book_id, force=True)
+        # fill_one 内含同步 AI 请求与信息源联网搜索（可达分钟级），下放线程池避免冻住 ioloop
+        result = await utils.run_in_threadpool(AIFillInfoService().fill_one, book_id, force=True)
         status = result.get("status", "fail")
         if status == "ok":
             return {
@@ -2510,7 +2511,7 @@ class HotBook(ListHandler):
 class BookAddByISBN(BaseHandler):
     @js
     @auth
-    def post(self):
+    async def post(self):
         if not self.current_user.can_upload():
             return {"err": "permission", "msg": _("无权操作")}
         data = tornado.escape.json_decode(self.request.body)
@@ -2555,8 +2556,9 @@ class BookAddByISBN(BaseHandler):
 
         logging.info("Adding new book by ISBN: %s" % isbn)
         try:
-            # 通过 BookSearch 查询ISBN的图书信息（依次尝试豆瓣、新华书店兜底）
-            book_data = BookSearch.find_physical_book_by_isbn(isbn)
+            # 通过 BookSearch 查询ISBN的图书信息（依次尝试豆瓣、新华书店兜底）。
+            # 每个信息源超时 10s，同步等待会冻住 ioloop，下放线程池执行
+            book_data = await utils.run_in_threadpool(BookSearch.find_physical_book_by_isbn, isbn)
             if not book_data:
                 return {"err": "book.notfound", "msg": _("未找到该ISBN号对应的图书")}
 
@@ -3389,7 +3391,7 @@ class BookUploadBatchCancel(BaseHandler):
 class BookRead(BaseHandler):
     READABLE_FORMATS = ("epub", "pdf", "mobi", "azw3", "azw", "txt", "djvu", "cbz", "fb2")
 
-    def get(self, bid):
+    async def get(self, bid):
         if not CONF["ALLOW_GUEST_READ"] and not self.current_user:
             return self.redirect("/login")
 
@@ -3400,9 +3402,9 @@ class BookRead(BaseHandler):
             else:
                 raise web.HTTPError(403, reason=_("无权在线阅读"))
 
-        book = self.get_book(bid, fully=True, raise_exception=False)
+        book = await self.get_book_async(bid, fully=True, raise_exception=False)
         if not book:
-            return {"err": "params.book.invalid", "msg": _("书籍已不存在")}
+            raise web.HTTPError(404, reason=_("书籍已不存在"))
         book_id = book["id"]
 
         # 若指定了格式且书籍存在该格式，优先按指定格式处理
@@ -3539,7 +3541,7 @@ class BookRead(BaseHandler):
         return None
 
     @js
-    def post(self, bid):
+    async def post(self, bid):
         """检测目标阅读格式是否就绪，如未就绪则按需启动转换任务"""
         if not CONF["ALLOW_GUEST_READ"] and not self.current_user:
             return {"err": "user.need_login", "msg": _("请先登录")}
@@ -3551,7 +3553,7 @@ class BookRead(BaseHandler):
             else:
                 return {"err": "user.no_permission", "msg": _("无权在线阅读")}
 
-        book = self.get_book(bid, raise_exception=False)
+        book = await self.get_book_async(bid, raise_exception=False)
         if not book:
             return {"err": "params.book.invalid", "msg": _("书籍已不存在")}
 
@@ -3589,7 +3591,7 @@ class BookFilePath(BaseHandler):
     STREAMABLE_FORMATS = ("epub", "pdf", "fb2")
 
     @js
-    def get(self, bid):
+    async def get(self, bid):
         if not CONF["ALLOW_GUEST_READ"] and not self.current_user:
             return {"err": "user.need_login", "msg": _("请先登录")}
 
@@ -3600,7 +3602,7 @@ class BookFilePath(BaseHandler):
             else:
                 return {"err": "user.no_permission", "msg": _("无权在线阅读")}
 
-        book = self.get_book(bid, raise_exception=False)
+        book = await self.get_book_async(bid, raise_exception=False)
         if not book:
             return {"err": "params.book.invalid", "msg": _("书籍已不存在")}
 

@@ -681,11 +681,50 @@ class BaseHandler(web.RequestHandler):
         del vals["self"]
         self.write(self.render_string(template, **vals))
 
+    async def run_calibre_async(self, func, *args, **kwargs):
+        """在工作线程执行阻塞的 calibre 调用（get_data_as_dict / get_metadata 等）。
+
+        导入、刮削等后台任务持有 calibre 独占写锁期间，ioloop 线程上的同步 calibre
+        调用会排队等锁，连带冻住全站请求（包括不碰 calibre 的 /api/user/info）。
+        跨线程正确性由 calibre Cache 自带的读写锁保证；db_lock 是与 static_files.
+        ImageHandler 等线程化 calibre 访问共用的串行纪律（写者优先场景下避免读请求
+        无序插队），不是正确性依赖。走 calibre_pool 专用池，与联网长任务隔离。
+        func 内只允许 calibre 侧操作，绝不能触碰 sqlite_session（线程本地）。
+        请求上下文（contextvars，含 i18n 请求语言）经 bind_threadpool_call 显式带入。
+        """
+
+        call = utils.bind_threadpool_call(func, *args, **kwargs)
+
+        def _runner():
+            with self.db_lock:
+                return call()
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(utils.calibre_pool, _runner)
+
     def get_book(self, book_id, fully=False, raise_exception=True):
         if fully:
             books = self.get_books(ids=[int(book_id)])
         else:
             books = self.get_books_simple(ids=[int(book_id)])
+        if not books:
+            if raise_exception:
+                self.write({"err": "not_found", "msg": _("抱歉，这本书不存在")})
+                self.set_status(200)
+                raise web.Finish()
+            else:
+                return None
+        return books[0]
+
+    async def get_book_async(self, book_id, fully=False, raise_exception=True):
+        """get_book 的非阻塞版：calibre 查询放工作线程，sqlite/Item 合并留在 ioloop。"""
+        _ts = time.time()
+        book_id = int(book_id)
+        books = await self.run_calibre_async(self.calibre_db.get_data_as_dict, ids=[book_id])
+        if fully:
+            books = self._merge_books_full(books, _ts)
+        else:
+            books = self._merge_books_simple(books, _ts)
         if not books:
             if raise_exception:
                 self.write({"err": "not_found", "msg": _("抱歉，这本书不存在")})
@@ -705,10 +744,7 @@ class BaseHandler(web.RequestHandler):
         query = query.filter(Item.collector_id == user_id)
         return query.count() > 0
 
-    def get_books(self, *args, **kwargs):
-        _ts = time.time()
-        books = self.calibre_db.get_data_as_dict(*args, **kwargs)
-
+    def _build_custom_column_map(self):
         # The custom column is returned as int key, e.g. { 1: 'value' }
         # We need to convert it to { '#field': 'value' }
         if not hasattr(self, "_custom_column_map"):
@@ -716,6 +752,22 @@ class BaseHandler(web.RequestHandler):
             for key, meta in self.calibre_db.field_metadata.items():
                 if meta["is_custom"]:
                     self._custom_column_map[meta["colnum"]] = key
+
+    def get_books(self, *args, **kwargs):
+        _ts = time.time()
+        books = self.calibre_db.get_data_as_dict(*args, **kwargs)
+        logging.debug(
+            "[%5d ms] select books from library (count = %d)"
+            % (int(1000 * (time.time() - _ts)), len(books))
+        )
+        return self._merge_books_full(books, _ts)
+
+    def _merge_books_full(self, books, _ts=None):
+        """get_books 的 sqlite 合并段：只碰 sqlite_session 与内存结构，须留在 ioloop
+        线程执行；calibre 查询段可先经 run_calibre_async 在工作线程完成。"""
+        if _ts is None:
+            _ts = time.time()
+        self._build_custom_column_map()
 
         # Get audio book ids set once for better performance
         audio_book_ids = set()
@@ -725,11 +777,6 @@ class BaseHandler(web.RequestHandler):
             audio_book_ids = AudioBooksCache.get_audio_book_ids_set()
         except Exception as e:
             logging.error(f"Error getting audio book ids: {e}")
-
-        logging.debug(
-            "[%5d ms] select books from library (count = %d)"
-            % (int(1000 * (time.time() - _ts)), len(books))
-        )
 
         item = Item()
         empty_item = item.to_dict()
@@ -780,14 +827,13 @@ class BaseHandler(web.RequestHandler):
     def get_books_simple(self, *args, **kwargs):
         _ts = time.time()
         books = self.calibre_db.get_data_as_dict(*args, **kwargs)
+        return self._merge_books_simple(books, _ts)
 
-        # The custom column is returned as int key, e.g. { 1: 'value' }
-        # We need to convert it to { '#field': 'value' }
-        if not hasattr(self, "_custom_column_map"):
-            self._custom_column_map = {}
-            for key, meta in self.calibre_db.field_metadata.items():
-                if meta["is_custom"]:
-                    self._custom_column_map[meta["colnum"]] = key
+    def _merge_books_simple(self, books, _ts=None):
+        """get_books_simple 的 sqlite 合并段（同 _merge_books_full，只碰 sqlite_session）。"""
+        if _ts is None:
+            _ts = time.time()
+        self._build_custom_column_map()
 
         item = Item()
         empty_item = item.to_dict()

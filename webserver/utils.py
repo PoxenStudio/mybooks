@@ -1,10 +1,52 @@
 #!/usr/bin/env python3
+import asyncio
+import contextvars
 import datetime
+import functools
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 from webserver import constants
+
+# 联网任务线程池：信息源插件搜索、AI 请求等长任务（单次可达分钟级）放这里执行。
+# tornado 是单线程事件循环，在 handler 里同步等一次网络请求会把全站请求（包括不碰
+# 数据库的 /api/user/info）一起冻住。
+blocking_pool = ThreadPoolExecutor(max_workers=20, thread_name_prefix="mybooks-blocking")
+
+# calibre 查询专用池：与联网长任务隔离。若混用一池，20 个并发联网搜索打满时，
+# 阅读链路的毫秒级 calibre 查询（get_book_async）要排在网络任务后面，最坏等分钟级。
+calibre_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="mybooks-calibre")
+
+
+def bind_threadpool_call(func, *args, **kwargs):
+    """把「提交时刻的 contextvars 快照」绑定到调用上，返回可直接交给 run_in_executor 的
+    无参 callable。
+
+    ``loop.run_in_executor()`` **不会**把 contextvars 带进工作线程。mybooks 里依赖它的有
+    ``webserver/i18n.py`` 的 ``_current_language``（请求语言）：不带过去的话，线程池里调
+    ``_()`` 会退回 ``DEFAULT_LANGUAGE``，返回给客户端的消息就变成另一种语言（站点语言设为
+    en 而系统默认 zh 时尤其明显）。每个调用都取一份新快照，用完即弃，不会污染池线程。
+    """
+    ctx = contextvars.copy_context()
+    call = functools.partial(func, *args, **kwargs)
+    return lambda: ctx.run(call)
+
+
+async def run_in_threadpool(func, *args, **kwargs):
+    """把联网等长阻塞任务丢到 blocking_pool 执行并返回结果。
+
+    calibre 数据库调用走 BaseHandler.run_calibre_async（calibre_pool），不与本池混跑。
+    注意：工作线程里绝不能触碰 handler 的 sqlite_session——SQLAlchemy scoped_session
+    是线程本地的，mybooks 自身的 sqlite 查询必须留在 ioloop 线程；本池里的 calibre
+    调用不持 db_lock，正确性由 calibre Cache 自带的读写锁保证。
+    请求上下文（contextvars，含 i18n 请求语言）由 bind_threadpool_call 显式带进线程。
+    """
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        blocking_pool, bind_threadpool_call(func, *args, **kwargs)
+    )
 
 
 # 匹配包含z-library的括号内容，例如 (z-library.sk, 1lib.sk, z-lib.sk)
