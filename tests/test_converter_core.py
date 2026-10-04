@@ -240,25 +240,84 @@ def test_html_cdata_preserved():
     assert "MYBOOKS_CDATA" not in out
 
 
+def test_html_comment_preserved():
+    # 注释类节点（Comment / IE 条件注释 / Doctype）必须整体保留：bs4 中它们是
+    # NavigableString 的子类，会被 string=True 匹配到——replace_with 会剥掉
+    # 注释标记使内容变成可见正文（条件注释还会遭转义），且内容不应参与繁简转换
+    html = (
+        '<!DOCTYPE html><html><body>'
+        '<!-- 這是註釋請勿轉換 -->'
+        '<p>作為正文。</p>'
+        '<!--[if IE]>老舊瀏覽器<![endif]-->'
+        '</body></html>'
+    ).encode("utf-8")
+    oc = OpenCC("t2s")
+    out = epub_converter._convert_html_doc(html, oc.convert).decode("utf-8")
+    assert "<!-- 這是註釋請勿轉換 -->" in out
+    assert "<!--[if IE]>老舊瀏覽器<![endif]-->" in out
+    assert out.lstrip().startswith("<!DOCTYPE html>")
+    assert "作为正文。" in out
+
+
+def test_xml_identifier_not_converted():
+    # OPF 元数据文本参与转换（与库内元数据同步转换的产品语义一致），
+    # 但机器标识符 dc:identifier 除外——转换会破坏 UUID/来源引用与跨书去重
+    opf = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">'
+        '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+        '<dc:identifier id="uid">urn:uuid:繁體編號-123</dc:identifier>'
+        '<dc:title>繁體測試書</dc:title>'
+        '<dc:description>這是簡介，含繁體。</dc:description>'
+        '</metadata></package>'
+    ).encode("utf-8")
+    oc = OpenCC("t2s")
+    out = epub_converter._convert_xml_doc(opf, oc.convert).decode("utf-8")
+    assert "urn:uuid:繁體編號-123" in out
+    assert "繁体测试书" in out
+    assert "这是简介，含繁体。" in out
+
+
+def test_xml_ncx_navlabel_converted():
+    # NCX 的 docTitle/navLabel 文本参与转换；meta dtb:uid 是属性、不受影响
+    ncx = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">'
+        '<head><meta name="dtb:uid" content="urn:uuid:繁體編號-999"/></head>'
+        '<docTitle><text>繁體書名</text></docTitle>'
+        '<navMap><navPoint id="n1"><navLabel><text>第一章 繁體標題</text></navLabel>'
+        '<content src="ch1.xhtml"/></navPoint></navMap></ncx>'
+    ).encode("utf-8")
+    oc = OpenCC("t2s")
+    out = epub_converter._convert_xml_doc(ncx, oc.convert).decode("utf-8")
+    assert "繁体书名" in out
+    assert "第一章 繁体标题" in out
+    assert "urn:uuid:繁體編號-999" in out
+
+
 def test_html_gbk_entry_roundtrip():
-    # 非 UTF-8 条目（GB18030 繁体）：解码兜底 + 原编码写回，不产生替换符，
-    # XML 声明同步为实际写回编码（bs4 序列化会把声明改成 utf-8）
+    # 非 UTF-8 条目（GB18030 繁体）：解码兜底后统一以 UTF-8 回写——bs4 会把
+    # <meta charset> 重写为 utf-8，字节若按原编码写回会产生"声明 utf-8、
+    # 字节 gb18030"的矛盾（按声明解码即乱码），故声明与字节一并统一
     html = (
         '<?xml version="1.0" encoding="gbk"?>\n'
-        '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+        '<html xmlns="http://www.w3.org/1999/xhtml"><head>'
+        '<meta charset="gbk"/></head><body>'
         '<p>作為一個發展中的國家，電腦產業蓬勃發展。</p>'
         '</body></html>'
     ).encode("gb18030")
     oc = OpenCC("t2s")
     out = epub_converter._convert_html_doc(html, oc.convert)
-    text = out.decode("gb18030")
+    text = out.decode("utf-8")  # 回写必为 UTF-8
     assert "作为一个发展中的国家，电脑产业蓬勃发展。" in text
     assert "\ufffd" not in text
-    assert 'encoding="gb18030"' in text.split("?>")[0]
+    assert 'encoding="utf-8"' in text.split("?>")[0]
+    assert 'charset="utf-8"' in text
+    assert 'charset="gbk"' not in text
 
 
-def test_html_big5_entry_falls_back_utf8():
-    # BIG5 繁体条目繁→简后简体字 BIG5 无法表示：降级 UTF-8 并同步 XML 声明
+def test_html_big5_entry_utf8_writeback():
+    # BIG5 繁体条目：统一 UTF-8 回写，XML 声明与字节一致
     html = (
         '<?xml version="1.0" encoding="big5"?>\n'
         '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
@@ -269,8 +328,28 @@ def test_html_big5_entry_falls_back_utf8():
     out = epub_converter._convert_html_doc(html, oc.convert)
     text = out.decode("utf-8")
     assert "电脑产业蓬勃发展。" in text
-    assert 'encoding="utf-8"' in text
+    assert 'encoding="utf-8"' in text.split("?>")[0]
     assert "big5" not in text.split("?>")[0]
+
+
+def test_official_semantics_maxmatch():
+    # 对齐 OpenCC 官方 mmseg 逐位置贪心最长匹配。此前 Hopkins 树版是
+    # "全局最长（先长度后最左）"：位置靠后的长词条会抢走位置靠前的词组
+    # 命中（如"沈詩任筆"抢掉"陰沈→阴沉"、"一丝不挂"抢掉"周一→週一"）
+    assert OpenCC("s2t").convert("周一丝不挂") == "週一絲不掛"
+    assert OpenCC("t2s").convert("陰沈詩任筆") == "阴沉诗任笔"
+    assert OpenCC("t2s").convert("藉以免藉口") == "借以免借口"
+    # multiple mapping 取第一候选：单字"沈"保持（姓氏），词组"陰沈"才转
+    assert OpenCC("t2s").convert("沈") == "沈"
+
+
+def test_long_text_no_recursion():
+    # 无分隔符长段：此前树递归深度≈段长，约 2000 字即 RecursionError
+    # 导致整本书转换失败；线性匹配后不再受段长限制
+    oc = OpenCC("t2s")
+    out = oc.convert("發展國家" * 2500)
+    assert len(out) == 10000
+    assert "发展国家" in out
 
 
 def test_direction_label_new_directions():
@@ -328,6 +407,51 @@ def test_detect_encoding():
     assert epub_converter.detect_encoding(b"\xef\xbb\xbf" + "你好".encode("utf-8")) == "utf-8-sig"
     assert epub_converter.detect_encoding("繁體中文".encode("gb18030")) == "big5"
     assert epub_converter.detect_encoding("简体中文".encode("gb18030")) == "gb18030"
+
+
+def test_detect_encoding_utf16_32():
+    # UTF-16/32 BOM（Windows 导出 TXT 常见形态）：此前回落 utf-8 + replace
+    # 静默毁坏（gb18030 甚至能"成功"解码部分 UTF-16 字节产出更隐蔽的乱码）
+    assert epub_converter.detect_encoding(b"\xff\xfe" + "你好".encode("utf-16-le")) == "utf-16"
+    assert epub_converter.detect_encoding(b"\xfe\xff" + "你好".encode("utf-16-be")) == "utf-16"
+    # UTF-32LE BOM 以 UTF-16LE BOM 开头，必须先判 UTF-32
+    assert epub_converter.detect_encoding(b"\xff\xfe\x00\x00" + "你好".encode("utf-32-le")) == "utf-32"
+    assert epub_converter.detect_encoding(b"\x00\x00\xfe\xff" + "你好".encode("utf-32-be")) == "utf-32"
+    # 无 BOM：靠 \x00 密度启发式（ASCII 字符高字节），且须先于 UTF-8 尝试——
+    # 纯 ASCII 的 UTF-16 是合法 UTF-8（NUL）
+    assert epub_converter.detect_encoding("Hello".encode("utf-16-le")) == "utf-16-le"
+    assert epub_converter.detect_encoding("Hello 世界 123".encode("utf-16-le")) == "utf-16-le"
+    assert epub_converter.detect_encoding("Hello 世界 123".encode("utf-16-be")) == "utf-16-be"
+
+
+def test_txt_utf16_roundtrip():
+    # Windows 导出的 UTF-16（带 BOM）TXT：完整转换 + 输出统一 UTF-8
+    with tempfile.TemporaryDirectory() as tmp:
+        src = os.path.join(tmp, "in.txt")
+        out = os.path.join(tmp, "out.txt")
+        with open(src, "wb") as f:
+            f.write("作為一個發展中的國家。\n後台管理員的頭髮很長。".encode("utf-16"))
+        oc = OpenCC("t2s")
+        enc = epub_converter.convert_txt_file(src, out, oc.convert)
+        assert enc == "utf-16"
+        with open(out, encoding="utf-8") as f:
+            assert f.read() == "作为一个发展中的国家。\n后台管理员的头发很长。"
+
+
+def test_html_utf16_entry_writeback():
+    # EPUB 内 UTF-16 条目（OPF 规范允许 UTF-16）：解码转换后统一 UTF-8 回写
+    html = (
+        '<?xml version="1.0" encoding="UTF-16"?>\n'
+        '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+        '<p>電腦產業蓬勃發展。</p>'
+        '</body></html>'
+    ).encode("utf-16")
+    oc = OpenCC("t2s")
+    out = epub_converter._convert_html_doc(html, oc.convert)
+    text = out.decode("utf-8")
+    assert "电脑产业蓬勃发展。" in text
+    assert 'encoding="utf-8"' in text.split("?>")[0]
+    assert "\x00" not in text
 
 
 if __name__ == "__main__":
