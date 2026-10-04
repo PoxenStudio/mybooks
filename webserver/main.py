@@ -571,7 +571,7 @@ def log_request(handler):
     status = handler.get_status()
     level = logging.INFO if status < 400 else logging.WARNING if status < 500 else logging.ERROR
     cost_ms = 1000.0 * handler.request.request_time()
-    logging.log(level, "[%d][%.2fms][%s][%s](%s)", status, cost_ms, handler.request.method, handler.request.uri, handler.request.remote_ip)
+    logging.log(level, f"[{status}][{cost_ms:.2f}ms][{handler.request.method}][{handler.request.uri}]({handler.request.remote_ip}){'' if cost_ms < 1000 else '[x]'}")
 
 
 def main():
