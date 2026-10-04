@@ -66,10 +66,13 @@ MIN_MOJIBAKE_LEN = 8
 _UNREADABLE_RE = re.compile(
     "[\ufffd\ufffe\uffff\ue000-\uf8ff\ud800-\udfff\ud7b0-\ud7ff]"
 )
-# 常见乱码字形区（GBK 误读 UTF-8 常落入拉丁-1 补充区等；
-# 不含全角标点区 \uff00-\uffef——那是正常中文标点，不能当作乱码扣分）
+# 常见乱码字形区（GBK 误读 UTF-8 常落入拉丁-1 补充区等）。
+# 两类合法排版字符必须剔除：全角标点区 \uff00-\uffef（正常中文标点）；
+# U+2000-206F 中的弯引号/破折号/省略号/全角引号系等常用排版符号——
+# 否则对话密集的合法文本被系统性压分，极端标点密度甚至会被误反转（实测复现）。
 _MOJIBAKE_CHAR_RE = re.compile(
-    "[\u0080-\u00ff\u0100-\u017f\u2000-\u206f]"
+    "[\u0080-\u00ff\u0100-\u017f"
+    "\u2000-\u2012\u2015-\u2017\u201b\u2023-\u2025\u2027-\u202f\u2031\u2034-\u2038\u203b-\u206f]"
 )
 # 控制字符（保留 \n \r \t）
 _CONTROL_RE = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
@@ -188,8 +191,10 @@ def _chardet_vote(data):
     """chardet 三段采样投票；返回 (encoding, confidence) 或 None。"""
     if chardet is None:
         return None
+    segs = _sample_segments(data)
     votes = {}
-    for seg in _sample_segments(data):
+    voted = 0
+    for seg in segs:
         try:
             guess = chardet.detect(seg)
         except Exception:
@@ -198,10 +203,12 @@ def _chardet_vote(data):
         conf = guess.get("confidence") or 0.0
         if enc and conf > 0.3:
             votes[enc] = votes.get(enc, 0.0) + conf
+            voted += 1
     if not votes:
         return None
     best = max(votes.items(), key=lambda kv: kv[1])
-    return (best[0], best[1] / len(_sample_segments(data)))
+    # 分母只计实际投票的段：未过 0.3 门槛 / 采样异常的段不稀释置信度
+    return (best[0], best[1] / voted)
 
 
 def _decode_candidates(data):
@@ -302,6 +309,7 @@ def _try_mojibake_recovery(text, max_rounds=3):
     visited = {text}
     for _ in range(max_rounds):
         found = None
+        found_total = None
         for mid_enc, real_enc in _MOJIBAKE_PAIRS:
             try:
                 raw = current.encode(mid_enc)
@@ -311,7 +319,17 @@ def _try_mojibake_recovery(text, max_rounds=3):
             if recovered is None or recovered == current:
                 continue  # 解码失败或无变化（纯 ASCII 在任意编码下等价）
             score = _readability_score(recovered)
-            if score >= 60 or _is_latin1_intermediate(recovered):
+            if score >= 60:
+                # 真出口：扫完全部组合取总分最优——首个过线的可能只是次优链路
+                total = _score_total(recovered)
+                if found is None or total > found_total:
+                    found = (recovered, mid_enc, real_enc, score)
+                    found_total = total
+                continue
+            if _is_latin1_intermediate(recovered):
+                # latin-1 中间态（ANSI 误读层的结构信号）：按组合顺序立即采纳
+                # 并继续反转，不得与同轮"高分的语义级乱码假出口"（如 utf-8→gb18030
+                # 对字形合法但语义全无的文本打出 100 分）竞争评分
                 found = (recovered, mid_enc, real_enc, score)
                 break
         if found is None:
@@ -483,6 +501,50 @@ def _lossy_report(text, encoding, reason, **flags):
     }
 
 
+# 不可逆门槛：替换符同时超数量与占比才判不可逆
+# （少量洞可容忍，带损部分恢复仍优于拒修；BOM 直解 / 有损兜底 / 常规解码三路径同口径）
+IRREVERSIBLE_MIN_COUNT = 20
+
+
+def _finalize_report(text, report):
+    """统一收尾：所有产出路径补 ``replacement_chars`` 并按同一门槛判 ``irreversible``。
+
+    替换符 = 上游 errors=replace 误读 / 宽松兜底留下的"洞"，字节级信息已毁。
+    数量 >=20 且占比 >1% 时标记 irreversible（fix() 据此拒绝修复，避免产出
+    带洞的乱码新书）；低于门槛时保留 replacement_chars 供前端警示"带损恢复"。
+    """
+    fffd = text.count("\ufffd")
+    report["replacement_chars"] = fffd
+    if fffd >= IRREVERSIBLE_MIN_COUNT and fffd > max(1, len(text) // 100):
+        report["irreversible"] = True
+        reasons = report.setdefault("reasons", [])
+        if not any("不可逆" in r for r in reasons):
+            reasons.append("最终文本含 %d 个替换符(%.1f%%)，字节级信息不可逆，拒绝修复"
+                           % (fffd, 100.0 * fffd / max(1, len(text))))
+    else:
+        report["irreversible"] = False
+    return text, report
+
+
+def _full_decode(data, enc, reasons):
+    """全量严格解码；尾部 ≤8 字节不完整时按采样阶段同款回退截断处理。
+
+    analyze 只读 2MB 前缀，边界恰好切断多字节字符是常态（UTF-8 三字节汉字
+    概率 2/3）——不得因调用方自身的截断把整本书误判为垃圾。真正的混用编码
+    （回退 ≤8 字节仍无法解码）原样抛出，由调用方维持垃圾判定；回退产物过短
+    （超短残片在任意双字节编码间几乎必然"可解"为错字，编码判定不可信）同样
+    抛出维持垃圾判定——与 MIN_MOJIBAKE_LEN 同一哲学。
+    """
+    try:
+        return data.decode(enc)
+    except UnicodeDecodeError:
+        text = _strict_decode_tail(data, enc)
+        if text is None or len(text) < MIN_MOJIBAKE_LEN:
+            raise
+        reasons.append("文件尾部存在不完整的多字节字符，已截断处理（≤8 字节）")
+        return text
+
+
 def _analyze(data):
     """内部完整分析：返回 (text, report)。
 
@@ -497,9 +559,9 @@ def _analyze(data):
         data = data.encode("utf-8")
 
     if not data:
-        return "", {"encoding": "utf-8", "confidence": 0.0, "mojibake": False,
-                    "garbage": False, "unrecoverable": False,
-                    "sample": "", "reasons": ["空文件"]}
+        return _finalize_report("", {"encoding": "utf-8", "confidence": 0.0, "mojibake": False,
+                                     "garbage": False, "unrecoverable": False,
+                                     "sample": "", "reasons": ["空文件"]})
 
     # 1. BOM 优先（文件头字节，全量数据上判定）
     for bom, enc in _BOM_TABLE:
@@ -515,9 +577,10 @@ def _analyze(data):
                         and (_common_ratio(text) >= 0.15 or _western_like(text)))
             if coherent:
                 reasons.append("检测到 BOM，编码确定为 %s" % enc)
-                return text, {"encoding": enc, "confidence": 1.0, "mojibake": False,
-                              "garbage": False, "unrecoverable": False,
-                              "sample": text[:SAMPLE_CHARS], "reasons": reasons}
+                return _finalize_report(text, {
+                    "encoding": enc, "confidence": 1.0, "mojibake": False,
+                    "garbage": False, "unrecoverable": False,
+                    "sample": text[:SAMPLE_CHARS], "reasons": reasons})
             reasons.append("检测到 %s BOM 但内容不自洽（替换符 %.1f%%），剥离该 BOM 前缀后继续"
                            % (enc, fffd_ratio * 100))
             data = data[len(bom):]
@@ -529,10 +592,10 @@ def _analyze(data):
     if western is not None:
         reasons.append("检测到西文 latin-1 误读（Ã© 型签名），已按 UTF-8 还原")
         w_score = _readability_score(western)
-        return western, {
+        return _finalize_report(western, {
             "encoding": "utf-8", "confidence": round(min(1.0, w_score / 100.0), 2),
             "mojibake": True, "garbage": False, "unrecoverable": False,
-            "sample": western[:SAMPLE_CHARS], "reasons": reasons}
+            "sample": western[:SAMPLE_CHARS], "reasons": reasons})
 
     # 2. 候选编码 strict 解码打分（采样上，尾部截断自动回退）
     candidates = _decode_candidates(sample)
@@ -542,11 +605,11 @@ def _analyze(data):
         if recovered:
             text, rep = recovered
             rep["reasons"] = reasons + rep["reasons"]
-            return text, rep
-        return data.decode("utf-8", errors="replace"), {
+            return _finalize_report(text, rep)
+        return _finalize_report(data.decode("utf-8", errors="replace"), {
             "encoding": "utf-8", "confidence": 0.0, "mojibake": False,
             "garbage": True, "unrecoverable": False,
-            "sample": "", "reasons": reasons}
+            "sample": "", "reasons": reasons})
 
     # 3. chardet 投票（作为参考依据，不覆盖 strict 打分）
     chardet_guess = _chardet_vote(sample)
@@ -599,37 +662,29 @@ def _analyze(data):
         # 正常文本的候选环不构成拒绝理由（见下方 unrecoverable 门槛）
         reasons.append("检测到乱码反转候选循环（疑似多重误读，视可读性判定是否拒绝）")
 
-    # 5. 全量解码最终方案（仅一次）；反转链按序逐层重放（支持多层误读）
+    # 5. 全量解码最终方案（仅一次）；反转链按序逐层重放（支持多层误读）。
+    #    尾部 ≤8 字节不完整（analyze 的 2MB 前缀截断 / 文件尾损坏）走回退，
+    #    不因调用方自身的截断误判垃圾（P0：候选阶段有 _strict_decode_tail
+    #    兜底而全量阶段没有，2MB 边界切中字符时 analyze 会自相矛盾地报垃圾）
     try:
         if mojibake:
-            full_text = data.decode(cand_enc)
+            full_text = _full_decode(data, cand_enc, reasons)
             for mid, real in chain:
                 full_text = full_text.encode(mid).decode(real)
             score = _readability_score(full_text)
         else:
-            full_text = data.decode(enc)
+            full_text = _full_decode(data, enc, reasons)
             score = _readability_score(full_text)
     except (UnicodeDecodeError, UnicodeEncodeError):
         # 采样与全量不一致（尾部截断 / 混用编码 / 采样外字符无法往返）：
         # 按 UTF-8 替换解码输出并标记垃圾，拒绝修复而非崩溃
         reasons.append("全量解码失败，疑似尾部截断或混用编码")
-        return data.decode("utf-8", errors="replace"), {
+        return _finalize_report(data.decode("utf-8", errors="replace"), {
             "encoding": "utf-8", "confidence": 0.0, "mojibake": False,
             "garbage": True, "unrecoverable": False,
-            "sample": "", "reasons": reasons}
+            "sample": "", "reasons": reasons})
 
     confidence = min(1.0, score / 100.0)
-
-    # 不可逆性探测：最终文本若含大量替换符（误读层映射损失 / 直解替损），
-    # 字节级信息已毁——输出只会是"带洞的乱码"，应由 fix() 明确拒修而非
-    # 产出半成品让用户误存（如 GBK 系双层乱码，实测还原文本含数万替换符）。
-    # 门槛：替换符 >=20 且 占比 >1%（小文件导出少量洞可容忍，带损部分恢复仍优于拒修）。
-    irreversible = False
-    fffd = full_text.count("\ufffd")
-    if fffd >= 20 and fffd > max(1, len(full_text) // 100):
-        irreversible = True
-        reasons.append("最终文本含 %d 个替换符(%.1f%%)，字节级信息不可逆，拒绝修复"
-                       % (fffd, 100.0 * fffd / max(1, len(full_text))))
 
     # 循环判定只应作用于"看起来像乱码"的文件：可读性差，或 CJK 密集但常用字极少
     # （语义级乱码特征，如 鍙岄噸 类字形全合法但语义全无）。
@@ -647,18 +702,17 @@ def _analyze(data):
         if recovered:
             text, rep = recovered
             rep["reasons"] = reasons + rep["reasons"]
-            return text, rep
+            return _finalize_report(text, rep)
 
-    return full_text, {
+    return _finalize_report(full_text, {
         "encoding": enc,
         "confidence": round(confidence, 2),
         "mojibake": mojibake,
         "garbage": score < 30,
         "unrecoverable": unrecoverable,
-        "irreversible": irreversible,
         "sample": full_text[:SAMPLE_CHARS],
         "reasons": reasons,
-    }
+    })
 
 
 def detect_encoding(data):

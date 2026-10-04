@@ -4,10 +4,12 @@
 运行：python -m unittest discover -s tests 或 python tests/test_encoding_detect.py
 """
 import os
+import random
 import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "webserver", "toolbox"))
+# 模块位于 webserver/toolbox/utils/（72f44b4c 目录重构后的布局）
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "webserver", "toolbox", "utils"))
 
 from encoding_detect import (  # noqa: E402
     detect_encoding,
@@ -294,6 +296,23 @@ class TestRobustness(unittest.TestCase):
         text, _ = decode_with_report("你好世界".encode("utf-16-le"))
         self.assertEqual(text, "你好世界")
 
+    def test_utf16_32_with_bom_roundtrip(self):
+        # 带 BOM 的 UTF-16/32（Windows 导出常见）：四种组合都必须正确解码并
+        # 字节级还原——绝不允许回落 utf-8 replace 产出替换符（P1 回归钉）
+        src = GBK_TEXT + "The river flows quietly.\n"
+        for bom, enc in ((b"\xff\xfe", "utf-16-le"), (b"\xfe\xff", "utf-16-be"),
+                         (b"\xff\xfe\x00\x00", "utf-32-le"), (b"\x00\x00\xfe\xff", "utf-32-be")):
+            with self.subTest(enc=enc):
+                data = bom + src.encode(enc)
+                r = detect_encoding(data)
+                self.assertFalse(r["garbage"], r["reasons"])
+                self.assertEqual(r["confidence"], 1.0)
+                text, _ = decode_with_report(data)
+                self.assertEqual(text, src)
+                self.assertEqual(text.count("\ufffd"), 0)
+                out, _ = fix_to_utf8(data)
+                self.assertEqual(out.decode("utf-8"), src)
+
     def test_single_gbk_char_no_cycle(self):
         # 合法 GBK 单字：不得因反转 A↔B 摇摆被误判"多重误读循环"而拒绝
         r = detect_encoding("你".encode("gb18030"))
@@ -468,6 +487,189 @@ class TestRobustness(unittest.TestCase):
         self.assertFalse(r["unrecoverable"])
         text, _ = decode_with_report(data)
         self.assertEqual(text, fr)
+
+
+class TestReplacementAndIrreversible(unittest.TestCase):
+    """替换符统一口径：replacement_chars 全路径携带，irreversible 三路径同门槛。"""
+
+    def test_clean_text_zero_replacement(self):
+        r = detect_encoding(GBK_TEXT.encode("gb18030"))
+        self.assertEqual(r["replacement_chars"], 0)
+        self.assertFalse(r["irreversible"])
+
+    def test_bom_with_minor_damage_tolerated(self):
+        # BOM + 正文含少量坏字节（<5% 替换符）：按 BOM 直解放行，但必须带
+        # replacement_chars 计数（前端/消息据此警示带损恢复），不标 irreversible
+        rng = random.Random(42)
+        body = bytearray(b"He said something about the river. " * 800)
+        for pos in rng.sample(range(len(body)), 40):
+            body[pos] = rng.randrange(0x80, 0xFF)
+        data = b"\xef\xbb\xbf" + bytes(body)
+        r = detect_encoding(data)
+        self.assertEqual(r["encoding"], "utf-8-sig")
+        self.assertFalse(r["garbage"])
+        self.assertGreaterEqual(r["replacement_chars"], 20)
+        self.assertFalse(r["irreversible"])
+        text, _ = decode_with_report(data)
+        self.assertEqual(text.count("\ufffd"), r["replacement_chars"])
+
+    def test_bom_with_major_damage_irreversible(self):
+        # BOM + 正文 ~3% 替换符（>=20 处）：自洽校验放行（<=5%），
+        # 但统一 irreversible 门槛（>1% 且 >=20）必须拒绝修复
+        # （腐蚀率 0.8%：每处坏字节产生 1~2 个替换符，实测 3.17% 落在窗口内）
+        rng = random.Random(7)
+        body = bytearray(GBK_TEXT.encode("utf-8") * 50)
+        for pos in rng.sample(range(len(body)), int(len(body) * 0.008)):
+            body[pos] = rng.randrange(0x80, 0xFF)
+        data = b"\xef\xbb\xbf" + bytes(body)
+        r = detect_encoding(data)
+        self.assertFalse(r["garbage"])  # 自洽校验仍放行（替换符 <5%）
+        self.assertTrue(r["irreversible"], r["reasons"])
+
+    def test_lossy_minor_damage_tolerated(self):
+        # 0.1% 字节腐蚀 → 有损兜底恢复：损伤 <1% 低于不可逆门槛，放行但带计数
+        rng = random.Random(7)
+        data = bytearray("人工智能的发展历程，包括机器学习与深度学习。" * 300, "utf-8")
+        for pos in rng.sample(range(len(data)), max(1, int(len(data) * 0.001))):
+            data[pos] ^= 0xFF
+        text, r = decode_with_report(bytes(data))
+        self.assertTrue(r.get("lossy"))
+        self.assertFalse(r["irreversible"])
+        self.assertGreaterEqual(r["replacement_chars"], 1)
+        self.assertEqual(text.count("\ufffd"), r["replacement_chars"])
+
+    def test_lossy_major_damage_irreversible(self):
+        # 1% 字节腐蚀 → 有损兜底恢复出 ~5% 替换符：超不可逆门槛，fix() 必须拒绝
+        rng = random.Random(7)
+        data = bytearray("人工智能的发展历程，包括机器学习与深度学习。" * 300, "utf-8")
+        for pos in rng.sample(range(len(data)), int(len(data) * 0.01)):
+            data[pos] ^= 0xFF
+        r = detect_encoding(bytes(data))
+        self.assertTrue(r["irreversible"], r["reasons"])
+
+
+class TestTypographyPunctuation(unittest.TestCase):
+    """排版标点不参与乱码扣分：对话密集文本不得压分/误反转（N2 回归）。"""
+
+    def test_punctuation_soup_not_reversed(self):
+        # 极端标点汤（~35% 弯引号/破折号/省略号）：修复前会被误反转成 big5 乱码
+        soup = "\u201c\u2026\u2026\u597d\u5427\u3002\u201d\u4ed6\u8bf4\uff1a\u201c\u8d70\u5427\u2014\u2014\u201d\n"
+        text = soup * 500
+        r = detect_encoding(text.encode("utf-8"))
+        self.assertEqual(r["encoding"], "utf-8", r["reasons"])
+        self.assertFalse(r["mojibake"], r["reasons"])
+        self.assertGreaterEqual(r["confidence"], 0.95)
+        out, _ = fix_to_utf8(text.encode("utf-8"))
+        self.assertEqual(out.decode("utf-8"), text)
+
+    def test_dialogue_chinese_stays_utf8(self):
+        para = "夜色渐深，他站在窗前望着远处灯火阑珊的城市。"
+        text = ("“%s”他说，“……走吧——”\n" % para) * 400
+        r = detect_encoding(text.encode("utf-8"))
+        self.assertEqual(r["encoding"], "utf-8")
+        self.assertFalse(r["mojibake"])
+        self.assertGreaterEqual(r["confidence"], 0.9)
+        out, _ = fix_to_utf8(text.encode("utf-8"))
+        self.assertEqual(out.decode("utf-8"), text)
+
+    def test_curly_quote_english_confidence(self):
+        text = "He said, “It’s a fine day — isn’t it?” She nodded… \n" * 500
+        r = detect_encoding(text.encode("utf-8"))
+        self.assertEqual(r["encoding"], "utf-8")
+        self.assertFalse(r["mojibake"])
+        self.assertGreaterEqual(r["confidence"], 0.95)
+
+
+class TestMoreRecoveryPairs(unittest.TestCase):
+    """补齐反转对覆盖：cp1252 系（结构预检）与 gb18030→big5（可 strict 构造）。
+
+    ("big5","utf-8") / ("utf-8","gb18030") 两对要求字节流同时满足两种编码的
+    strict 合法性——UTF-8 续字节 0x80-A0 不是合法 big5/gb 尾字节的场景占绝
+    对多数，CJK 实际文本几乎无法构造，保留为启发式不作单测。
+    """
+
+    def test_cp1252_as_utf8_recovery(self):
+        # 西文被按 cp1252 逐字节误读后另存（Ã© 型）：走 latin-1 西文结构预检还原
+        src = "café — naïve ‘quo’té… déjà où\n" * 4
+        data = src.encode("utf-8").decode("cp1252").encode("utf-8")
+        r = detect_encoding(data)
+        self.assertTrue(r["mojibake"], r["reasons"])
+        text, _ = decode_with_report(data)
+        self.assertEqual(text, src)
+
+    def test_gb18030_as_big5_recovery(self):
+        # gb 字节恰为合法 big5（“你好世界”的 GBK 编码在 big5 中逐对合法）
+        src = "你好世界" * 3
+        data = src.encode("gb18030").decode("big5").encode("utf-8")
+        r = detect_encoding(data)
+        self.assertTrue(r["mojibake"], r["reasons"])
+        self.assertEqual(r["encoding"], "gb18030")
+        text, _ = decode_with_report(data)
+        self.assertEqual(text, src)
+
+
+class TestFixToUtf8Garbage(unittest.TestCase):
+    """fix_to_utf8 对垃圾输入的行为钉住：返回替换文本 + garbage 标记，不抛异常。"""
+
+    def test_binary_garbage_returns_report(self):
+        out, r = fix_to_utf8(bytes(range(256)) * 4)
+        self.assertIsInstance(out, bytes)
+        self.assertTrue(r["garbage"])
+        self.assertEqual(r["confidence"], 0.0)
+
+    def test_truncated_utf8_rejected(self):
+        out, r = fix_to_utf8(b"\xf0\x9f\x98")
+        self.assertTrue(r["garbage"])
+
+
+class TestTailTruncation(unittest.TestCase):
+    """尾部截断：analyze 只读 2MB 前缀，边界切断多字节字符不得误判垃圾（P0 回归）。
+
+    候选阶段有 _strict_decode_tail（≤8 字节尾部回退）兜底，而全量解码阶段
+    原本没有——2MB 边界切中字符时 analyze 会自相矛盾地报 garbage（fix 全量
+    却正常）。修复后两阶段口径一致。
+    """
+
+    def test_utf8_prefix_truncated_mid_char(self):
+        # 复刻 analyze()：2MB 前缀恰在 3 字节汉字中段截断
+        text = "人工智能的发展历程。" * 300000  # 30 字节/重复
+        data = text.encode("utf-8")[:2 * 1024 * 1024]
+        self.assertEqual(len(data) % 30, 2)  # 边界确实切在字符中间
+        r = detect_encoding(data)
+        self.assertFalse(r["garbage"], r["reasons"])
+        self.assertEqual(r["encoding"], "utf-8")
+        out, _ = fix_to_utf8(data)
+        self.assertEqual(out.decode("utf-8"), text[:len(data) // 3])
+
+    def test_gb18030_prefix_truncated_mid_char(self):
+        text = "人工智能的发展历程，包括机器学习与深度学习。" * 100000  # 44 字节/重复
+        data = text.encode("gb18030")[:2 * 1024 * 1024 - 1]  # 奇数边界切断 2 字节字符
+        self.assertEqual(len(data) % 2, 1)
+        r = detect_encoding(data)
+        self.assertFalse(r["garbage"], r["reasons"])
+        self.assertEqual(r["encoding"], "gb18030")
+        text_out, _ = decode_with_report(data)
+        self.assertEqual(text_out, text[:len(data) // 2])
+
+    def test_small_tail_truncation(self):
+        # 与文件大小无关：任何尾部切断的多字节流都不再误判垃圾
+        data = GBK_TEXT.encode("utf-8")[:-1]
+        r = detect_encoding(data)
+        self.assertFalse(r["garbage"], r["reasons"])
+        out, _ = fix_to_utf8(data)
+        self.assertEqual(out.decode("utf-8"), GBK_TEXT[:-1])
+
+    def test_tail_damage_beyond_fallback_still_rejected(self):
+        # 2MB 采样内干净、尾部 >8 字节垃圾：尾部回退救不了 → 维持垃圾判定
+        data = ("人工智能的发展历程。" * 70000).encode("utf-8") + bytes([0xFF] * 9)
+        r = detect_encoding(data)
+        self.assertTrue(r["garbage"], r["reasons"])
+
+    def test_tiny_fragment_still_rejected(self):
+        # 超短残片（截断的 emoji）：尾部回退产物 <8 字符时编码判定不可信，维持垃圾
+        data = b"\xf0\x9f\x98"
+        r = detect_encoding(data)
+        self.assertTrue(r["garbage"], r["reasons"])
 
 
 if __name__ == "__main__":
