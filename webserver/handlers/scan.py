@@ -67,8 +67,15 @@ class Scanner:
             return False
 
     def summary(self):
+        """管理页概览计数。这里有两套**不同**的口径，不要混用：
+
+        - counts/total/ready：电子书扫描记录（ScanService.ebook_scan_filter 排有声书），
+          与按状态的导入/批量删除动作同口径，供批量删除确认框显示条数，故 total == sum(counts)；
+        - todo/done：列表页签口径（全部记录，含有声书），与 ImportList 的分页查询共用
+          ScanService.list_scan_filter，保证「待处理 (N)」恒等于该页签下列表底部的行数。
+        """
         try:
-            # 单次 GROUP BY 聚合取代三个 COUNT：本方法挂在轮询热路径上，
+            # 单次 GROUP BY 聚合取代多个 COUNT：本方法挂在轮询热路径上，
             # 无 status 索引时每个 COUNT 都是一次全表扫。
             # 口径与按状态的导入/批量删除一致（ScanService.ebook_scan_filter 排除有声书记录），
             # 否则批量删除确认框显示的条数会把有声书记录算进去、与实际删除数对不上。
@@ -80,16 +87,21 @@ class Scanner:
                 .all()
             )
             total = sum(counts.values())
-            done = counts.get(ScanFile.EXIST, 0) + counts.get(ScanFile.IMPORTED, 0)
             ready = counts.get(ScanFile.READY, 0)
-            todo = total - done
+
+            # 页签计数走列表口径（含声书、exist 归待处理），与 ImportList 的分页查询同源；
+            # 两条 COUNT 都命中 ix_scanfiles_status_import_type，代价可接受。
+            base = self.session.query(func.count(ScanFile.id))
+            todo = ScanService.list_scan_filter(base, "todo").scalar() or 0
+            done = ScanService.list_scan_filter(base, "done").scalar() or 0
         except Exception as e:
             logging.error(f"Error in summary: {e}")
             if self.cached_status:
                 return self.cached_status
             return {"total": 0, "done": 0, "todo": 0, "ready": 0, "counts": {}}
         # counts：各状态原始计数（GROUP BY 顺带产出），供批量删除确认框显示条数；
-        # 与 total/done/todo 同口径（均只含电子书扫描记录），故 total == sum(counts)
+        # 与 total 同口径（只含电子书扫描记录），故 total == sum(counts)；
+        # todo/done 走列表口径（含声书），不参与该等式。
         self.cached_status = {"total": total, "done": done, "todo": todo, "ready": ready, "counts": counts}
         return self.cached_status
 
@@ -149,11 +161,9 @@ class ImportList(BaseHandler):
             order = order.asc() if desc == "false" else order.desc()
             query = self.sqlite_session.query(ScanFile).order_by(order)
 
-            done_status = [ScanFile.IMPORTED]
-            if filter == "todo":
-                query = query.filter(ScanFile.status.not_in(done_status))
-            elif filter == "done":
-                query = query.filter(ScanFile.status.in_(done_status))
+            # 与页签数字（summary 的 todo/done）共用同一套列表口径，页签数字才恒等于
+            # 当前页签下的 total；两边各写一遍过滤条件正是历史上对不上的根源。
+            query = ScanService.list_scan_filter(query, filter)
             total = query.count()
 
             start = page * num

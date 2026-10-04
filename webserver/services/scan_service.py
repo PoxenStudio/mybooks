@@ -244,16 +244,38 @@ class ScanService(AsyncService):
 
     @staticmethod
     def status_filter(query, status):
-        """todo 语义 = 非 IMPORTED（管理页待导入口径）；其余按状态等值过滤。
+        """批量动作口径：todo = 非 IMPORTED，其余按状态等值过滤，一律排有声书记录。
 
         选择器解析、导入预检、批量删除共用本实现，防止各处过滤条件漂移；统一经
         ebook_scan_filter 收敛到电子书扫描记录——导入预检的 COUNT 与实际解析、批删执行
         必须是同一口径，否则预检条数会与实际动作对不上。
+
+        注意：本函数排掉有声书记录，所以**不能**用来算管理页页签上的数字（那要与列表
+        行数一致，见 list_scan_filter）。
         """
         query = ScanService.ebook_scan_filter(query)
         if status == "todo":
             return query.filter(ScanFile.status.not_in([ScanFile.IMPORTED]))
         return query.filter(ScanFile.status == status)
+
+    @staticmethod
+    def list_scan_filter(query, filter_kind="all"):
+        """列表/页签口径：作用于**全部**扫描记录（含有声书 import_type=2）。
+
+        - "todo" → 非 IMPORTED
+        - "done" → IMPORTED
+        - 其它   → 不过滤
+
+        ImportList 的分页查询与页签数字（Scanner.summary 的 todo/done）共用本函数，
+        保证「待处理 (N)」恒等于该页签下列表底部的「共 N 条」——两处各写一套过滤条件
+        正是历史上页签与列表对不上的原因（exist 一度只被算进"已导入"）。与 status_filter
+        的区别：status_filter 是批量动作口径且排有声书。
+        """
+        if filter_kind == "todo":
+            return query.filter(ScanFile.status.not_in([ScanFile.IMPORTED]))
+        if filter_kind == "done":
+            return query.filter(ScanFile.status.in_([ScanFile.IMPORTED]))
+        return query
 
     @staticmethod
     def resolve_filter_paths(session, filter_kind="todo"):
