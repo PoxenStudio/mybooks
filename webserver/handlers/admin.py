@@ -1848,7 +1848,7 @@ class AdminResources(BaseHandler):
 
     @js
     @is_admin
-    def get(self):
+    async def get(self):
         if (
             time.time() - AdminResources._cache_time < AdminResources.CACHED_TIME
             and AdminResources._cache_data
@@ -1856,7 +1856,7 @@ class AdminResources(BaseHandler):
             logging.info("[Resources]Use cached data")
             resources = AdminResources._cache_data
         else:
-            resources = BookBarnClient().getResourceList(CONF.get("BOOKBARN_TOKEN", ""))
+            resources = await utils.run_in_threadpool(BookBarnClient().getResourceList, CONF.get("BOOKBARN_TOKEN", ""))
             resources = (
                 resources if resources else AdminResources.CONF_DEFAULT_RESOURCES
             )
