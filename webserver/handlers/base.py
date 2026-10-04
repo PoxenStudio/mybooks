@@ -4,6 +4,8 @@
 import asyncio
 import base64
 import datetime
+import hashlib
+import hmac
 import logging
 import os
 import random
@@ -14,6 +16,7 @@ from urllib.parse import urlparse
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import func as sql_func
 from tornado import web
+from tornado.escape import utf8
 
 from webserver.i18n import _, choose_language, set_language
 from webserver import loader, utils
@@ -284,6 +287,31 @@ class BaseHandler(web.RequestHandler):
         logging.debug("Valid podcast token: %s for user %s", token, user.username)
         self.login_user(user)
         return True
+
+    DOWNLOAD_SIGN_MAX_AGE_SECONDS = 3600
+
+    @staticmethod
+    def _download_sign_mac(secret, user_id, book_id, fmt, expire):
+        msg = ("dl|%s|%s|%s|%s" % (user_id, book_id, fmt.lower(), expire)).encode("utf-8")
+        return hmac.new(utf8(secret), msg, hashlib.sha256).hexdigest()[:32]
+
+    def make_download_sign(self, user_id, book_id, fmt):
+        expire = int(time.time()) + self.DOWNLOAD_SIGN_MAX_AGE_SECONDS
+        mac = self._download_sign_mac(self.application.settings["cookie_secret"], user_id, book_id, fmt, expire)
+        return "%s.%s.%s" % (user_id, expire, mac)
+
+    def parse_download_sign(self, sign, book_id, fmt):
+        """校验下载签名，返回签名绑定的 user_id；签名无效、过期或与书籍/格式不符时返回 None"""
+        parts = sign.split(".")
+        if len(parts) != 3 or not parts[0].isdigit() or not parts[1].isdigit():
+            return None
+        uid, expire, mac = parts
+        if int(expire) < time.time():
+            return None
+        expected = self._download_sign_mac(self.application.settings["cookie_secret"], uid, book_id, fmt, expire)
+        if not hmac.compare_digest(mac, expected):
+            return None
+        return int(uid)
 
     def send_error_of_not_invited(self):
         self.write({"err": "not_invited"})

@@ -2180,6 +2180,8 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
     def prepare(self):
         BaseHandler.prepare(self)
         if not CONF["ALLOW_GUEST_DOWNLOAD"] and not self.current_user:
+            self.login_by_download_sign()
+        if not CONF["ALLOW_GUEST_DOWNLOAD"] and not self.current_user:
             if self.is_opds:
                 return self.send_error_of_not_invited()
             else:
@@ -2191,6 +2193,20 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
                     raise web.HTTPError(403, reason=_("无权操作，请先登录注册邮箱激活账号。"))
             else:
                 raise web.HTTPError(403, reason=_("无权操作"))
+
+    def login_by_download_sign(self):
+        sign = self.get_argument("dl", "")
+        if not sign or not self.path_args:
+            return
+        try:
+            bid, fmt = self.path_args[0].split("/")[-1].split(".")
+            uid = self.parse_download_sign(sign, bid, fmt)
+        except ValueError:
+            uid = None
+        user = self.sqlite_session.get(Reader, uid) if uid else None
+        if not user:
+            raise web.HTTPError(403, reason=_("下载链接已失效，请刷新页面后重试"))
+        self.current_user = user
 
     def parse_url_path(self, url_path: str) -> str:
         filename = url_path.split("/")[-1]
