@@ -230,6 +230,29 @@ class TestAppWithoutLogin(TestApp):
         rsp = self.fetch("/api/book/1.epub", follow_redirects=False)
         self.assertEqual(rsp.code, 302)
 
+    def _sign(self, uid=1, bid=1, fmt="epub", expire=None):
+        expire = int(time.time()) + 3600 if expire is None else expire
+        mac = BaseHandler._download_sign_mac(_app.settings["cookie_secret"], uid, bid, fmt, expire)
+        return "%s.%s.%s" % (uid, expire, mac)
+
+    def test_download_with_sign(self):
+        rsp = self.fetch("/api/book/1.epub?dl=" + self._sign(), follow_redirects=False)
+        self.assertEqual(rsp.code, 200)
+        self.assertEqual(int(rsp.headers["Content-Length"]), len(rsp.body))
+
+    def test_download_with_bad_sign(self):
+        for sign in ("bogus", self._sign(bid=2), self._sign(fmt="pdf"), self._sign().replace("1.", "2.", 1), self._sign(expire=int(time.time()) - 1)):
+            rsp = self.fetch("/api/book/1.epub?dl=" + sign, follow_redirects=False)
+            self.assertEqual(rsp.code, 403)
+
+    def test_download_guest_allowed_ignores_sign(self):
+        main.CONF["ALLOW_GUEST_DOWNLOAD"] = True
+        try:
+            rsp = self.fetch("/api/book/1.epub", follow_redirects=False)
+            self.assertEqual(rsp.code, 200)
+        finally:
+            main.CONF["ALLOW_GUEST_DOWNLOAD"] = False
+
     def test_push(self):
         d = self.json("/api/book/1/push", method="POST", body="mail_to=unittest@gmail.com")
         self.assertEqual(d["err"], "user.need_login")

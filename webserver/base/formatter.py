@@ -2,12 +2,15 @@
 # -*- coding: UTF-8 -*-
 import datetime
 from webserver.i18n import _
+from webserver.loader import get_settings
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT
 from webserver.constants import CALIBRE_COLUMN_EXT_LINK, CALIBRE_COLUMN_CATEGORY, CALIBRE_COLUMN_FOLDER
 from webserver.constants import CALIBRE_COLUMN_TRANSLATORS
 from webserver.constants import BOOK_TYPE_EBOOK, CALIBRE_COLUMN_DYNAMIC_COVER
 from webserver.constants import CALIBRE_COLUMN_LOCATION, BOOK_TYPE_PHYSICAL
 from webserver.constants import CALIBRE_COLUMN_CATALOG
+
+CONF = get_settings()
 
 
 class SimpleBookFormatter:
@@ -145,10 +148,14 @@ class BookFormatter:
                 filesize = self.db.sizeof_format(book_id, fmt, index_is_id=True)
             except:
                 continue
+            href = self.cdn_url + "/api/book/%s.%s" % (book_id, fmt)
+            h = self.handler
+            if not CONF.get("ALLOW_GUEST_DOWNLOAD", False) and h.current_user:
+                href += "?dl=" + h.make_download_sign(h.current_user.id, book_id, fmt)
             item = {
                 "format": fmt,
                 "size": filesize,
-                "href": self.cdn_url + "/api/book/%s.%s" % (book_id, fmt),
+                "href": href,
             }
             files.append(item)
         return files
