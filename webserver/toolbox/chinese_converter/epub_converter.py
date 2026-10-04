@@ -7,13 +7,16 @@ EPUB 本质是 ZIP 容器，这里采用“条目级”处理保证无损：
 - 仅对 ``.html/.xhtml/.htm`` 做 HTML 解析，转换所有文本节点
   （跳过 ``script/style/noscript`` 子树，避免破坏脚本与样式；
   CDATA 段整体原样保留——其内容属原始字节数据，不参与繁简转换）；
-- 对 OPF（``.opf``）与 NCX（``.ncx``）做 XML 解析，转换其中的标题类文本
-  （``dc:title``、``navLabel`` 等）；
+- 对 OPF（``.opf``）与 NCX（``.ncx``）做 XML 解析，转换其中的元数据文本
+  （``dc:title``、``navLabel`` 等；机器标识符 ``dc:identifier`` 除外——
+  其中通常是 UUID/ISBN 等来源标识，转换会破坏跨书去重与来源引用）；
 - CSS、图片、字体等其余条目字节原样保留；
 - 重新打包时 ``mimetype`` 置首且 ``ZIP_STORED``（EPUB 规范要求），
-  其余条目沿用原压缩方式（``ZIP_DEFLATED``）。
+  其余条目统一以 ``ZIP_DEFLATED`` 重新压缩（内容字节不变，原 STORED
+  条目也会被重压；lxml 序列化会重写 XML 声明，``standalone`` 属性不保留）。
 
-TXT 为纯文本：自动探测编码（UTF-8 → GB18030），转换后统一以 UTF-8 输出。
+TXT 为纯文本：自动探测编码（UTF-16/32 → UTF-8 → GB18030 / BIG5 择优），转换后统一以
+UTF-8 输出。
 
 转换逻辑通过 ``converter`` 可调用对象注入（``text -> text``），
 方便在测试中用简单替换函数验证，也便于解耦引擎。
@@ -23,14 +26,21 @@ import os
 import re
 import zipfile
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, CData, Comment, Declaration, Doctype, ProcessingInstruction
 
 # 参与正文转换的 HTML 扩展名
 HTML_EXTS = (".html", ".xhtml", ".htm")
-# 解析为 XML 并转换标题类文本的扩展名
+# 解析为 XML 并转换元数据文本的扩展名
 XML_EXTS = (".opf", ".ncx")
 # 正文解析时跳过的子树（脚本 / 样式 / 注释区）
 SKIP_TAGS = {"script", "style", "noscript"}
+# 跳过的非文本节点：bs4 中这些类型都是 NavigableString 的子类，string=True
+# 会匹配到，replace_with 普通字符串会把它们降级为可见文本（注释标记丢失、
+# 内容遭转义），必须整体跳过、不参与转换
+SKIP_STRING_TYPES = (Comment, CData, Doctype, ProcessingInstruction, Declaration)
+# OPF/NCX 中不参与转换的标签（lxml-xml parser 会剥掉命名空间前缀，
+# dc:identifier 的 tag name 即 "identifier"）
+XML_KEEP_TAGS = {"identifier"}
 
 # CDATA 段匹配（XML 规范：以 ]]> 结束，内容中不可能再出现 ]]>）
 _CDATA_RE = re.compile(r"<!\[CDATA\[(.*?)\]\]>", re.DOTALL)
@@ -66,7 +76,7 @@ def convert_epub(epub_path, out_path, converter, convert_metadata=True, progress
     :param epub_path:        源 EPUB 路径
     :param out_path:         输出 EPUB 路径
     :param converter:        ``(str) -> str`` 文本转换函数
-    :param convert_metadata: 是否转换 OPF/NCX 中的标题类文本（默认 True）
+    :param convert_metadata: 是否转换 OPF/NCX 中的元数据文本（默认 True）
     :param progress_cb:      可选进度回调 ``(percent: int, stage: str) -> None``
     """
     if not os.path.isfile(epub_path):
@@ -137,20 +147,26 @@ def _set_xml_encoding(text: str, enc: str) -> str:
 
 
 def _convert_html_doc(data, converter):
-    """转换单个 HTML/XHTML 文档的所有文本节点（CDATA 段原样保留）。"""
+    """转换单个 HTML/XHTML 文档的所有文本节点（CDATA 段原样保留）。
+
+    非 UTF-8 输入统一以 UTF-8 回写：bs4 序列化会把 <meta charset> 重写为
+    utf-8，若按原编码写回字节会产生“声明 utf-8、字节 gb18030”的矛盾
+    （按声明解码即乱码），故字节与声明一并统一为 UTF-8。"""
     if not data.strip():
         return data
-    text, enc = _decode_entry(data)
+    text, _enc = _decode_entry(data)
     text, cdata_parts = _extract_cdata(text)
     soup = BeautifulSoup(text, "html.parser")
     _convert_text_nodes(soup, converter)
     html = soup.encode("utf-8").decode("utf-8")
     html = _restore_cdata(html, cdata_parts)
-    return _encode_entry(html, enc)
+    return _set_xml_encoding(html, "utf-8").encode("utf-8")
 
 
 def _convert_xml_doc(data, converter):
-    """转换 OPF/NCX 中的标题类文本（仅文本节点，不动属性）。"""
+    """转换 OPF/NCX 中的元数据文本（仅文本节点，不动属性）。
+
+    ``dc:identifier``/``identifier`` 除外（见 XML_KEEP_TAGS）。"""
     if not data.strip():
         return data
     text, enc = _decode_entry(data)
@@ -158,17 +174,28 @@ def _convert_xml_doc(data, converter):
     if soup.find() is None:
         # 不是合法 XML，原样返回
         return data
-    for node in soup.find_all(string=True):
-        node.replace_with(converter(str(node)))
+    for tag in soup.find_all(True):
+        if tag.name in XML_KEEP_TAGS:
+            continue
+        for node in tag.find_all(string=True, recursive=False):
+            if isinstance(node, SKIP_STRING_TYPES):
+                continue
+            node.replace_with(converter(str(node)))
     return _encode_entry(soup.encode("utf-8").decode("utf-8"), enc)
 
 
 def _convert_text_nodes(soup, converter):
-    """遍历并转换文本节点；跳过 SKIP_TAGS 子树。"""
+    """遍历并转换文本节点；跳过 SKIP_TAGS 子树与注释类节点。
+
+    Comment/Doctype 等是 NavigableString 的子类，string=True 会匹配到，
+    直接 replace_with 会把注释降级为可见文本（标记丢失、内容遭转义），
+    必须跳过。"""
     for parent in soup.find_all():
         if parent.name in SKIP_TAGS:
             continue
         for child in parent.find_all(string=True, recursive=False):
+            if isinstance(child, SKIP_STRING_TYPES):
+                continue
             child.replace_with(converter(str(child)))
 
 
@@ -189,9 +216,10 @@ def _write_epub(out_path, entries, mimetype_data):
 
 
 def convert_txt_file(src_path, out_path, converter):
-    """转换 TXT 文件；编码自动探测（UTF-8 → GB18030 / BIG5），输出统一 UTF-8。
+    """转换 TXT 文件；编码自动探测（UTF-16/32 / UTF-8 → GB18030 / BIG5 择优），
+    输出统一 UTF-8。
 
-    :return: 检测到的源编码（如 'utf-8' / 'gb18030' / 'big5'）
+    :return: 检测到的源编码（如 'utf-8' / 'gb18030' / 'big5' / 'utf-16'）
     """
     with open(src_path, "rb") as f:
         data = f.read()
@@ -214,14 +242,29 @@ _SIMPLE_ONLY_CHARS = frozenset(
 
 
 def detect_encoding(data: bytes) -> str:
-    """探测文本编码：UTF-8（含 BOM）→ GB18030 / BIG5 择一 → UTF-8 兜底。
+    """探测文本编码：UTF-16/32（BOM、\\x00 密度启发式）→ UTF-8（含 BOM）→
+    GB18030 / BIG5 择一 → UTF-8 兜底。
 
     GB18030 与 BIG5 都能严格解码大部分 CJK 字节流，先用高频简体独有字形
     判断是否为简体文本（简体 GBK），否则按 BIG5 解读（繁体书）；仅当
     BIG5 也无法严格解码时才回落到 GB18030。
     """
+    # UTF-32 BOM 必须先于 UTF-16 判断（UTF-32LE BOM 以 UTF-16LE BOM 开头）。
+    # 返回 BOM 感知编码名，decode 时自动处理字节序并剥离 BOM
+    if data.startswith((b"\xff\xfe\x00\x00", b"\x00\x00\xfe\xff")):
+        return "utf-32"
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return "utf-16"
     if data.startswith(b"\xef\xbb\xbf"):
         return "utf-8-sig"
+    # 无 BOM 的 UTF-16/32：ASCII 字符的高字节为 \x00（Windows 导出常见）。
+    # 文本类单字节编码（UTF-8/GB18030/BIG5）中 \x00 极罕见，高密度即可判；
+    # 必须先于 UTF-8 尝试——纯 ASCII 的 UTF-16 是合法 UTF-8（NUL），会被误判
+    head = data[:8192]
+    if head.count(b"\x00") > len(head) // 100:
+        even = head[0::2].count(b"\x00")
+        odd = head[1::2].count(b"\x00")
+        return "utf-16-be" if even > odd else "utf-16-le"
     try:
         data.decode("utf-8")
         return "utf-8"

@@ -112,7 +112,10 @@ class ToolSet:
         from .author_clean_tool import AuthorCleanTool
         from .mimo_tts import MimoTTSTool
         from .bookbarn_acceptor_tool import BookBarnAcceptorTool
-        from .text_replace import TextReplaceTool
+        try:
+            from .text_replace import TextReplaceTool
+        except ImportError:  # 未安装「正文查找替换」插件时优雅降级，跳过注册而非整站 500
+            TextReplaceTool = None
         from .txt_encoding_fixer import TxtEncodingFixerTool
         from .chinese_converter_tool import ChineseConverterTool
         from .epub_beautify import EpubBeautifyTool
@@ -122,7 +125,8 @@ class ToolSet:
         ToolSet.register(EpubBeautifyTool.info())
         ToolSet.register(EpubMergeTool.info())
         ToolSet.register(MimoTTSTool.info())
-        ToolSet.register(TextReplaceTool.info())
+        if TextReplaceTool is not None:
+            ToolSet.register(TextReplaceTool.info())
         ToolSet.register(TxtEncodingFixerTool.info())
         ToolSet.register(ChineseConverterTool.info())
         ToolSet.register(TextProcessor.info())

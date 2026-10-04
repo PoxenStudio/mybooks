@@ -130,6 +130,15 @@
                     class="mb-3"
                   >{{ $t('txtEncodingFixer.garbageAlert') }}</v-alert>
 
+                  <v-alert
+                    v-if="report.replacement_chars > 0"
+                    type="warning"
+                    dense
+                    text
+                    rounded="lg"
+                    class="mb-3"
+                  >{{ $t('txtEncodingFixer.replacementAlert', { n: report.replacement_chars }) }}</v-alert>
+
                   <div v-if="report.reasons && report.reasons.length" class="mb-3">
                     <div class="caption grey--text mb-1">{{ $t('txtEncodingFixer.reasons') }}</div>
                     <div
@@ -177,7 +186,7 @@
             <!-- Result -->
             <v-alert
               v-if="resultMsg"
-              :type="resultType === 'success' ? 'success' : 'error'"
+              :type="resultType"
               dense
               text
               rounded="lg"
@@ -239,8 +248,10 @@ export default {
       this.searching = true;
       this.searched = false;
       this.selected = null;
+      // calibre 查询语法特殊字符转义（\ " : ( )），防止用户输入破坏搜索表达式
+      const safe = q.replace(/\\/g, '\\\\').replace(/(["():])/g, '\\$1');
       try {
-        const rsp = await this.$backend(`/search?title=title:${encodeURIComponent(q)}`);
+        const rsp = await this.$backend(`/search?title=title:${encodeURIComponent(safe)}`);
         this.books = rsp.err === 'ok' ? (rsp.books || []) : [];
       } catch (_e) {
         this.books = [];
@@ -287,6 +298,15 @@ export default {
           return;
         }
         const data = rsp.data || {};
+        // 轮询的是全局最近任务：不属于当前选中书的任务一律忽略；
+        // 若在其终态仍不匹配，说明本书任务已被后续任务覆盖，停止轮询（结果仍走消息通知）
+        if (data.book_id && this.selected && data.book_id !== this.selected.id) {
+          if (rsp.err === 'task.failed' || data.status === 'completed') {
+            this.stopPolling();
+            this.processing = false;
+          }
+          return;
+        }
         this.progress = data.progress || 0;
         this.progressMsg = this.stageText(data.stage);
 
@@ -302,8 +322,14 @@ export default {
           this.processing = false;
           this.progress = 100;
           this.progressMsg = this.$t('txtEncodingFixer.progressCompleted');
-          this.resultMsg = this.$t('txtEncodingFixer.fixCompleted');
-          this.resultType = 'success';
+          const damage = data.replacement_chars || 0;
+          if (damage > 0) {
+            this.resultMsg = this.$t('txtEncodingFixer.fixCompletedDamage', { n: damage });
+            this.resultType = 'warning';
+          } else {
+            this.resultMsg = this.$t('txtEncodingFixer.fixCompleted');
+            this.resultType = 'success';
+          }
         }
       } catch (e) {
         // 网络抖动时忽略，继续轮询

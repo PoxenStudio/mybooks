@@ -244,16 +244,38 @@ class ScanService(AsyncService):
 
     @staticmethod
     def status_filter(query, status):
-        """todo 语义 = 非 IMPORTED（管理页待导入口径）；其余按状态等值过滤。
+        """批量动作口径：todo = 非 IMPORTED，其余按状态等值过滤，一律排有声书记录。
 
         选择器解析、导入预检、批量删除共用本实现，防止各处过滤条件漂移；统一经
         ebook_scan_filter 收敛到电子书扫描记录——导入预检的 COUNT 与实际解析、批删执行
         必须是同一口径，否则预检条数会与实际动作对不上。
+
+        注意：本函数排掉有声书记录，所以**不能**用来算管理页页签上的数字（那要与列表
+        行数一致，见 list_scan_filter）。
         """
         query = ScanService.ebook_scan_filter(query)
         if status == "todo":
             return query.filter(ScanFile.status.not_in([ScanFile.IMPORTED]))
         return query.filter(ScanFile.status == status)
+
+    @staticmethod
+    def list_scan_filter(query, filter_kind="all"):
+        """列表/页签口径：作用于**全部**扫描记录（含有声书 import_type=2）。
+
+        - "todo" → 非 IMPORTED
+        - "done" → IMPORTED
+        - 其它   → 不过滤
+
+        ImportList 的分页查询与页签数字（Scanner.summary 的 todo/done）共用本函数，
+        保证「待处理 (N)」恒等于该页签下列表底部的「共 N 条」——两处各写一套过滤条件
+        正是历史上页签与列表对不上的原因（exist 一度只被算进"已导入"）。与 status_filter
+        的区别：status_filter 是批量动作口径且排有声书。
+        """
+        if filter_kind == "todo":
+            return query.filter(ScanFile.status.not_in([ScanFile.IMPORTED]))
+        if filter_kind == "done":
+            return query.filter(ScanFile.status.in_([ScanFile.IMPORTED]))
+        return query
 
     @staticmethod
     def resolve_filter_paths(session, filter_kind="todo"):
@@ -511,7 +533,7 @@ class ScanService(AsyncService):
         return filelist
 
     @AsyncService.register_service
-    def do_import(self, paths, user_id, skip_last_dirs=0, force=False, import_id=0, cleanup_dir=None, selector=None):
+    def do_import(self, paths, user_id, skip_last_dirs=0, force=False, import_id=0, cleanup_dir=None, selector=None, sole=False):
         """
             force: 为TRUE时不检查重复的图书，直接导入
             import_id: 由调用方预先生成的批次id(如批量上传)，用于调用方在发起后立即拿到id去轮询逐文件结果；
@@ -521,6 +543,8 @@ class ScanService(AsyncService):
             selector: 服务端选择器 ("ready"|"filter", value)，非空时忽略 paths 参数，由本方法
                       在后台服务线程解析出文件清单——全量 .all() + 逐行 stat 在百万行表上会
                       冻住 tornado ioloop，绝不能在 handler 里做（handler 只做 COUNT 预检）
+            sole: 本次导入新建的书籍全部设为私藏(Item.sole，仅收藏人可见)；只作用于新建 Item，
+                  命中同书加格式/已存在记录不受影响
         """
         with ScanService.task_claim_lock:
             if ScanService.static_is_importing:
@@ -588,7 +612,7 @@ class ScanService(AsyncService):
 
         ScanService.static_import_files_cnt = len(filelist)
         try:
-            self.do_import_internal(filelist, user_id, task_id, imported_id, force)
+            self.do_import_internal(filelist, user_id, task_id, imported_id, force, sole=sole)
             if task_id:
                 BackgroundService().complete_task(task_id=task_id)
 
@@ -653,7 +677,7 @@ class ScanService(AsyncService):
             logging.error("[IMPORT] Error reading file %s: %s", fpath, e)
             return None, ScanFile.INVALID
 
-    def _import_one_file(self, row, user_id, scan_upload_path, session, force):
+    def _import_one_file(self, row, user_id, scan_upload_path, session, force, sole=False):
         """
             Read metadata and import one READY ScanFile into calibre.
 
@@ -801,6 +825,7 @@ class ScanService(AsyncService):
                 item = Item()
                 item.book_id = row.book_id
                 item.collector_id = user_id
+                item.sole = bool(sole)
                 item.src_path = fpath
                 try:
                     item.save()
@@ -839,7 +864,7 @@ class ScanService(AsyncService):
             logging.warning("[IMPORT] Slow import detected (%.3fs) for file: %s", time.time() - start_time, fpath)
         return new_book_id, status
 
-    def _importing_worker(self, work_queue, importing_imported, task_id, user_id, scan_upload_path, batch_size, force):
+    def _importing_worker(self, work_queue, importing_imported, task_id, user_id, scan_upload_path, batch_size, force, sole=False):
         """Worker thread for Phase 2: consumes row IDs from work_queue and imports each file."""
         importing_session = self.scoped_session()
         importing_index = 0
@@ -876,7 +901,7 @@ class ScanService(AsyncService):
                         except Exception as e:
                             logging.error("[IMPORT] Failed to update progress: %s", e)
 
-                    new_book_id, status = self._import_one_file(row, user_id, scan_upload_path, importing_session, force)
+                    new_book_id, status = self._import_one_file(row, user_id, scan_upload_path, importing_session, force, sole)
                     if status:
                         if status in ScanService.static_status_cnt:
                             ScanService.static_status_cnt[status] += 1
@@ -1000,7 +1025,7 @@ class ScanService(AsyncService):
             return row.id, ScanFile.READY
         return None, None
 
-    def do_import_internal(self, filelist, user_id, task_id=None, imported_id=0, force=False):
+    def do_import_internal(self, filelist, user_id, task_id=None, imported_id=0, force=False, sole=False):
         """
             并行执行:
             Phase Scanning: 负责遍历文件、计算哈希、去重，并将 READY 状态的 ScanFile 行 ID 放入队列；
@@ -1024,7 +1049,7 @@ class ScanService(AsyncService):
 
         importing_thread = threading.Thread(
             target=self._importing_worker,
-            args=(work_queue, importing_imported, task_id, user_id, scan_upload_path, batch_size, force),
+            args=(work_queue, importing_imported, task_id, user_id, scan_upload_path, batch_size, force, sole),
             name="ScanService.importing",
             daemon=True,
         )
@@ -1074,7 +1099,8 @@ class ScanService(AsyncService):
             AutoFillService().auto_fill_all(importing_imported)
             CatalogExtractService().extract_batch(user_id, importing_imported)
 
-            if CONF.get("SEND_MAIL_FOR_NEW_BOOKS", False):
+            # 私藏批次不发新书通知：邮件会发全站，等于把私藏书的存在与书名公开
+            if CONF.get("SEND_MAIL_FOR_NEW_BOOKS", False) and not sole:
                 try:
                     book_names = []
                     index = 100

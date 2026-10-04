@@ -19,7 +19,7 @@ from sqlalchemy import func
 import tornado
 import tornado.ioloop
 
-from webserver import loader
+from webserver import loader, utils
 from webserver.services.autofill import AutoFillService
 from webserver.services.ai_fillinfo import AIFillInfoService
 from webserver.services.batch_convert import BatchConvertService
@@ -1877,7 +1877,7 @@ class AdminResources(BaseHandler):
 class AdminAITestConnection(BaseHandler):
     @js
     @is_admin
-    def post(self):
+    async def post(self):
         data = tornado.escape.json_decode(self.request.body)
         api_url = data.get("api_url", None)
         api_key = data.get("api_key", None)
@@ -1889,7 +1889,10 @@ class AdminAITestConnection(BaseHandler):
             }
 
         try:
-            result, msg = BookAIClient(api_url, api_key, api_model).test_connection()
+            # 同步 OpenAI 客户端连接测试（服务不可达时等待到超时），下放线程池避免冻住 ioloop
+            result, msg = await utils.run_in_threadpool(
+                BookAIClient(api_url, api_key, api_model).test_connection
+            )
             if result:
                 return {"err": "ok", "msg": _("AI服务连接测试成功")}
             return {"err": "error", "msg": _("AI服务连接测试失败: %s") % msg}
