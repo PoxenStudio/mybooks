@@ -400,6 +400,7 @@ def make_app():
 
     app_settings = dict(CONF)
     app_settings.update({
+        "log_function": log_request,
         "legacy": book_db,
         "cache": cache,
         "ScopedSession": ScopedSession,
@@ -564,6 +565,13 @@ def setup_logging():
         logger.addHandler(file_handler)
     logger.setLevel(log_level)
     logging.debug("**Debug logging is enabled.**")
+
+
+def log_request(handler):
+    status = handler.get_status()
+    level = logging.INFO if status < 400 else logging.WARNING if status < 500 else logging.ERROR
+    cost_ms = 1000.0 * handler.request.request_time()
+    logging.log(level, "[%d][%.2fms][%s][%s](%s)", status, cost_ms, handler.request.method, handler.request.uri, handler.request.remote_ip)
 
 
 def main():
