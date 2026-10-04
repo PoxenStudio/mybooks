@@ -182,6 +182,10 @@ class AutoFillService(AsyncService):
             return True
         return self.do_fill_metadata(book_id, mi)
 
+    @AsyncService.register_service
+    def auto_fill_async(self, book_id):
+        self.auto_fill(book_id)
+
     def do_fill_metadata(self, book_id, mi):
         refer_mi = None
 
