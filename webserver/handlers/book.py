@@ -2718,8 +2718,8 @@ class BookUpload(BaseHandler):
         self.sqlite_session.add(item)
         self.sqlite_session.commit()
         if CONF.get(AUTO_FILL_META, False):
-            AutoFillService().auto_fill(book_id)
-        CatalogExtractService().extract_one(book_id)
+            AutoFillService().auto_fill_async(book_id)
+        CatalogExtractService().extract_one_async(book_id)
 
         if CONF.get("SEND_MAIL_FOR_NEW_BOOKS", False) and mi.title:
             try:
@@ -3010,7 +3010,7 @@ class BookUploadChunk(BaseHandler):
         self.sqlite_session.add(item)
         self.sqlite_session.commit()
         if CONF.get(AUTO_FILL_META, False):
-            AutoFillService().auto_fill(book_id)
+            AutoFillService().auto_fill_async(book_id)
 
         if CONF.get("SEND_MAIL_FOR_NEW_BOOKS", False) and mi.title:
             try:

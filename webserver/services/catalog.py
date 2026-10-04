@@ -177,6 +177,10 @@ class CatalogExtractService(AsyncService):
         return self._extract_one(book_id, force)
 
     @AsyncService.register_service
+    def extract_one_async(self, book_id, force=True):
+        self._extract_one(book_id, force)
+
+    @AsyncService.register_service
     def extract_batch(self, uid, book_ids, force=False):
         """批量提取，force=False 时跳过已有目录信息的书籍"""
         self.is_running = True
