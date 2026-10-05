@@ -23,6 +23,7 @@ from tornado.options import define, options
 
 from webserver import loader, models, social_routes, startup_status
 from webserver.startup_status import StartupState
+from webserver.services.perf_monitor import PerfMonitor
 from webserver.base.setting_saver import SettingsSaver
 from webserver.services import AsyncService
 from webserver.services.book_barn import BookBarnService
@@ -571,6 +572,8 @@ def log_request(handler):
     status = handler.get_status()
     level = logging.INFO if status < 400 else logging.WARNING if status < 500 else logging.ERROR
     cost_ms = 1000.0 * handler.request.request_time()
+    if CONF.get("PERF_MONITOR", True):
+        PerfMonitor.instance().record_request(handler.request.method, handler.request.path, cost_ms)
     logging.log(level, f"[{status}][{cost_ms:.2f}ms][{handler.request.method}][{handler.request.uri}]({handler.request.remote_ip}){'' if cost_ms < 1000 else '[x]'}")
 
 
@@ -630,6 +633,8 @@ def main():
         http_server.add_sockets(sockets)
     else:
         http_server.listen(options.port, options.host)
+    if CONF.get("PERF_MONITOR", True):
+        PerfMonitor.instance().start(int(CONF["PERF_STALL_MS"]))
     tornado.ioloop.IOLoop.instance().start()
 
     from flask.ext.sqlalchemy import _EngineDebuggingSignalEvents
