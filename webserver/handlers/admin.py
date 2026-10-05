@@ -34,6 +34,7 @@ from webserver.services.download_quota_service import (
     DownloadQuotaService,
     DOWNLOAD_QUOTA_FOLLOW_GLOBAL,
 )
+from webserver.services.perf_monitor import PerfMonitor
 from webserver.services.background_service import BackgroundService, BackgroundTask
 from webserver.services.book_search import BookSearch
 from webserver.handlers.base import BaseHandler, auth, js, is_admin
@@ -1338,6 +1339,19 @@ class AdminTokenHandler(BaseHandler):
         return {"err": "ok", "token": token}
 
 
+class AdminPerf(BaseHandler):
+    @js
+    @is_admin
+    def get(self):
+        return {"err": "ok", "perf": PerfMonitor.instance().snapshot()}
+
+    @js
+    @is_admin
+    def post(self):
+        PerfMonitor.instance().reset()
+        return {"err": "ok"}
+
+
 class AdminRunningTasks(BaseHandler):
     @js
     def get(self):
@@ -1990,6 +2004,7 @@ def routes():
         (r"/api/admin/thanks/notes", ThanksTo),
         (r"/api/admin/token", AdminTokenHandler),
         (r"/api/admin/tasks/running", AdminRunningTasks),
+        (r"/api/admin/perf", AdminPerf),
         (r"/api/admin/trash/size", AdminTrashSize),
         (r"/api/admin/trash/clear", AdminTrashClear),
         (r"/api/admin/trash/books", AdminTrashBooks),

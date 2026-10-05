@@ -24,6 +24,7 @@ from webserver.base.book_data_cascade import cascade_delete_book_data
 from webserver.base.formatter import BookFormatter
 from webserver.base.global_state import get_global_state
 from webserver.services.resource_service import ResourceService
+from webserver.services.perf_monitor import PerfMonitor
 from webserver.models import Item, Message, Reader
 from webserver import constants
 from webserver.version import VERSION
@@ -722,10 +723,17 @@ class BaseHandler(web.RequestHandler):
         """
 
         call = utils.bind_threadpool_call(func, *args, **kwargs)
+        name = getattr(func, "__name__", "calibre_call")
+        submitted = time.monotonic()
+        monitor = PerfMonitor.instance()
 
         def _runner():
             with self.db_lock:
-                return call()
+                started = time.monotonic()
+                try:
+                    return call()
+                finally:
+                    monitor.record_calibre(name, (started - submitted) * 1000.0, (time.monotonic() - started) * 1000.0)
 
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(utils.calibre_pool, _runner)
