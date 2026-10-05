@@ -1316,7 +1316,20 @@ class BaseHandler(web.RequestHandler):
 
         return result
 
+    # get_sys_info 的短缓存：返回值全部为服务器全局统计（库计数/友链图标/CONF 开关），
+    # 无用户态数据；该方法被 /api/user/info 心跳与首页高频调用，弱 CPU 设备上每次
+    # 做全库聚合代价高。缓存模式与 AdminResources 的类属性缓存一致。
+    _sys_info_cache = None
+    _sys_info_cache_time = 0.0
+    SYS_INFO_CACHE_TIME = 60
+
     def get_sys_info(self):
+        now = time.time()
+        cached = BaseHandler._sys_info_cache
+        if cached is not None:
+            age = now - BaseHandler._sys_info_cache_time
+            if age < BaseHandler.SYS_INFO_CACHE_TIME:
+                return cached
         from sqlalchemy import func
 
         db = self.calibre_db
@@ -1331,7 +1344,7 @@ class BaseHandler(web.RequestHandler):
         audio_book_cnt = self.get_audio_books_count()
         physical_book_cnt = self.get_physical_books_count()
 
-        return {
+        result = {
             "books": db.count(),
             "tags": len(db.all_tags()),
             "authors": len(db.all_authors()),
@@ -1387,6 +1400,9 @@ class BaseHandler(web.RequestHandler):
             "invited_enabled": self.need_invited(),
             "showUserInfo": CONF.get("ENABLE_AUTHOR_INFO", False),
         }
+        BaseHandler._sys_info_cache = result
+        BaseHandler._sys_info_cache_time = now
+        return result
 
 
 class ListHandler(BaseHandler):
