@@ -50,19 +50,29 @@ class DoubanV2MetaPlugin(MetaSourcePlugin):
 
     def search_best(self, mi):
         query = mi.isbn or mi.title
-        if not query or not self._acquire():
+        if not query:
+            logging.warning("[DoubanV2]search_best 跳过：isbn 和 title 均为空")
             return None
-        items, search_url = api.search(query, max_count=_max_count(), skip_error=True)
+        if not self._acquire():
+            logging.warning("[DoubanV2]search_best 跳过 %s：本地请求频率限制", query)
+            return None
+        result = api.search(query, max_count=_max_count(), skip_error=True)
+        if not result:
+            logging.warning("[DoubanV2]%s 查询返回错误响应，已跳过", query)
+            return None
+        items, search_url = result
         if not items:
+            logging.warning("[DoubanV2]search_best %s 无结果（请求失败、被反爬或确实没有该书，详见前面的 [DoubanV2] 日志）", query)
             return None
         if items[0].get("title", "") == "BLOCKED":
+            logging.warning("[DoubanV2]search_best %s 被豆瓣限制访问：%s", query, items[0].get("summary", ""))
             return None
         # 优先取标题完全匹配的，否则取首个结果
         best = next((i for i in items if i.get("title") == mi.title), items[0])
         try:
             return api.build_metadata(best, search_url, isbn=getattr(mi, "isbn", None), copy_image=True, get_detail=True)
         except Exception:
-            logging.error(_("[DoubanV2]查询 %s 失败"), query)
+            logging.error(_("[DoubanV2]查询 %s 失败"), query, exc_info=True)
             return None
 
     def get_metadata_by_provider(self, provider_value, item=None):

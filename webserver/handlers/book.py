@@ -2255,7 +2255,27 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
 
     DOWNLOAD_CACHE_TTL = 60
     DOWNLOAD_CACHE_MAX = 512
+    DOWNLOAD_CHARGE_WINDOW = 600
     _download_cache = {}
+    _charged = {}
+
+    def _charge_download(self, bid, fmt):
+        """同一用户同一本书同一格式在窗口期内的多次请求（分段、续传、重试）只扣一次配额；HEAD 不扣。"""
+        if not self.current_user or self.request.method == "HEAD":
+            return
+        key = (self.current_user.id, bid, fmt)
+        now = time.time()
+        charged = BookDownload._charged
+        if charged.get(key, 0) < now:
+            result = DownloadQuotaService.check_and_consume(self.current_user)
+            if not result.allowed:
+                raise web.HTTPError(429, reason=_("今日下载次数已达上限(%d/%d)，请明天再试") % (result.used, result.quota))
+            protocol = Reading.PROTOCOL_OPDS if self.is_opds else Reading.PROTOCOL_WEB
+            ReadingStatsService.record_download(self.current_user.id, int(bid), protocol)
+            if len(charged) >= 4 * self.DOWNLOAD_CACHE_MAX:
+                for stale in [k for k, expire in charged.items() if expire < now]:
+                    del charged[stale]
+        charged[key] = now + self.DOWNLOAD_CHARGE_WINDOW
 
     def parse_url_path(self, url_path: str) -> str:
         filename = url_path.split("/")[-1]
@@ -2269,21 +2289,14 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
         hit = BookDownload._download_cache.get(key)
         if hit and hit[0] > now and os.path.exists(hit[1]):
             BookDownload._download_cache[key] = (now + ttl, hit[1], hit[2])
+            self._charge_download(bid, fmt)
             self.set_header("Content-Disposition", hit[2].encode("UTF-8"))
             self.set_header("Content-Type", "application/octet-stream")
             return hit[1]
         book = self.get_book(bid, raise_exception=False)
-        if not book:
+        if not book or "fmt_%s" % fmt not in book:
             raise web.HTTPError(404, reason=_("%s格式无法下载" % fmt))
-        book_id = book["id"]
-        if self.current_user:
-            result = DownloadQuotaService.check_and_consume(self.current_user)
-            if not result.allowed:
-                raise web.HTTPError(429, reason=_("今日下载次数已达上限(%d/%d)，请明天再试") % (result.used, result.quota))
-            protocol = Reading.PROTOCOL_OPDS if self.is_opds else Reading.PROTOCOL_WEB
-            ReadingStatsService.record_download(self.current_user.id, book_id, protocol)
-        if "fmt_%s" % fmt not in book:
-            raise web.HTTPError(404, reason=_("%s格式无法下载" % fmt))
+        self._charge_download(bid, fmt)
 
         path = book["fmt_%s" % fmt]
         book["fmt"] = fmt
