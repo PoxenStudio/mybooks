@@ -868,7 +868,8 @@ class BaseHandler(web.RequestHandler):
     async def get_books_for_list_async(self, **kwargs):
         _ts = time.time()
         books = await self.run_calibre_read_async(self.calibre_db.get_data_as_dict, **calibre_fast.list_kwargs(), **kwargs)
-        return self._merge_books_full(books, _ts)
+        item_maps = await self._item_maps_async([book["id"] for book in books])
+        return self._merge_books_full(books, _ts, item_maps)
 
     def get_books(self, *args, **kwargs):
         _ts = time.time()
@@ -879,14 +880,25 @@ class BaseHandler(web.RequestHandler):
         )
         return self._merge_books_full(books, _ts)
 
-    def _item_maps(self, ids):
+    def _item_maps_offloaded(self, ids):
+        scoped = self.settings["ScopedSession"]
+        try:
+            return self._item_maps(ids, scoped())
+        finally:
+            scoped.remove()
+
+    async def _item_maps_async(self, ids):
+        return await asyncio.get_running_loop().run_in_executor(utils.calibre_pool, utils.bind_threadpool_call(self._item_maps_offloaded, ids))
+
+    def _item_maps(self, ids, session=None):
+        session = session or self.sqlite_session
         stage = PerfMonitor.instance().stage
         empty_item = Item().to_dict()
         rows = []
         if ids:
             table = Item.__table__
             with stage("list.items_execute"):
-                result = self.sqlite_session.execute(table.select().where(table.c.book_id.in_(ids)))
+                result = session.execute(table.select().where(table.c.book_id.in_(ids)))
             with stage("list.items_fetch"):
                 rows = [dict(r._mapping) for r in result]
         needs_default = len(rows) < len(set(ids))
@@ -895,7 +907,7 @@ class BaseHandler(web.RequestHandler):
         if collector_ids:
             with stage("list.collectors"):
                 collectors = {
-                    reader.id: reader.to_dict() for reader in self.sqlite_session.query(Reader).filter(Reader.id.in_(collector_ids)).all()
+                    reader.id: reader.to_dict() for reader in session.query(Reader).filter(Reader.id.in_(collector_ids)).all()
                 }
         maps = {}
         for row in rows:
@@ -905,7 +917,7 @@ class BaseHandler(web.RequestHandler):
             maps[row["book_id"]] = (row, collector)
         if needs_default:
             empty_item["collector"] = (
-                self.sqlite_session.query(Reader).order_by(Reader.id).first()
+                session.query(Reader).order_by(Reader.id).first()
             )
         result = {}
         for book_id, (row, collector) in maps.items():
@@ -913,9 +925,7 @@ class BaseHandler(web.RequestHandler):
             result[book_id] = row
         return result, empty_item
 
-    def _merge_books_full(self, books, _ts=None):
-        """get_books 的 sqlite 合并段：只碰 sqlite_session 与内存结构，须留在 ioloop
-        线程执行；calibre 查询段可先经 run_calibre_async 在工作线程完成。"""
+    def _merge_books_full(self, books, _ts=None, item_maps=None):
         if _ts is None:
             _ts = time.time()
         self._build_custom_column_map()
@@ -930,7 +940,7 @@ class BaseHandler(web.RequestHandler):
         except Exception as e:
             logging.error(f"Error getting audio book ids: {e}")
 
-        maps, empty_item = self._item_maps([book["id"] for book in books])
+        maps, empty_item = item_maps or self._item_maps([book["id"] for book in books])
 
         soled_books = set()
         for book in books:
