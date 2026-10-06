@@ -54,8 +54,10 @@ export default {
       return this.$store?.state?.default_page_size || 60;
     },
     max_search_size() {
-      // 搜索时一次性获取的最大书籍数量，避免数据量过大
-      return 10000;
+      return 1000;
+    },
+    fetch_page_size() {
+      return 200;
     }
   },
   data: () => ({
@@ -231,10 +233,29 @@ export default {
       this.page_cnt = Math.max(1, Math.ceil(this.total / this.page_size));
     },
 
+    async fetchAllPages(url) {
+      const pageSize = this.fetch_page_size;
+      const first = await this.$backend(`${url}&start=0&size=${pageSize}`);
+      if (first.err !== 'ok') {
+        return first;
+      }
+      const books = first.books || [];
+      const wanted = Math.min(first.total || books.length, this.max_search_size);
+      while (books.length < wanted) {
+        const rsp = await this.$backend(`${url}&start=${books.length}&size=${pageSize}`);
+        if (rsp.err !== 'ok' || !rsp.books || rsp.books.length === 0) {
+          break;
+        }
+        books.push(...rsp.books);
+      }
+      first.books = books;
+      return first;
+    },
+
     async searchByTitle(name) {
       try {
-        const url = `/search?title=${encodeURIComponent(name)}&start=0&size=${this.max_search_size}`;
-        const rsp = await this.$backend(url);
+        const url = `/search?title=${encodeURIComponent(name)}`;
+        const rsp = await this.fetchAllPages(url);
         if (rsp.err === 'ok') {
           return rsp;
         }
@@ -246,8 +267,8 @@ export default {
 
     async searchBySegmentation(name) {
       try {
-        const url = `/search?seg=1&title=${encodeURIComponent(name)}&start=0&size=${this.max_search_size}`;
-        const rsp = await this.$backend(url);
+        const url = `/search?seg=1&title=${encodeURIComponent(name)}`;
+        const rsp = await this.fetchAllPages(url);
         if (rsp.err === 'ok') {
           return rsp;
         }
@@ -259,8 +280,8 @@ export default {
 
     async searchExtended(name) {
       try {
-        const url = `/search?name=${encodeURIComponent(name)}&start=0&size=${this.max_search_size}`;
-        const rsp = await this.$backend(url);
+        const url = `/search?name=${encodeURIComponent(name)}`;
+        const rsp = await this.fetchAllPages(url);
         if (rsp.err === 'ok') {
           return rsp;
         }
