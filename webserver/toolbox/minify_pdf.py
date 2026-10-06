@@ -6,10 +6,11 @@ import logging
 import os
 import shutil
 from pathlib import Path
-from typing import Callable, Optional
-
-import fitz
+from typing import TYPE_CHECKING, Callable, Optional
 from PIL import Image
+
+if TYPE_CHECKING:
+    import fitz
 
 from webserver.services import AsyncService
 from webserver.toolbox.base_tool import BaseTool
@@ -119,7 +120,7 @@ def _parse_page_selection(page_spec: str, total_pages: int, option_name: str) ->
 
 
 def _render_page(
-    page: fitz.Page,
+    page: "fitz.Page",
     max_width: Optional[int],
     to_bw: bool,
     to_gray: bool,
@@ -138,6 +139,7 @@ def _render_page(
         scale = 1.0
     scale = max(scale, 0.01)
 
+    import fitz
     matrix = fitz.Matrix(scale, scale)
     pix = page.get_pixmap(matrix=matrix, alpha=False)
     mode = "RGB" if pix.n >= 3 else "L"
@@ -226,6 +228,7 @@ class MinifyPdfTool(BaseTool):
     def get_pdf_info(pdf_path: str) -> dict:
         """获取 PDF 基础信息，如分辨率、色彩空间、尺寸等"""
         try:
+            import fitz
             doc = fitz.open(pdf_path)
             info = {
                 "page_count": len(doc),
@@ -293,6 +296,7 @@ class MinifyPdfTool(BaseTool):
 
             logging.info("[MinifyPdfTool] start minify: %s -> %s", input_pdf, output_pdf)
 
+            import fitz
             doc = fitz.open(str(input_path))
             total_pages = len(doc)
             if total_pages == 0:

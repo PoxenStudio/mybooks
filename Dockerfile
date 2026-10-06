@@ -118,6 +118,7 @@ RUN chmod 644 /etc/logrotate.d/mybooks-nginx && \
     python3 server.py --syncdb  && \
     python3 server.py --update-config  && \
     find webserver -name "*.pyc" -type f -delete && \
+    (python3 -m compileall -q -x "webserver/test/" webserver server.py || true) && \
     rm -rf app/src && \
     rm -rf app/dist/logo && \
     ln -s /data/books/logo app/dist/logo && \

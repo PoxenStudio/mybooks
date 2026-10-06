@@ -18,11 +18,14 @@ from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
 from webserver.i18n import _
 
-try:
-    import jieba
-    JIEBA_AVAILABLE = True
-except ImportError:
-    JIEBA_AVAILABLE = False
+
+def _load_jieba():
+    try:
+        import jieba
+        return jieba
+    except ImportError:
+        return None
+
 
 import tornado.escape
 from tornado import web
@@ -2447,7 +2450,8 @@ class SearchBook(ListHandler):
         return await self.cached_search_async(self._fast_clause(variants, title_search))
 
     async def _search_by_segmentation(self, name, ids, seen):
-        if not JIEBA_AVAILABLE or not (2 < len(name) < 10):
+        jieba = _load_jieba() if 2 < len(name) < 10 else None
+        if jieba is None:
             return None
 
         start = time.time()
