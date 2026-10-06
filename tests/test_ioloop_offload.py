@@ -19,6 +19,7 @@ import contextvars
 import threading
 import types
 import unittest
+from unittest import mock
 
 from tornado import web
 
@@ -149,6 +150,40 @@ class TestPoolIsolation(unittest.TestCase):
         # calibre 查询不能跟着排队——两池必须隔离
         self.assertIsNot(calibre_pool, blocking_pool)
         self.assertNotEqual(calibre_pool._thread_name_prefix, blocking_pool._thread_name_prefix)
+
+
+class TestDeleteBookAsync(unittest.TestCase):
+    def test_user_name_read_before_session_is_committed(self):
+        class Session:
+            committed = False
+
+            def commit(self):
+                Session.committed = True
+
+            def rollback(self):
+                pass
+
+        class User:
+            @property
+            def name(self):
+                if Session.committed:
+                    raise RuntimeError("detached")
+                return "alice"
+
+        handler = _make_handler([])
+        handler.sqlite_session = Session()
+        handler.cascade_delete_book_data = lambda *a, **k: None
+        handler.current_user = User()
+        handler.add_msg = mock.Mock()
+
+        async def run_calibre(func, *args):
+            return None
+
+        handler.run_calibre_async = run_calibre
+        handler.calibre_db = mock.Mock()
+        with mock.patch.object(BaseHandler, "purge_book_thumbs"):
+            self.assertTrue(asyncio.run(handler.delete_book_async(1, "t")))
+        self.assertIn("alice", handler.add_msg.call_args[0][1])
 
 
 class TestGetBookAsync(unittest.TestCase):

@@ -1039,6 +1039,7 @@ class BaseHandler(web.RequestHandler):
                 logging.warning("purge thumbs of book %s failed: %s", book_id, e)
 
     async def delete_book_async(self, book_id, book_title):
+        user_name = self.current_user.name if self.current_user else ""
         try:
             self.cascade_delete_book_data(self.sqlite_session, book_id, commit=False)
             self.sqlite_session.commit()
@@ -1051,7 +1052,6 @@ class BaseHandler(web.RequestHandler):
             logging.error(f"删除书籍《{book_title}》失败: {e}")
             return False
         await asyncio.get_running_loop().run_in_executor(utils.calibre_pool, self.purge_book_thumbs, book_id)
-        user_name = self.current_user.name if self.current_user else ""
         self.add_msg("success", _("%s删除了书籍《%s》") % (user_name, book_title))
         return True
 
