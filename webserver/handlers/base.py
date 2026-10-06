@@ -349,7 +349,7 @@ class BaseHandler(web.RequestHandler):
         self.login_user(user, persist=not recent)
         return True
 
-    DOWNLOAD_SIGN_MAX_AGE_SECONDS = 10
+    DOWNLOAD_SIGN_MAX_AGE_SECONDS = 30
 
     @staticmethod
     def _download_sign_mac(secret, user_id, book_id, fmt, expire):
