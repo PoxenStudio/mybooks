@@ -559,7 +559,7 @@ class UserInfo(BaseHandler):
             return
         ids = sorted({b["id"] for k, v in user.extra.items() if k.endswith("_history") for b in v[:24]})
         if ids:
-            self._history_existing = await self.run_calibre_async(self._existing_book_ids, ids)
+            self._history_existing = await self.run_calibre_read_async(self._existing_book_ids, ids)
 
     def get_user_info(self, detail):
         enable_vip_quota = CONF.get(ENABLE_VIP_QUOTA_KEY, False)

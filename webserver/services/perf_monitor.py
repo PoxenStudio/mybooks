@@ -217,12 +217,14 @@ class PerfMonitor:
         try:
             yield
         finally:
-            cost_ms = (time.perf_counter() - start) * 1000
-            with self._lock:
-                samples = self._stages.get(name)
-                if samples is None:
-                    samples = self._stages[name] = collections.deque(maxlen=MAX_SAMPLES)
-                samples.append(cost_ms)
+            self.record_stage(name, (time.perf_counter() - start) * 1000)
+
+    def record_stage(self, name, cost_ms):
+        with self._lock:
+            samples = self._stages.get(name)
+            if samples is None:
+                samples = self._stages[name] = collections.deque(maxlen=MAX_SAMPLES)
+            samples.append(cost_ms)
 
     def snapshot(self):
         with self._lock:
