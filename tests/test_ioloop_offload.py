@@ -17,6 +17,7 @@ BaseHandler.run_calibre_async/get_book_async.
 import asyncio
 import contextvars
 import threading
+import types
 import unittest
 
 from tornado import web
@@ -44,11 +45,12 @@ class _FakeQuery:
 
 
 class _FakeCollector:
-    def __init__(self, name="alice"):
+    def __init__(self, name="alice", reader_id=3):
         self._name = name
+        self.id = reader_id
 
     def to_dict(self):
-        return {"name": self._name}
+        return {"id": self.id, "name": self._name}
 
 
 class _FakeItemRow:
@@ -70,6 +72,9 @@ class _FakeSession:
     def __init__(self, readers=(), items=()):
         self._readers = list(readers)
         self._items = list(items)
+
+    def execute(self, _stmt):
+        return [types.SimpleNamespace(_mapping=item.to_dict()) for item in self._items]
 
     def query(self, model):
         if model is Reader:
@@ -95,13 +100,13 @@ class _FakeCalibreDB:
         return list(self._books)
 
 
-def _make_handler(books, items=()):
+def _make_handler(books, items=(), readers=()):
     # 跳过 RequestHandler.__init__（需要 application/db），只装配被测路径触及的属性
     handler = BaseHandler.__new__(BaseHandler)
     handler.request = None
     handler.calibre_db = _FakeCalibreDB(books)
     handler.db_lock = threading.RLock()
-    handler.sqlite_session = _FakeSession(items=items)
+    handler.sqlite_session = _FakeSession(readers=readers, items=items)
     handler.write = lambda chunk: None
     handler.set_status = lambda status, reason=None: None
     handler.user_id = lambda: 1
@@ -154,6 +159,7 @@ class TestGetBookAsync(unittest.TestCase):
         self.handler = _make_handler(
             self.BOOKS,
             items=[_FakeItemRow(7, sole=False, collector_id=3)],
+            readers=[_FakeCollector()],
         )
 
     def test_calibre_call_runs_off_ioloop(self):

@@ -596,7 +596,7 @@ def setup_logging():
 
 def log_request(handler):
     status = handler.get_status()
-    level = logging.INFO if status < 400 else logging.WARNING if status < 500 else logging.ERROR
+    level = logging.INFO if status < 400 else logging.WARNING if status < 500 or status == 503 else logging.ERROR
     cost_ms = 1000.0 * handler.request.request_time()
     if CONF.get("PERF_MONITOR", True):
         PerfMonitor.instance().record_request(handler.request.method, handler.request.path, cost_ms)
