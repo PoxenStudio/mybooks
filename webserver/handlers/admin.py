@@ -1343,7 +1343,9 @@ class AdminPerf(BaseHandler):
     @js
     @is_admin
     def get(self):
-        return {"err": "ok", "perf": PerfMonitor.instance().snapshot()}
+        perf = PerfMonitor.instance().snapshot()
+        perf["library_books"] = len(self.calibre_db_cache.all_book_ids())
+        return {"err": "ok", "perf": perf}
 
     @js
     @is_admin

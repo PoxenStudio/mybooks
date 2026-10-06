@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import collections
+import contextlib
 import logging
 import os
 import re
@@ -12,6 +13,20 @@ import tornado.ioloop
 
 HEARTBEAT_MS = 100
 WATCHDOG_INTERVAL_S = 0.2
+SAMPLE_INTERVAL_S = 0.1
+MAX_PROFILE_KEYS = 400
+TOP_N = 15
+_LAYER_RULES = (
+    ("calibre", "/calibre/"),
+    ("sqlalchemy", "/sqlalchemy/"),
+    ("sqlalchemy", "/social_sqlalchemy/"),
+    ("opencc", "/opencc/"),
+    ("jieba", "/jieba/"),
+    ("image", "/PIL/"),
+    ("image", "/magick/"),
+    ("json", "/json/"),
+    ("webserver", "/webserver/"),
+)
 DEFAULT_STALL_MS = 500
 MAX_STALLS = 50
 MAX_SAMPLES = 300
@@ -53,9 +68,12 @@ class PerfMonitor:
         self._main_ident = None
         self._stalls = collections.deque(maxlen=MAX_STALLS)
         self._stall_total = 0
+        self._profile_samples = 0
+        self._profile = {name: collections.Counter() for name in ("layer", "leaf", "app", "entry")}
         self._lag_samples = collections.deque(maxlen=MAX_SAMPLES * 4)
         self._routes = {}
         self._calibre = {}
+        self._stages = {}
         self._started_at = time.time()
         self._callback = None
         self._watchdog = None
@@ -91,19 +109,73 @@ class PerfMonitor:
 
     def _watch(self):
         reported_for = None
+        sleep_s = WATCHDOG_INTERVAL_S
         while self._running:
-            time.sleep(WATCHDOG_INTERVAL_S)
+            time.sleep(sleep_s)
             beat = self._heartbeat
             stalled_ms = (time.monotonic() - beat) * 1000.0
             if stalled_ms < self.stall_ms:
                 reported_for = None
+                sleep_s = WATCHDOG_INTERVAL_S
                 continue
-            if reported_for == beat:
-                continue
-            reported_for = beat
+            sleep_s = SAMPLE_INTERVAL_S
             frame = sys._current_frames().get(self._main_ident)
-            stack = "".join(traceback.format_stack(frame, limit=12)) if frame else ""
-            self._record_stall(stalled_ms, stack)
+            if frame is None:
+                continue
+            self._sample(frame)
+            if reported_for != beat:
+                reported_for = beat
+                self._record_stall(stalled_ms, "".join(traceback.format_stack(frame, limit=12)))
+
+    @staticmethod
+    def _short(filename):
+        parts = filename.replace("\\", "/").split("/")
+        return "/".join(parts[-2:])
+
+    def _sample(self, frame):
+        layer = None
+        leaf = None
+        app = None
+        entry = None
+        cursor = frame
+        while cursor is not None:
+            code = cursor.f_code
+            filename = code.co_filename
+            name = getattr(code, "co_qualname", code.co_name)
+            if leaf is None:
+                leaf = "%s:%s" % (self._short(filename), name)
+            if layer is None:
+                for layer_name, needle in _LAYER_RULES:
+                    if needle in filename:
+                        layer = layer_name
+                        break
+            if "/webserver/" in filename:
+                relative = filename.split("/webserver/", 1)[1]
+                if app is None:
+                    app = "%s:%s:%d" % (relative, name, cursor.f_lineno)
+                if relative.startswith("handlers/") and name != "js.<locals>.do":
+                    entry = "%s:%s" % (relative, name)
+                elif entry is None and relative.startswith(("services/", "toolbox/")):
+                    entry = "%s:%s" % (relative, name)
+            cursor = cursor.f_back
+        with self._lock:
+            self._profile_samples += 1
+            for key, value in (("layer", layer or "other"), ("leaf", leaf), ("app", app), ("entry", entry)):
+                if value is None:
+                    continue
+                counter = self._profile[key]
+                counter[value] += 1
+                if len(counter) > MAX_PROFILE_KEYS:
+                    for name, _ in counter.most_common()[MAX_PROFILE_KEYS // 2:]:
+                        del counter[name]
+
+    def _profile_snapshot(self):
+        total = self._profile_samples or 1
+        result = {"samples": self._profile_samples, "interval_ms": int(SAMPLE_INTERVAL_S * 1000)}
+        for key, counter in self._profile.items():
+            limit = len(counter) if key == "layer" else TOP_N
+            result[key] = [{"name": name, "count": n, "pct": round(100.0 * n / total, 1)} for name, n in counter.most_common(limit)]
+        return result
 
     def _record_stall(self, stalled_ms, stack):
         entry = {
@@ -139,12 +211,27 @@ class PerfMonitor:
         if wait_ms > 1000:
             logging.warning("[perf] calibre call %s waited %.0fms for pool/db_lock (run %.0fms)", name, wait_ms, run_ms)
 
+    @contextlib.contextmanager
+    def stage(self, name):
+        start = time.perf_counter()
+        try:
+            yield
+        finally:
+            cost_ms = (time.perf_counter() - start) * 1000
+            with self._lock:
+                samples = self._stages.get(name)
+                if samples is None:
+                    samples = self._stages[name] = collections.deque(maxlen=MAX_SAMPLES)
+                samples.append(cost_ms)
+
     def snapshot(self):
         with self._lock:
             routes = {k: _summary(v) for k, v in self._routes.items()}
             calibre = {k: {"wait": _summary(v["wait"]), "run": _summary(v["run"])} for k, v in self._calibre.items()}
+            stages = {k: _summary(v) for k, v in self._stages.items()}
             stalls = list(self._stalls)
             stall_total = self._stall_total
+            profile = self._profile_snapshot()
         slowest = sorted(routes.items(), key=lambda kv: kv[1]["p95"] * kv[1]["count"], reverse=True)
         return {
             "running": self._running,
@@ -153,7 +240,9 @@ class PerfMonitor:
             "loop_lag_ms": _summary(self._lag_samples),
             "stall_total": stall_total,
             "stalls": stalls[-20:],
+            "profile": profile,
             "calibre": calibre,
+            "stages": stages,
             "routes": dict(slowest[:40]),
             "system": self._system(),
         }
@@ -180,6 +269,10 @@ class PerfMonitor:
         with self._lock:
             self._stalls.clear()
             self._stall_total = 0
+            self._profile_samples = 0
+            for counter in self._profile.values():
+                counter.clear()
             self._routes.clear()
             self._calibre.clear()
+            self._stages.clear()
         self._lag_samples.clear()
