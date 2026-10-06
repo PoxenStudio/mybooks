@@ -36,6 +36,7 @@ from webserver.base.image_helper import ImageHelper
 from webserver.base.epub_helper import EpubHelper
 from webserver.base.meta_helper import guess_authors, guess_tags
 from webserver.services.autofill import AutoFillService
+from webserver.services.perf_monitor import PerfMonitor
 from webserver.services.ai_fillinfo import AIFillInfoService
 from webserver.services.catalog import CatalogExtractService
 from webserver.services.book_search import BookSearch
@@ -2685,12 +2686,14 @@ class BookUpload(BaseHandler):
         if not mi.languages:
             mi.languages = CONF.get("DEFAULT_LANGUAGE", constants.DEFAULT_LANGUAGE_CODE)
 
+        stage = PerfMonitor.instance().stage
         cover_fmt, cover_data = mi.cover_data
         if (cover_fmt is None or cover_data is None) and fmt.lower() == "epub":
             # Try to extract cover from epub file directly
             epub_fpath = next((p for p in fpaths if p.lower().endswith(".epub")), None)
             if epub_fpath:
-                cover_buf = EpubHelper.extract_cover(epub_fpath)
+                with stage("upload.cover_extract"):
+                    cover_buf = EpubHelper.extract_cover(epub_fpath)
                 if cover_buf:
                     mi.cover_data = ("jpeg", cover_buf.read())
                     logging.info("_add_new_book: 从 epub 文件提取封面成功: %s", epub_fpath)
@@ -2701,22 +2704,25 @@ class BookUpload(BaseHandler):
             fmt, cover_data = mi.cover_data
             if fmt is None or cover_data is None:
                 author = mi.authors[0] if mi.authors else _("佚名")
-                data = ImageGenerator.generate_cover(mi.title, author)
+                with stage("upload.dynamic_cover"):
+                    data = ImageGenerator.generate_cover(mi.title, author)
                 if data:
                     mi.cover_data = ("jpeg", data)
                     dynamic_cover = True
-        book_id = self.calibre_db.import_book(mi, fpaths)
+        with stage("upload.import_book"):
+            book_id = self.calibre_db.import_book(mi, fpaths)
         if book_id is not None and dynamic_cover:
             try:
                 self.calibre_db_cache.set_field(CALIBRE_COLUMN_DYNAMIC_COVER, {book_id: 1})
             except Exception as e:
                 logging.error(f"Failed to set dynamic cover field for book ID {book_id}: {e}")
         self.increase_history_count("upload_history")
-        item = Item()
-        item.book_id = book_id
-        item.collector_id = self.user_id()
-        self.sqlite_session.add(item)
-        self.sqlite_session.commit()
+        with stage("upload.item_commit"):
+            item = Item()
+            item.book_id = book_id
+            item.collector_id = self.user_id()
+            self.sqlite_session.add(item)
+            self.sqlite_session.commit()
         if CONF.get(AUTO_FILL_META, False):
             AutoFillService().auto_fill_async(book_id)
         CatalogExtractService().extract_one_async(book_id)
@@ -2867,8 +2873,9 @@ class BookUpload(BaseHandler):
             return {"err": "params.filename", "msg": _("文件名不合法")}
 
         logging.info("save upload file into [%s], fmt:%s", fpath, fmt)
+        stage = PerfMonitor.instance().stage
         try:
-            with open(fpath, "wb") as f:
+            with stage("upload.save_file"), open(fpath, "wb") as f:
                 f.write(data)
         except Exception as e:
             logging.error("Failed to save uploaded file: %s", e)
@@ -2880,10 +2887,12 @@ class BookUpload(BaseHandler):
             _translators = []
             _authors = []
             try:
-                validate_book_file(fpath, fmt)
+                with stage("upload.validate"):
+                    validate_book_file(fpath, fmt)
             except InvalidBookFileError as e:
                 return {"err": "book.invalid", "msg": _("文件校验失败：%s") % e}
-            mi = read_book_metadata(fpath, fmt, name)
+            with stage("upload.read_meta"):
+                mi = read_book_metadata(fpath, fmt, name)
             if mi.title and mi.title == CALIBRE_ERROR_FLAG:
                 if fmt == "pdf":
                     mi.title = utils.remove_zlibrary_suffix(name.replace("." + fmt, ""))
@@ -2925,7 +2934,8 @@ class BookUpload(BaseHandler):
             if CONF.get("UPLOAD_IGNORE_TITLE_CHECKING", False):
                 books = []
             else:
-                books = self.calibre_db.books_with_same_title(mi)
+                with stage("upload.same_title"):
+                    books = self.calibre_db.books_with_same_title(mi)
             if books and fmt in SCANNED_DOCUMENT_FORMATS and len(books) > 1:
                 # 扫描版作者多来自文件名、不可信：多个同名候选一律按新书入库，避免误并
                 logging.info("upload: %d same-title candidates for scanned document, import as new book", len(books))
@@ -2961,7 +2971,8 @@ class BookUpload(BaseHandler):
                 if _translators:
                     translators = ",".join(_translators)
                     self.calibre_db_cache.set_field(CALIBRE_COLUMN_TRANSLATORS, {book_id: translators})
-            self.add_msg("success", _("导入书籍成功！"))
+            with stage("upload.add_msg"):
+                self.add_msg("success", _("导入书籍成功！"))
             return {"err": "ok", "book_id": book_id}
         finally:
             # 上传的源文件已被 calibre 复制进书库，除非配置要求保留，否则清理暂存文件
