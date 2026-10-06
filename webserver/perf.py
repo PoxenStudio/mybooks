@@ -24,12 +24,25 @@ def lite_on(name):
 
 
 def setting_keys():
-    return ["PERFORMANCE_MODE", *LITE_GROUPS]
+    return ["PERFORMANCE_MODE", "THUMB_CACHE", "CACHE_MAX_MB", *LITE_GROUPS]
+
+
+CACHE_MB_CHOICES = (50, 100, 200, 300)
+
+
+def clamp_cache_mb(value):
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        return 200
+    return min(CACHE_MB_CHOICES, key=lambda c: abs(c - value))
 
 
 def sanitize(args, current):
     mode = args.get("PERFORMANCE_MODE", current.get("PERFORMANCE_MODE", "normal"))
     args["PERFORMANCE_MODE"] = mode if mode in MODES else "normal"
+    args["THUMB_CACHE"] = bool(args.get("THUMB_CACHE", current.get("THUMB_CACHE", True)))
+    args["CACHE_MAX_MB"] = clamp_cache_mb(args.get("CACHE_MAX_MB", current.get("CACHE_MAX_MB", 200)))
     for key in LITE_GROUPS:
         args[key] = bool(args.get(key, current.get(key, True)))
     return args

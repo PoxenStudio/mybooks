@@ -658,6 +658,10 @@
   content: "\F02E9";
 }
 
+.mdi-image-multiple-outline::before {
+  content: "\F02EF";
+}
+
 .mdi-image-outline::before {
   content: "\F0976";
 }

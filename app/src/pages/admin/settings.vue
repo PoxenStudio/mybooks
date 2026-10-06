@@ -715,6 +715,23 @@
                     persistent-hint
                   ></v-checkbox>
                 </div>
+                <v-checkbox
+                  small
+                  v-model="thumbCache"
+                  prepend-icon="mdi-image-multiple-outline"
+                  :label="$t('settings.thumb_cache')"
+                  :hint="$t('settings.thumb_cache_hint')"
+                  persistent-hint
+                ></v-checkbox>
+                <div v-if="thumbCache" style="padding-left: 32px; padding-top: 14px">
+                  <v-select
+                    v-model="cacheMaxMb"
+                    :items="cacheSizeItems"
+                    :label="$t('settings.thumb_cache_size')"
+                    dense
+                    style="max-width: 240px"
+                  ></v-select>
+                </div>
               </div>
             </template>
             <template v-if="card.show_stamp">
@@ -1729,6 +1746,25 @@ export default {
   computed: {
     liteGroups() {
       return LITE_GROUPS;
+    },
+    thumbCache: {
+      get() {
+        return this.settings["THUMB_CACHE"] !== false;
+      },
+      set(value) {
+        this.$set(this.settings, "THUMB_CACHE", value);
+      },
+    },
+    cacheMaxMb: {
+      get() {
+        return Number(this.settings["CACHE_MAX_MB"]) || 200;
+      },
+      set(value) {
+        this.$set(this.settings, "CACHE_MAX_MB", value);
+      },
+    },
+    cacheSizeItems() {
+      return [50, 100, 200, 300].map((v) => ({ text: v + " MB", value: v }));
     },
     liteMode: {
       get() {

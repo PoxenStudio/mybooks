@@ -17,7 +17,7 @@ def nearest_size(width, height, sizes=DEFAULT_SIZES):
     return ordered[-1]
 
 
-def scale_cover(data, width, height, quality=83):
+def scale_cover(data, width, height, quality=81):
     im = Image.open(io.BytesIO(data))
     if im.format == "JPEG":
         im.draft("RGB", (width * 2, height * 2))
@@ -97,7 +97,7 @@ class ThumbCache:
             except OSError:
                 continue
             for name in names:
-                if not (name.startswith(prefix) and name.endswith(".jpg")):
+                if not (name.startswith(prefix) and name.endswith((".jpg", ".webp"))):
                     continue
                 full = os.path.join(folder, name)
                 try:
