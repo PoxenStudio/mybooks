@@ -11,6 +11,7 @@
 import datetime
 import json
 import logging
+import random
 import re
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -22,19 +23,40 @@ from html.parser import HTMLParser
 
 KEY = "douban_v2"
 
-_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-       "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36")
+UA_LIST = [
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:138.0) Gecko/20010101 Firefox/138.0",
+    "Mozilla/5.0 (Windows NT 6.1; WOW64; x64; rv:138.0) Gecko/20010101 Firefox/138.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_6; rv:138.0) Gecko/20110101 Firefox/138.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:138.0) Gecko/20100101 Firefox/138.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.7444.162 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.7444.176 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.7444.176 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.7444.59 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.7727.101 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.7727.120 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.7727.116 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.7727.137 Safari/537.36",
+]
 
-_SEARCH_HEADERS = {
-    "User-Agent": _UA,
-    "Referer": "https://book.douban.com/",
-    "Accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,"
-               "image/avif,image/webp,image/apng,*/*;q=0.8,"
-               "application/signed-exchange;v=b3;q=0.7"),
-    "Accept-Language": "zh-CN,zh;q=0.9",
-}
+_UA_KEY = "_ua"
 
-_COVER_HEADERS = {"User-Agent": _UA}
+
+def pick_ua():
+    return random.choice(UA_LIST)
+
+
+def _search_headers(ua):
+    return {
+        "User-Agent": ua,
+        "Referer": "https://book.douban.com/",
+        "Accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,"
+                   "image/avif,image/webp,image/apng,*/*;q=0.8,"
+                   "application/signed-exchange;v=b3;q=0.7"),
+        "Accept-Language": "zh-CN,zh;q=0.9",
+    }
+
 
 _SEARCH_BASE = "https://search.douban.com/book/subject_search"
 
@@ -56,8 +78,9 @@ def search(query, max_count=1, skip_error=False):
     """搜索豆瓣图书，返回 (items, search_url)。items 为过滤后的 search_subject 列表。"""
     encoded = urllib.parse.quote(str(query))
     url = f"{_SEARCH_BASE}?search_text={encoded}&cat=1001"
+    ua = pick_ua()
     try:
-        resp = requests.get(url, headers=_SEARCH_HEADERS, timeout=10)
+        resp = requests.get(url, headers=_search_headers(ua), timeout=10)
         resp.raise_for_status()
     except requests.exceptions.RequestException as e:
         logging.error("[DoubanV2]搜索请求失败 query=%s: %s", query, e)
@@ -93,6 +116,8 @@ def search(query, max_count=1, skip_error=False):
         }], url
 
     items = [i for i in data.get("items", []) if i.get("tpl_name") == "search_subject"]
+    for item in items:
+        item[_UA_KEY] = ua
     return items[:max_count], url
 
 
@@ -262,11 +287,11 @@ class _BookDetailParser(HTMLParser):
         return primary if primary else "".join(self._fallback_chunks).strip()
 
 
-def get_book_detail(book_url, search_url):
+def get_book_detail(book_url, search_url, ua=None):
     logging.debug("[D2]get book detail: %s", book_url)
     if not book_url:
         return None
-    headers = {**_SEARCH_HEADERS, "Referer": search_url}
+    headers = {**_search_headers(ua or pick_ua()), "Referer": search_url}
     try:
         resp = requests.get(book_url, headers=headers, timeout=10)
         resp.raise_for_status()
@@ -295,7 +320,7 @@ def get_book_detail(book_url, search_url):
     }
 
 
-def get_cover(cover_url, referer="https://book.douban.com/"):
+def get_cover(cover_url, referer="https://book.douban.com/", ua=None):
     """下载封面图片，返回 (fmt, bytes) 或 None。"""
     if not cover_url:
         return None
@@ -304,7 +329,7 @@ def get_cover(cover_url, referer="https://book.douban.com/"):
     if not suffix:
         return None
 
-    headers = {**_COVER_HEADERS, "Referer": referer}
+    headers = {"User-Agent": ua or pick_ua(), "Referer": referer}
     try:
         session = requests.Session()
         resp = session.get(cover_url, headers=headers, timeout=10)
@@ -351,10 +376,11 @@ def build_metadata(item, search_url, isbn=None, copy_image=False, get_detail=Fal
     book_url = item.get("url", "")
     if not book_url:
         book_url = item.get("website", "")
+    ua = item.get(_UA_KEY) or pick_ua()
 
     # 从书籍详情页获取精确作者、ISBN 和简介（失败时回退到 abstract 解析值）
     if get_detail and book_url:
-        detail = get_book_detail(book_url, search_url)
+        detail = get_book_detail(book_url, search_url, ua=ua)
     else:
         detail = None
 
@@ -399,7 +425,7 @@ def build_metadata(item, search_url, isbn=None, copy_image=False, get_detail=Fal
         if not copy_image:
             mi.cover_url = cover_url
         else:
-            cover_data = get_cover(cover_url, referer=search_url or "https://book.douban.com/")
+            cover_data = get_cover(cover_url, referer=search_url or "https://book.douban.com/", ua=ua)
             if cover_data:
                 mi.cover_url = cover_url
                 mi.cover_data = cover_data

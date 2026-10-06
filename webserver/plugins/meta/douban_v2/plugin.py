@@ -62,7 +62,7 @@ class DoubanV2MetaPlugin(MetaSourcePlugin):
             return None
         items, search_url = result
         if not items:
-            logging.warning("[DoubanV2]search_best %s 无结果（请求失败、被反爬或确实没有该书，详见前面的 [DoubanV2] 日志）", query)
+            logging.warning("[DoubanV2]search_best %s 无结果", query)
             return None
         if items[0].get("title", "") == "BLOCKED":
             logging.warning("[DoubanV2]search_best %s 被豆瓣限制访问：%s", query, items[0].get("summary", ""))
