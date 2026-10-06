@@ -7,6 +7,7 @@ import os
 import re
 import sys
 import threading
+import time
 from webserver.handlers import static_files
 from webserver.i18n import _
 from logging.handlers import RotatingFileHandler
@@ -661,6 +662,7 @@ def main():
         gc.freeze()
         gc.set_threshold(50000, 20, 100)
     perf.apply_logging()
+    logging.info("[STARTUP-TIMING] step=listening since_import_ms=%.0f", (time.perf_counter() - StartupState.t0) * 1000)
     if CONF.get("PERF_MONITOR", True):
         PerfMonitor.instance().start(int(CONF["PERF_STALL_MS"]))
     tornado.ioloop.IOLoop.instance().start()

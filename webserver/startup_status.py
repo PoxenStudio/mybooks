@@ -5,6 +5,7 @@ import asyncio
 import contextlib
 import logging
 import threading
+import time
 
 import tornado.httpserver
 import tornado.ioloop
@@ -19,6 +20,9 @@ class StartupState:
     lock = threading.Lock()
     running = False
     steps = {}
+    began = {}
+    costs = []
+    t0 = time.perf_counter()
 
     @classmethod
     def plan(cls, names):
@@ -27,10 +31,17 @@ class StartupState:
             cls.steps = {name: PENDING for name in names}
 
     @classmethod
+    def _record(cls, name, status):
+        cost = (time.perf_counter() - cls.began.pop(name)) * 1000 if name in cls.began else 0
+        cls.costs.append((name, cost))
+        logging.info("[STARTUP-TIMING] step=%s status=%s cost_ms=%.0f", name, status, cost)
+
+    @classmethod
     def _close_running(cls):
         for name, status in cls.steps.items():
             if status == RUNNING:
                 cls.steps[name] = DONE
+                cls._record(name, DONE)
 
     @classmethod
     def enter(cls, name):
@@ -38,10 +49,13 @@ class StartupState:
         with cls.lock:
             cls._close_running()
             cls.steps[name] = RUNNING
+            cls.began[name] = time.perf_counter()
 
     @classmethod
     def set_step(cls, name, status):
         with cls.lock:
+            if cls.steps.get(name) == RUNNING or name in cls.began:
+                cls._record(name, status)
             cls.steps[name] = status
 
     @classmethod
@@ -49,6 +63,9 @@ class StartupState:
         with cls.lock:
             cls._close_running()
             cls.running = False
+            total = (time.perf_counter() - cls.t0) * 1000
+            detail = " ".join("%s=%.0f" % item for item in cls.costs)
+            logging.info("[STARTUP-TIMING] total_ms=%.0f %s", total, detail)
 
     @classmethod
     def snapshot(cls):

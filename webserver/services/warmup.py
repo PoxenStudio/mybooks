@@ -10,9 +10,9 @@ def _timed(name, func):
     start = time.perf_counter()
     try:
         func()
-        logging.info("[warmup] %s done in %.0f ms", name, (time.perf_counter() - start) * 1000)
+        logging.info("[STARTUP-TIMING] step=warmup:%s status=done cost_ms=%.0f", name, (time.perf_counter() - start) * 1000)
     except Exception as e:
-        logging.warning("[warmup] %s failed: %s", name, e)
+        logging.warning("[STARTUP-TIMING] step=warmup:%s status=failed error=%s", name, e)
 
 
 def _opencc():
