@@ -8,6 +8,7 @@ Designed to be instantiated once per request, wrapping a BaseHandler instance.
 
 import logging
 
+from webserver.base.formatter import cover_stamp
 from webserver.models import ReadingState
 
 PAGE_SIZE = 20  # default books per page
@@ -36,8 +37,7 @@ class WapDataProvider:
         that renderers can build cover image URLs.
         """
         for book in books:
-            ts = book.get("timestamp")
-            book["ts"] = int(ts.timestamp()) if hasattr(ts, "timestamp") else 0
+            book["ts"] = cover_stamp(book)
         return books
 
     def _search(self, query):

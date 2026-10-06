@@ -29,6 +29,7 @@ from tornado import web
 from sqlalchemy import func
 
 from webserver import loader, utils
+from webserver.base import accel
 from webserver.base.formatter import BookFormatter, ReadingStateFormatter
 from webserver.base.image_generator import ImageGenerator
 from webserver.base.image_helper import ImageHelper
@@ -2260,6 +2261,15 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
         self.set_header("Content-Disposition", att.encode("UTF-8"))
         self.set_header("Content-Type", "application/octet-stream")
         return path
+
+    async def get(self, path, include_body=True):
+        if accel.enabled(self):
+            file_path = self.parse_url_path(path)
+            uri = accel.uri_for(accel.LIBRARY_PREFIX, self.calibre_db_cache.backend.library_path, file_path)
+            if uri and os.path.isfile(file_path):
+                self.set_header("X-Accel-Redirect", uri)
+                return
+        return await super().get(path, include_body)
 
     @classmethod
     def get_absolute_path(cls, root: str, path: str) -> str:

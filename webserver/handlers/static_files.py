@@ -2,12 +2,14 @@
 # -*- coding: UTF-8 -*-
 
 
+import asyncio
 import hashlib
 import logging
 import mimetypes
 import os
 import random
 import re
+import time
 import urllib
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
@@ -17,7 +19,9 @@ from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 from webserver import constants, loader
 from webserver.services.converter import ConverterService
 from webserver.handlers.base import BaseHandler, js, is_admin
+from webserver.base import accel
 from webserver.base.image_generator import ImageGenerator
+from webserver.base.thumbnail import DEFAULT_SIZES, ThumbCache, nearest_size, scale_cover
 
 
 CONF = loader.get_settings()
@@ -31,6 +35,12 @@ def get_author_hash(author):
 
 
 class ImageHandler(BaseHandler):
+    _cover_paths = {}
+    _thumb_inflight = {}
+    _thumb_slots = None
+    _thumb_cache = None
+    _thumb_cache_root = None
+
     def send_error_of_not_invited(self):
         self.set_header("WWW-Authenticate", "Basic")
         self.set_status(401)
@@ -38,7 +48,8 @@ class ImageHandler(BaseHandler):
 
     async def get(self, fmt, id, **kwargs):
         data = await self.get_data_async(fmt, id, **kwargs)
-        self.write(data)
+        if data is not None:
+            self.write(data)
 
     async def get_data_async(self, fmt, id, **kwargs):
         "Serves files, covers, thumbnails, metadata from the calibre database"
@@ -50,8 +61,10 @@ class ImageHandler(BaseHandler):
             if not match:
                 raise web.HTTPError(404, "id:%s not an integer" % id)
             id = int(match.group())
-        if not self.calibre_db.has_id(id):
-            raise web.HTTPError(404, "id:%d does not exist in database" % id)
+        known = ImageHandler._cover_paths.get(id)
+        if not (known and known[1] and known[0] > time.time()):
+            if not await asyncio.get_running_loop().run_in_executor(_executor, self.calibre_db.has_id, id):
+                raise web.HTTPError(404, "id:%d does not exist in database" % id)
         if fmt == "thumb" or fmt.startswith("thumb_"):
             try:
                 width, height = map(int, fmt.split("_")[1:])
@@ -64,54 +77,156 @@ class ImageHandler(BaseHandler):
             return await self.get_metadata_as_opf_async(id)
         raise web.HTTPError(404, "bad url")
 
-    # Actually get content from the database {{{
-    async def get_cover_async(self, id, thumbnail=False, thumb_width=60, thumb_height=80):
-        """异步获取封面，将阻塞操作放到线程池执行"""
-        import asyncio
+    @classmethod
+    def thumb_cache(cls):
+        root = CONF.get("CACHE_DIR", "/data/cache")
+        if not CONF.get("THUMB_CACHE", True) or not root:
+            return None
+        if cls._thumb_cache is None or cls._thumb_cache_root != root:
+            cls._thumb_cache_root = root
+            cls._thumb_cache = ThumbCache(root, int(CONF.get("CACHE_MAX_MB", 200)) * 1024 * 1024)
+        return cls._thumb_cache
+
+    def library_root(self):
+        return self.calibre_db_cache.backend.library_path
+
+    def _lookup_cover_dir(self, book_id):
+        return self.calibre_db_cache.field_for("path", book_id)
+
+    async def _cover_file(self, book_id):
+        loop = asyncio.get_running_loop()
+        for attempt in (0, 1):
+            hit = ImageHandler._cover_paths.get(book_id)
+            if attempt == 1 or hit is None or hit[0] < time.time():
+                rel = await loop.run_in_executor(_executor, self._lookup_cover_dir, book_id)
+                if len(ImageHandler._cover_paths) > 4096:
+                    ImageHandler._cover_paths.clear()
+                hit = ImageHandler._cover_paths[book_id] = (time.time() + 60, rel)
+            if not hit[1]:
+                return None, None
+            path = os.path.join(self.library_root(), hit[1], "cover.jpg")
+            try:
+                return path, os.stat(path)
+            except OSError:
+                continue
+        return None, None
+
+    def _not_modified(self, etag):
+        self.set_header("Etag", etag)
+        if self.check_etag_header():
+            self.set_status(304)
+            return True
+        return False
+
+    def _accel_redirect(self, uri):
+        self.set_header("Content-Type", "image/jpeg")
+        self.set_header("Cache-Control", "public, max-age=86400")
+        self.set_header("X-Accel-Redirect", uri)
+
+    def _read_default_or_dynamic(self, book_id, width, height):
+        try:
+            cover_data = self.default_cover
+            if CONF.get("USE_DYNAMIC_COVER", False):
+                with self.db_lock:
+                    mi = self.calibre_db.get_metadata(book_id, index_is_id=True)
+                author = mi.authors[0] if mi.authors else _("佚名")
+                data = ImageGenerator.generate_cover(mi.title, author, width, height)
+                if data:
+                    cover_data = data
+            return cover_data
+        except Exception as err:
+            logging.error(f"Failed to generate cover!! {err}")
+            return self.default_cover
+
+    @staticmethod
+    def _read_file(path):
+        with open(path, "rb") as f:
+            return f.read()
+
+    @staticmethod
+    def _make_thumbnail(path, width, height, quality, use_pillow):
+        data = ImageHandler._read_file(path)
+        if use_pillow:
+            try:
+                return scale_cover(data, width, height, quality)
+            except Exception as err:
+                logging.warning("Pillow thumbnail failed (%s), fall back to calibre", err)
         from calibre.utils.magick.draw import thumbnail as generate_thumbnail
 
-        def _get_cover_sync():
-            try:
-                # 快速访问数据库获取封面数据，锁住最小范围
-                with self.db_lock:
-                    cover = self.calibre_db.cover(id, index_is_id=True)
+        return generate_thumbnail(data, width=width, height=height, compression_quality=quality)[-1]
 
-                dynamic_cover_flag = False
-                if cover is None:
-                    cover_data = self.default_cover
-                    if CONF.get("USE_DYNAMIC_COVER", False):
-                        mi = self.calibre_db.get_metadata(id, index_is_id=True)
-                        author = mi.authors[0] if mi.authors else _("佚名")
-                        data = ImageGenerator.generate_cover(mi.title, author, thumb_width, thumb_height)
-                        if data:
-                            cover_data = data
-                            dynamic_cover_flag = True
-                    updated = self.build_time
-                else:
-                    cover_data = cover
-                    updated = self.calibre_db.cover_last_modified(id, index_is_id=True)
-
-                # 图片处理在锁外执行（CPU 密集型操作）
-                if thumbnail and cover_data != self.default_cover and not dynamic_cover_flag:
-                    cover_data = generate_thumbnail(
-                        cover_data, width=thumb_width, height=thumb_height, compression_quality=83
-                    )[-1]
-
-                return cover_data, updated
-            except Exception as err:
-                logging.error(f"Failed to generate cover!! {err}")
-                cover_data = self.default_cover
-                updated = self.build_time
-                return cover_data, updated
-
+    async def _generate_thumbnail(self, path, stamp, book_id, width, height):
+        key = (book_id, stamp, width, height)
+        inflight = ImageHandler._thumb_inflight.get(key)
+        if inflight is not None:
+            return await asyncio.shield(inflight)
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        ImageHandler._thumb_inflight[key] = future
+        if ImageHandler._thumb_slots is None:
+            ImageHandler._thumb_slots = asyncio.Semaphore(max(1, int(CONF.get("THUMB_CONCURRENCY", 2))))
         try:
+            async with ImageHandler._thumb_slots:
+                data = await loop.run_in_executor(
+                    _executor, self._make_thumbnail, path, width, height, int(CONF.get("THUMB_JPEG_QUALITY", 83)), bool(CONF.get("THUMB_USE_PILLOW", True))
+                )
+            future.set_result(data)
+            return data
+        except BaseException as err:
+            future.set_exception(err)
+            future.exception()
+            raise
+        finally:
+            ImageHandler._thumb_inflight.pop(key, None)
+
+    async def get_cover_async(self, id, thumbnail=False, thumb_width=60, thumb_height=80):
+        loop = asyncio.get_running_loop()
+        try:
+            path, st = await self._cover_file(id)
+            if path is None:
+                self.set_header("Content-Type", "image/jpeg")
+                self.set_header("Last-Modified", self.last_modified(self.build_time))
+                return await loop.run_in_executor(_executor, self._read_default_or_dynamic, id, thumb_width, thumb_height)
+
+            stamp = st.st_mtime_ns
+            use_accel = accel.enabled(self)
+            if not thumbnail:
+                if use_accel:
+                    uri = accel.uri_for(accel.LIBRARY_PREFIX, self.library_root(), path)
+                    if uri:
+                        self._accel_redirect(uri)
+                        return None
+                if self._not_modified('"%d-%d"' % (stamp, st.st_size)):
+                    return None
+                self.set_header("Content-Type", "image/jpeg")
+                self.set_header("Cache-Control", "public, max-age=86400")
+                return await loop.run_in_executor(_executor, self._read_file, path)
+
+            sizes = CONF.get("THUMB_SIZES") or DEFAULT_SIZES
+            width, height = nearest_size(thumb_width, thumb_height, [tuple(s) for s in sizes])
+            if not use_accel and self._not_modified('"%d-%d-%dx%d"' % (stamp, id, width, height)):
+                return None
+            cache = self.thumb_cache()
+            cache_path = cache.path_for(id, stamp, width, height) if cache else None
+            if cache_path and os.path.exists(cache_path):
+                if use_accel:
+                    uri = accel.uri_for(accel.CACHE_PREFIX, cache.root, cache_path)
+                    if uri:
+                        cache.hits += 1
+                        self._accel_redirect(uri)
+                        return None
+                data = await loop.run_in_executor(_executor, cache.get, cache_path)
+                if data is not None:
+                    self.set_header("Content-Type", "image/jpeg")
+                    self.set_header("Cache-Control", "public, max-age=86400")
+                    return data
+            data = await self._generate_thumbnail(path, stamp, id, width, height)
+            if cache_path:
+                cache.misses += 1
+                await loop.run_in_executor(_executor, cache.put, cache_path, data)
             self.set_header("Content-Type", "image/jpeg")
-            # 在线程池中执行阻塞操作
-            cover, updated = await asyncio.get_event_loop().run_in_executor(
-                _executor, _get_cover_sync
-            )
-            self.set_header("Last-Modified", self.last_modified(updated))
-            return cover
+            self.set_header("Cache-Control", "public, max-age=86400")
+            return data
         except web.HTTPError:
             raise
         except Exception as err:

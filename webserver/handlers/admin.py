@@ -1345,6 +1345,10 @@ class AdminPerf(BaseHandler):
     def get(self):
         perf = PerfMonitor.instance().snapshot()
         perf["library_books"] = len(self.calibre_db_cache.all_book_ids())
+        from webserver.handlers.static_files import ImageHandler
+
+        cache = ImageHandler.thumb_cache()
+        perf["thumb_cache"] = cache.stats() if cache else None
         return {"err": "ok", "perf": perf}
 
     @js
