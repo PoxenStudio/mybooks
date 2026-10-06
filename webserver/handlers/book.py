@@ -2074,10 +2074,12 @@ class BookEdit(BaseHandler):
 
 
 class BookDelete(BaseHandler):
+    _deleting = set()
+
     @js
     @auth
-    def post(self, bid):
-        book = self.get_book(bid)
+    async def post(self, bid):
+        book = await self.get_book_async(bid)
         bid = book["id"]
 
         if isinstance(book["collector"], dict):
@@ -2090,11 +2092,16 @@ class BookDelete(BaseHandler):
         if not self.current_user.can_delete() or not (self.is_admin() or self.is_book_owner(bid, cid)):
             return {"err": "permission", "msg": _("无权操作")}
 
-        # 删除整本书
-        AudioUtils.clear_audio(bid)
-        if self.delete_book(bid, book.get("title", "")):
+        if bid in BookDelete._deleting:
             return {"err": "ok", "msg": _("删除成功")}
-        return {"err": "fail", "msg": _("删除失败, 请查看日志。如果一直出错，请联系管理员。")}
+        BookDelete._deleting.add(bid)
+        try:
+            await utils.run_in_threadpool(AudioUtils.clear_audio, bid)
+            if await self.delete_book_async(bid, book.get("title", "")):
+                return {"err": "ok", "msg": _("删除成功")}
+            return {"err": "fail", "msg": _("删除失败, 请查看日志。如果一直出错，请联系管理员。")}
+        finally:
+            BookDelete._deleting.discard(bid)
 
 
 class BookDeleteFormat(BaseHandler):
@@ -2692,7 +2699,7 @@ class BookUpload(BaseHandler):
         except Exception:
             return s.group(0)
 
-    def _add_new_book(self, mi, fpaths, fmt):
+    def _prepare_new_book(self, mi, fpaths, fmt):
         dynamic_cover = False
         mi.title_sort = utils.get_title_sort(mi.title)
         detected_language = utils.detect_title_language(mi.title)
@@ -2704,7 +2711,6 @@ class BookUpload(BaseHandler):
         stage = PerfMonitor.instance().stage
         cover_fmt, cover_data = mi.cover_data
         if (cover_fmt is None or cover_data is None) and fmt.lower() == "epub":
-            # Try to extract cover from epub file directly
             epub_fpath = next((p for p in fpaths if p.lower().endswith(".epub")), None)
             if epub_fpath:
                 with stage("upload.cover_extract"):
@@ -2724,13 +2730,20 @@ class BookUpload(BaseHandler):
                 if data:
                     mi.cover_data = ("jpeg", data)
                     dynamic_cover = True
-        with stage("upload.import_book"):
+        return dynamic_cover
+
+    def _import_to_calibre(self, mi, fpaths, dynamic_cover):
+        with PerfMonitor.instance().stage("upload.import_book"):
             book_id = self.calibre_db.import_book(mi, fpaths)
         if book_id is not None and dynamic_cover:
             try:
                 self.calibre_db_cache.set_field(CALIBRE_COLUMN_DYNAMIC_COVER, {book_id: 1})
             except Exception as e:
                 logging.error(f"Failed to set dynamic cover field for book ID {book_id}: {e}")
+        return book_id
+
+    def _after_import(self, mi, book_id):
+        stage = PerfMonitor.instance().stage
         self.increase_history_count("upload_history")
         with stage("upload.item_commit"):
             item = Item()
@@ -2766,6 +2779,16 @@ class BookUpload(BaseHandler):
 
         return book_id
 
+    def _add_new_book(self, mi, fpaths, fmt):
+        dynamic_cover = self._prepare_new_book(mi, fpaths, fmt)
+        book_id = self._import_to_calibre(mi, fpaths, dynamic_cover)
+        return self._after_import(mi, book_id)
+
+    async def _add_new_book_async(self, mi, fpaths, fmt):
+        dynamic_cover = await utils.run_in_threadpool(self._prepare_new_book, mi, fpaths, fmt)
+        book_id = await self.run_calibre_async(self._import_to_calibre, mi, fpaths, dynamic_cover)
+        return self._after_import(mi, book_id)
+
     def get_upload_file(self):
         # for unittest mock
         if "ebook" not in self.request.files:
@@ -2773,9 +2796,9 @@ class BookUpload(BaseHandler):
         p = self.request.files["ebook"][0]
         return (p["filename"], p["body"])
 
-    def _add_format_to_existing_book(self, book_id, update_metadata=True, force=False):
+    async def _add_format_to_existing_book(self, book_id, update_metadata=True, force=False):
         """向已存在的书籍添加新格式文件"""
-        book = self.get_book(book_id, raise_exception=False)
+        book = await self.get_book_async(book_id, raise_exception=False)
         if not book:
             return {"err": "book.not_found", "msg": _("书籍不存在")}
 
@@ -2813,20 +2836,18 @@ class BookUpload(BaseHandler):
         except ValueError:
             return {"err": "params.filename", "msg": _("文件名不合法")}
         try:
-            with open(fpath, "wb") as f:
-                f.write(data)
-        except Exception as e:
+            await utils.run_in_threadpool(self._save_and_validate, fpath, data, fmt)
+        except InvalidBookFileError as e:
+            self._remove_staged_file(fpath)
+            return {"err": "book.invalid", "msg": _("文件校验失败：%s") % e}
+        except OSError as e:
             logging.error(f"Failed to save uploaded file for book {book_id}: {e}")
+            self._remove_staged_file(fpath)
             return {"err": "internal", "msg": _("保存上传文件失败, 请检查文件名是否过长或者书库所在路径空间不足!")}
 
         logging.info(f"Save format file to [{fpath}]")
         try:
-            # 置于 try 内，校验失败时 finally 仍清理暂存文件
-            try:
-                validate_book_file(fpath, fmt)
-            except InvalidBookFileError as e:
-                return {"err": "book.invalid", "msg": _("文件校验失败：%s") % e}
-            self.calibre_db.add_format(book_id, fmt.upper(), fpath, index_is_id=True, replace=force)
+            await self.run_calibre_async(self.calibre_db.add_format, book_id, fmt.upper(), fpath, index_is_id=True, replace=force)
             logging.info(f"Successfully added {fmt.upper()} format to book {book_id}")
 
             try:
@@ -2842,27 +2863,37 @@ class BookUpload(BaseHandler):
             logging.error(f"Failed to add format to book {book_id}: {e}")
             return {"err": "internal", "msg": _("添加格式失败: %s") % str(e)}
         finally:
-            # 清理临时文件（除非配置要求保留上传源文件）
-            if not CONF.get("KEEP_UPLOAD_SOURCE_FILE", False) and os.path.exists(fpath):
-                try:
-                    os.remove(fpath)
-                except Exception as e:
-                    logging.warning("Failed to remove uploaded source file %s: %s", fpath, e)
+            self._remove_staged_file(fpath)
+
+    @staticmethod
+    def _save_and_validate(fpath, data, fmt):
+        stage = PerfMonitor.instance().stage
+        with stage("upload.save_file"), open(fpath, "wb") as f:
+            f.write(data)
+        with stage("upload.validate"):
+            validate_book_file(fpath, fmt)
+
+    _upload_slots = None
+
+    @classmethod
+    def _upload_slot(cls):
+        if cls._upload_slots is None:
+            cls._upload_slots = asyncio.Semaphore(max(1, int(CONF.get("UPLOAD_CONCURRENCY", 1))))
+        return cls._upload_slots
 
     @js
-    def post(self):
+    async def post(self):
         if CONF["ALLOW_GUEST_UPLOAD"] is False:
             if self.is_guest():
                 return {"err": "permission", "msg": _("无权操作，请先登录")}
             if not self.current_user.can_upload():
                 return {"err": "permission", "msg": _("无权操作")}
 
-        # 检查是否为添加格式到已有书籍
         target_book_id = self.get_argument("bid", None)
         update_metadata = self.get_argument("update_meta", 1)
         if target_book_id:
             force = str(self.get_argument("force", "0")).lower() in ("1", "true")
-            return self._add_format_to_existing_book(int(target_book_id), update_metadata == 1, force)
+            return await self._add_format_to_existing_book(int(target_book_id), update_metadata == 1, force)
 
         name, data = self.get_upload_file()
         if name is None:
@@ -2881,122 +2912,135 @@ class BookUpload(BaseHandler):
         if fmt not in ACCEPTED_BOOK_FORMATS:
             return {"err": "params.format.unsupported", "msg": _("不支持的书籍格式: %s" % fmt)}
 
-        # save file
+        async with self._upload_slot():
+            return await self._import_uploaded_book(name, data, fmt)
+
+    async def _import_uploaded_book(self, name, data, fmt):
+        fpath = None
+        try:
+            err, fpath, mi, translators = await utils.run_in_threadpool(self._receive_new_book, name, data, fmt)
+            if err:
+                return err
+            if CONF.get("UPLOAD_IGNORE_TITLE_CHECKING", False):
+                kind, payload = "new", True
+            else:
+                kind, payload = await self.run_calibre_async(self._resolve_same_title, mi, fmt)
+            if kind == "samebook":
+                return payload
+            if kind == "existing":
+                book_id = payload
+                await self.run_calibre_async(self.calibre_db.add_format, book_id, fmt.upper(), fpath, True)
+            else:
+                book_id = await self._add_new_book_async(mi, [fpath], fmt)
+                if payload and translators:
+                    await self.run_calibre_async(self.calibre_db_cache.set_field, CALIBRE_COLUMN_TRANSLATORS, {book_id: ",".join(translators)})
+            self.add_msg("success", _("导入书籍成功！"))
+            return {"err": "ok", "book_id": book_id}
+        finally:
+            self._remove_staged_file(fpath)
+
+    @staticmethod
+    def _remove_staged_file(fpath):
+        if fpath and not CONF.get("KEEP_UPLOAD_SOURCE_FILE", False) and os.path.exists(fpath):
+            try:
+                os.remove(fpath)
+            except Exception as e:
+                logging.warning("Failed to remove uploaded source file %s: %s", fpath, e)
+
+    def _receive_new_book(self, name, data, fmt):
+        stage = PerfMonitor.instance().stage
         try:
             fpath = self._safe_upload_path(name)
         except ValueError:
-            return {"err": "params.filename", "msg": _("文件名不合法")}
+            return {"err": "params.filename", "msg": _("文件名不合法")}, None, None, []
 
         logging.info("save upload file into [%s], fmt:%s", fpath, fmt)
-        stage = PerfMonitor.instance().stage
         try:
             with stage("upload.save_file"), open(fpath, "wb") as f:
                 f.write(data)
         except Exception as e:
             logging.error("Failed to save uploaded file: %s", e)
-            return {"err": "internal", "msg": _("保存上传文件失败, 请检查文件名是否过长或者书库所在路径空间不足!") % str(e)}
+            return {"err": "internal", "msg": _("保存上传文件失败, 请检查文件名是否过长或者书库所在路径空间不足!")}, fpath, None, []
 
         try:
-            # read ebook meta
-            failed = False
-            _translators = []
-            _authors = []
-            try:
-                with stage("upload.validate"):
-                    validate_book_file(fpath, fmt)
-            except InvalidBookFileError as e:
-                return {"err": "book.invalid", "msg": _("文件校验失败：%s") % e}
-            with stage("upload.read_meta"):
-                mi = read_book_metadata(fpath, fmt, name)
-            if mi.title and mi.title == CALIBRE_ERROR_FLAG:
-                if fmt == "pdf":
-                    mi.title = utils.remove_zlibrary_suffix(name.replace("." + fmt, ""))
-                else:
-                    logging.error("Failed to get metadata for %s, reason:%s", fpath, mi.comments)
-                    failed = True
-            mi.title = utils.super_strip(mi.title)
-            if mi.authors:
-                _authors, _translators = guess_authors(mi.authors)
+            with stage("upload.validate"):
+                validate_book_file(fpath, fmt)
+        except InvalidBookFileError as e:
+            return {"err": "book.invalid", "msg": _("文件校验失败：%s") % e}, fpath, None, []
+        with stage("upload.read_meta"):
+            mi = read_book_metadata(fpath, fmt, name)
+        failed = False
+        translators = []
+        if mi.title and mi.title == CALIBRE_ERROR_FLAG:
+            if fmt == "pdf":
+                mi.title = utils.remove_zlibrary_suffix(name.replace("." + fmt, ""))
             else:
-                _authors = guess_authors([utils.super_strip(mi.author_sort)])
-            mi.tags = guess_tags(mi.tags)
-            mi.authors = _authors
+                logging.error("Failed to get metadata for %s, reason:%s", fpath, mi.comments)
+                failed = True
+        mi.title = utils.super_strip(mi.title)
+        if mi.authors:
+            authors, translators = guess_authors(mi.authors)
+        else:
+            authors = guess_authors([utils.super_strip(mi.author_sort)])
+        mi.tags = guess_tags(mi.tags)
+        mi.authors = authors
 
-            if failed:
-                return {"err": "book.invalid", "msg": _("此书籍文件无法识别, 或者受DRM保护无法导入")}
+        if failed:
+            return {"err": "book.invalid", "msg": _("此书籍文件无法识别, 或者受DRM保护无法导入")}, fpath, None, []
 
-            name = name[:-len(fmt) - 1]
-            if fmt == "txt":
+        name = name[:-len(fmt) - 1]
+        if fmt == "txt":
+            mi.title = utils.remove_zlibrary_suffix(name)
+            title, author = utils.guess_title_author_from_filename(mi.title)
+            mi.title = title if title else mi.title
+            mi.authors = [author] if author else [_("佚名")]
+        elif fmt == "pdf":
+            if CONF["PDF_TILE_WITH_FILE_NAME"]:
                 mi.title = utils.remove_zlibrary_suffix(name)
-                title, author = utils.guess_title_author_from_filename(mi.title)
-                mi.title = title if title else mi.title
-                mi.authors = [author] if author else [_("佚名")]
-            elif fmt == "pdf":
-                if CONF["PDF_TILE_WITH_FILE_NAME"]:
+            else:
+                title = mi.title.strip() if mi.title else ""
+                if not title or title.find(_("下载工具")) >= 0 or title == "SSReader Print.":
                     mi.title = utils.remove_zlibrary_suffix(name)
                 else:
-                    title = mi.title.strip() if mi.title else ""
-                    if not title or title.find(_("下载工具")) >= 0 or title == "SSReader Print.":
-                        mi.title = utils.remove_zlibrary_suffix(name)
-                    else:
-                        mi.title = utils.remove_zlibrary_suffix(title)
-                if mi.authors is None or len(mi.authors) == 0 or mi.authors[0].lower() == "unknown":
-                    mi.authors = [_("佚名")]
+                    mi.title = utils.remove_zlibrary_suffix(title)
+            if mi.authors is None or len(mi.authors) == 0 or mi.authors[0].lower() == "unknown":
+                mi.authors = [_("佚名")]
 
-            logging.info("upload mi.title = " + repr(mi.title))
-            if mi.cover_data and mi.cover_data[1] and mi.cover_data[1][:4] == b"RIFF":
-                mi.cover_data = ("jpeg", ImageHelper.convert_to_jpeg(mi.cover_data[1]))
-            if CONF.get("UPLOAD_IGNORE_TITLE_CHECKING", False):
-                books = []
-            else:
-                with stage("upload.same_title"):
-                    books = self.calibre_db.books_with_same_title(mi)
-            if books and fmt in SCANNED_DOCUMENT_FORMATS and len(books) > 1:
-                # 扫描版作者多来自文件名、不可信：多个同名候选一律按新书入库，避免误并
-                logging.info("upload: %d same-title candidates for scanned document, import as new book", len(books))
-                books = []
-            if books:
+        logging.info("upload mi.title = " + repr(mi.title))
+        if mi.cover_data and mi.cover_data[1] and mi.cover_data[1][:4] == b"RIFF":
+            mi.cover_data = ("jpeg", ImageHelper.convert_to_jpeg(mi.cover_data[1]))
+        return None, fpath, mi, translators
+
+    def _resolve_same_title(self, mi, fmt):
+        with PerfMonitor.instance().stage("upload.same_title"):
+            books = self.calibre_db.books_with_same_title(mi)
+        if books and fmt in SCANNED_DOCUMENT_FORMATS and len(books) > 1:
+            logging.info("upload: %d same-title candidates for scanned document, import as new book", len(books))
+            books = []
+        if not books:
+            return "new", True
+        book_id = None
+        for id in books:
+            b = self.calibre_db.get_metadata(id, index_is_id=True, get_user_categories=False)
+            logging.info(f"book id:{id}, book_type:{b.get(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK)}")
+            logging.info(f"  existed formats: {b.formats}")
+            if b.get(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK) == BOOK_TYPE_PHYSICAL:
+                continue
+            if book_id is None:
+                book_id = b.get("id")
+            if b.get("authors", "") != mi.authors:
                 book_id = None
-                for id in books:
-                    b = self.calibre_db.get_metadata(id, index_is_id=True, get_user_categories=False)
-                    logging.info(f"book id:{id}, book_type:{b.get(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK)}")
-                    logging.info(f"  existed formats: {b.formats}")
-                    # 如果是实体书，则跳过
-                    if b.get(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK) == BOOK_TYPE_PHYSICAL:
-                        continue
-                    if book_id is None:
-                        book_id = b.get("id")
-                    if b.get("authors", "") != mi.authors:
-                        book_id = None
-                        continue
-                    if fmt.upper() in b.formats:
-                        return {
-                            "err": "samebook",
-                            "msg": _("同名书籍《%s》已存在这一图书格式 %s") % (mi.title, fmt),
-                            "book_id": b.get("id")
-                        }
-                logging.info("import [%s] from %s with format %s", repr(mi.title), fpath, fmt)
-                if book_id is None:
-                    book_id = self._add_new_book(mi, [fpath], fmt)
-                else:
-                    self.calibre_db.add_format(book_id, fmt.upper(), fpath, True)
-            else:
-                fpaths = [fpath]
-                book_id = self._add_new_book(mi, fpaths, fmt)
-                if _translators:
-                    translators = ",".join(_translators)
-                    self.calibre_db_cache.set_field(CALIBRE_COLUMN_TRANSLATORS, {book_id: translators})
-            with stage("upload.add_msg"):
-                self.add_msg("success", _("导入书籍成功！"))
-            return {"err": "ok", "book_id": book_id}
-        finally:
-            # 上传的源文件已被 calibre 复制进书库，除非配置要求保留，否则清理暂存文件
-            # (无论导入成功、失败还是发现同名书籍，都要清理，避免残留)
-            if not CONF.get("KEEP_UPLOAD_SOURCE_FILE", False) and os.path.exists(fpath):
-                try:
-                    os.remove(fpath)
-                except Exception as e:
-                    logging.warning("Failed to remove uploaded source file %s: %s", fpath, e)
+                continue
+            if fmt.upper() in b.formats:
+                return "samebook", {
+                    "err": "samebook",
+                    "msg": _("同名书籍《%s》已存在这一图书格式 %s") % (mi.title, fmt),
+                    "book_id": b.get("id")
+                }
+        logging.info("import [%s] with format %s", repr(mi.title), fmt)
+        if book_id is None:
+            return "new", False
+        return "existing", book_id
 
 
 class BookUploadChunk(BaseHandler):

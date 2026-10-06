@@ -1084,6 +1084,7 @@
         width="500"
         transition="dialog-bottom-transition"
         :confirm-text="$t('book.confirmDeleteBook')"
+        :confirm-loading="deleting_book"
         @confirm="confirmDeleteBook"
     >
         <p>{{ $t('book.deleteBookConfirm') }}</p>
@@ -1904,6 +1905,7 @@ export default {
         // 删除格式对话框
         dialog_delete_book: false,
         dialog_delete_format: false,
+        deleting_book: false,
         selectedDeletedFormat: null,
         deleting_format: false,
         // 上传新格式对话框
@@ -2788,16 +2790,22 @@ export default {
             }
         },
         confirmDeleteBook() {
-            this.dialog_delete_book = false;
+            if (this.deleting_book) {
+                return;
+            }
+            this.deleting_book = true;
             this.$backend("/book/" + this.book.id + "/delete", {
                 method: "POST",
             }).then((rsp) => {
+                this.dialog_delete_book = false;
                 if (rsp.err === "ok") {
                     this.$alert("success", this.$t('message.deleteSuccess'));
                     this.$router.push("/");
                 } else {
                     this.$alert("error", rsp.msg);
                 }
+            }).finally(() => {
+                this.deleting_book = false;
             });
         },
         playSampleVoice(voiceOption) {

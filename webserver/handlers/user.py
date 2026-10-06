@@ -12,6 +12,7 @@ from webserver.i18n import _
 import tornado.escape
 from tornado import web
 from webserver import loader
+from webserver.base import calibre_fast
 from webserver.base.appearance import (
     APPEARANCE_KEY,
     is_appearance_too_large,
@@ -547,6 +548,18 @@ class UserMessagesClear(BaseHandler):
 
 
 class UserInfo(BaseHandler):
+    _history_existing = frozenset()
+
+    def _existing_book_ids(self, ids):
+        return {b["id"] for b in self.calibre_db.get_data_as_dict(ids=ids, **calibre_fast.list_kwargs())}
+
+    async def _load_history_existing(self):
+        user = self.current_user
+        if not user or not user.extra:
+            return
+        ids = sorted({b["id"] for k, v in user.extra.items() if k.endswith("_history") for b in v[:24]})
+        if ids:
+            self._history_existing = await self.run_calibre_async(self._existing_book_ids, ids)
 
     def get_user_info(self, detail):
         enable_vip_quota = CONF.get(ENABLE_VIP_QUOTA_KEY, False)
@@ -642,9 +655,7 @@ class UserInfo(BaseHandler):
                         # 已作为 d["appearance"] 单独下发，不在这里重复一份
                         continue
                     if k.endswith("_history"):
-                        ids = [b["id"] for b in v][:24]
-                        books = self.calibre_db.get_data_as_dict(ids=ids)
-                        show = set([b["id"] for b in books])
+                        show = {b["id"] for b in v[:24]} & self._history_existing
                         n = []
                         for b in v:
                             if b["id"] not in show:
@@ -667,11 +678,13 @@ class UserInfo(BaseHandler):
         return d
 
     @js
-    def get(self):
+    async def get(self):
         if CONF.get("installed", None) is False:
             return {"err": "not_installed"}
 
         detail = self.get_argument("detail", "")
+        if detail:
+            await self._load_history_existing()
         rsp = {
             "err": "ok",
             "cdn": self.cdn_url,
