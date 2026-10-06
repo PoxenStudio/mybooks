@@ -118,6 +118,7 @@ settings = {
     "DEFAULT_PAGE_SIZE": 60,
     "PERF_MONITOR": True,
     "PERF_STALL_MS": 500,
+    "FAST_GET_DATA_AS_DICT": True,
     "ENABLE_AUDIO_CONVERSION_LOG": False,
     "ENABLE_AUDIO_SUBTITLE": True,
     "LOG_LEVEL_DEBUG": False,
