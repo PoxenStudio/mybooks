@@ -819,28 +819,32 @@ class BaseHandler(web.RequestHandler):
 
     def _item_maps(self, ids):
         empty_item = Item().to_dict()
-        items = (
-            self.sqlite_session.query(Item).filter(Item.book_id.in_(ids)).all()
-            if ids
-            else []
-        )
-        needs_default = len(items) < len(set(ids))
+        rows = []
+        if ids:
+            table = Item.__table__
+            rows = [dict(r._mapping) for r in self.sqlite_session.execute(table.select().where(table.c.book_id.in_(ids)))]
+        needs_default = len(rows) < len(set(ids))
+        collector_ids = {r["collector_id"] for r in rows if r["collector_id"] is not None}
         collectors = {}
-        for b in items:
-            if b.collector is None:
+        if collector_ids:
+            collectors = {
+                reader.id: reader.to_dict() for reader in self.sqlite_session.query(Reader).filter(Reader.id.in_(collector_ids)).all()
+            }
+        maps = {}
+        for row in rows:
+            collector = collectors.get(row["collector_id"])
+            if collector is None:
                 needs_default = True
-            elif b.collector_id not in collectors:
-                collectors[b.collector_id] = b.collector.to_dict()
+            maps[row["book_id"]] = (row, collector)
         if needs_default:
             empty_item["collector"] = (
                 self.sqlite_session.query(Reader).order_by(Reader.id).first()
             )
-        maps = {}
-        for b in items:
-            d = b.to_dict()
-            d["collector"] = dict(collectors[b.collector_id]) if b.collector_id in collectors and b.collector is not None else empty_item["collector"]
-            maps[b.book_id] = d
-        return maps, empty_item
+        result = {}
+        for book_id, (row, collector) in maps.items():
+            row["collector"] = dict(collector) if collector is not None else empty_item["collector"]
+            result[book_id] = row
+        return result, empty_item
 
     def _merge_books_full(self, books, _ts=None):
         """get_books 的 sqlite 合并段：只碰 sqlite_session 与内存结构，须留在 ioloop
@@ -1394,10 +1398,26 @@ class BaseHandler(web.RequestHandler):
 
         return result
 
-    def get_sys_info(self):
+    _stats_cache = VersionedCache(ttl=60, max_items=4)
+
+    def _library_stats(self):
+        db = self.calibre_db
+        return {
+            "books": db.count(),
+            "tags": len(db.all_tags()),
+            "authors": len(db.all_authors()),
+            "audiobooks": self.get_audio_books_count(),
+            "publishers": len(db.all_publishers()),
+            "series": len(db.all_series()),
+            "categories": self.get_custom_category_count(),
+            "folders": self.get_folder_count(),
+            "physicals": self.get_physical_books_count(),
+            "mtime": db.last_modified().strftime("%Y-%m-%d"),
+        }
+
+    def _sys_info_with(self, stats):
         from sqlalchemy import func
 
-        db = self.calibre_db
         last_week = datetime.datetime.now() - datetime.timedelta(days=7)
         count_all_users = self.sqlite_session.query(func.count(Reader.id)).scalar()
         count_hot_users = (
@@ -1405,66 +1425,64 @@ class BaseHandler(web.RequestHandler):
             .filter(Reader.access_time > last_week)
             .scalar()
         )
+        info = dict(stats, users=count_all_users, version=VERSION, active=count_hot_users)
+        info.update(
+            {
+                "installed": CONF.get("installed", False),
+                "upgrable": CONF.get(UPGRABLE_REVISION, ""),
+                "title": CONF["site_title"] if "site_title" in CONF else "MyBooks",
+                "language": CONF["site_language"] if "site_language" in CONF else "",
+                "theme": CONF["site_theme"] if "site_theme" in CONF else "light",
+                "maxUploadSize": (
+                    CONF["MAX_UPLOAD_SIZE"] if "MAX_UPLOAD_SIZE" in CONF else "100MB"
+                ),
+                "chunkUploadSize": (
+                    CONF["CHUNK_UPLOAD_SIZE"] if "CHUNK_UPLOAD_SIZE" in CONF else "0MB"
+                ),
+                "icon": CONF["site_icon"] if "site_icon" in CONF else "favicon_1",
+                "socials": CONF["SOCIALS"],
+                "friends": self._build_friends_with_favicon(),
+                "footer": CONF["FOOTER"] if "FOOTER" in CONF else "",
+                "footer_watermark": CONF.get("FOOTER_WATERMARK", ""),
+                "header": CONF["HEADER"] if "HEADER" in CONF else "",
+                "allow": {
+                    "register": CONF["ALLOW_REGISTER"],
+                    "download": CONF["ALLOW_GUEST_DOWNLOAD"],
+                    "push": CONF["ALLOW_GUEST_PUSH"],
+                    "read": CONF["ALLOW_GUEST_READ"],
+                    "physical_books": CONF.get("ENABLE_PHYSICAL_BOOKS", True),
+                    "folder": CONF.get("ENABLE_FOLDER_BROWSE", False),
+                    "download_quota": CONF.get("ENABLE_DOWNLOAD_QUOTA", False),
+                    "upload": CONF.get("ALLOW_GUEST_UPLOAD", False),
+                    "server_import": CONF.get("ENABLE_SERVER_FILE_IMPORT", False),
+                    "sync": CONF.get("ENABLE_DATA_SYNC", False),
+                    "book_review": CONF.get("ENABLE_BOOK_REVIEW", True),
+                    "book_recommend": CONF.get("ENABLE_BOOK_RECOMMEND_TO_OTHERS", True),
+                    "shared_notes": CONF.get("ENABLE_SHARED_NOTES", True),
+                },
+                "indexPage": CONF.get("INDEX_PAGE_TYPE", "index"),
+                "epub_viewer": CONF.get("EPUB_VIEWER", "MyReader"),
+                "defaultPageSize": CONF.get("DEFAULT_PAGE_SIZE", 60),
+                "aiEnabled": CONF.get("AI_ENABLED", False),
+                "standalone": CONF.get("STANDALONE", False),
+                "hide_project_links": CONF.get("HIDE_PROJECT_LINKS", False),
+                "sidebar_items": CONF.get("SIDEBAR_ITEMS", []),
+                "invited_enabled": self.need_invited(),
+                "showUserInfo": CONF.get("ENABLE_AUTHOR_INFO", False),
+            }
+        )
+        return info
 
-        audio_book_cnt = self.get_audio_books_count()
-        physical_book_cnt = self.get_physical_books_count()
+    def get_sys_info(self):
+        return self._sys_info_with(self._library_stats())
 
-        return {
-            "books": db.count(),
-            "tags": len(db.all_tags()),
-            "authors": len(db.all_authors()),
-            "audiobooks": audio_book_cnt,
-            "publishers": len(db.all_publishers()),
-            "series": len(db.all_series()),
-            "categories": self.get_custom_category_count(),
-            "folders": self.get_folder_count(),
-            "physicals": physical_book_cnt,
-            "mtime": db.last_modified().strftime("%Y-%m-%d"),
-            "users": count_all_users,
-            "version": VERSION,
-            "active": count_hot_users,
-            "installed": CONF.get("installed", False),
-            "upgrable": CONF.get(UPGRABLE_REVISION, ""),
-            "title": CONF["site_title"] if "site_title" in CONF else "MyBooks",
-            "language": CONF["site_language"] if "site_language" in CONF else "",
-            "theme": CONF["site_theme"] if "site_theme" in CONF else "light",
-            "maxUploadSize": (
-                CONF["MAX_UPLOAD_SIZE"] if "MAX_UPLOAD_SIZE" in CONF else "100MB"
-            ),
-            "chunkUploadSize": (
-                CONF["CHUNK_UPLOAD_SIZE"] if "CHUNK_UPLOAD_SIZE" in CONF else "0MB"
-            ),
-            "icon": CONF["site_icon"] if "site_icon" in CONF else "favicon_1",
-            "socials": CONF["SOCIALS"],
-            "friends": self._build_friends_with_favicon(),
-            "footer": CONF["FOOTER"] if "FOOTER" in CONF else "",
-            "footer_watermark": CONF.get("FOOTER_WATERMARK", ""),
-            "header": CONF["HEADER"] if "HEADER" in CONF else "",
-            "allow": {
-                "register": CONF["ALLOW_REGISTER"],
-                "download": CONF["ALLOW_GUEST_DOWNLOAD"],
-                "push": CONF["ALLOW_GUEST_PUSH"],
-                "read": CONF["ALLOW_GUEST_READ"],
-                "physical_books": CONF.get("ENABLE_PHYSICAL_BOOKS", True),
-                "folder": CONF.get("ENABLE_FOLDER_BROWSE", False),
-                "download_quota": CONF.get("ENABLE_DOWNLOAD_QUOTA", False),
-                "upload": CONF.get("ALLOW_GUEST_UPLOAD", False),
-                "server_import": CONF.get("ENABLE_SERVER_FILE_IMPORT", False),
-                "sync": CONF.get("ENABLE_DATA_SYNC", False),
-                "book_review": CONF.get("ENABLE_BOOK_REVIEW", True),
-                "book_recommend": CONF.get("ENABLE_BOOK_RECOMMEND_TO_OTHERS", True),
-                "shared_notes": CONF.get("ENABLE_SHARED_NOTES", True),
-            },
-            "indexPage": CONF.get("INDEX_PAGE_TYPE", "index"),
-            "epub_viewer": CONF.get("EPUB_VIEWER", "MyReader"),
-            "defaultPageSize": CONF.get("DEFAULT_PAGE_SIZE", 60),
-            "aiEnabled": CONF.get("AI_ENABLED", False),
-            "standalone": CONF.get("STANDALONE", False),
-            "hide_project_links": CONF.get("HIDE_PROJECT_LINKS", False),
-            "sidebar_items": CONF.get("SIDEBAR_ITEMS", []),
-            "invited_enabled": self.need_invited(),
-            "showUserInfo": CONF.get("ENABLE_AUTHOR_INFO", False),
-        }
+    async def get_sys_info_async(self):
+        version = self.library_version()
+        stats = BaseHandler._stats_cache.get("stats", version)
+        if stats is None:
+            stats = await self.run_calibre_async(self._library_stats)
+            BaseHandler._stats_cache.put("stats", version, stats)
+        return self._sys_info_with(stats)
 
 
 class ListHandler(BaseHandler):

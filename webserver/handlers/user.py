@@ -685,10 +685,11 @@ class UserInfo(BaseHandler):
         detail = self.get_argument("detail", "")
         if detail:
             await self._load_history_existing()
+        sys_info = {} if detail else await self.get_sys_info_async()
         rsp = {
             "err": "ok",
             "cdn": self.cdn_url,
-            "sys": self.get_sys_info() if not detail else {},
+            "sys": sys_info,
             "user": self.get_user_info(detail),
         }
         return rsp

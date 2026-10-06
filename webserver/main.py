@@ -643,6 +643,10 @@ def main():
     else:
         http_server.listen(options.port, options.host)
     tornado.ioloop.PeriodicCallback(lambda: models.Message.cleanup_old_messages(), 24 * 3600 * 1000).start()
+    switch_ms = float(CONF.get("GIL_SWITCH_INTERVAL_MS", 0) or 0)
+    if switch_ms > 0:
+        sys.setswitchinterval(switch_ms / 1000.0)
+        logging.info("GIL switch interval set to %s ms", switch_ms)
     if CONF.get("WARMUP_ENABLE", True):
         from webserver.handlers.base import BaseHandler
 
