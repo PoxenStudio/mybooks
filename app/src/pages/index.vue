@@ -39,9 +39,19 @@
 
     <library-overview v-if="libraryStats && showDetail" :allow-physical-books="allowPhysicalBooks"></library-overview>
 
-    <div class="reading-stats-banner-wrapper" :class="{ 'is-pending': readingStatsPending }" v-show="readingStatsHasData || readingStatsPending">
+    <div v-if="!lazyHome" class="reading-stats-banner-wrapper" :class="{ 'is-pending': readingStatsPending }" v-show="readingStatsHasData || readingStatsPending">
         <reading-stats-banner v-if="!$vuetify.breakpoint.xsOnly" :show-title="false" @has-stats="onReadingStatsHasData"></reading-stats-banner>
     </div>
+    <home-section-card
+        v-else-if="isLoggedIn && !$vuetify.breakpoint.xsOnly"
+        icon="mdi-chart-box-outline"
+        :title="$t('index.readingStats.title')"
+        storage-key="index.readingStats"
+        :default-expanded="false"
+        @toggle="onStatsToggle"
+    >
+        <reading-stats-banner v-if="statsExpanded" :show-title="false"></reading-stats-banner>
+    </home-section-card>
 
     <div class="home-sections-container">
         <div
@@ -151,15 +161,20 @@
             @drop.prevent="onSectionDrop('index.booklistRecommendation')"
         >
             <home-section-card
-                v-if="homepage_booklists.length > 0"
+                v-if="homepage_booklists.length > 0 || (lazyHome && !booklistsLoaded)"
                 icon="mdi-format-list-bulleted-square"
                 :title="$t('index.booklistRecommendation')"
                 storage-key="index.booklistRecommendation"
+                :default-expanded="!lazyHome"
                 :drag-over="dragOverKey === 'index.booklistRecommendation'"
+                @toggle="onBooklistsToggle"
                 @drag-start="onSectionDragStart('index.booklistRecommendation', $event)"
                 @drag-end="onSectionDragEnd"
             >
-                <v-row>
+                <div v-if="homepage_booklists.length === 0" class="text-center pa-4">
+                    <v-progress-circular indeterminate size="24"></v-progress-circular>
+                </div>
+                <v-row v-else>
                     <v-col cols="12" md="6" v-for="b in homepage_booklists" :key="'home-booklist-' + b.id">
                         <BookListCard :booklist="b" :show-recommend-badge="true" @toggle-like="toggleBooklistLike" />
                     </v-col>
@@ -312,6 +327,13 @@ export default {
         readingStatsPending() {
             return this.isLoggedIn && !this.readingStatsResolved;
         },
+        sysReady() {
+            return !!(this.$store.state.sys && this.$store.state.sys.version);
+        },
+        lazyHome() {
+            const lite = this.$store.state.sys && this.$store.state.sys.lite;
+            return !!(lite && lite.homeCollapse);
+        },
         allowPhysicalBooks() {
             return !!(this.$store.state.sys && this.$store.state.sys.allow && this.$store.state.sys.allow.physical_books);
         },
@@ -425,6 +447,26 @@ export default {
                 this.readingStatsResolved = true;
             }
         },
+        defer(fn, delay) {
+            const id = setTimeout(() => {
+                if (window.requestIdleCallback) {
+                    window.requestIdleCallback(fn, { timeout: 2000 });
+                } else {
+                    fn();
+                }
+            }, delay);
+            this.deferTimers.push(id);
+        },
+        onBooklistsToggle(expanded) {
+            if (expanded && this.lazyHome && !this.booklistsLoaded) {
+                this.loadBooklists();
+            }
+        },
+        onStatsToggle(expanded) {
+            if (expanded) {
+                this.statsExpanded = true;
+            }
+        },
         async loadBooklists() {
             try {
                 const rsp = await this.$backend('/booklists/homepage');
@@ -433,6 +475,8 @@ export default {
                 }
             } catch (error) {
                 console.warn('Failed to load homepage booklists:', error);
+            } finally {
+                this.booklistsLoaded = true;
             }
         },
         async toggleBooklistLike(b) {
@@ -506,10 +550,14 @@ export default {
         },
     },
     mounted() {
-        this.loadLibraryStats();
         setTimeout(() => this.checkReleaseNotes(), 1500);
         this.loadReadingBooks();
-        this.loadBooklists();
+        if (this.sysReady && this.lazyHome) {
+            this.defer(() => this.loadLibraryStats(), 300);
+        } else {
+            this.loadLibraryStats();
+            this.loadBooklists();
+        }
         // 强制重新渲染图片，修复从其他页面返回时的布局问题
         this.$nextTick(() => {
             window.dispatchEvent(new Event('resize'));
@@ -522,6 +570,7 @@ export default {
         });
     },
     beforeDestroy() {
+        this.deferTimers.forEach((id) => clearTimeout(id));
         if (this.countdownTimer) {
             clearInterval(this.countdownTimer);
         }
@@ -546,6 +595,9 @@ export default {
         readingStatsHasData: false,
         readingStatsResolved: false,
         readingLoading: false,
+        statsExpanded: false,
+        booklistsLoaded: false,
+        deferTimers: [],
         libraryStats: null,
         showDetail: false,
         releaseNotesDialog: false,

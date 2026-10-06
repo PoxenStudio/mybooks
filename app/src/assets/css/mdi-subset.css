@@ -254,6 +254,10 @@
   content: "\F0110";
 }
 
+.mdi-chart-box-outline::before {
+  content: "\F154E";
+}
+
 .mdi-chart-donut::before {
   content: "\F07AF";
 }

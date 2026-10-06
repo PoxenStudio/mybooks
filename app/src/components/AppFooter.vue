@@ -22,6 +22,9 @@
             <p v-if="version" class="version-info cursor-pointer" @click="showReleaseNotes">
                 {{ $t('appHeader.systemVersion') }}: {{ version }} {{ standalone ? '(Standalone)' : '' }}
             </p>
+            <p v-if="liteMode" class="version-info" :title="$t('appHeader.lite_mode_tip')">
+                {{ $t('appHeader.lite_mode') }}
+            </p>
         </v-col>
     </v-row>
 
@@ -79,6 +82,9 @@ export default {
         },
         version: function () {
             return this.$store.state.sys.version || '';
+        },
+        liteMode: function () {
+            return this.$store.state.sys.performanceMode === 'lite';
         },
     },
     methods: {

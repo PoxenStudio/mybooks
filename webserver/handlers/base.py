@@ -1502,7 +1502,7 @@ class BaseHandler(web.RequestHandler):
             .filter(Reader.access_time > last_week)
             .scalar()
         )
-        info = dict(stats, users=count_all_users, version=VERSION, active=count_hot_users, performanceMode=perf.CONF.get("PERFORMANCE_MODE", "normal"))
+        info = dict(stats, users=count_all_users, version=VERSION, active=count_hot_users, performanceMode=perf.CONF.get("PERFORMANCE_MODE", "normal"), lite={"homeCollapse": perf.lite_on("LITE_HOME_COLLAPSE")})
         info.update(
             {
                 "installed": CONF.get("installed", False),
