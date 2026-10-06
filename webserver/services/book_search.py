@@ -142,9 +142,11 @@ class BookSearch:
             try:
                 book = plugin.search_best(search_mi)
                 if book:
+                    logging.info("[Meta]search_best 采用信息源[%s]的结果：%s", plugin.name, title)
                     return book
+                logging.info("[Meta]信息源[%s]未找到 %s，尝试下一个信息源", plugin.name, title)
             except Exception:
-                logging.error(_("信息源[%s]查询 %s 失败"), plugin.name, title)
+                logging.error(_("信息源[%s]查询 %s 失败"), plugin.name, title, exc_info=True)
 
         return None
 

@@ -240,7 +240,9 @@ class TestDownloadTtl(unittest.TestCase):
         handler = object.__new__(BookDownload)
         handler.is_opds = False
         handler.current_user = mock.Mock(id=1)
+        handler.request = mock.Mock(method="GET")
         handler.set_header = mock.Mock()
+        BookDownload._charged.clear()
         fd, path = tempfile.mkstemp()
         os.close(fd)
         self.addCleanup(os.remove, path)

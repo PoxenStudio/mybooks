@@ -60,7 +60,7 @@ def search(query, max_count=1, skip_error=False):
         resp = requests.get(url, headers=_SEARCH_HEADERS, timeout=10)
         resp.raise_for_status()
     except requests.exceptions.RequestException as e:
-        logging.error("[DoubanV2]搜索请求失败: %s", e)
+        logging.error("[DoubanV2]搜索请求失败 query=%s: %s", query, e)
         return [], ""
 
     if resp.status_code != 200:
@@ -69,18 +69,18 @@ def search(query, max_count=1, skip_error=False):
     pattern = r"window\.__DATA__\s*=\s*({.*?});"
     match = re.search(pattern, resp.text, re.DOTALL)
     if not match:
-        logging.warning("[DoubanV2]豆瓣V2未能匹配 window.__DATA__，可能触发反爬")
+        logging.warning("[DoubanV2]豆瓣V2未能匹配 window.__DATA__，可能触发反爬 query=%s status=%s", query, resp.status_code)
         return [], url
 
     try:
         data = json.loads(match.group(1))
     except json.JSONDecodeError:
-        logging.error("[DoubanV2]豆瓣V2 JSON 解析失败")
+        logging.error("[DoubanV2]豆瓣V2 JSON 解析失败 query=%s", query)
         return [], url
 
     error_info = data.get("error_info", "")
     if error_info:
-        logging.error(f"[DoubanV2] 响应错误：{error_info}")
+        logging.error(f"[DoubanV2] 响应错误 query={query}：{error_info}")
         if skip_error:
             return None
         return [{
