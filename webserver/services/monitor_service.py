@@ -11,7 +11,7 @@ import os
 import threading
 import time
 
-from webserver import loader, constants
+from webserver import constants, loader, perf
 from webserver.services.scan_service import ScanService, SCAN_EXT
 
 CONF = loader.get_settings()
@@ -21,6 +21,11 @@ DEBOUNCE_SECONDS = 3
 
 # ScanService 繁忙时的轮询间隔（秒）
 POLL_INTERVAL = 10
+
+
+def poll_interval():
+    return 30 if perf.lite_on("LITE_BG_SLOWER") else POLL_INTERVAL
+
 
 # Event expired in s
 EVENT_EXPIRE_SECONDS = 0.15
@@ -388,10 +393,10 @@ class MonitorService:
             if ScanService.is_importing() or ScanService.is_bulk_deleting():
                 logging.info(
                     "[Monitor] ScanService busy (importing or bulk deleting), retrying in %ds (current pending files: %d)",
-                    POLL_INTERVAL,
+                    poll_interval(),
                     len(files),
                 )
-                time.sleep(POLL_INTERVAL)
+                time.sleep(poll_interval())
                 continue
 
             break

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 
+import gc
 import logging
 import os
 import re
@@ -21,7 +22,7 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 from tornado import web
 from tornado.options import define, options
 
-from webserver import loader, models, social_routes, startup_status
+from webserver import loader, models, perf, social_routes, startup_status
 from webserver.startup_status import StartupState
 from webserver.services import warmup
 from webserver.services.perf_monitor import PerfMonitor
@@ -297,7 +298,7 @@ def make_app():
             cursor = db_connection.cursor()
             try:
                 cursor.execute("PRAGMA busy_timeout=30000")
-                if CONF.get("SQLITE_RELAXED", False):
+                if CONF.get("SQLITE_RELAXED", False) or perf.lite_on("LITE_SQLITE_RELAXED"):
                     cursor.execute("PRAGMA synchronous=NORMAL")
                     cursor.execute("PRAGMA temp_store=MEMORY")
                     cursor.execute("PRAGMA cache_size=-20000")
@@ -653,8 +654,13 @@ def main():
         settings = app.settings
         warmup.start(
             settings["legacy"], settings["cache"], BaseHandler.db_lock, settings["recommend"] if CONF.get("RECOMMEND_ENABLE", True) else None, settings["ScopedSession"],
-            int(CONF.get("WARMUP_DELAY_SEC", 10))
+            300 if perf.lite_on("LITE_BG_SLOWER") else int(CONF.get("WARMUP_DELAY_SEC", 10))
         )
+    if perf.lite_on("LITE_GC_TUNE"):
+        gc.collect()
+        gc.freeze()
+        gc.set_threshold(50000, 20, 100)
+    perf.apply_logging()
     if CONF.get("PERF_MONITOR", True):
         PerfMonitor.instance().start(int(CONF["PERF_STALL_MS"]))
     tornado.ioloop.IOLoop.instance().start()

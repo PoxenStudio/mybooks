@@ -38,10 +38,7 @@
             <template v-for="f in card.fields">
               <v-checkbox
                 small
-                :hide-details="!f.hint"
-                :hint="f.hint ? $t(f.hint) : ''"
-                :persistent-hint="!!f.hint"
-                :disabled="!!f.requiresLite && settings.PERFORMANCE_MODE !== 'lite'"
+                hide-details
                 v-if="f.type === 'checkbox'"
                 v-model="settings[f.key]"
                 :key="f.key + '-checkbox'"
@@ -92,8 +89,6 @@
                 :items="f.items"
                 :key="f.key + '-select'"
                 :label="$t(f.label)"
-                :hint="f.hint ? $t(f.hint) : ''"
-                :persistent-hint="!!f.hint"
               >
                 <template v-if="f.icon" v-slot:prepend>
                   <v-icon :color="f.color">{{ f.icon }}</v-icon>
@@ -698,6 +693,30 @@
                 </p>
               </div>
             </template>
+            <template v-if="card.show_perf">
+              <div class="pl-6">
+                <v-checkbox
+                  small
+                  v-model="liteMode"
+                  prepend-icon="mdi-speedometer"
+                  :label="$t('settings.perf_mode_lite')"
+                  :hint="$t('settings.perf_mode_hint')"
+                  persistent-hint
+                ></v-checkbox>
+                <div v-if="liteMode" style="padding-left: 32px">
+                  <v-checkbox
+                    v-for="key in liteGroups"
+                    :key="key"
+                    small
+                    dense
+                    v-model="settings[key]"
+                    :label="$t('settings.' + key.toLowerCase())"
+                    :hint="$t('settings.' + key.toLowerCase() + '_hint')"
+                    persistent-hint
+                  ></v-checkbox>
+                </div>
+              </div>
+            </template>
             <template v-if="card.show_stamp">
               <div class="pl-6">
               <v-checkbox
@@ -856,6 +875,14 @@ import ReadingRangeDialog from "~/components/ReadingRangeDialog.vue";
 import BookNavEditor, { createCategory } from "~/components/BookNavEditor.vue";
 import ReaderDictEditor from "~/components/ReaderDictEditor.vue";
 import { languageOptions } from "~/utils/languageCodes";
+
+const LITE_GROUPS = [
+  "LITE_GROUP_LISTING",
+  "LITE_GROUP_RECOMMEND",
+  "LITE_GROUP_FILES",
+  "LITE_GROUP_BACKGROUND",
+  "LITE_GROUP_RESOURCES",
+];
 
 export default {
   components: {
@@ -1473,26 +1500,6 @@ export default {
         fields: [
           { icon: "mdi-home", color: "red", key: "static_host", label: "settings.cdn_domain" },
           {
-            icon: "mdi-speedometer",
-            color: "orange",
-            key: "PERFORMANCE_MODE",
-            label: "settings.perf_mode",
-            hint: "settings.perf_mode_hint",
-            type: "select",
-            items: [
-              { text: this.$t("settings.perf_mode_normal"), value: "normal" },
-              { text: this.$t("settings.perf_mode_lite"), value: "lite" },
-            ],
-          },
-          {
-            icon: "mdi-memory",
-            key: "LITE_BOOK_CACHE",
-            label: "settings.lite_book_cache",
-            hint: "settings.lite_book_cache_hint",
-            type: "checkbox",
-            requiresLite: true,
-          },
-          {
             icon: "mdi-information",
             color: "red",
             key: "BOOK_NAMES_FORMAT",
@@ -1596,6 +1603,7 @@ export default {
         show: false,
         title: "settings.extended_features",
         fields: [],
+        show_perf: true,
         show_stamp: true,
       },
       {
@@ -1719,6 +1727,17 @@ export default {
     ],
   }),
   computed: {
+    liteGroups() {
+      return LITE_GROUPS;
+    },
+    liteMode: {
+      get() {
+        return this.settings["PERFORMANCE_MODE"] === "lite";
+      },
+      set(value) {
+        this.$set(this.settings, "PERFORMANCE_MODE", value ? "lite" : "normal");
+      },
+    },
     urlRule() {
       return (v) => {
         if (!v) return true;

@@ -27,7 +27,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 import tornado.ioloop
 
-from webserver import loader
+from webserver import loader, perf
 from webserver.models import ReadingRecord, Reading, Reader, parse_book_id_from_reading_record_hash
 from webserver.services.reading_stats_service import ReadingStatsService, parse_book_id_from_hash, parse_format_from_hash
 
@@ -603,7 +603,7 @@ class MyReaderSyncService:
     @classmethod
     def start(cls) -> None:
         if cls._periodic_callback is None:
-            interval_ms = CONF.get("SYNC_DB_FLUSH_INTERVAL_SEC", 5) * 1000
+            interval_ms = (15 if perf.lite_on("LITE_FLUSH_SLOWER") else CONF.get("SYNC_DB_FLUSH_INTERVAL_SEC", 5)) * 1000
             cls._periodic_callback = tornado.ioloop.PeriodicCallback(cls.flush_now, interval_ms)
             cls._periodic_callback.start()
             logging.info("[sync] reading_records write buffer started, flushing every %sms", interval_ms)

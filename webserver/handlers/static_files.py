@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from webserver.i18n import _
 from tornado import web
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
-from webserver import constants, loader
+from webserver import constants, loader, perf
 from webserver.services.converter import ConverterService
 from webserver.handlers.base import BaseHandler, js, is_admin
 from webserver.base import accel
@@ -28,6 +28,7 @@ CONF = loader.get_settings()
 
 # 创建线程池用于执行阻塞操作
 _executor = ThreadPoolExecutor(max_workers=20)
+LITE_THUMB_SIZES = [(120, 200), (240, 320)]
 
 
 def get_author_hash(author):
@@ -126,7 +127,7 @@ class ImageHandler(BaseHandler):
     def _read_default_or_dynamic(self, book_id, width, height):
         try:
             cover_data = self.default_cover
-            if CONF.get("USE_DYNAMIC_COVER", False):
+            if CONF.get("USE_DYNAMIC_COVER", False) and not perf.lite_on("LITE_NO_DYNAMIC_COVER"):
                 with self.db_lock:
                     mi = self.calibre_db.get_metadata(book_id, index_is_id=True)
                 author = mi.authors[0] if mi.authors else _("佚名")
@@ -164,11 +165,11 @@ class ImageHandler(BaseHandler):
         future = loop.create_future()
         ImageHandler._thumb_inflight[key] = future
         if ImageHandler._thumb_slots is None:
-            ImageHandler._thumb_slots = asyncio.Semaphore(max(1, int(CONF.get("THUMB_CONCURRENCY", 2))))
+            ImageHandler._thumb_slots = asyncio.Semaphore(1 if perf.lite_on("LITE_POOLS_SMALL") else max(1, int(CONF.get("THUMB_CONCURRENCY", 2))))
         try:
             async with ImageHandler._thumb_slots:
                 data = await loop.run_in_executor(
-                    _executor, self._make_thumbnail, path, width, height, int(CONF.get("THUMB_JPEG_QUALITY", 83)), bool(CONF.get("THUMB_USE_PILLOW", True))
+                    _executor, self._make_thumbnail, path, width, height, 70 if perf.lite_on("LITE_THUMB_CACHE_ONLY") else int(CONF.get("THUMB_JPEG_QUALITY", 83)), bool(CONF.get("THUMB_USE_PILLOW", True))
                 )
             future.set_result(data)
             return data
@@ -202,7 +203,7 @@ class ImageHandler(BaseHandler):
                 self.set_header("Cache-Control", "public, max-age=86400")
                 return await loop.run_in_executor(_executor, self._read_file, path)
 
-            sizes = CONF.get("THUMB_SIZES") or DEFAULT_SIZES
+            sizes = LITE_THUMB_SIZES if perf.lite_on("LITE_THUMB_CACHE_ONLY") else (CONF.get("THUMB_SIZES") or DEFAULT_SIZES)
             width, height = nearest_size(thumb_width, thumb_height, [tuple(s) for s in sizes])
             if not use_accel and self._not_modified('"%d-%d-%dx%d"' % (stamp, id, width, height)):
                 return None

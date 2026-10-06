@@ -673,6 +673,7 @@ class AdminSettings(BaseHandler):
             "ENABLE_AUTHOR_INFO", False
         )
         result = SettingsSaver().save_extra_settings(args)
+        perf.apply_logging()
         if need_sync_authors:
             BookBarnService().sync_author_list()
         return result
