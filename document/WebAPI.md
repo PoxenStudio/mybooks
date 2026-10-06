@@ -533,8 +533,9 @@ user.appearance为外观设置（顶栏品牌色、侧栏图标配色、深浅�
 - **路径**：`/api/user/messages`
 - **方法**：GET
 - **认证**：无需认证（未登录返回空列表）
-- **参数**：无
-- **说明**：只返回未读消息，按时间倒序；`status` 为消息级别（如 `success`、`error`）。
+- **参数**：
+  - `after_id` (int, 可选): 只返回 id 大于该值的未读消息，供轮询增量使用
+- **说明**：只返回未读消息，按 id 倒序，最多 50 条；`total_unread` 为全部未读数（超过 50 条时用于提示）；`status` 为消息级别（如 `success`、`error`）。
 - **响应示例**：
 
 ```json
@@ -548,7 +549,8 @@ user.appearance为外观设置（顶栏品牌色、侧栏图标配色、深浅�
       "create_time": "2026-05-11 10:00:00",
       "data": {}
     }
-  ]
+  ],
+  "total_unread": 1
 }
 ```
 
@@ -3168,7 +3170,8 @@ user.appearance为外观设置（顶栏品牌色、侧栏图标配色、深浅�
 - **路径**：`/api/admin/tasks/running`
 - **方法**：GET
 - **认证**：需要管理员权限
-- **参数**：无
+- **参数**：
+  - `with_messages` (int, 可选): 传 `1` 时额外返回当前用户未读消息 `messages`（兼容旧客户端，默认不返回；新客户端请用 `/api/user/messages`）
 - **响应示例**：
 
 ```json

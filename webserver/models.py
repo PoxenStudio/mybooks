@@ -12,7 +12,7 @@ import zlib
 from webserver.i18n import _
 
 from social_sqlalchemy.storage import JSONType, SQLAlchemyMixin
-from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, or_
 from sqlalchemy.ext.mutable import Mutable
 from sqlalchemy.orm import relationship, declarative_base
 from webserver.constants import BOOK_TYPE_EBOOK
@@ -328,6 +328,12 @@ class BizKey(Base, SQLAlchemyMixin):
 
 class Message(Base, SQLAlchemyMixin):
     __tablename__ = "messages"
+    __table_args__ = (
+        Index("ix_messages_reader_unread_id", "reader_id", "unread", "id"),
+        Index("ix_messages_reader_id", "reader_id", "id"),
+    )
+    MAX_PER_USER = 200
+
     id = Column(Integer, primary_key=True)
     title = Column(String(200))
     status = Column(String(100))
@@ -335,6 +341,7 @@ class Message(Base, SQLAlchemyMixin):
     create_time = Column(DateTime)
     update_time = Column(DateTime)
     data = Column(MutableDict.as_mutable(JSONType), default={})
+    content_hash = Column(String(40))
 
     reader_id = Column(Integer, ForeignKey("readers.id"))
     reader = relationship(Reader, backref="messages")
@@ -346,27 +353,43 @@ class Message(Base, SQLAlchemyMixin):
         self.create_time = datetime.datetime.now()
         self.update_time = datetime.datetime.now()
         self.data = {"message": msg}
+        self.content_hash = self.hash_content(msg)
+
+    @staticmethod
+    def hash_content(msg):
+        return hashlib.sha1(str(msg).encode("utf-8")).hexdigest()
+
+    def to_brief(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "status": self.status,
+            "create_time": self.create_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "data": self.data,
+        }
+
+    @classmethod
+    def unread_page(cls, session, reader_id, after_id=0, limit=50):
+        query = session.query(cls).filter(cls.reader_id == reader_id, cls.unread.is_(True))
+        total = query.count()
+        if after_id > 0:
+            query = query.filter(cls.id > after_id)
+        return query.order_by(cls.id.desc()).limit(limit).all(), total
 
     @classmethod
     def cleanup_messages(cls, reader_id, msg_content, days=31):
-        """清理指定用户的匹配消息内容的消息"""
+        """清理指定用户内容相同的消息、过期消息，并把总量限制在 MAX_PER_USER 以内"""
         session = cls._session()
-        messages = session.query(cls).filter_by(reader_id=reader_id).all()
-
-        removed_count = 0
-        for message in messages:
-            if message.data.get("message") == msg_content:
-                session.delete(message)
-                removed_count += 1
-            elif message.update_time < datetime.datetime.now() - datetime.timedelta(
-                days=days
-            ):
-                session.delete(message)
-                removed_count += 1
-
+        cutoff = datetime.datetime.now() - datetime.timedelta(days=days)
+        removed_count = session.query(cls).filter(
+            cls.reader_id == reader_id,
+            or_(cls.content_hash == cls.hash_content(msg_content), cls.update_time < cutoff),
+        ).delete(synchronize_session=False)
+        edge = session.query(cls.id).filter(cls.reader_id == reader_id).order_by(cls.id.desc()).offset(cls.MAX_PER_USER - 1).limit(1).scalar()
+        if edge is not None:
+            removed_count += session.query(cls).filter(cls.reader_id == reader_id, cls.id <= edge).delete(synchronize_session=False)
         if removed_count > 0:
             session.commit()
-
         return removed_count
 
     @classmethod
@@ -374,17 +397,10 @@ class Message(Base, SQLAlchemyMixin):
         """清理指定天数以前的消息"""
         session = cls._session()
         cutoff_date = datetime.datetime.now() - datetime.timedelta(days=days)
-
-        old_messages = session.query(cls).filter(cls.create_time < cutoff_date).all()
-        removed_count = len(old_messages)
-
-        for message in old_messages:
-            session.delete(message)
-
+        removed_count = session.query(cls).filter(cls.create_time < cutoff_date).delete(synchronize_session=False)
         if removed_count > 0:
             session.commit()
             logging.info(f"Cleaned up {removed_count} messages older than {days} days")
-
         return removed_count
 
 

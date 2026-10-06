@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 
+import json
 import logging
 import re
 import threading
@@ -110,6 +111,8 @@ class AsyncService(metaclass=SingletonType):
                     scanfile_changed = self.adjust_scanfile_table()
                 with upgrade_step("db_readings"):
                     self.adjust_readings_table()
+                with upgrade_step("db_messages"):
+                    self.adjust_messages_table()
                 changed = changed or reader_changed or scanfile_changed or True  # readings index creation is idempotent but must always be committed
                 if changed:
                     self.session.commit()
@@ -221,6 +224,21 @@ class AsyncService(metaclass=SingletonType):
             """))
             changed = True
         return changed
+
+    def adjust_messages_table(self):
+        columns = [row[1] for row in self.session.execute(text("PRAGMA table_info(messages)")).fetchall()]
+        if not columns:
+            return
+        if "content_hash" not in columns:
+            self.session.execute(text("ALTER TABLE messages ADD COLUMN content_hash STRING(40)"))
+            for msg_id, data in self.session.execute(text("SELECT id, data FROM messages")).fetchall():
+                try:
+                    content = json.loads(data).get("message") if isinstance(data, str) else (data or {}).get("message")
+                except Exception:
+                    continue
+                self.session.execute(text("UPDATE messages SET content_hash=:h WHERE id=:i"), {"h": Message.hash_content(content), "i": msg_id})
+        self.session.execute(text("CREATE INDEX IF NOT EXISTS ix_messages_reader_unread_id ON messages (reader_id, unread, id)"))
+        self.session.execute(text("CREATE INDEX IF NOT EXISTS ix_messages_reader_id ON messages (reader_id, id)"))
 
     def adjust_readings_table(self):
         # Reading 表本身随 Base.metadata.create_all() 自动创建。

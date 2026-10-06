@@ -637,6 +637,7 @@ def main():
         http_server.add_sockets(sockets)
     else:
         http_server.listen(options.port, options.host)
+    tornado.ioloop.PeriodicCallback(lambda: models.Message.cleanup_old_messages(), 24 * 3600 * 1000).start()
     if CONF.get("PERF_MONITOR", True):
         PerfMonitor.instance().start(int(CONF["PERF_STALL_MS"]))
     tornado.ioloop.IOLoop.instance().start()

@@ -517,9 +517,10 @@ class BaseHandler(web.RequestHandler):
     def pop_messages(self):
         if not self.current_user:
             return []
-        messages = self.current_user.messages
+        messages = self.sqlite_session.query(Message).filter(Message.reader_id == self.current_user.id).all()
         for m in messages:
-            self.sqlite_session.delete(m)
+            self.sqlite_session.expunge(m)
+        self.sqlite_session.query(Message).filter(Message.reader_id == self.current_user.id).delete(synchronize_session=False)
         self.sqlite_session.commit()
         return messages
 

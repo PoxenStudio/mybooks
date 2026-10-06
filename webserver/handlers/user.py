@@ -497,28 +497,17 @@ class SignOut(BaseHandler):
 class UserMessages(BaseHandler):
     @js
     def get(self):
+        rsp = {"err": "ok", "messages": [], "total_unread": 0}
         user = self.current_user
-        rsp = {
-            "err": "ok",
-            "messages": [],
-        }
-
-        if user and user.messages is not None:
-            messages = user.messages
-            messages.sort(key=lambda x: x.create_time, reverse=True)
-            if messages is None:
-                return rsp
-            for msg in messages:
-                if not msg.unread:
-                    continue
-                m = {
-                    "id": msg.id,
-                    "title": msg.title,
-                    "status": msg.status,
-                    "create_time": msg.create_time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "data": msg.data,
-                }
-                rsp["messages"].append(m)
+        if not user:
+            return rsp
+        try:
+            after_id = int(self.get_argument("after_id", 0) or 0)
+        except ValueError:
+            after_id = 0
+        rows, total = Message.unread_page(self.sqlite_session, user.id, after_id=after_id)
+        rsp["messages"] = [m.to_brief() for m in rows]
+        rsp["total_unread"] = total
         return rsp
 
     @js

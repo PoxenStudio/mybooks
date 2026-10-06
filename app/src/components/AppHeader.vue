@@ -310,7 +310,7 @@
                 <v-menu offset-y right :close-on-content-click="false" v-if="messages.length > 0">
                     <template v-slot:activator="{ on }">
                         <v-btn v-on="on" icon color="yellow">
-                            <v-badge color="red" class="blink" :content="messages.length > 99 ? '...' : String(messages.length)" overlap>
+                            <v-badge color="red" class="blink" :content="unreadCount > 99 ? '...' : String(unreadCount)" overlap>
                                 <v-icon>mdi-bell</v-icon>
                             </v-badge>
                         </v-btn>
@@ -587,6 +587,9 @@ export default {
         messages: [],
         runningTasks: [],
         taskPollingTimer: null,
+        messagePollingTimer: null,
+        idleTaskPolls: 0,
+        totalUnread: 0,
         expandedGroups: {},
         feedbackDialog: false,
         memoDialog: false,
@@ -596,6 +599,9 @@ export default {
     };
     },
     computed: {
+        unreadCount() {
+            return Math.max(this.totalUnread, this.messages.length);
+        },
         appearanceSettings() {
             return this.$store.state.appearance;
         },
@@ -818,18 +824,14 @@ export default {
                 }
             }
         });
-        this.$backend("/user/messages").then((rsp) => {
-            if (rsp.err == "ok") {
-                this.messages = rsp.messages;
-            }
-        });
-
+        this.pollMessages();
         this.loadRunningTasks();
-        this.startTaskPolling();
+        document.addEventListener("visibilitychange", this.onVisibilityChange);
     },
     beforeDestroy() {
         this.closeAi();
-        this.stopTaskPolling();
+        this.stopPolling();
+        document.removeEventListener("visibilitychange", this.onVisibilityChange);
     },
     methods: {
         isExternalLink(url) {
@@ -1046,6 +1048,7 @@ export default {
             }).then((rsp) => {
                 if (rsp.err == "ok") {
                     this.messages.splice(idx, 1);
+                    this.totalUnread = Math.max(0, this.totalUnread - 1);
                 }
             });
         },
@@ -1055,32 +1058,84 @@ export default {
             }).then((rsp) => {
                 if (rsp.err == "ok") {
                     this.messages = [];
+                    this.totalUnread = 0;
                 }
             });
         },
         loadRunningTasks() {
             if (!this.user.is_login || !this.user.is_admin) {
                 this.runningTasks = [];
+                this.scheduleTaskPolling();
                 return;
             }
             this.$backend("/admin/tasks/running").then((rsp) => {
                 if (rsp.err == "ok") {
                     this.runningTasks = rsp.tasks || [];
-                    this.messages = rsp.messages || this.messages;
+                    this.idleTaskPolls = this.runningTasks.length ? 0 : this.idleTaskPolls + 1;
                 }
             }).catch((err) => {
                 console.error("Failed to load running tasks:", err);
+            }).finally(() => {
+                this.scheduleTaskPolling();
             });
         },
-        startTaskPolling() {
-            this.taskPollingTimer = setInterval(() => {
-                this.loadRunningTasks();
-            }, 10000);
+        scheduleTaskPolling() {
+            this.stopTaskPolling();
+            if (document.visibilityState !== "visible") {
+                return;
+            }
+            const delay = this.idleTaskPolls >= 3 ? 30000 : 10000;
+            this.taskPollingTimer = setTimeout(() => this.loadRunningTasks(), delay);
         },
         stopTaskPolling() {
             if (this.taskPollingTimer) {
-                clearInterval(this.taskPollingTimer);
+                clearTimeout(this.taskPollingTimer);
                 this.taskPollingTimer = null;
+            }
+        },
+        pollMessages() {
+            if (!this.user.is_login) {
+                this.scheduleMessagePolling();
+                return;
+            }
+            const afterId = this.messages.reduce((max, msg) => Math.max(max, msg.id), 0);
+            this.$backend(`/user/messages?after_id=${afterId}`).then((rsp) => {
+                if (rsp.err == "ok") {
+                    const known = new Set(this.messages.map((msg) => msg.id));
+                    const fresh = (rsp.messages || []).filter((msg) => !known.has(msg.id));
+                    this.messages = fresh.concat(this.messages);
+                    this.totalUnread = rsp.total_unread || 0;
+                }
+            }).catch((err) => {
+                console.error("Failed to load messages:", err);
+            }).finally(() => {
+                this.scheduleMessagePolling();
+            });
+        },
+        scheduleMessagePolling() {
+            this.stopMessagePolling();
+            if (document.visibilityState !== "visible") {
+                return;
+            }
+            this.messagePollingTimer = setTimeout(() => this.pollMessages(), 30000);
+        },
+        stopMessagePolling() {
+            if (this.messagePollingTimer) {
+                clearTimeout(this.messagePollingTimer);
+                this.messagePollingTimer = null;
+            }
+        },
+        stopPolling() {
+            this.stopTaskPolling();
+            this.stopMessagePolling();
+        },
+        onVisibilityChange() {
+            if (document.visibilityState === "visible") {
+                this.idleTaskPolls = 0;
+                this.pollMessages();
+                this.loadRunningTasks();
+            } else {
+                this.stopPolling();
             }
         },
         getTaskTypeLabel(serviceType) {
