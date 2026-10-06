@@ -24,7 +24,7 @@ from tornado import web
 from tornado.options import define, options
 
 from webserver import loader, models, perf, social_routes, startup_status
-from webserver.startup_status import StartupState
+from webserver.startup_status import StartupState, substep
 from webserver.services import warmup
 from webserver.services.perf_monitor import PerfMonitor
 from webserver.base.setting_saver import SettingsSaver
@@ -435,7 +435,8 @@ def make_app():
     logging.info("Now, Running...")
     # WebDAV route is always registered; the handler checks ENABLE_WEBDAV_SERVICE at
     # request time and lazily initialises the WSGI app on first use.
-    from webserver.webdav.handler import WebDAVHandler
+    with substep("import_webdav"):
+        from webserver.webdav.handler import WebDAVHandler
     webdav_routes = [
         (r"/books/?(.*)", WebDAVHandler, dict(cache=cache, session=ScopedSession)),
     ]
@@ -443,7 +444,13 @@ def make_app():
     # Assemble routes carefully:
     # WebDAV must come before files.routes() because files has a catch-all (r"/(.*)")
     # We need to get routes from handlers module without files, add webdav, then add files
-    from webserver.handlers import assistant, mcp, admin, barcode, scan, opds, book, book_review, booklist, user, meta, audio, toolbox, sync, tts, folder, reader_dict
+    import importlib
+    names = ["assistant", "mcp", "admin", "barcode", "scan", "opds", "book", "book_review", "booklist", "user", "meta", "audio", "toolbox", "sync", "tts", "folder", "reader_dict"]
+    mods = {}
+    for name in names:
+        with substep("import_handler:" + name):
+            mods[name] = importlib.import_module("webserver.handlers." + name)
+    assistant, mcp, admin, barcode, scan, opds, book, book_review, booklist, user, meta, audio, toolbox, sync, tts, folder, reader_dict = (mods[n] for n in names)
 
     app_routes = []
     app_routes += social_routes.SOCIAL_AUTH_ROUTES
@@ -468,13 +475,15 @@ def make_app():
 
     # Podcast routes are always registered; each handler calls check_podcast_enabled()
     # at request time, so toggling ENABLE_PODCAST_SERVICE takes effect without restart.
-    from webserver.handlers.podcast import routes as podcast_route_func
+    with substep("import_podcast"):
+        from webserver.handlers.podcast import routes as podcast_route_func
     app_routes += podcast_route_func()
 
     # WAP routes: server-side rendered HTML pages for Kindle browsers.
     # Must be registered BEFORE static_files.routes() so they take precedence
     # over the Vue SPA assets served at /wap/*.
-    from webserver.handlers import wap as wap_handler
+    with substep("import_wap"):
+        from webserver.handlers import wap as wap_handler
     app_routes += wap_handler.routes()
 
     # Insert WebDAV routes BEFORE files.routes()
@@ -482,14 +491,17 @@ def make_app():
     # files.routes() contains catch-all r"/(.*)" so must be last
     app_routes += static_files.routes()
 
-    app = web.Application(app_routes, **app_settings)
+    with substep("build_application"):
+        app = web.Application(app_routes, **app_settings)
     app._engine = engine
 
     # Start background service
-    BookBarnService().get_daily_books()
+    with substep("bookbarn_daily"):
+        BookBarnService().get_daily_books()
 
     # Init the resources
-    resources_service = ResourceService()
+    with substep("resource_service"):
+        resources_service = ResourceService()
 
     # Sync authors as needed
     if CONF.get("ENABLE_AUTHOR_INFO", False) and CONF.get("ENABLE_BOOKBARN", False):
@@ -533,17 +545,20 @@ def make_app():
 
     if CONF.get("IMPORT_BY_INOTIFY", False):
         from webserver.services.monitor_service import get_monitor_service
-        get_monitor_service().start()
+        with substep("monitor_service"):
+            get_monitor_service().start()
 
     from webserver.services.reading_stats_service import ReadingStatsService
-    ReadingStatsService.start()
+    with substep("reading_stats"):
+        ReadingStatsService.start()
     import atexit
     # best-effort：覆盖正常退出/SIGINT，不保证 SIGKILL/supervisor 强杀场景，
     # 见 document/Reading_Stats_Design.md §11.4
     atexit.register(ReadingStatsService.stop)
 
     from webserver.services.sync_service import MyReaderSyncService
-    MyReaderSyncService.start()
+    with substep("sync_service"):
+        MyReaderSyncService.start()
     atexit.register(MyReaderSyncService.stop)
 
     return app

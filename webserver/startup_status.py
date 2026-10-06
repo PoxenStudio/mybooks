@@ -76,6 +76,15 @@ class StartupState:
 
 
 @contextlib.contextmanager
+def substep(name):
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        logging.info("[STARTUP-TIMING] sub=%s cost_ms=%.0f", name, (time.perf_counter() - start) * 1000)
+
+
+@contextlib.contextmanager
 def upgrade_step(name):
     StartupState.enter(name)
     try:

@@ -13,7 +13,6 @@ from webserver.handlers.base import BaseHandler, ListHandler, js
 from webserver.i18n import _
 from webserver.version import VERSION
 
-from webserver.mcp.mcp_service import MCPService
 
 CONF = loader.get_settings()
 
@@ -29,6 +28,7 @@ class MCPHandler(ListHandler):
         Create and return a new MCP service instance.
         Different instances are created based on whether a token is provided.
         """
+        from webserver.mcp.mcp_service import MCPService
         if token is None or token == "":
             if cls.mcp_service_single is None:
                 cls.mcp_service_single = MCPService(base_handler, token=token)

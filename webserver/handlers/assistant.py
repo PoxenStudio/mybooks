@@ -4,7 +4,6 @@
 import json
 import logging
 import tornado.websocket
-from webserver.assistant.ai_assistant_agent import AIAssistantMCPAgent
 
 
 class AssistantWebSocketHandler(tornado.websocket.WebSocketHandler):
@@ -44,6 +43,7 @@ class AssistantWebSocketHandler(tornado.websocket.WebSocketHandler):
             logging.info(f"WebSocket cookies: {list(cookies.keys())}")
 
             # 为每个连接创建独立的 Agent 实例
+            from webserver.assistant.ai_assistant_agent import AIAssistantMCPAgent
             self.agent = AIAssistantMCPAgent(cookies=cookies)
             await self.agent.initialize()
 

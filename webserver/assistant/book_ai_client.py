@@ -3,7 +3,6 @@ import logging
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from openai import OpenAI
 from webserver import loader
 from webserver.constants import DEEPSEEK_API_BASE
 from webserver.services.book_search import BookSearch
@@ -60,6 +59,7 @@ class BookAIClient:
         if not api_key or not api_url:
             raise ValueError("API_KEY or API_URL is not configured")
 
+        from openai import OpenAI
         self.client = OpenAI(
             api_key=api_key,
             base_url=api_url,

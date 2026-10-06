@@ -4,8 +4,10 @@ Supports HTTP Streamable communication (non-SSE)
 """
 
 import json
-import aiohttp
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
+
+if TYPE_CHECKING:
+    import aiohttp
 
 
 class MCPStreamClient:
@@ -16,13 +18,14 @@ class MCPStreamClient:
 
     def __init__(self, base_url: str, token: str, cookies: Optional[Dict] = None):
         self.base_url = f'{base_url}?token={token}' if token is not None else base_url
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: Optional["aiohttp.ClientSession"] = None
         self.tools_cache = None
         self.cookies = cookies
         print(f"MCP Tool: {self.base_url}")
 
     async def connect(self):
         """连接到MCP服务器"""
+        import aiohttp
         self.session = aiohttp.ClientSession()
         await self.initialize_session()
 

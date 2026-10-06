@@ -7,7 +7,6 @@ import json
 import logging
 import re
 from typing import Dict, List, Optional
-from openai import OpenAI
 from webserver import loader
 
 from webserver.assistant.mcp_client import MCPStreamClient
@@ -28,6 +27,7 @@ class AIAssistantMCPAgent:
     """
 
     def __init__(self, cookies: Optional[Dict] = None):
+        from openai import OpenAI
         self.ai_client = OpenAI(
             api_key=AI_API_KEY,
             base_url=AI_BASE_URL,
