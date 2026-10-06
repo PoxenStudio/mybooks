@@ -38,7 +38,7 @@ from webserver.services.perf_monitor import PerfMonitor
 from webserver.services.background_service import BackgroundService, BackgroundTask
 from webserver.services.book_search import BookSearch
 from webserver.handlers.base import BaseHandler, auth, js, is_admin
-from webserver.models import Reader, Item, Authors, Reading, BookReview
+from webserver.models import Reader, Item, Authors, Reading, BookReview, Message
 from webserver.services.book_review_service import BookReviewService
 from webserver.base.formatter import SimpleBookFormatter
 from webserver.base.setting_saver import SettingsSaver
@@ -1372,23 +1372,11 @@ class AdminRunningTasks(BaseHandler):
             if task["status"] == BackgroundTask.STATUS_RUNNING
         ]
 
-        # 一起返回user messages, 可以及时显示到前端
-        messages = self.current_user.messages
-        rsp_messages = []
-        if messages:
-            messages.sort(key=lambda x: x.create_time, reverse=True)
-            for msg in messages:
-                if not msg.unread:
-                    continue
-                m = {
-                    "id": msg.id,
-                    "title": msg.title,
-                    "status": msg.status,
-                    "create_time": msg.create_time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "data": msg.data,
-                }
-                rsp_messages.append(m)
-        return {"err": "ok", "tasks": running_tasks, "messages": rsp_messages}
+        rsp = {"err": "ok", "tasks": running_tasks}
+        if self.get_argument("with_messages", "0") == "1":
+            rows, _total = Message.unread_page(self.sqlite_session, self.current_user.id)
+            rsp["messages"] = [m.to_brief() for m in rows]
+        return rsp
 
 
 class AdminRestartServer(BaseHandler):
