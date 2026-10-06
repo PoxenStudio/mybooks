@@ -275,7 +275,7 @@ def ACQUISITION_ENTRY(item, db, updated, CFM, CKEYS, prefix):
     ans.append(
         E.link(
             type="image/jpeg",
-            href=prefix + "/get/thumb_200_300/%s.jpg?size=200x300" % item[FM["id"]],
+            href=prefix + "/get/thumb_240_320/%s.jpg?size=240x320" % item[FM["id"]],
             rel="http://opds-spec.org/cover",
         )
     )
