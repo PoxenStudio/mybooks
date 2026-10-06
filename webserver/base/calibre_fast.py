@@ -7,6 +7,9 @@ import contextlib
 import inspect
 import logging
 import os
+import time
+
+from webserver.services.perf_monitor import PerfMonitor
 
 _original = None
 _supports_verify = False
@@ -43,7 +46,11 @@ def fast_get_data_as_dict(self, prefix=None, authors_as_string=False, ids=None, 
     cache = getattr(view, "cache", None)
     read_lock = getattr(cache, "read_lock", None)
     data = []
+    monitor = PerfMonitor.instance()
+    wait_start = time.perf_counter()
     with read_lock if read_lock is not None else contextlib.nullcontext():
+        monitor.record_stage("fast.lock_wait", (time.perf_counter() - wait_start) * 1000)
+        fields_start = time.perf_counter()
         for db_id in wanted:
             record = view.tablerow_for_id(db_id)
             x = {}
@@ -68,6 +75,8 @@ def fast_get_data_as_dict(self, prefix=None, authors_as_string=False, ids=None, 
             x["cover"] = os.path.join(path, "cover.jpg")
             if not record[field_map["cover"]]:
                 x["cover"] = None
+    monitor.record_stage("fast.fields", (time.perf_counter() - fields_start) * 1000)
+    formats_start = time.perf_counter()
     for x in data:
         db_id = x["id"]
         if _supports_verify:
@@ -86,6 +95,7 @@ def fast_get_data_as_dict(self, prefix=None, authors_as_string=False, ids=None, 
                     x["formats"].append(path)
                     x["fmt_" + fmt.lower()] = path
             x["available_formats"] = [i.upper() for i in formats.split(",")]
+    monitor.record_stage("fast.formats", (time.perf_counter() - formats_start) * 1000)
     return data
 
 

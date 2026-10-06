@@ -17,7 +17,7 @@ blocking_pool = ThreadPoolExecutor(max_workers=int(loader.get_settings().get("BL
 
 # calibre 查询专用池：与联网长任务隔离。若混用一池，20 个并发联网搜索打满时，
 # 阅读链路的毫秒级 calibre 查询（get_book_async）要排在网络任务后面，最坏等分钟级。
-calibre_pool = ThreadPoolExecutor(max_workers=int(loader.get_settings().get("CALIBRE_POOL_SIZE", 2)), thread_name_prefix="mybooks-calibre")
+calibre_pool = ThreadPoolExecutor(max_workers=int(loader.get_settings().get("CALIBRE_POOL_SIZE", 4)), thread_name_prefix="mybooks-calibre")
 
 
 def bind_threadpool_call(func, *args, **kwargs):

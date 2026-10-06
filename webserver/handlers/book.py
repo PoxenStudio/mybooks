@@ -183,7 +183,7 @@ class Index(BaseHandler):
         cnt_recent = min(int(self.get_argument("recent", setting_recent_count)), 200)
 
         t0 = time.perf_counter()
-        ids = await self.run_calibre_async(self._all_book_ids)
+        ids = await self.run_calibre_read_async(self._all_book_ids)
         t_ids = time.perf_counter()
         if not ids:
             return {
@@ -2551,7 +2551,6 @@ class SearchBook(ListHandler):
         # 查询被别的用户标记为sole的图书ID，并将ids中对应的ID去除
         sole_book_ids = set(item.book_id for item in self.sqlite_session.query(Item).filter(Item.sole == 1, Item.collector_id != self.user_id()).all())
         ids = [book_id for book_id in ids if book_id not in sole_book_ids]
-        logging.debug(f"Search result IDs after excluding sole books: {ids}")
         return self.render_book_list([], ids=ids, title=title, sort_fields=order_by)
 
 

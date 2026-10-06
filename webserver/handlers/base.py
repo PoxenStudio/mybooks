@@ -2,6 +2,7 @@
 # -*- coding: UTF-8 -*-
 
 import asyncio
+import contextlib
 import base64
 import datetime
 import hashlib
@@ -721,6 +722,14 @@ class BaseHandler(web.RequestHandler):
         del vals["self"]
         self.write(self.render_string(template, **vals))
 
+    async def run_calibre_read_async(self, func, *args, **kwargs):
+        """只读 calibre 调用：不持 db_lock，读之间可并行，仍受 calibre 自带读写锁约束。
+
+        只能用于 Cache 层的读 API（search、get_data_as_dict 等）；直接执行 backend.conn
+        原生 SQL 的调用必须走 run_calibre_async，由 db_lock 串行。
+        """
+        return await self._run_calibre(func, args, kwargs, locked=False)
+
     async def run_calibre_async(self, func, *args, **kwargs):
         """在工作线程执行阻塞的 calibre 调用（get_data_as_dict / get_metadata 等）。
 
@@ -732,14 +741,16 @@ class BaseHandler(web.RequestHandler):
         func 内只允许 calibre 侧操作，绝不能触碰 sqlite_session（线程本地）。
         请求上下文（contextvars，含 i18n 请求语言）经 bind_threadpool_call 显式带入。
         """
+        return await self._run_calibre(func, args, kwargs, locked=True)
 
+    async def _run_calibre(self, func, args, kwargs, locked):
         call = utils.bind_threadpool_call(func, *args, **kwargs)
         name = getattr(func, "__name__", "calibre_call")
         submitted = time.monotonic()
         monitor = PerfMonitor.instance()
 
         def _runner():
-            with self.db_lock:
+            with self.db_lock if locked else contextlib.nullcontext():
                 started = time.monotonic()
                 try:
                     return call()
@@ -767,7 +778,7 @@ class BaseHandler(web.RequestHandler):
         """get_book 的非阻塞版：calibre 查询放工作线程，sqlite/Item 合并留在 ioloop。"""
         _ts = time.time()
         book_id = int(book_id)
-        books = await self.run_calibre_async(self.calibre_db.get_data_as_dict, ids=[book_id])
+        books = await self.run_calibre_read_async(self.calibre_db.get_data_as_dict, ids=[book_id])
         if fully:
             books = self._merge_books_full(books, _ts)
         else:
@@ -805,7 +816,7 @@ class BaseHandler(web.RequestHandler):
 
     async def get_books_for_list_async(self, **kwargs):
         _ts = time.time()
-        books = await self.run_calibre_async(self.calibre_db.get_data_as_dict, **calibre_fast.list_kwargs(), **kwargs)
+        books = await self.run_calibre_read_async(self.calibre_db.get_data_as_dict, **calibre_fast.list_kwargs(), **kwargs)
         return self._merge_books_full(books, _ts)
 
     def get_books(self, *args, **kwargs):
@@ -818,18 +829,23 @@ class BaseHandler(web.RequestHandler):
         return self._merge_books_full(books, _ts)
 
     def _item_maps(self, ids):
+        stage = PerfMonitor.instance().stage
         empty_item = Item().to_dict()
         rows = []
         if ids:
             table = Item.__table__
-            rows = [dict(r._mapping) for r in self.sqlite_session.execute(table.select().where(table.c.book_id.in_(ids)))]
+            with stage("list.items_execute"):
+                result = self.sqlite_session.execute(table.select().where(table.c.book_id.in_(ids)))
+            with stage("list.items_fetch"):
+                rows = [dict(r._mapping) for r in result]
         needs_default = len(rows) < len(set(ids))
         collector_ids = {r["collector_id"] for r in rows if r["collector_id"] is not None}
         collectors = {}
         if collector_ids:
-            collectors = {
-                reader.id: reader.to_dict() for reader in self.sqlite_session.query(Reader).filter(Reader.id.in_(collector_ids)).all()
-            }
+            with stage("list.collectors"):
+                collectors = {
+                    reader.id: reader.to_dict() for reader in self.sqlite_session.query(Reader).filter(Reader.id.in_(collector_ids)).all()
+                }
         maps = {}
         for row in rows:
             collector = collectors.get(row["collector_id"])
@@ -852,6 +868,7 @@ class BaseHandler(web.RequestHandler):
         if _ts is None:
             _ts = time.time()
         self._build_custom_column_map()
+        merge_start = time.perf_counter()
 
         # Get audio book ids set once for better performance
         audio_book_ids = set()
@@ -886,6 +903,7 @@ class BaseHandler(web.RequestHandler):
         if CONF.get(constants.ALLOW_READ_RANGE_SETTING, False):
             books = [b for b in books if self.is_book_visible(b)]
 
+        PerfMonitor.instance().record_stage("list.merge_total", (time.perf_counter() - merge_start) * 1000)
         logging.debug(
             "[%5d ms] select books from database (count = %d)"
             % (int(1000 * (time.time() - _ts)), len(books))
@@ -1228,7 +1246,7 @@ class BaseHandler(web.RequestHandler):
         version = self.library_version()
         ids = BaseHandler._search_cache.get(query, version)
         if ids is None:
-            ids = tuple(await self.run_calibre_async(self.calibre_db_cache.search, query) or ())
+            ids = tuple(await self.run_calibre_read_async(self.calibre_db_cache.search, query) or ())
             BaseHandler._search_cache.put(query, version, ids)
         return list(ids)
 
@@ -1480,7 +1498,7 @@ class BaseHandler(web.RequestHandler):
         version = self.library_version()
         stats = BaseHandler._stats_cache.get("stats", version)
         if stats is None:
-            stats = await self.run_calibre_async(self._library_stats)
+            stats = await self.run_calibre_read_async(self._library_stats)
             BaseHandler._stats_cache.put("stats", version, stats)
         return self._sys_info_with(stats)
 
@@ -1603,7 +1621,7 @@ class ListHandler(BaseHandler):
                 self.do_sort(books, "id", False)
             elif sort_fields == "title":
                 # 获取所有books，排序后再抽取当前页
-                sorted_ids = await self.run_calibre_async(self._sort_ids_by_title, ids)
+                sorted_ids = await self.run_calibre_read_async(self._sort_ids_by_title, ids)
                 page_ids = sorted_ids[start : start + delta]
                 by_id = {b["id"]: b for b in await self.get_books_for_list_async(ids=page_ids)}
                 books = [by_id[i] for i in page_ids if i in by_id]
