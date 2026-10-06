@@ -72,6 +72,7 @@ export default {
     searching: false,
     extendedSearching: false,
     searchStatus: "",
+    searchController: null,
     searchName: "", // 搜索关键词
     cachedSearchName: "", // 缓存的搜索关键词，用于判断是否需要重新查询
     resultTitle: "", // searchByTitle 返回结果中携带的标题，用于覆盖默认标题
@@ -97,6 +98,9 @@ export default {
   mounted() {
     this.init();
   },
+  beforeDestroy() {
+    this.abortSearch();
+  },
   beforeRouteUpdate(to, from, next) {
     // 先完成路由跳转，确保 this.$route 是最新的
     next();
@@ -106,6 +110,15 @@ export default {
     });
   },
   methods: {
+    abortSearch() {
+      if (this.searchController) {
+        this.searchController.abort();
+        this.searchController = null;
+        this.searching = false;
+        this.extendedSearching = false;
+      }
+    },
+
     async init() {
       this.$store.commit('navbar', true);
 
@@ -113,6 +126,7 @@ export default {
       this.searchName = this.$route.query.name || "";
 
       if (!this.searchName) {
+        this.abortSearch();
         this.books = [];
         this.allBooks = [];
         this.total = 0;
@@ -124,6 +138,7 @@ export default {
 
       // 如果搜索关键词变化了，清空缓存
       if (this.searchName !== this.cachedSearchName) {
+        this.abortSearch();
         this.books = [];
         this.allBooks = [];
         this.total = 0;
@@ -150,6 +165,12 @@ export default {
     },
 
     async performFullSearch() {
+      if (this.searchController) {
+        this.searchController.abort();
+      }
+      const controller = new AbortController();
+      this.searchController = controller;
+      const signal = controller.signal;
       this.searching = true;
       this.books = [];
       this.allBooks = [];
@@ -161,7 +182,10 @@ export default {
       try {
         // 第一步：精确标题查询
         this.searchStatus = this.$t('listBook.searchingTitle');
-        const titleResults = await this.searchByTitle(this.searchName);
+        const titleResults = await this.searchByTitle(this.searchName, signal);
+        if (signal.aborted) {
+          return;
+        }
         if (titleResults && titleResults.books) {
           titleResults.books.forEach(book => {
             if (!seenIds.has(book.id)) {
@@ -176,7 +200,10 @@ export default {
 
         // 第二步：分词查询
         this.searchStatus = this.$t('listBook.searchingSegmentation');
-        const segResults = await this.searchBySegmentation(this.searchName);
+        const segResults = await this.searchBySegmentation(this.searchName, signal);
+        if (signal.aborted) {
+          return;
+        }
         if (segResults && segResults.books) {
           segResults.books.forEach(book => {
             if (!seenIds.has(book.id)) {
@@ -195,7 +222,10 @@ export default {
         // 第三步：扩展查询（耗时较长，在后台继续执行）
         this.extendedSearching = true;
         this.searchStatus = this.$t('listBook.searchingExtended');
-        const extResults = await this.searchExtended(this.searchName);
+        const extResults = await this.searchExtended(this.searchName, signal);
+        if (signal.aborted) {
+          return;
+        }
         if (extResults && extResults.books) {
           extResults.books.forEach(book => {
             if (!seenIds.has(book.id)) {
@@ -220,9 +250,11 @@ export default {
           this.page_cnt = 0;
         }
       } finally {
-        this.searching = false;
-        this.extendedSearching = false;
-        this.searchStatus = "";
+        if (this.searchController === controller) {
+          this.searching = false;
+          this.extendedSearching = false;
+          this.searchStatus = "";
+        }
       }
     },
 
@@ -233,16 +265,16 @@ export default {
       this.page_cnt = Math.max(1, Math.ceil(this.total / this.page_size));
     },
 
-    async fetchAllPages(url) {
+    async fetchAllPages(url, signal) {
       const pageSize = this.fetch_page_size;
-      const first = await this.$backend(`${url}&start=0&size=${pageSize}`);
+      const first = await this.$backend(`${url}&start=0&size=${pageSize}`, {signal});
       if (first.err !== 'ok') {
         return first;
       }
       const books = first.books || [];
       const wanted = Math.min(first.total || books.length, this.max_search_size);
       while (books.length < wanted) {
-        const rsp = await this.$backend(`${url}&start=${books.length}&size=${pageSize}`);
+        const rsp = await this.$backend(`${url}&start=${books.length}&size=${pageSize}`, {signal});
         if (rsp.err !== 'ok' || !rsp.books || rsp.books.length === 0) {
           break;
         }
@@ -252,10 +284,10 @@ export default {
       return first;
     },
 
-    async searchByTitle(name) {
+    async searchByTitle(name, signal) {
       try {
         const url = `/search?title=${encodeURIComponent(name)}`;
-        const rsp = await this.fetchAllPages(url);
+        const rsp = await this.fetchAllPages(url, signal);
         if (rsp.err === 'ok') {
           return rsp;
         }
@@ -265,10 +297,10 @@ export default {
       return null;
     },
 
-    async searchBySegmentation(name) {
+    async searchBySegmentation(name, signal) {
       try {
         const url = `/search?seg=1&title=${encodeURIComponent(name)}`;
-        const rsp = await this.fetchAllPages(url);
+        const rsp = await this.fetchAllPages(url, signal);
         if (rsp.err === 'ok') {
           return rsp;
         }
@@ -278,10 +310,10 @@ export default {
       return null;
     },
 
-    async searchExtended(name) {
+    async searchExtended(name, signal) {
       try {
         const url = `/search?name=${encodeURIComponent(name)}`;
-        const rsp = await this.fetchAllPages(url);
+        const rsp = await this.fetchAllPages(url, signal);
         if (rsp.err === 'ok') {
           return rsp;
         }

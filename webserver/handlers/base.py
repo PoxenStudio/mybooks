@@ -946,6 +946,22 @@ class BaseHandler(web.RequestHandler):
             result = False
         return result
 
+    async def delete_book_async(self, book_id, book_title):
+        try:
+            self.cascade_delete_book_data(self.sqlite_session, book_id, commit=False)
+            self.sqlite_session.commit()
+        except Exception as e:
+            self.sqlite_session.rollback()
+            logging.error(f"删除ID为{book_id},名为《{book_title}》的书籍关联记录失败: {e}")
+        try:
+            await self.run_calibre_async(self.calibre_db.delete_book, book_id)
+        except Exception as e:
+            logging.error(f"删除书籍《{book_title}》失败: {e}")
+            return False
+        user_name = self.current_user.name if self.current_user else ""
+        self.add_msg("success", _("%s删除了书籍《%s》") % (user_name, book_title))
+        return True
+
     def invalidate_recommendation(self):
         service = self.settings.get("recommend")
         if service is not None and self.user_id():
