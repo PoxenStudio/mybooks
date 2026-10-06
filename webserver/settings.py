@@ -207,7 +207,7 @@ settings = {
 
     "TOOL_ROOT": "/data/books/tools/",
     "ENABLE_TOOLBOX_DEV_MODE": False,
-    "ENABLE_TOOLBOX_STORE": False,
+    "ENABLE_TOOLBOX_STORE": True,
 
     "SOCIAL_AUTH_LOGIN_URL"          : '/',
     "SOCIAL_AUTH_LOGIN_REDIRECT_URL" : '/api/done/',
