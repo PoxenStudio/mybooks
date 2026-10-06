@@ -111,13 +111,18 @@ class AsyncService(metaclass=SingletonType):
                     scanfile_changed = self.adjust_scanfile_table()
                 with upgrade_step("db_readings"):
                     self.adjust_readings_table()
-                with upgrade_step("db_messages"):
-                    self.adjust_messages_table()
                 changed = changed or reader_changed or scanfile_changed or True  # readings index creation is idempotent but must always be committed
                 if changed:
                     self.session.commit()
             except Exception as err:
                 logging.warning("Failed to alter tables: %s", err)
+                self.session.rollback()
+        if self.session is not None:
+            try:
+                self.adjust_messages_table()
+                self.session.commit()
+            except Exception as err:
+                logging.warning("Failed to adjust messages table: %s", err)
                 self.session.rollback()
         # logging.info("<%s> setup: db=%s, session=%s", self, self.db, self.session)
         logging.info("AsyncService setup completed")
