@@ -8,16 +8,16 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
-from webserver import constants, loader
+from webserver import constants, loader, perf
 
 # 联网任务线程池：信息源插件搜索、AI 请求等长任务（单次可达分钟级）放这里执行。
 # tornado 是单线程事件循环，在 handler 里同步等一次网络请求会把全站请求（包括不碰
 # 数据库的 /api/user/info）一起冻住。
-blocking_pool = ThreadPoolExecutor(max_workers=int(loader.get_settings().get("BLOCKING_POOL_SIZE", 20)), thread_name_prefix="mybooks-blocking")
+blocking_pool = ThreadPoolExecutor(max_workers=6 if perf.lite_on("LITE_POOLS_SMALL") else int(loader.get_settings().get("BLOCKING_POOL_SIZE", 20)), thread_name_prefix="mybooks-blocking")
 
 # calibre 查询专用池：与联网长任务隔离。若混用一池，20 个并发联网搜索打满时，
 # 阅读链路的毫秒级 calibre 查询（get_book_async）要排在网络任务后面，最坏等分钟级。
-calibre_pool = ThreadPoolExecutor(max_workers=int(loader.get_settings().get("CALIBRE_POOL_SIZE", 4)), thread_name_prefix="mybooks-calibre")
+calibre_pool = ThreadPoolExecutor(max_workers=2 if perf.lite_on("LITE_POOLS_SMALL") else int(loader.get_settings().get("CALIBRE_POOL_SIZE", 4)), thread_name_prefix="mybooks-calibre")
 
 
 def bind_threadpool_call(func, *args, **kwargs):

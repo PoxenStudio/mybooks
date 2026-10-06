@@ -18,7 +18,7 @@ from typing import Dict, List, Optional, Tuple
 import tornado.ioloop
 from sqlalchemy import func, text, update
 
-from webserver import loader
+from webserver import loader, perf
 from webserver.models import BookReadingStats, Item, ManualReadingLog, Reader, Reading
 from webserver.services import reading_dashboard_service
 from webserver.services.reader_cache import ReaderStatsCache
@@ -704,7 +704,7 @@ class ReadingStatsService:
     def start(cls) -> None:
         if cls._periodic_callback is not None:
             return
-        interval_ms = CONF.get("READING_STATS_FLUSH_INTERVAL_SEC", 5) * 1000
+        interval_ms = (15 if perf.lite_on("LITE_FLUSH_SLOWER") else CONF.get("READING_STATS_FLUSH_INTERVAL_SEC", 5)) * 1000
         cls._periodic_callback = tornado.ioloop.PeriodicCallback(cls.flush_now, interval_ms)
         cls._periodic_callback.start()
         logging.info("[reading_stats] ReadingStatsService started, flushing every %sms", interval_ms)

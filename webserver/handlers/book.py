@@ -28,7 +28,7 @@ import tornado.escape
 from tornado import web
 from sqlalchemy import func
 
-from webserver import loader, utils
+from webserver import loader, perf, utils
 from webserver.base import accel
 from webserver.base.formatter import BookFormatter, ReadingStateFormatter
 from webserver.base.image_generator import ImageGenerator
@@ -43,7 +43,7 @@ from webserver.services.book_search import BookSearch
 from webserver.services.converter import ConverterService
 from webserver.services.extract import ExtractService
 from webserver.services.mail import MailService
-from webserver.handlers.base import BaseHandler, ListHandler, auth, js
+from webserver.handlers.base import BaseHandler, ListHandler, auth, js, throttle
 from webserver.models import BookReadingStats as BookFormatReadingStatsModel, Item, Reading, ReadingState, Reader, ScanFile
 from webserver.services.reading_stats_service import ManualReadingService, ReadingStatsService
 from webserver.services.scan_service import ScanService, SCAN_EXT
@@ -90,7 +90,7 @@ class Index(BaseHandler):
     async def _social_recommend_books(self):
         """首页"其他用户推荐"：最近 90 天内被评价（且状态通过）的书，见 plan §2.3。
         仅登录且个人偏好 show_home_recommendations=True 时才计算，游客/关闭时返回空列表。"""
-        if not CONF.get("ENABLE_BOOK_REVIEW", True):
+        if not CONF.get("ENABLE_BOOK_REVIEW", True) or perf.lite_on("LITE_NO_RECOMMEND"):
             return []
         if not CONF.get("ENABLE_BOOK_RECOMMEND_TO_OTHERS", True):
             return []
@@ -140,7 +140,7 @@ class Index(BaseHandler):
         return frozenset(ids[:MAX_SHOWN_IDS])
 
     def _recommend_home_ids(self, cnt_random, cnt_recent, exclude_ids, seed, reader_id):
-        if not CONF.get("RECOMMEND_ENABLE", True) or self.get_argument("personalized", "1") == "0":
+        if not CONF.get("RECOMMEND_ENABLE", True) or self.get_argument("personalized", "1") == "0" or perf.lite_on("LITE_NO_RECOMMEND"):
             return None
         service = self.settings.get("recommend")
         if service is None:
@@ -175,12 +175,23 @@ class Index(BaseHandler):
         return [books[i] for i in random_ids if i in books], [books[i] for i in new_ids if i in books]
 
     @js
+    @throttle()
     async def get(self):
         """首页显示随机书籍和最近添加的书籍"""
         setting_random_count = CONF.get("MAIN_PAGE_RANDOM_COUNT", 12)
         setting_recent_count = CONF.get("MAIN_PAGE_RECENT_COUNT", 12)
+        if perf.lite_on("LITE_PAGE_SIZE"):
+            setting_random_count = min(setting_random_count, 12)
+            setting_recent_count = min(setting_recent_count, 12)
         cnt_random = min(int(self.get_argument("random", setting_random_count)), setting_random_count)
         cnt_recent = min(int(self.get_argument("recent", setting_recent_count)), 200)
+
+        home_key = None
+        if perf.lite_on("LITE_HOME_CACHE") and self.get_argument("refresh", "0") != "1":
+            home_key = (self.user_id(), cnt_random, cnt_recent, self.get_argument("exclude", ""), self.get_argument("personalized", "1"), self.get_argument("seed", ""))
+            cached = BaseHandler._home_cache.get(home_key, self.library_version())
+            if cached is not None:
+                return cached
 
         t0 = time.perf_counter()
         ids = await self.run_calibre_read_async(self._all_book_ids)
@@ -221,6 +232,8 @@ class Index(BaseHandler):
             (t_ids - t0) * 1000, (t_social - t_ids) * 1000, "recommend" if home_ids else "legacy",
             (t_home - t_social) * 1000, (t_books - t_home) * 1000, (t_fmt - t_books) * 1000, (t_fmt - t0) * 1000,
         )
+        if home_key is not None:
+            BaseHandler._home_cache.put(home_key, self.library_version(), result)
         return result
 
 
@@ -2192,6 +2205,8 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
         self.root = "/"
         self.default_filename = None
         self.is_opds = self.get_argument("from", "") == "opds"
+        if perf.lite_on("LITE_DOWNLOAD_PATH_CACHE"):
+            self.CHUNK_SIZE = 256 * 1024
         BaseHandler.initialize(self)
 
     def prepare(self):
@@ -2237,9 +2252,10 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
         uid = self.current_user.id if self.current_user else 0
         key = (uid, bid, fmt, self.is_opds)
         now = time.time()
+        ttl = 600 if perf.lite_on("LITE_DOWNLOAD_PATH_CACHE") else self.DOWNLOAD_CACHE_TTL
         hit = BookDownload._download_cache.get(key)
         if hit and hit[0] > now and os.path.exists(hit[1]):
-            BookDownload._download_cache[key] = (now + self.DOWNLOAD_CACHE_TTL, hit[1], hit[2])
+            BookDownload._download_cache[key] = (now + ttl, hit[1], hit[2])
             self.set_header("Content-Disposition", hit[2].encode("UTF-8"))
             self.set_header("Content-Type", "application/octet-stream")
             return hit[1]
@@ -2267,7 +2283,7 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
         cache = BookDownload._download_cache
         if len(cache) >= self.DOWNLOAD_CACHE_MAX:
             cache.clear()
-        cache[key] = (now + self.DOWNLOAD_CACHE_TTL, path, att)
+        cache[key] = (now + ttl, path, att)
         self.set_header("Content-Disposition", att.encode("UTF-8"))
         self.set_header("Content-Type", "application/octet-stream")
         return path
@@ -2314,6 +2330,7 @@ class BookNav(ListHandler):
 
 
 class RecentBook(ListHandler):
+    @throttle(write=True)
     async def get(self):
         title = _("新书推荐")
         ids = await self.books_by_id_async()
@@ -2413,6 +2430,22 @@ class SearchBook(ListHandler):
                 ids.append(bid)
                 seen.add(bid)
 
+    FAST_SEARCH_FIELDS = ("title", "authors", "tags", "series")
+
+    def _fast_clause(self, values, title_search):
+        if title_search:
+            return " OR ".join(f"title:={v}" for v in values)
+        return " OR ".join("(" + " OR ".join(f"{field}:{self._quote(v)}" for field in self.FAST_SEARCH_FIELDS) + ")" for v in values)
+
+    async def _fast_search(self, name, title_search):
+        ids = await self.cached_search_async(self._fast_clause([name], title_search))
+        if ids:
+            return ids
+        variants = [c for c in (utils.get_opencc(profile).convert(name) for profile in ("s2t", "t2s")) if c != name]
+        if not variants:
+            return []
+        return await self.cached_search_async(self._fast_clause(variants, title_search))
+
     async def _search_by_segmentation(self, name, ids, seen):
         if not JIEBA_AVAILABLE or not (2 < len(name) < 10):
             return None
@@ -2445,6 +2478,7 @@ class SearchBook(ListHandler):
         logging.info(f"[TRACE]Word segmentation search took {time.time() - start:.2f} seconds.")
         return or_query
 
+    @throttle(per_user=True, write=True)
     async def get(self):
         name = self.get_argument("name", "").strip()
         book_title = self.get_argument("title", "").strip()  # 传入此参数代表只按名称搜索
@@ -2490,10 +2524,18 @@ class SearchBook(ListHandler):
             book_title = self._clear(book_title)
             name = self._clear(name)
 
+        fast = perf.lite_on("LITE_SEARCH_FAST") and not calibre_query
+        if fast and seg == 1:
+            return await self._render_book_ids([], title, exclude_id, order_by)
+
         # 只有当 seg=1 时才进行分词搜索
         if seg == 1 and title_search and not calibre_query:
             # 分词搜索：当name长度在2-10之间且jieba可用时
             seg_or_query = await self._search_by_segmentation(name, ids, seen)
+
+        if fast:
+            self._add_books(await self._fast_search(name, title_search), ids, seen)
+            return await self._render_book_ids(ids, title, exclude_id, order_by)
 
         # 简繁体转换搜索（合并为一次查询）
         start = time.time()
@@ -2770,6 +2812,8 @@ class BookUpload(BaseHandler):
             item.collector_id = self.user_id()
             self.sqlite_session.add(item)
             self.sqlite_session.commit()
+        if perf.lite_on("LITE_SKIP_AFTER_UPLOAD"):
+            return book_id
         if CONF.get(AUTO_FILL_META, False):
             AutoFillService().auto_fill_async(book_id)
         CatalogExtractService().extract_one_async(book_id)
@@ -2960,7 +3004,8 @@ class BookUpload(BaseHandler):
 
     @staticmethod
     def _remove_staged_file(fpath):
-        if fpath and not CONF.get("KEEP_UPLOAD_SOURCE_FILE", False) and os.path.exists(fpath):
+        keep = CONF.get("KEEP_UPLOAD_SOURCE_FILE", False) and not perf.lite_on("LITE_NO_SOURCE_COPY")
+        if fpath and not keep and os.path.exists(fpath):
             try:
                 os.remove(fpath)
             except Exception as e:
@@ -3857,6 +3902,8 @@ class BookSuggestion(ListHandler):
         book = self.get_book(id, raise_exception=False)
         if not book:
             return {"err": "params.book.invalid", "msg": _("书籍已不存在")}
+        if perf.lite_on("LITE_NO_RECOMMEND"):
+            return {"err": "ok", "msg": _("推荐成功"), "books": []}
         books = self._related_books(book["id"]) or self._tag_author_books(book)
         return {"err": "ok", "msg": _("推荐成功"), "books": books}
 

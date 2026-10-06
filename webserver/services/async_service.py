@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 
+import contextlib
 import json
 import logging
 import re
@@ -8,6 +9,7 @@ import threading
 from queue import Queue
 
 from sqlalchemy.sql import text
+from webserver import perf
 from webserver.startup_status import upgrade_step
 from webserver.models import Message
 
@@ -311,6 +313,8 @@ class AsyncService(metaclass=SingletonType):
         self.running[name] = (t, q)
         return q
 
+    heavy_task_lock = threading.Lock()
+
     def loop(self, service_func, q):
         name = self._service_key(service_func)
         while True:
@@ -324,7 +328,8 @@ class AsyncService(metaclass=SingletonType):
             )
             logging.info("call: func=%s", name)
             try:
-                service_func(self, *args, **kwargs)
+                with AsyncService.heavy_task_lock if perf.lite_on("LITE_ONE_HEAVY_TASK") else contextlib.nullcontext():
+                    service_func(self, *args, **kwargs)
             except Exception as err:
                 logging.exception("run task error: %s", err)
             logging.info("end : func=%s", name)

@@ -96,6 +96,57 @@ def js(func):
     return do
 
 
+class HeavyGate:
+    inflight = 0
+    per_user = {}
+
+    @classmethod
+    def enter(cls, user_key):
+        limit = int(CONF.get("LITE_THROTTLE_LIMIT", 4))
+        if cls.inflight >= limit or (user_key is not None and cls.per_user.get(user_key, 0) >= 1):
+            return False
+        cls.inflight += 1
+        if user_key is not None:
+            cls.per_user[user_key] = cls.per_user.get(user_key, 0) + 1
+        return True
+
+    @classmethod
+    def leave(cls, user_key):
+        cls.inflight = max(0, cls.inflight - 1)
+        if user_key is not None:
+            left = cls.per_user.get(user_key, 0) - 1
+            if left > 0:
+                cls.per_user[user_key] = left
+            else:
+                cls.per_user.pop(user_key, None)
+
+
+def throttle(per_user=False, write=False):
+    def decorator(func):
+        async def do(self, *args, **kwargs):
+            if not perf.lite_on("LITE_THROTTLE"):
+                rsp = func(self, *args, **kwargs)
+                return await rsp if asyncio.iscoroutine(rsp) else rsp
+            user_key = (self.user_id() or self.request.remote_ip) if per_user else None
+            if not HeavyGate.enter(user_key):
+                self.set_status(503)
+                self.set_header("Retry-After", "2")
+                busy = {"err": "busy", "msg": _("服务器繁忙，请稍后重试")}
+                if write:
+                    self.write(busy)
+                    return None
+                return busy
+            try:
+                rsp = func(self, *args, **kwargs)
+                return await rsp if asyncio.iscoroutine(rsp) else rsp
+            finally:
+                HeavyGate.leave(user_key)
+
+        return do
+
+    return decorator
+
+
 def auth(func):
     def do(self, *args, **kwargs):
         if not self.current_user:
@@ -1209,6 +1260,12 @@ class BaseHandler(web.RequestHandler):
 
     _catalog_cache = VersionedCache(max_items=32)
     _search_cache = VersionedCache(ttl=10, max_items=128)
+    _search_cache_lite = VersionedCache(ttl=60, max_items=256)
+    _home_cache = VersionedCache(ttl=60, max_items=64)
+
+    @classmethod
+    def search_cache(cls):
+        return cls._search_cache_lite if perf.lite_on("LITE_HOME_CACHE") else cls._search_cache
 
     def library_version(self):
         return library_version(self.calibre_db_cache.backend)
@@ -1236,18 +1293,20 @@ class BaseHandler(web.RequestHandler):
 
     def cached_search(self, query):
         version = self.library_version()
-        ids = BaseHandler._search_cache.get(query, version)
+        cache = self.search_cache()
+        ids = cache.get(query, version)
         if ids is None:
             ids = tuple(self.calibre_db_cache.search(query) or ())
-            BaseHandler._search_cache.put(query, version, ids)
+            cache.put(query, version, ids)
         return list(ids)
 
     async def cached_search_async(self, query):
         version = self.library_version()
-        ids = BaseHandler._search_cache.get(query, version)
+        cache = self.search_cache()
+        ids = cache.get(query, version)
         if ids is None:
             ids = tuple(await self.run_calibre_read_async(self.calibre_db_cache.search, query) or ())
-            BaseHandler._search_cache.put(query, version, ids)
+            cache.put(query, version, ids)
         return list(ids)
 
     def get_argument_start(self):
@@ -1606,6 +1665,10 @@ class ListHandler(BaseHandler):
         start = self.get_argument_start()
         page_size = CONF.get("DEFAULT_PAGE_SIZE", 60)
         max_size = int(CONF.get("MAX_PAGE_SIZE", 200))
+        if perf.lite_on("LITE_PAGE_SIZE"):
+            max_size = min(max_size, 60)
+        if perf.lite_on("LITE_LIST_SLIM"):
+            include_comments = False
         size = min(int(self.get_argument("size", "0").strip()), max_size)
         delta = min(size if size > 0 else max(page_size, 60), max_size)
 
