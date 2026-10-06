@@ -2175,6 +2175,15 @@ user.appearance为外观设置（顶栏品牌色、侧栏图标配色、深浅�
 }
 ```
 
+### 3.55.1 获取下载签名
+
+- **路径**：`/api/book/<id>/download_sign`
+- **方法**：GET
+- **认证**：需要登录
+- **参数**：`fmt` (string, query)：格式，如 `epub`，不能含 `/` 或 `.`
+- **说明**：返回一个短期有效的下载签名，用作 `/api/book/<id>.<fmt>?dl=<sign>` 的 `dl` 参数；从签发时刻起算有效期，与用户、书籍、格式绑定。前端在点击下载时现取，避免详情页停留过久导致 `files[].href` 里预签发的签名过期。
+- **响应**：`err` (string)：`ok` / `params.invalid`；`sign` (string)：签名
+
 ### 3.56 裁剪封面白边
 
 - **路径**：`/api/book/crop_cover`
