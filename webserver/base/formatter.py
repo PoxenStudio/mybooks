@@ -13,6 +13,11 @@ from webserver.constants import CALIBRE_COLUMN_CATALOG
 CONF = get_settings()
 
 
+def cover_stamp(book):
+    moment = book.get("last_modified") or book.get("timestamp")
+    return int(moment.timestamp()) if hasattr(moment, "timestamp") else 0
+
+
 class SimpleBookFormatter:
     """格式化calibre book的字段"""
 
@@ -48,7 +53,7 @@ class SimpleBookFormatter:
 
     def format(self, include_comments=True, strip_comments=False):
         b = self.book
-        b["ts"] = int(b["timestamp"].timestamp())
+        b["ts"] = cover_stamp(b)
         category = self.val(CALIBRE_COLUMN_CATEGORY, '').strip()
         book_type = self.val(CALIBRE_COLUMN_BOOK_TYPE, BOOK_TYPE_EBOOK)
         book_count = self.val(CALIBRE_COLUMN_PHY_COUNT, 1)
@@ -116,7 +121,7 @@ class MCPBookFormatter:
 
     def format(self, include_comments=True):
         b = self.book
-        b["ts"] = b["timestamp"].strftime("%s")
+        b["ts"] = cover_stamp(b)
         return {
             "id": b["id"],
             "title": b["title"],

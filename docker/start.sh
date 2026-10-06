@@ -39,6 +39,11 @@ if [ ! -d "/data/log" ]; then
   cp -rf /prebuilt/log /data/
 fi
 
+if [ ! -d "/data/cache" ]; then
+  mkdir -p /data/cache
+  chown -R mybooks:mybooks /data/cache
+fi
+
 if [ ! -d "/data/log/nginx" ]; then
   mkdir -p /data/log/nginx
   chown -R mybooks:mybooks /data/log/nginx
