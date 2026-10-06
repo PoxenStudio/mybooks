@@ -69,10 +69,14 @@ def fast_get_data_as_dict(self, prefix=None, authors_as_string=False, ids=None, 
         monitor.record_stage("fast.lock_wait", (time.perf_counter() - wait_start) * 1000)
         fields_start = time.perf_counter()
         for db_id in wanted:
-            record = view.tablerow_for_id(db_id)
             x = {}
-            for field in fields:
-                x[field] = record[field_map[field]]
+            try:
+                record = view.tablerow_for_id(db_id)
+                for field in fields:
+                    x[field] = record[field_map[field]]
+            except IndexError:
+                logging.debug("book %s removed while listing, skipped", db_id)
+                continue
             if convert_to_local_tz:
                 for tf in ("timestamp", "pubdate", "last_modified"):
                     x[tf] = as_local_time(x[tf])
