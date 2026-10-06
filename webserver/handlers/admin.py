@@ -38,6 +38,7 @@ from webserver.services.perf_monitor import PerfMonitor
 from webserver.services.background_service import BackgroundService, BackgroundTask
 from webserver.services.book_search import BookSearch
 from webserver.handlers.base import BaseHandler, auth, js, is_admin
+from webserver import perf
 from webserver.models import Reader, Item, Authors, Reading, BookReview, Message
 from webserver.services.book_review_service import BookReviewService
 from webserver.base.formatter import SimpleBookFormatter
@@ -609,6 +610,7 @@ class AdminSettings(BaseHandler):
             "READER_DICT_MYBOOKS_ENABLED",
             "READER_DICT_BAIKE_ENABLED",
             "READER_MYDICTS",
+            *perf.setting_keys(),
         ]
 
         current_icon = CONF.get(
@@ -641,6 +643,7 @@ class AdminSettings(BaseHandler):
 
         if "READER_MYDICTS" in args:
             args["READER_MYDICTS"] = reader_dict.sanitize_mydicts(args["READER_MYDICTS"])
+        perf.sanitize(args, CONF)
 
         args["META_ALL_SOURCES"] = BookSearch.all_sources()
         if "META_SELECTED_SOURCES" not in args:
@@ -1349,6 +1352,9 @@ class AdminPerf(BaseHandler):
 
         cache = ImageHandler.thumb_cache()
         perf["thumb_cache"] = cache.stats() if cache else None
+        from webserver.base import calibre_fast
+
+        perf["book_cache"] = calibre_fast.row_cache.stats()
         return {"err": "ok", "perf": perf}
 
     @js

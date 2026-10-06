@@ -884,6 +884,12 @@
     "batch_add_in_force": "批量添加实体书时，强制添加无法识别的ISBN书籍（即使无法从互联网获取书籍信息，书名为[无效]:<ISBN>）",
     "send_mail_for_new_books": "在上传及导入后发送邮箱提醒(15分钟合并发送)",
     "advanced_settings": "高级配置项",
+    "perf_mode": "性能模式",
+    "perf_mode_normal": "常规模式",
+    "perf_mode_lite": "极速模式（低端设备，部分功能降级）",
+    "perf_mode_hint": "极速模式会启用下方勾选的优化，用部分功能换取更低的 CPU 与文件开销；切回常规模式后这些优化自动失效，无需重启。",
+    "lite_book_cache": "书籍数据缓存（仅极速模式）",
+    "lite_book_cache_hint": "在内存中缓存最近使用的书籍列表数据（约 2000 本或 32MB 为上限，按最近使用淘汰），减少翻页与重复访问的 CPU 占用；书籍被修改后自动失效。",
     "enable_physical_books": "启用添加实体书功能",
     "enable_folder_browse": "启用以目录进行多层级分类的功能",
     "enable_book_type_convert_directly": "允许直接转换类型，不做是否已有文件及ISBN等检查",
@@ -1127,6 +1133,8 @@
     "mergeConfirm": "目录“{target}”已存在，合并后 {count} 本书将并入该目录，且无法撤回。是否合并？"
   },
   "appHeader": {
+    "lite_mode": "极速模式",
+    "lite_mode_tip": "已开启极速模式，部分功能已降级；管理员可在系统设置的高级配置项中调整。",
     "home": "首页",
     "admin": "系统管理",
     "systemSettings": "系统设置",
