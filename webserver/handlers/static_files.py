@@ -424,6 +424,12 @@ class AuthorAvatarUploadHandler(BaseHandler):
         return {'err': 'ok', 'msg': 'Avatar uploaded successfully'}
 
 
+class SpaStaticHandler(web.StaticFileHandler):
+    def set_extra_headers(self, path):
+        if path.startswith("_nuxt/"):
+            self.set_header("Cache-Control", "public, max-age=31536000, immutable")
+
+
 def routes():
     static_config = {"path": CONF["html_path"], "default_filename": "index.html"}
     return [
@@ -437,5 +443,5 @@ def routes():
         (r"/api/author_avatar", AuthorAvatarUploadHandler),
         (r"/get/(.*)/(.*)", ImageHandler),
         (r"/api/favicon/(.*)", FaviconHandler),
-        (r"/(.*)", web.StaticFileHandler, static_config),
+        (r"/(.*)", SpaStaticHandler, static_config),
     ]

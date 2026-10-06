@@ -548,18 +548,12 @@ class UserMessagesClear(BaseHandler):
     @js
     @auth
     def post(self):
-        user = self.current_user
-        if not user or not user.messages:
+        if not self.current_user:
             return {"err": "ok"}
-        for msg in user.messages:
-            # Ensure msg is in the current session to avoid "already attached to session" error
-            try:
-                msg = self.sqlite_session.merge(msg)
-                msg.unread = False
-                msg.update_time = datetime.datetime.now()
-                msg.save()
-            except Exception as e:
-                logging.error("Clear message failed: %s", e)
+        self.sqlite_session.query(Message).filter(
+            Message.reader_id == self.current_user.id, Message.unread.is_(True)
+        ).update({"unread": False, "update_time": datetime.datetime.now()}, synchronize_session=False)
+        self.sqlite_session.commit()
         return {"err": "ok"}
 
 

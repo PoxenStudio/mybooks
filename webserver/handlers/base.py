@@ -271,6 +271,9 @@ class BaseHandler(web.RequestHandler):
         self.login_user(user)
         return True
 
+    TOKEN_LOGIN_SAVE_INTERVAL = 300
+    _token_login_at = {}
+
     def process_auth_token(self):
         token = self.get_argument("token", None) or self.request.headers.get(
             "X-MYBOOKS-TOKEN", None
@@ -285,8 +288,11 @@ class BaseHandler(web.RequestHandler):
         if not user:
             logging.warning("Not login yet")
             return False
-        logging.debug("Valid podcast token: %s for user %s", token, user.username)
-        self.login_user(user)
+        now = time.time()
+        recent = BaseHandler._token_login_at.get(user.id, 0) > now - self.TOKEN_LOGIN_SAVE_INTERVAL
+        if not recent:
+            BaseHandler._token_login_at[user.id] = now
+        self.login_user(user, persist=not recent)
         return True
 
     DOWNLOAD_SIGN_MAX_AGE_SECONDS = 3600
@@ -482,12 +488,14 @@ class BaseHandler(web.RequestHandler):
             return False
         return self.current_user.is_admin()
 
-    def login_user(self, user):
+    def login_user(self, user, persist=True):
+        self.set_secure_cookie("user_id", str(user.id))
+        self.set_secure_cookie("lt", str(int(time.time())))
+        if not persist:
+            return
         logging.info(
             "LOGIN: %s - %d - %s" % (self.request.remote_ip, user.id, user.username)
         )
-        self.set_secure_cookie("user_id", str(user.id))
-        self.set_secure_cookie("lt", str(int(time.time())))
         # 确保user对象在当前会话中，避免"already attached to session"错误
         user = self.sqlite_session.merge(user)
         user.access_time = datetime.datetime.now()

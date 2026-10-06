@@ -140,6 +140,12 @@ _TRADITIONAL_ONLY_CHARS = frozenset(
 )
 
 
+@functools.lru_cache(maxsize=8)
+def get_opencc(profile):
+    import opencc
+    return opencc.OpenCC(profile)
+
+
 def _fallback_has_traditional(text: str) -> bool:
     return any(c in _TRADITIONAL_ONLY_CHARS for c in text)
 
@@ -152,9 +158,7 @@ def is_traditional_chinese(text: str) -> bool:
         return False
 
     try:
-        import opencc
-        converter = opencc.OpenCC("t2s")
-        converted = converter.convert(text)
+        converted = get_opencc("t2s").convert(text)
         return converted != text
     except Exception as exc:
         logging.debug("[review_cht] OpenCC unavailable (%s), using fallback", exc)
@@ -186,8 +190,7 @@ def detect_title_language(text: str) -> Optional[str]:
         return constants.TRADITIONAL_CHINESE_CODE
 
     try:
-        import opencc
-        if opencc.OpenCC("s2t").convert(text) != text:
+        if get_opencc("s2t").convert(text) != text:
             return constants.DEFAULT_LANGUAGE_CODE
     except Exception as exc:
         logging.debug("[detect_title_language] OpenCC unavailable (%s), skip simplified check", exc)

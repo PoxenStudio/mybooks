@@ -5,7 +5,6 @@ import datetime
 import json
 import logging
 from venv import logger
-import opencc
 import os
 import random
 import re
@@ -2209,11 +2208,24 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
             raise web.HTTPError(403, reason=_("下载链接已失效，请刷新页面后重试"))
         self.current_user = user
 
+    DOWNLOAD_CACHE_TTL = 60
+    DOWNLOAD_CACHE_MAX = 512
+    _download_cache = {}
+
     def parse_url_path(self, url_path: str) -> str:
         filename = url_path.split("/")[-1]
         bid, fmt = filename.split(".")
         fmt = fmt.lower()
-        logging.error("download %s bid=%s, fmt=%s" % (filename, bid, fmt))
+        logging.debug("download %s bid=%s, fmt=%s", filename, bid, fmt)
+        uid = self.current_user.id if self.current_user else 0
+        key = (uid, bid, fmt, self.is_opds)
+        now = time.time()
+        hit = BookDownload._download_cache.get(key)
+        if hit and hit[0] > now and os.path.exists(hit[1]):
+            BookDownload._download_cache[key] = (now + self.DOWNLOAD_CACHE_TTL, hit[1], hit[2])
+            self.set_header("Content-Disposition", hit[2].encode("UTF-8"))
+            self.set_header("Content-Type", "application/octet-stream")
+            return hit[1]
         book = self.get_book(bid, raise_exception=False)
         if not book:
             raise web.HTTPError(404, reason=_("%s格式无法下载" % fmt))
@@ -2235,6 +2247,10 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
         if self.is_opds:
             att = 'attachment; filename="%(id)d.%(fmt)s"' % book
 
+        cache = BookDownload._download_cache
+        if len(cache) >= self.DOWNLOAD_CACHE_MAX:
+            cache.clear()
+        cache[key] = (now + self.DOWNLOAD_CACHE_TTL, path, att)
         self.set_header("Content-Disposition", att.encode("UTF-8"))
         self.set_header("Content-Type", "application/octet-stream")
         return path
@@ -2313,7 +2329,7 @@ class SearchBook(ListHandler):
         # 原文 + 简繁体转换结果，去重保序
         values = [value]
         for profile in ["s2t", "t2s"]:
-            converted = opencc.OpenCC(profile).convert(value)
+            converted = utils.get_opencc(profile).convert(value)
             if converted not in values:
                 values.append(converted)
         return values
@@ -2461,7 +2477,7 @@ class SearchBook(ListHandler):
         else:
             converted_names = [name]
         for profile in ['s2t', 't2s']:
-            converted_name = opencc.OpenCC(profile).convert(name)
+            converted_name = utils.get_opencc(profile).convert(name)
             if converted_name != name:
                 if calibre_query:
                     converted_names.append("( " + converted_name + " )")
