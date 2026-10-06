@@ -125,6 +125,7 @@ settings = {
     "WARMUP_ENABLE": True,
     "WARMUP_DELAY_SEC": 10,
     "SQLITE_RELAXED": False,
+    "GIL_SWITCH_INTERVAL_MS": 0,
     "CALIBRE_POOL_SIZE": 2,
     "BLOCKING_POOL_SIZE": 20,
     "CACHE_DIR": "/data/cache",

@@ -586,8 +586,12 @@ class BookCategories(BaseHandler):
         # read_limit == 2: 黑名单
         return [c for c in categories if c["name"] not in limit_cats]
 
+    def _query_category_rows(self, sql):
+        with self.db_lock:
+            return [(row[0], row[1]) for row in self.calibre_db_cache.backend.conn.get(sql)]
+
     @js
-    def get(self):
+    async def get(self):
         # Find the custom column for category
         category_key = CALIBRE_COLUMN_CATEGORY
         if category_key not in self.calibre_db.field_metadata:
@@ -606,8 +610,11 @@ class BookCategories(BaseHandler):
         """
 
         try:
-            with self.db_lock:
-                rows = self.calibre_db_cache.backend.conn.get(sql)
+            version = self.library_version()
+            rows = BaseHandler._catalog_cache.get(("categories", sql), version)
+            if rows is None:
+                rows = await self.run_calibre_async(self._query_category_rows, sql)
+                BaseHandler._catalog_cache.put(("categories", sql), version, rows)
             categories = [{"name": row[0], "count": row[1]} for row in rows]
 
             if CONF.get(constants.ALLOW_READ_RANGE_SETTING, False):
