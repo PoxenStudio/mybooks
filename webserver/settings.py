@@ -116,7 +116,7 @@ settings = {
     "RECOMMEND_CO_NEIGHBORS": 30,             # 每本书保留的共读邻居数
     "RECOMMEND_CO_MAX_BOOKS_PER_READER": 1000,  # 每个用户最多取最近这么多本书参与共读计算
     "DEFAULT_PAGE_SIZE": 60,
-    "PERF_MONITOR": True,
+    "PERF_MONITOR": False,
     "PERF_STALL_MS": 500,
     "FAST_GET_DATA_AS_DICT": True,
     "MAX_PAGE_SIZE": 200,

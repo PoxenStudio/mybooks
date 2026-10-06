@@ -60,6 +60,8 @@ class TestRunCalibre(unittest.TestCase):
         handler = make_handler()
         monitor = PerfMonitor.instance()
         monitor.reset()
+        monitor.enabled = True
+        self.addCleanup(setattr, monitor, "enabled", False)
 
         def work(a, b=0):
             return a + b
@@ -85,6 +87,8 @@ class TestRecordStage(unittest.TestCase):
     def test_record_stage_in_snapshot(self):
         monitor = PerfMonitor.instance()
         monitor.reset()
+        monitor.enabled = True
+        self.addCleanup(setattr, monitor, "enabled", False)
         monitor.record_stage("x", 5.0)
         with monitor.stage("y"):
             time.sleep(0.001)

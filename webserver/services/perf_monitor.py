@@ -11,6 +11,8 @@ import traceback
 
 import tornado.ioloop
 
+from webserver import loader
+
 HEARTBEAT_MS = 100
 WATCHDOG_INTERVAL_S = 0.2
 SAMPLE_INTERVAL_S = 0.1
@@ -78,6 +80,7 @@ class PerfMonitor:
         self._callback = None
         self._watchdog = None
         self._running = False
+        self.enabled = bool(loader.get_settings().get("PERF_MONITOR", False))
 
     @classmethod
     def instance(cls):
@@ -189,6 +192,8 @@ class PerfMonitor:
         logging.warning("[perf] ioloop stalled >= %dms, main thread stack:\n%s", stalled_ms, stack)
 
     def record_request(self, method, path, cost_ms):
+        if not self.enabled:
+            return
         key = "%s %s" % (method, _ID_RE.sub("N", path))
         with self._lock:
             samples = self._routes.get(key)
@@ -199,6 +204,8 @@ class PerfMonitor:
             samples.append(cost_ms)
 
     def record_calibre(self, name, wait_ms, run_ms):
+        if not self.enabled:
+            return
         with self._lock:
             entry = self._calibre.get(name)
             if entry is None:
@@ -220,6 +227,8 @@ class PerfMonitor:
             self.record_stage(name, (time.perf_counter() - start) * 1000)
 
     def record_stage(self, name, cost_ms):
+        if not self.enabled:
+            return
         with self._lock:
             samples = self._stages.get(name)
             if samples is None:
