@@ -73,10 +73,14 @@ export default {
     created() {
         this.expanded = this.loadExpanded();
     },
+    mounted() {
+        this.$emit('toggle', this.expanded);
+    },
     methods: {
         toggle() {
             this.expanded = !this.expanded;
             this.saveExpanded(this.expanded);
+            this.$emit('toggle', this.expanded);
         },
         loadExpanded() {
             try {

@@ -210,15 +210,6 @@
 
             <v-toolbar-title class="ml-4 mr-12 align-center d-flex">
                 <span>{{ sys.title }}</span>
-                <v-chip
-                    v-if="sys.performanceMode === 'lite'"
-                    x-small
-                    color="orange"
-                    text-color="white"
-                    class="ml-2"
-                    :to="user && user.is_admin ? '/admin/settings' : undefined"
-                    :title="$t('appHeader.lite_mode_tip')"
-                >{{ $t('appHeader.lite_mode') }}</v-chip>
             </v-toolbar-title>
 
             <v-spacer></v-spacer>
