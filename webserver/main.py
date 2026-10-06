@@ -598,7 +598,7 @@ def log_request(handler):
     status = handler.get_status()
     level = logging.INFO if status < 400 else logging.WARNING if status < 500 or status == 503 else logging.ERROR
     cost_ms = 1000.0 * handler.request.request_time()
-    if CONF.get("PERF_MONITOR", True):
+    if CONF.get("PERF_MONITOR", False):
         PerfMonitor.instance().record_request(handler.request.method, handler.request.path, cost_ms)
     logging.log(level, f"[{status}][{cost_ms:.2f}ms][{handler.request.method}][{handler.request.uri}]({handler.request.remote_ip}){'' if cost_ms < 1000 else '[x]'}")
 
@@ -678,7 +678,7 @@ def main():
         gc.set_threshold(50000, 20, 100)
     perf.apply_logging()
     logging.info("[STARTUP-TIMING] step=listening since_import_ms=%.0f", (time.perf_counter() - StartupState.t0) * 1000)
-    if CONF.get("PERF_MONITOR", True):
+    if PerfMonitor.instance().enabled:
         PerfMonitor.instance().start(int(CONF["PERF_STALL_MS"]))
     tornado.ioloop.IOLoop.instance().start()
 
