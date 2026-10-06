@@ -85,7 +85,8 @@ class ImageHandler(BaseHandler):
             return None
         if cls._thumb_cache is None or cls._thumb_cache_root != root:
             cls._thumb_cache_root = root
-            cls._thumb_cache = ThumbCache(root, int(CONF.get("CACHE_MAX_MB", 200)) * 1024 * 1024)
+            cls._thumb_cache = ThumbCache(root, perf.clamp_cache_mb(CONF.get("CACHE_MAX_MB", 200)) * 1024 * 1024)
+        cls._thumb_cache.max_bytes = perf.clamp_cache_mb(CONF.get("CACHE_MAX_MB", 200)) * 1024 * 1024
         return cls._thumb_cache
 
     def library_root(self):

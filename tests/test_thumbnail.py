@@ -187,6 +187,14 @@ class TestImageHandler(ImageTestCase):
             self.assertIsNone(self.fetch(accel_handler, "thumb_240_320"))
         self.assertTrue(accel_handler._headers["X-Accel-Redirect"].startswith("/_cache/thumb/240x320/1-"))
 
+    def test_remove_book_covers_both_formats(self):
+        cache = ThumbCache(self.cache_dir, 10 ** 6)
+        paths = [cache.path_for(3, 9, 60, 80), cache.path_for(3, 9, 60, 80).replace(".jpg", ".webp")]
+        for path in paths:
+            cache.put(path, b"x")
+        cache.remove_book(3)
+        self.assertFalse(any(os.path.exists(p) for p in paths))
+
     def test_unlisted_size_maps_to_whitelist(self):
         self.fetch(self.handler(), "thumb_100_150")
         self.assertTrue(os.path.isdir(os.path.join(self.cache_dir, "thumb", "120x200")))

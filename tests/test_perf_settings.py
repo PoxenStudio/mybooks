@@ -44,10 +44,18 @@ class TestModeSwitches(unittest.TestCase):
 
     def test_setting_keys_cover_mode_and_groups(self):
         self.assertEqual(perf.setting_keys()[0], "PERFORMANCE_MODE")
-        self.assertEqual(set(perf.setting_keys()[1:]), set(perf.LITE_GROUPS))
+        self.assertEqual(set(perf.setting_keys()[1:]), set(perf.LITE_GROUPS) | {"THUMB_CACHE", "CACHE_MAX_MB"})
 
 
 class TestSanitize(unittest.TestCase):
+
+    def test_cache_size_snaps_to_choices_and_defaults(self):
+        for raw, expected in ((10, 50), (76, 100), (120, 100), (250, 200), (999, 300), ("150", 100), ("x", 200), (None, 200)):
+            self.assertEqual(perf.sanitize({"CACHE_MAX_MB": raw}, {})["CACHE_MAX_MB"], expected, raw)
+
+    def test_thumb_cache_defaults_on(self):
+        self.assertTrue(perf.sanitize({}, {})["THUMB_CACHE"])
+        self.assertFalse(perf.sanitize({"THUMB_CACHE": False}, {})["THUMB_CACHE"])
 
     def test_invalid_mode_falls_back_to_normal(self):
         self.assertEqual(perf.sanitize({"PERFORMANCE_MODE": "turbo"}, {})["PERFORMANCE_MODE"], "normal")
