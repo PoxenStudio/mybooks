@@ -159,8 +159,12 @@ _index_cache = {"tools": [], "ts": 0.0}
 
 def get_cached_index(force: bool = False) -> list:
     """带 TTL 缓存的商店索引；`ENABLE_TOOLBOX_STORE=False` 时缓存内容恒为空列表。"""
+    if not ToolboxStoreClient.enabled():
+        _index_cache["tools"] = []
+        _index_cache["ts"] = 0.0
+        return []
     now = time.time()
-    if force or now - _index_cache["ts"] > INDEX_CACHE_TTL:
+    if force or not _index_cache["tools"] or now - _index_cache["ts"] > INDEX_CACHE_TTL:
         _index_cache["tools"] = ToolboxStoreClient().get_index()
         _index_cache["ts"] = now
     return _index_cache["tools"]
