@@ -2152,6 +2152,21 @@ export default {
                 this.dialog_download = true;
             }
         },
+        async freshDownloadUrl(url) {
+            const target = new URL(url, window.location.href);
+            const match = target.pathname.match(/\/api\/book\/(\d+)\.([^/]+)$/);
+            if (!match || !target.searchParams.has('dl')) return url;
+            try {
+                const rsp = await this.$backend(`/book/${match[1]}/download_sign?fmt=${encodeURIComponent(match[2])}`);
+                if (rsp.err === 'ok' && rsp.sign) {
+                    target.searchParams.set('dl', rsp.sign);
+                    return target.toString();
+                }
+            } catch (e) {
+                console.error('Failed to refresh download sign:', e);
+            }
+            return url;
+        },
         async openDownloadLink(url) {
             // 与 $store.state.sys.allow.physical_books 相同的用法：功能开关关闭时不做任何检查，直接下载
             if (this.$store.state.sys.allow.download_quota) {
@@ -2167,7 +2182,11 @@ export default {
                     return;
                 }
             }
-            window.open(url, '_blank');
+            const target = await this.freshDownloadUrl(url);
+            // 异步等待后若被浏览器拦截弹窗，则在当前页触发下载（响应为附件，不会离开页面）
+            if (!window.open(target, '_blank')) {
+                window.location.href = target;
+            }
             this.dialog_download = false;
         },
         async loadMyReview() {

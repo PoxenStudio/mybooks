@@ -2198,6 +2198,16 @@ class BookDownloadQuota(BaseHandler):
         }
 
 
+class BookDownloadSign(BaseHandler):
+    @js
+    @auth
+    def get(self, bid):
+        fmt = self.get_argument("fmt", "").strip()
+        if not fmt or "/" in fmt or "." in fmt:
+            return {"err": "params.invalid", "msg": _("参数错误")}
+        return {"err": "ok", "sign": self.make_download_sign(self.current_user.id, bid, fmt)}
+
+
 class BookDownload(BaseHandler, web.StaticFileHandler):
     def send_error_of_not_invited(self):
         self.set_header("WWW-Authenticate", "Basic")
@@ -4675,6 +4685,7 @@ def routes():
         (r"/api/book/([0-9]+)/delete_format", BookDeleteFormat),
         (r"/api/book/([0-9]+)/edit", BookEdit),
         (r"/api/book/download_quota", BookDownloadQuota),
+        (r"/api/book/([0-9]+)/download_sign", BookDownloadSign),
         (r"/api/book/([0-9]+\..+)", BookDownload),
         (r"/api/book/([0-9]+)/refer", BookRefer),
         (r"/api/book/([0-9]+)/send_to_device", BookSendToDevice),
