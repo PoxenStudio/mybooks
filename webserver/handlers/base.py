@@ -23,6 +23,7 @@ from webserver import loader, utils
 from webserver.base import calibre_fast
 from webserver.base.book_data_cascade import cascade_delete_book_data
 from webserver.base.formatter import BookFormatter
+from webserver.base.query_cache import VersionedCache, library_version
 from webserver.base.global_state import get_global_state
 from webserver.services.resource_service import ResourceService
 from webserver.services.perf_monitor import PerfMonitor
@@ -1026,10 +1027,15 @@ class BaseHandler(web.RequestHandler):
         sql = """SELECT tags.name, count(distinct book) as count
         FROM tags left join books_tags_link on tags.id = books_tags_link.tag
         group by tags.id order by count desc"""
-        with self.db_lock:
-            return dict(
-                (i[0], i[1]) for i in self.calibre_db_cache.backend.conn.get(sql)
-            )
+        version = self.library_version()
+        tags = BaseHandler._catalog_cache.get("all_tags_with_count", version)
+        if tags is None:
+            with self.db_lock:
+                tags = dict(
+                    (i[0], i[1]) for i in self.calibre_db_cache.backend.conn.get(sql)
+                )
+            BaseHandler._catalog_cache.put("all_tags_with_count", version, tags)
+        return dict(tags)
 
     def filter_tags_by_read_range(self, tags):
         if CONF.get(constants.ALLOW_READ_RANGE_SETTING, False):
@@ -1164,11 +1170,29 @@ class BaseHandler(web.RequestHandler):
         translators_map = self.get_translators_map()
         return {book_id for book_id, names in translators_map.items() if name in names}
 
+    _catalog_cache = VersionedCache(max_items=32)
+    _search_cache = VersionedCache(ttl=10, max_items=128)
+
+    def library_version(self):
+        return library_version(self.calibre_db_cache.backend)
+
     def books_by_id(self):
-        sql = "SELECT id FROM books order by id desc"
-        with self.db_lock:
-            ids = [v[0] for v in self.calibre_db_cache.backend.conn.get(sql)]
-        return ids
+        version = self.library_version()
+        ids = BaseHandler._catalog_cache.get("books_by_id", version)
+        if ids is None:
+            sql = "SELECT id FROM books order by id desc"
+            with self.db_lock:
+                ids = tuple(v[0] for v in self.calibre_db_cache.backend.conn.get(sql))
+            BaseHandler._catalog_cache.put("books_by_id", version, ids)
+        return list(ids)
+
+    def cached_search(self, query):
+        version = self.library_version()
+        ids = BaseHandler._search_cache.get(query, version)
+        if ids is None:
+            ids = tuple(self.calibre_db_cache.search(query) or ())
+            BaseHandler._search_cache.put(query, version, ids)
+        return list(ids)
 
     def get_argument_start(self):
         start = self.get_argument("start", 0)
@@ -1507,8 +1531,9 @@ class ListHandler(BaseHandler):
         """Get a list of books."""
         start = self.get_argument_start()
         page_size = CONF.get("DEFAULT_PAGE_SIZE", 60)
-        size = min(int(self.get_argument("size", "0").strip()), 1000)
-        delta = size if size > 0 else max(page_size, 60)
+        max_size = int(CONF.get("MAX_PAGE_SIZE", 200))
+        size = min(int(self.get_argument("size", "0").strip()), max_size)
+        delta = min(size if size > 0 else max(page_size, 60), max_size)
 
         if ids:
             ids = list(ids)
@@ -1522,9 +1547,11 @@ class ListHandler(BaseHandler):
                 self.do_sort(books, "id", False)
             elif sort_fields == "title":
                 # 获取所有books，排序后再抽取当前页
-                all_books_data = self.get_books_for_list(ids=ids)
-                self.do_sort(all_books_data, "sort", True)
-                books = all_books_data[start : start + delta]
+                sort_map = self.calibre_db_cache.all_field_for("sort", ids, "")
+                sorted_ids = sorted(ids, key=lambda i: sort_map.get(i) or "")
+                page_ids = sorted_ids[start : start + delta]
+                by_id = {b["id"]: b for b in self.get_books_for_list(ids=page_ids)}
+                books = [by_id[i] for i in page_ids if i in by_id]
             else:
                 # 按照输入的ids顺序排序
                 books = self.get_books_for_list(ids=ids[start : start + delta])

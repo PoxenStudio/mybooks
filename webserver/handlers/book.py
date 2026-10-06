@@ -166,9 +166,9 @@ class Index(BaseHandler):
             data["reason"] = {"type": reason.type, "value": reason.value}
         return data
 
-    def _books_in_order(self, ids):
-        books = {b["id"]: b for b in self.get_books_for_list(ids=ids, convert_to_local_tz=False)}
-        return [books[i] for i in ids if i in books]
+    def _home_books(self, random_ids, new_ids):
+        books = {b["id"]: b for b in self.get_books_for_list(ids=list(set(random_ids) | set(new_ids)), convert_to_local_tz=False)}
+        return [books[i] for i in random_ids if i in books], [books[i] for i in new_ids if i in books]
 
     @js
     def get(self):
@@ -199,8 +199,7 @@ class Index(BaseHandler):
         home_ids = self._recommend_home_ids(cnt_random, cnt_recent, [b["id"] for b in social_books], seed, reader_id)
         random_ids, new_ids, reasons = home_ids or (*self._legacy_home_ids(ids, cnt_random, cnt_recent), {})
         t_home = time.perf_counter()
-        random_books = self._books_in_order(random_ids)
-        new_books = self._books_in_order(new_ids)
+        random_books, new_books = self._home_books(random_ids, new_ids)
         t_books = time.perf_counter()
 
         result = {
@@ -2405,7 +2404,7 @@ class SearchBook(ListHandler):
                 # 1. 先查所有分词都包含的书（AND查询）
                 try:
                     and_query = " AND ".join([f'title:"{word}"' for word in filtered_words])
-                    and_ids = self.calibre_db_cache.search(and_query)
+                    and_ids = self.cached_search(and_query)
                     if and_ids:
                         self._add_books(and_ids, ids, seen)
                         logging.info(f"Found {len(and_ids)} books for AND of segmented words: {filtered_words}")
@@ -2499,7 +2498,7 @@ class SearchBook(ListHandler):
                 logging.info(f"Searching books with query: {query}")
                 ids2 = None
                 if query:
-                    ids2 = self.calibre_db_cache.search(query)
+                    ids2 = self.cached_search(query)
                 if ids2:
                     self._add_books(ids2, ids, seen)
             except Exception as e:
@@ -2512,7 +2511,7 @@ class SearchBook(ListHandler):
         logging.info(f"Searching books with query: {query}")
         ids = []
         try:
-            ids = list(self.calibre_db_cache.search(query) or [])
+            ids = self.cached_search(query)
         except Exception as e:
             logging.error("Search book failed: %s" % e)
             logging.error(traceback.format_exc())
