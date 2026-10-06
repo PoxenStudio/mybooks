@@ -23,6 +23,7 @@ from tornado.options import define, options
 
 from webserver import loader, models, social_routes, startup_status
 from webserver.startup_status import StartupState
+from webserver.services import warmup
 from webserver.services.perf_monitor import PerfMonitor
 from webserver.base.setting_saver import SettingsSaver
 from webserver.services import AsyncService
@@ -296,8 +297,12 @@ def make_app():
             cursor = db_connection.cursor()
             try:
                 cursor.execute("PRAGMA busy_timeout=30000")
+                if CONF.get("SQLITE_RELAXED", False):
+                    cursor.execute("PRAGMA synchronous=NORMAL")
+                    cursor.execute("PRAGMA temp_store=MEMORY")
+                    cursor.execute("PRAGMA cache_size=-20000")
             except Exception as e:
-                logging.warning(f"Failed to set SQLite busy_timeout: {e}")
+                logging.warning(f"Failed to set SQLite pragmas: {e}")
             cursor.close()
 
     ScopedSession = scoped_session(sessionmaker(bind=engine, autoflush=True, autocommit=False))
@@ -638,6 +643,14 @@ def main():
     else:
         http_server.listen(options.port, options.host)
     tornado.ioloop.PeriodicCallback(lambda: models.Message.cleanup_old_messages(), 24 * 3600 * 1000).start()
+    if CONF.get("WARMUP_ENABLE", True):
+        from webserver.handlers.base import BaseHandler
+
+        settings = app.settings
+        warmup.start(
+            settings["legacy"], settings["cache"], BaseHandler.db_lock, settings["recommend"] if CONF.get("RECOMMEND_ENABLE", True) else None, settings["ScopedSession"],
+            int(CONF.get("WARMUP_DELAY_SEC", 10))
+        )
     if CONF.get("PERF_MONITOR", True):
         PerfMonitor.instance().start(int(CONF["PERF_STALL_MS"]))
     tornado.ioloop.IOLoop.instance().start()
