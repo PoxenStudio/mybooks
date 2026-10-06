@@ -82,6 +82,35 @@ class ThumbCache:
         if over:
             self.cleanup()
 
+    def remove_book(self, book_id):
+        base = os.path.join(self.root, "thumb")
+        prefix = "%d-" % book_id
+        freed = 0
+        try:
+            dirs = os.listdir(base)
+        except OSError:
+            return 0
+        for d in dirs:
+            folder = os.path.join(base, d)
+            try:
+                names = os.listdir(folder)
+            except OSError:
+                continue
+            for name in names:
+                if not (name.startswith(prefix) and name.endswith(".jpg")):
+                    continue
+                full = os.path.join(folder, name)
+                try:
+                    size = os.stat(full).st_size
+                    os.remove(full)
+                    freed += size
+                except OSError:
+                    continue
+        with self._lock:
+            if self._size is not None:
+                self._size = max(0, self._size - freed)
+        return freed
+
     def _files(self):
         base = os.path.join(self.root, "thumb")
         for dirpath, _dirs, names in os.walk(base):
