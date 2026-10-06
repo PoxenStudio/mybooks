@@ -87,7 +87,7 @@ class Index(BaseHandler):
             return reader.avatar.replace("http://", "https://")
         return self.site_url + "/avatar/%s" % reader.avatar
 
-    def _social_recommend_books(self):
+    async def _social_recommend_books(self):
         """首页"其他用户推荐"：最近 90 天内被评价（且状态通过）的书，见 plan §2.3。
         仅登录且个人偏好 show_home_recommendations=True 时才计算，游客/关闭时返回空列表。"""
         if not CONF.get("ENABLE_BOOK_REVIEW", True):
@@ -99,7 +99,7 @@ class Index(BaseHandler):
         review_rows = BookReviewService.recent_recommendations(self.sqlite_session, days=90, limit=12)
         if not review_rows:
             return []
-        rec_books = {b["id"]: b for b in self.get_books(ids=[r.book_id for r in review_rows])}
+        rec_books = {b["id"]: b for b in await self.get_books_for_list_async(ids=[r.book_id for r in review_rows])}
         readers = {
             u.id: u for u in self.sqlite_session.query(Reader).filter(Reader.id.in_({r.reader_id for r in review_rows})).all()
         }
@@ -167,12 +167,15 @@ class Index(BaseHandler):
             data["reason"] = {"type": reason.type, "value": reason.value}
         return data
 
-    def _home_books(self, random_ids, new_ids):
-        books = {b["id"]: b for b in self.get_books_for_list(ids=list(set(random_ids) | set(new_ids)), convert_to_local_tz=False)}
+    def _all_book_ids(self):
+        return list(self.calibre_db_cache.all_book_ids())
+
+    async def _home_books(self, random_ids, new_ids):
+        books = {b["id"]: b for b in await self.get_books_for_list_async(ids=list(set(random_ids) | set(new_ids)), convert_to_local_tz=False)}
         return [books[i] for i in random_ids if i in books], [books[i] for i in new_ids if i in books]
 
     @js
-    def get(self):
+    async def get(self):
         """首页显示随机书籍和最近添加的书籍"""
         setting_random_count = CONF.get("MAIN_PAGE_RANDOM_COUNT", 12)
         setting_recent_count = CONF.get("MAIN_PAGE_RECENT_COUNT", 12)
@@ -180,7 +183,7 @@ class Index(BaseHandler):
         cnt_recent = min(int(self.get_argument("recent", setting_recent_count)), 200)
 
         t0 = time.perf_counter()
-        ids = list(self.calibre_db_cache.all_book_ids())
+        ids = await self.run_calibre_async(self._all_book_ids)
         t_ids = time.perf_counter()
         if not ids:
             return {
@@ -193,14 +196,14 @@ class Index(BaseHandler):
 
         cnt_recent = min(cnt_recent, len(ids))
         cnt_random = min(cnt_random, len(ids))
-        social_books = self._social_recommend_books()
+        social_books = await self._social_recommend_books()
         t_social = time.perf_counter()
         reader_id = self.user_id() or None
         seed = self._home_seed(reader_id)
         home_ids = self._recommend_home_ids(cnt_random, cnt_recent, [b["id"] for b in social_books], seed, reader_id)
         random_ids, new_ids, reasons = home_ids or (*self._legacy_home_ids(ids, cnt_random, cnt_recent), {})
         t_home = time.perf_counter()
-        random_books, new_books = self._home_books(random_ids, new_ids)
+        random_books, new_books = await self._home_books(random_ids, new_ids)
         t_books = time.perf_counter()
 
         result = {
@@ -2304,10 +2307,10 @@ class BookNav(ListHandler):
 
 
 class RecentBook(ListHandler):
-    def get(self):
+    async def get(self):
         title = _("新书推荐")
-        ids = self.books_by_id()
-        return self.render_book_list([], ids=ids, title=title, sort_fields="id")
+        ids = await self.books_by_id_async()
+        return await self.render_book_list([], ids=ids, title=title, sort_fields="id")
 
 
 class SearchBook(ListHandler):
@@ -2403,7 +2406,7 @@ class SearchBook(ListHandler):
                 ids.append(bid)
                 seen.add(bid)
 
-    def _search_by_segmentation(self, name, ids, seen):
+    async def _search_by_segmentation(self, name, ids, seen):
         if not JIEBA_AVAILABLE or not (2 < len(name) < 10):
             return None
 
@@ -2421,7 +2424,7 @@ class SearchBook(ListHandler):
                 # 1. 先查所有分词都包含的书（AND查询）
                 try:
                     and_query = " AND ".join([f'title:"{word}"' for word in filtered_words])
-                    and_ids = self.cached_search(and_query)
+                    and_ids = await self.cached_search_async(and_query)
                     if and_ids:
                         self._add_books(and_ids, ids, seen)
                         logging.info(f"Found {len(and_ids)} books for AND of segmented words: {filtered_words}")
@@ -2435,7 +2438,7 @@ class SearchBook(ListHandler):
         logging.info(f"[TRACE]Word segmentation search took {time.time() - start:.2f} seconds.")
         return or_query
 
-    def get(self):
+    async def get(self):
         name = self.get_argument("name", "").strip()
         book_title = self.get_argument("title", "").strip()  # 传入此参数代表只按名称搜索
         exclude_id = int(self.get_argument("exclude", "0").strip())
@@ -2445,7 +2448,7 @@ class SearchBook(ListHandler):
 
         structured_query, structured_desc = self._build_structured_query(name, book_title, exact)
         if structured_query:
-            return self._render_search(structured_query, _("搜索") + structured_desc, exclude_id, order_by)
+            return await self._render_search(structured_query, _("搜索") + structured_desc, exclude_id, order_by)
 
         if not name and not book_title:
             return self.write({"err": "params.invalid", "msg": _("请输入搜索关键字")})
@@ -2466,7 +2469,7 @@ class SearchBook(ListHandler):
         if not calibre_query and not title_search:
             if self.ISBN_RE.match(re.sub(r"[\s-]", "", name)):
                 # 纯 ISBN 关键字：直接按 ISBN 精确查找
-                return self._render_search(self._isbn_clause(name), _("搜索") + _("ISBN:") + name, exclude_id, order_by)
+                return await self._render_search(self._isbn_clause(name), _("搜索") + _("ISBN:") + name, exclude_id, order_by)
             if self._is_calibre_expr(name):
                 # 任意 Calibre 条件表达式，如 authors:=余华 AND rating:>=4、#category:="小说"
                 calibre_query = True
@@ -2483,7 +2486,7 @@ class SearchBook(ListHandler):
         # 只有当 seg=1 时才进行分词搜索
         if seg == 1 and title_search and not calibre_query:
             # 分词搜索：当name长度在2-10之间且jieba可用时
-            seg_or_query = self._search_by_segmentation(name, ids, seen)
+            seg_or_query = await self._search_by_segmentation(name, ids, seen)
 
         # 简繁体转换搜索（合并为一次查询）
         start = time.time()
@@ -2515,24 +2518,24 @@ class SearchBook(ListHandler):
                 logging.info(f"Searching books with query: {query}")
                 ids2 = None
                 if query:
-                    ids2 = self.cached_search(query)
+                    ids2 = await self.cached_search_async(query)
                 if ids2:
                     self._add_books(ids2, ids, seen)
             except Exception as e:
                 logging.error("Search book failed: %s" % e)
                 logging.error(traceback.format_exc())
         logging.info(f"[TRACE] search took {time.time() - start:.2f} seconds.")
-        return self._render_book_ids(ids, title, exclude_id, order_by)
+        return await self._render_book_ids(ids, title, exclude_id, order_by)
 
-    def _render_search(self, query, title, exclude_id, order_by):
+    async def _render_search(self, query, title, exclude_id, order_by):
         logging.info(f"Searching books with query: {query}")
         ids = []
         try:
-            ids = self.cached_search(query)
+            ids = await self.cached_search_async(query)
         except Exception as e:
             logging.error("Search book failed: %s" % e)
             logging.error(traceback.format_exc())
-        return self._render_book_ids(ids, title, exclude_id, order_by)
+        return await self._render_book_ids(ids, title, exclude_id, order_by)
 
     def _render_book_ids(self, ids, title, exclude_id, order_by):
         if exclude_id > 0 and exclude_id in ids:

@@ -803,6 +803,11 @@ class BaseHandler(web.RequestHandler):
     def get_books_for_list(self, **kwargs):
         return self.get_books(**calibre_fast.list_kwargs(), **kwargs)
 
+    async def get_books_for_list_async(self, **kwargs):
+        _ts = time.time()
+        books = await self.run_calibre_async(self.calibre_db.get_data_as_dict, **calibre_fast.list_kwargs(), **kwargs)
+        return self._merge_books_full(books, _ts)
+
     def get_books(self, *args, **kwargs):
         _ts = time.time()
         books = self.calibre_db.get_data_as_dict(*args, **kwargs)
@@ -811,6 +816,31 @@ class BaseHandler(web.RequestHandler):
             % (int(1000 * (time.time() - _ts)), len(books))
         )
         return self._merge_books_full(books, _ts)
+
+    def _item_maps(self, ids):
+        empty_item = Item().to_dict()
+        items = (
+            self.sqlite_session.query(Item).filter(Item.book_id.in_(ids)).all()
+            if ids
+            else []
+        )
+        needs_default = len(items) < len(set(ids))
+        collectors = {}
+        for b in items:
+            if b.collector is None:
+                needs_default = True
+            elif b.collector_id not in collectors:
+                collectors[b.collector_id] = b.collector.to_dict()
+        if needs_default:
+            empty_item["collector"] = (
+                self.sqlite_session.query(Reader).order_by(Reader.id).first()
+            )
+        maps = {}
+        for b in items:
+            d = b.to_dict()
+            d["collector"] = dict(collectors[b.collector_id]) if b.collector_id in collectors and b.collector is not None else empty_item["collector"]
+            maps[b.book_id] = d
+        return maps, empty_item
 
     def _merge_books_full(self, books, _ts=None):
         """get_books 的 sqlite 合并段：只碰 sqlite_session 与内存结构，须留在 ioloop
@@ -828,23 +858,7 @@ class BaseHandler(web.RequestHandler):
         except Exception as e:
             logging.error(f"Error getting audio book ids: {e}")
 
-        item = Item()
-        empty_item = item.to_dict()
-        empty_item["collector"] = (
-            self.sqlite_session.query(Reader).order_by(Reader.id).first()
-        )
-        ids = [book["id"] for book in books]
-        items = (
-            self.sqlite_session.query(Item).filter(Item.book_id.in_(ids)).all()
-            if ids
-            else []
-        )
-        maps = {}
-        for b in items:
-            d = b.to_dict()
-            c = b.collector.to_dict() if b.collector else empty_item["collector"]
-            d["collector"] = c
-            maps[b.book_id] = d
+        maps, empty_item = self._item_maps([book["id"] for book in books])
 
         soled_books = set()
         for book in books:
@@ -885,23 +899,7 @@ class BaseHandler(web.RequestHandler):
             _ts = time.time()
         self._build_custom_column_map()
 
-        item = Item()
-        empty_item = item.to_dict()
-        empty_item["collector"] = (
-            self.sqlite_session.query(Reader).order_by(Reader.id).first()
-        )
-        ids = [book["id"] for book in books]
-        items = (
-            self.sqlite_session.query(Item).filter(Item.book_id.in_(ids)).all()
-            if ids
-            else []
-        )
-        maps = {}
-        for b in items:
-            d = b.to_dict()
-            c = b.collector.to_dict() if b.collector else empty_item["collector"]
-            d["collector"] = c
-            maps[b.book_id] = d
+        maps, empty_item = self._item_maps([book["id"] for book in books])
 
         for book in books:
             for colnum, key in self._custom_column_map.items():
@@ -1193,13 +1191,24 @@ class BaseHandler(web.RequestHandler):
     def library_version(self):
         return library_version(self.calibre_db_cache.backend)
 
+    def _query_books_by_id(self):
+        sql = "SELECT id FROM books order by id desc"
+        with self.db_lock:
+            return tuple(v[0] for v in self.calibre_db_cache.backend.conn.get(sql))
+
     def books_by_id(self):
         version = self.library_version()
         ids = BaseHandler._catalog_cache.get("books_by_id", version)
         if ids is None:
-            sql = "SELECT id FROM books order by id desc"
-            with self.db_lock:
-                ids = tuple(v[0] for v in self.calibre_db_cache.backend.conn.get(sql))
+            ids = self._query_books_by_id()
+            BaseHandler._catalog_cache.put("books_by_id", version, ids)
+        return list(ids)
+
+    async def books_by_id_async(self):
+        version = self.library_version()
+        ids = BaseHandler._catalog_cache.get("books_by_id", version)
+        if ids is None:
+            ids = await self.run_calibre_async(self._query_books_by_id)
             BaseHandler._catalog_cache.put("books_by_id", version, ids)
         return list(ids)
 
@@ -1208,6 +1217,14 @@ class BaseHandler(web.RequestHandler):
         ids = BaseHandler._search_cache.get(query, version)
         if ids is None:
             ids = tuple(self.calibre_db_cache.search(query) or ())
+            BaseHandler._search_cache.put(query, version, ids)
+        return list(ids)
+
+    async def cached_search_async(self, query):
+        version = self.library_version()
+        ids = BaseHandler._search_cache.get(query, version)
+        if ids is None:
+            ids = tuple(await self.run_calibre_async(self.calibre_db_cache.search, query) or ())
             BaseHandler._search_cache.put(query, version, ids)
         return list(ids)
 
@@ -1542,7 +1559,11 @@ class ListHandler(BaseHandler):
             self.do_sort(items, "id", False)
         return None
 
-    def get_book_list(
+    def _sort_ids_by_title(self, ids):
+        sort_map = self.calibre_db_cache.all_field_for("sort", ids, "")
+        return sorted(ids, key=lambda i: sort_map.get(i) or "")
+
+    async def get_book_list(
         self, all_books, ids=None, title=None, sort_fields=None, include_comments=True
     ):
         """Get a list of books."""
@@ -1560,21 +1581,19 @@ class ListHandler(BaseHandler):
 
             if sort_fields == "id":
                 # 按照id从大到小排列（降序），直接对ids排序后再获取当前页
-                books = self.get_books_for_list(ids=ids[start : start + delta])
+                books = await self.get_books_for_list_async(ids=ids[start : start + delta])
                 self.do_sort(books, "id", False)
             elif sort_fields == "title":
                 # 获取所有books，排序后再抽取当前页
-                sort_map = self.calibre_db_cache.all_field_for("sort", ids, "")
-                sorted_ids = sorted(ids, key=lambda i: sort_map.get(i) or "")
+                sorted_ids = await self.run_calibre_async(self._sort_ids_by_title, ids)
                 page_ids = sorted_ids[start : start + delta]
-                by_id = {b["id"]: b for b in self.get_books_for_list(ids=page_ids)}
+                by_id = {b["id"]: b for b in await self.get_books_for_list_async(ids=page_ids)}
                 books = [by_id[i] for i in page_ids if i in by_id]
             else:
                 # 按照输入的ids顺序排序
-                books = self.get_books_for_list(ids=ids[start : start + delta])
-                books = sorted(
-                    books, key=lambda x: ids.index(x["id"]) if x["id"] in ids else -1
-                )
+                page_ids = ids[start : start + delta]
+                by_id = {b["id"]: b for b in await self.get_books_for_list_async(ids=page_ids)}
+                books = [by_id[i] for i in page_ids if i in by_id]
         else:
             count = len(all_books)
             books = all_books[start : start + delta]

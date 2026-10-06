@@ -3,6 +3,7 @@
 """
 
 import builtins
+import contextlib
 import inspect
 import logging
 import os
@@ -39,31 +40,36 @@ def fast_get_data_as_dict(self, prefix=None, authors_as_string=False, ids=None, 
 
     field_map = self.FIELD_MAP
     wanted = sorted({i for i in ids if i in id_to_row}, key=id_to_row.__getitem__)
+    cache = getattr(view, "cache", None)
+    read_lock = getattr(cache, "read_lock", None)
     data = []
-    for db_id in wanted:
-        record = view.tablerow_for_id(db_id)
-        x = {}
-        for field in fields:
-            x[field] = record[field_map[field]]
-        if convert_to_local_tz:
-            for tf in ("timestamp", "pubdate", "last_modified"):
-                x[tf] = as_local_time(x[tf])
+    with read_lock if read_lock is not None else contextlib.nullcontext():
+        for db_id in wanted:
+            record = view.tablerow_for_id(db_id)
+            x = {}
+            for field in fields:
+                x[field] = record[field_map[field]]
+            if convert_to_local_tz:
+                for tf in ("timestamp", "pubdate", "last_modified"):
+                    x[tf] = as_local_time(x[tf])
 
-        data.append(x)
-        x["id"] = db_id
-        x["formats"] = []
-        isbn = self.isbn(db_id, index_is_id=True)
-        x["isbn"] = isbn or ""
-        if not x["authors"]:
-            x["authors"] = _unknown()
-        x["authors"] = [i.replace("|", ",") for i in x["authors"].split(",")]
-        if authors_as_string:
-            x["authors"] = authors_to_string(x["authors"])
-        x["tags"] = [i.replace("|", ",").strip() for i in x["tags"].split(",")] if x["tags"] else []
-        path = os.path.join(prefix, self.path(db_id, index_is_id=True))
-        x["cover"] = os.path.join(path, "cover.jpg")
-        if not record[field_map["cover"]]:
-            x["cover"] = None
+            data.append(x)
+            x["id"] = db_id
+            x["formats"] = []
+            isbn = self.isbn(db_id, index_is_id=True)
+            x["isbn"] = isbn or ""
+            if not x["authors"]:
+                x["authors"] = _unknown()
+            x["authors"] = [i.replace("|", ",") for i in x["authors"].split(",")]
+            if authors_as_string:
+                x["authors"] = authors_to_string(x["authors"])
+            x["tags"] = [i.replace("|", ",").strip() for i in x["tags"].split(",")] if x["tags"] else []
+            path = os.path.join(prefix, self.path(db_id, index_is_id=True))
+            x["cover"] = os.path.join(path, "cover.jpg")
+            if not record[field_map["cover"]]:
+                x["cover"] = None
+    for x in data:
+        db_id = x["id"]
         if _supports_verify:
             formats = self.formats(db_id, index_is_id=True, verify_formats=verify_formats)
         else:

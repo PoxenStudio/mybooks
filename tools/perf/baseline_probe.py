@@ -189,6 +189,8 @@ def print_server(args):
     lp.log("服务端：ioloop 滞后 %s，停滞 %s 次，calibre 池 %s" % (perf["loop_lag_ms"], perf["stall_total"], json.dumps(perf["calibre"], ensure_ascii=False)))
     if perf.get("stages"):
         lp.log("服务端：分段耗时 %s" % json.dumps(perf["stages"], ensure_ascii=False))
+    if perf.get("thumb_cache"):
+        lp.log("服务端：缩略图缓存 %s" % json.dumps(perf["thumb_cache"], ensure_ascii=False))
     profile = perf.get("profile") or {}
     if profile.get("samples"):
         lp.log("服务端：空闲基线期间仍有 %s 次停滞采样（间隔 %sms），按应用代码行：" % (profile["samples"], profile["interval_ms"]))
