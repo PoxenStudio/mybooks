@@ -6,10 +6,10 @@
         <span class="ml-2 text-caption grey--text">{{ $t('syslog.subtitle') }}</span>
       </v-col>
       <v-col cols="auto">
-        <v-btn small outlined color="primary" class="mr-2" :loading="loading" @click="fetchLog">
+        <v-btn small color="primary" class="mr-2" :loading="loading" @click="fetchLog">
           <v-icon small left>mdi-refresh</v-icon>{{ $t('syslog.refresh') }}
         </v-btn>
-        <v-btn small outlined color="secondary" :href="this.logLink" target="_blank" :disabled="this.logLink == null">
+        <v-btn small color="primary" :href="this.logLink" target="_blank" :disabled="this.logLink == null">
           <v-icon small left>mdi-download</v-icon>{{ $t('syslog.download') }}
         </v-btn>
       </v-col>
@@ -25,10 +25,10 @@
       <v-col>
       </v-col>
       <v-col cols="auto">
-        <v-btn small outlined color="primary" class="mr-2" :loading="loading" @click="fetchLog">
+        <v-btn small color="primary" class="mr-2" :loading="loading" @click="fetchLog">
           <v-icon small left>mdi-refresh</v-icon>{{ $t('syslog.refresh') }}
         </v-btn>
-        <v-btn small outlined color="secondary" :href="this.logLink" target="_blank" :disabled="this.logLink == null">
+        <v-btn small color="primary" :href="this.logLink" target="_blank" :disabled="this.logLink == null">
           <v-icon small left>mdi-download</v-icon>{{ $t('syslog.download') }}
         </v-btn>
       </v-col>
