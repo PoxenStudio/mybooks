@@ -143,7 +143,7 @@ settings = {
     "THUMB_USE_PILLOW": True,
     "THUMB_JPEG_QUALITY": 83,
     "THUMB_CONCURRENCY": 2,
-    "THUMB_SIZES": [[60, 80], [120, 200], [200, 300], [240, 320], [480, 640]],
+    "THUMB_SIZES": [[60, 80], [120, 200], [240, 320], [480, 640]],
     "ENABLE_AUDIO_CONVERSION_LOG": False,
     "ENABLE_AUDIO_SUBTITLE": True,
     "LOG_LEVEL_DEBUG": False,

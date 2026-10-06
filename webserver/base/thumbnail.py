@@ -6,7 +6,7 @@ import time
 
 from PIL import Image
 
-DEFAULT_SIZES = ((60, 80), (120, 200), (200, 300), (240, 320), (480, 640))
+DEFAULT_SIZES = ((60, 80), (120, 200), (240, 320), (480, 640))
 
 
 def nearest_size(width, height, sizes=DEFAULT_SIZES):

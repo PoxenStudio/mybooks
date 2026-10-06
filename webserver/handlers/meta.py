@@ -3,10 +3,8 @@
 import logging
 import math
 import sys
-from functools import cmp_to_key
 from webserver.i18n import _
 
-from webserver import utils
 from webserver.handlers.base import ListHandler, js
 from webserver.models import StickyItem
 from webserver import loader, constants
@@ -203,16 +201,7 @@ class MetaList(ListHandler):
 
 
 class MetaBooks(ListHandler):
-    def get(self, meta, name):
-        titles = {
-            "tag": _(u'含有"%(name)s"标签的书籍'),
-            "author": _(u'"%(name)s"编著的书籍'),
-            "series": _('"%(name)s"丛书包含的书籍'),
-            "rating": _("评分为%(name)s星的书籍"),
-            "publisher": _(u'"%(name)s"出版的书籍'),
-            "language": _(u'"%(name)s"语言的书籍'),
-        }
-        title = titles.get(meta, _(u"未知")) % vars()  # noqa: F841
+    def _book_ids(self, meta, name):
         category = meta + "s" if meta in ["tag", "author", "language"] else meta
         extra_ids = None
         if meta == "rating":
@@ -229,12 +218,35 @@ class MetaBooks(ListHandler):
         elif meta == "author":
             extra_ids = self.get_translator_book_ids(name)
         logging.info(f"Get meta {meta} books of {name}")
-        books = self.get_item_books(category, name, extra_ids=extra_ids)
+        item_id = self.calibre_db_cache.get_item_id(category, name)
+        ids = set(self.calibre_db.get_books_for_category(category, item_id)) if item_id else set()
+        if extra_ids:
+            ids |= set(extra_ids)
+        return ids
+
+    def _sorted_ids(self, ids, meta):
+        ids = list(ids)
+        cache = self.calibre_db_cache
         if meta == "series":
-            books.sort(key=cmp_to_key(utils.compare_books_by_series_index_or_name), reverse=False)
-        else:
-            books.sort(key=cmp_to_key(utils.compare_books_by_rating_or_id), reverse=True)
-        return self.render_book_list(books, title=title)
+            index = cache.all_field_for("series_index", ids, 0)
+            sort = cache.all_field_for("sort", ids, "")
+            return sorted(ids, key=lambda i: (index.get(i) or 0, sort.get(i) or ""))
+        rating = cache.all_field_for("rating", ids, 0)
+        return sorted(ids, key=lambda i: (rating.get(i) or 0, i), reverse=True)
+
+    async def get(self, meta, name):
+        titles = {
+            "tag": _(u'含有"%(name)s"标签的书籍'),
+            "author": _(u'"%(name)s"编著的书籍'),
+            "series": _('"%(name)s"丛书包含的书籍'),
+            "rating": _("评分为%(name)s星的书籍"),
+            "publisher": _(u'"%(name)s"出版的书籍'),
+            "language": _(u'"%(name)s"语言的书籍'),
+        }
+        title = titles.get(meta, _(u"未知")) % vars()  # noqa: F841
+        ids = await self.run_calibre_async(self._book_ids, meta, name)
+        ids = await self.run_calibre_read_async(self._sorted_ids, ids, meta)
+        return await self.render_book_list([], ids=ids, title=title)
 
 
 def routes():
