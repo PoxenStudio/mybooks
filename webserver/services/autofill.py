@@ -184,6 +184,9 @@ class AutoFillService(AsyncService):
 
     @AsyncService.register_service
     def auto_fill_async(self, book_id):
+        if not self.db.new_api.has_id(book_id):
+            logging.info("[AutoFill] book %s no longer exists, skip", book_id)
+            return
         self.auto_fill(book_id)
 
     def do_fill_metadata(self, book_id, mi):

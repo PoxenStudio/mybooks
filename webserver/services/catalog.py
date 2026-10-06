@@ -130,8 +130,21 @@ class CatalogExtractService(AsyncService):
                 lines.append(line)
         return "\n".join(lines)
 
+    @staticmethod
+    def _store_catalog(cache, book_id, value):
+        try:
+            cache.set_field(CALIBRE_COLUMN_CATALOG, {book_id: value})
+            return True
+        except Exception:
+            if cache.has_id(book_id):
+                raise
+            logging.info("[Catalog] book %s was deleted during extraction, skip", book_id)
+            return False
+
     def _extract_one(self, book_id, force):
         cache = self.db.new_api
+        if not cache.has_id(book_id):
+            return {"err": "book.not_found", "skipped": True, "msg": _("书籍不存在")}
         if not force:
             existing = (cache.field_for(CALIBRE_COLUMN_CATALOG, book_id) or "").strip()
             if existing:
@@ -163,10 +176,11 @@ class CatalogExtractService(AsyncService):
             if markdown and len(markdown.splitlines()) > 1:
                 if len(markdown) > MAX_CATALOG_LEN:
                     markdown = markdown[:MAX_CATALOG_LEN] + "\n\n* 目录过长，已被截断*"
-                cache.set_field(CALIBRE_COLUMN_CATALOG, {book_id: markdown})
+                if not self._store_catalog(cache, book_id, markdown):
+                    return {"err": "book.not_found", "skipped": True, "msg": _("书籍不存在")}
                 return {"err": "ok", "format": fmt, "catalog": markdown}
-            else:
-                cache.set_field(CALIBRE_COLUMN_CATALOG, {book_id: ""})
+            elif not self._store_catalog(cache, book_id, ""):
+                return {"err": "book.not_found", "skipped": True, "msg": _("书籍不存在")}
             last_error = _("未能从%s格式中解析出目录") % fmt
 
         return {"err": "catalog.not_found", "skipped": skipped, "msg": last_error}

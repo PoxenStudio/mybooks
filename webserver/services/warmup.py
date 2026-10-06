@@ -26,11 +26,6 @@ def _jieba():
     jieba.initialize()
 
 
-def _search(cache, db_lock):
-    with db_lock:
-        cache.search("mybooks_warmup_probe")
-
-
 def _metadata(legacy, cache):
     ids = sorted(cache.all_book_ids(), reverse=True)[:20]
     if ids:
@@ -49,7 +44,7 @@ def _recommend(service, session_factory):
 
 def run(legacy, cache, db_lock, recommend, session_factory, delay):
     time.sleep(delay)
-    steps = [("opencc", _opencc), ("jieba", _jieba), ("metadata", lambda: _metadata(legacy, cache)), ("search", lambda: _search(cache, db_lock))]
+    steps = [("opencc", _opencc), ("jieba", _jieba), ("metadata", lambda: _metadata(legacy, cache))]
     if recommend is not None:
         steps.append(("recommend", lambda: _recommend(recommend, session_factory)))
     for name, func in steps:

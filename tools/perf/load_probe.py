@@ -429,6 +429,8 @@ def print_perf(number, perf):
     log("-- 第 %d 轮 服务端 书库=%s 本 loop_lag_ms=%s stall_total=%s calibre=%s" % (number, perf.get("library_books"), perf["loop_lag_ms"], perf["stall_total"], json.dumps(perf["calibre"], ensure_ascii=False)))
     if perf.get("stages"):
         log("-- 第 %d 轮 分段耗时 %s" % (number, json.dumps(perf["stages"], ensure_ascii=False)))
+    if perf.get("thumb_cache"):
+        log("-- 第 %d 轮 缩略图缓存 %s" % (number, json.dumps(perf["thumb_cache"], ensure_ascii=False)))
     profile = perf.get("profile") or {}
     log("-- 采样 %s 次（间隔 %sms，仅统计 ioloop 停滞期间）" % (profile.get("samples"), profile.get("interval_ms")))
     for key, title in (("layer", "按层"), ("entry", "按入口(handler)"), ("app", "按应用代码行"), ("leaf", "按最内层函数")):
