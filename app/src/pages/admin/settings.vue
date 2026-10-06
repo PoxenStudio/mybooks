@@ -38,7 +38,10 @@
             <template v-for="f in card.fields">
               <v-checkbox
                 small
-                hide-details
+                :hide-details="!f.hint"
+                :hint="f.hint ? $t(f.hint) : ''"
+                :persistent-hint="!!f.hint"
+                :disabled="!!f.requiresLite && settings.PERFORMANCE_MODE !== 'lite'"
                 v-if="f.type === 'checkbox'"
                 v-model="settings[f.key]"
                 :key="f.key + '-checkbox'"
@@ -89,6 +92,8 @@
                 :items="f.items"
                 :key="f.key + '-select'"
                 :label="$t(f.label)"
+                :hint="f.hint ? $t(f.hint) : ''"
+                :persistent-hint="!!f.hint"
               >
                 <template v-if="f.icon" v-slot:prepend>
                   <v-icon :color="f.color">{{ f.icon }}</v-icon>
@@ -1467,6 +1472,26 @@ export default {
         title: "settings.advanced_settings",
         fields: [
           { icon: "mdi-home", color: "red", key: "static_host", label: "settings.cdn_domain" },
+          {
+            icon: "mdi-speedometer",
+            color: "orange",
+            key: "PERFORMANCE_MODE",
+            label: "settings.perf_mode",
+            hint: "settings.perf_mode_hint",
+            type: "select",
+            items: [
+              { text: this.$t("settings.perf_mode_normal"), value: "normal" },
+              { text: this.$t("settings.perf_mode_lite"), value: "lite" },
+            ],
+          },
+          {
+            icon: "mdi-memory",
+            key: "LITE_BOOK_CACHE",
+            label: "settings.lite_book_cache",
+            hint: "settings.lite_book_cache_hint",
+            type: "checkbox",
+            requiresLite: true,
+          },
           {
             icon: "mdi-information",
             color: "red",

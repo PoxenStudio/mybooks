@@ -619,6 +619,12 @@
     "batch_add_in_force": "Force add book during batch import (even if book information cannot be fetched from the internet)",
     "send_mail_for_new_books": "Send email notifications for new books (combined send after 15 mins)",
     "advanced_settings": "Advanced Configuration",
+    "perf_mode": "Performance mode",
+    "perf_mode_normal": "Normal",
+    "perf_mode_lite": "Lite (for low-end devices, some features reduced)",
+    "perf_mode_hint": "Lite mode enables the optimizations ticked below, trading some features for lower CPU and file usage. They take effect only while Lite mode is on; no restart needed.",
+    "lite_book_cache": "Book data cache (Lite mode only)",
+    "lite_book_cache_hint": "Keeps recently used book list data in memory (up to about 2000 books or 32MB, least recently used evicted) to cut CPU on paging and repeated visits. Entries are invalidated when a book is modified.",
     "enable_physical_books": "Enable Hardcopy Books",
     "enable_folder_browse": "Enable multi-level classification by folders",
     "enable_book_type_convert_directly": "Allow direct book type conversion without checking for existing files, ISBNs, or other conditions",
@@ -1127,6 +1133,8 @@
     "mergeConfirm": "Folder \"{target}\" already exists. {count} books will be merged into it and this cannot be undone. Merge?"
   },
   "appHeader": {
+    "lite_mode": "Lite mode",
+    "lite_mode_tip": "Lite mode is on and some features are reduced. Admins can adjust it under Advanced Configuration in System Settings.",
     "home": "Home",
     "admin": "Admin",
     "systemSettings": "System Settings",

@@ -20,7 +20,7 @@ from tornado import web
 from tornado.escape import utf8
 
 from webserver.i18n import _, choose_language, set_language
-from webserver import loader, utils
+from webserver import loader, perf, utils
 from webserver.base import calibre_fast
 from webserver.base.book_data_cascade import cascade_delete_book_data
 from webserver.base.formatter import BookFormatter
@@ -1443,7 +1443,7 @@ class BaseHandler(web.RequestHandler):
             .filter(Reader.access_time > last_week)
             .scalar()
         )
-        info = dict(stats, users=count_all_users, version=VERSION, active=count_hot_users)
+        info = dict(stats, users=count_all_users, version=VERSION, active=count_hot_users, performanceMode=perf.CONF.get("PERFORMANCE_MODE", "normal"))
         info.update(
             {
                 "installed": CONF.get("installed", False),

@@ -9,8 +9,11 @@ import logging
 import os
 import time
 
+from webserver import perf
+from webserver.base.book_row_cache import BookRowCache
 from webserver.services.perf_monitor import PerfMonitor
 
+row_cache = BookRowCache()
 _original = None
 _supports_verify = False
 
@@ -29,6 +32,7 @@ def fast_get_data_as_dict(self, prefix=None, authors_as_string=False, ids=None, 
     from calibre.utils.date import as_local_time
 
     backend = getattr(self, "backend", self)
+    cacheable = prefix is None and not verify_formats and not with_paths
     if prefix is None:
         prefix = backend.library_path
     fdata = backend.custom_column_num_map
@@ -42,9 +46,22 @@ def fast_get_data_as_dict(self, prefix=None, authors_as_string=False, ids=None, 
             fields.add(f"{x}_index")
 
     field_map = self.FIELD_MAP
-    wanted = sorted({i for i in ids if i in id_to_row}, key=id_to_row.__getitem__)
+    ordered = sorted({i for i in ids if i in id_to_row}, key=id_to_row.__getitem__)
     cache = getattr(view, "cache", None)
     read_lock = getattr(cache, "read_lock", None)
+    keys = {}
+    cached_rows = {}
+    wanted = ordered
+    if cacheable and perf.lite_on("LITE_BOOK_CACHE") and hasattr(cache, "all_field_for"):
+        stamps = cache.all_field_for("last_modified", ordered)
+        keys = {i: (i, stamps.get(i), convert_to_local_tz, authors_as_string) for i in ordered}
+        for i in ordered:
+            row = row_cache.get(keys[i])
+            if row is not None:
+                cached_rows[i] = row
+        wanted = [i for i in ordered if i not in cached_rows]
+    elif row_cache.stats()["entries"]:
+        row_cache.clear()
     data = []
     monitor = PerfMonitor.instance()
     wait_start = time.perf_counter()
@@ -96,7 +113,15 @@ def fast_get_data_as_dict(self, prefix=None, authors_as_string=False, ids=None, 
                     x["fmt_" + fmt.lower()] = path
             x["available_formats"] = [i.upper() for i in formats.split(",")]
     monitor.record_stage("fast.formats", (time.perf_counter() - formats_start) * 1000)
-    return data
+    if not keys:
+        return data
+    max_items = int(perf.CONF.get("LITE_BOOK_CACHE_SIZE", 2000))
+    max_bytes = int(perf.CONF.get("LITE_BOOK_CACHE_MB", 32)) * 1024 * 1024
+    built = {}
+    for x in data:
+        built[x["id"]] = x
+        row_cache.put(keys[x["id"]], x, max_items, max_bytes)
+    return [cached_rows[i] if i in cached_rows else built[i] for i in ordered]
 
 
 def install(library_cls):
