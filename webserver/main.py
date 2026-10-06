@@ -329,6 +329,10 @@ def make_app():
 
     from calibre import gui2
     from calibre.db.legacy import LibraryDatabase
+    if CONF.get("FAST_GET_DATA_AS_DICT", True):
+        from webserver.base import calibre_fast
+
+        calibre_fast.install(LibraryDatabase)
     from calibre.utils.date import fromtimestamp
     from calibre.ebooks.metadata.sources.update import patch_plugins
 

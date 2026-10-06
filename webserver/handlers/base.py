@@ -20,6 +20,7 @@ from tornado.escape import utf8
 
 from webserver.i18n import _, choose_language, set_language
 from webserver import loader, utils
+from webserver.base import calibre_fast
 from webserver.base.book_data_cascade import cascade_delete_book_data
 from webserver.base.formatter import BookFormatter
 from webserver.base.global_state import get_global_state
@@ -797,6 +798,9 @@ class BaseHandler(web.RequestHandler):
                 if meta["is_custom"]:
                     self._custom_column_map[meta["colnum"]] = key
 
+    def get_books_for_list(self, **kwargs):
+        return self.get_books(**calibre_fast.list_kwargs(), **kwargs)
+
     def get_books(self, *args, **kwargs):
         _ts = time.time()
         books = self.calibre_db.get_data_as_dict(*args, **kwargs)
@@ -1419,7 +1423,7 @@ class ListHandler(BaseHandler):
 
         if (max_count > 0) and (len(ids) > max_count):
             ids = set(random.sample(list(ids), max_count))
-        books = self.calibre_db.get_data_as_dict(ids=ids)
+        books = self.calibre_db.get_data_as_dict(ids=ids, **calibre_fast.list_kwargs())
 
         # 提前查询被标记为sole的图书ID并过滤
         ids = [book["id"] for book in books]
@@ -1514,16 +1518,16 @@ class ListHandler(BaseHandler):
 
             if sort_fields == "id":
                 # 按照id从大到小排列（降序），直接对ids排序后再获取当前页
-                books = self.get_books(ids=ids[start : start + delta])
+                books = self.get_books_for_list(ids=ids[start : start + delta])
                 self.do_sort(books, "id", False)
             elif sort_fields == "title":
                 # 获取所有books，排序后再抽取当前页
-                all_books_data = self.get_books(ids=ids)
+                all_books_data = self.get_books_for_list(ids=ids)
                 self.do_sort(all_books_data, "sort", True)
                 books = all_books_data[start : start + delta]
             else:
                 # 按照输入的ids顺序排序
-                books = self.get_books(ids=ids[start : start + delta])
+                books = self.get_books_for_list(ids=ids[start : start + delta])
                 books = sorted(
                     books, key=lambda x: ids.index(x["id"]) if x["id"] in ids else -1
                 )

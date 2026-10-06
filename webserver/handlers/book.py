@@ -167,7 +167,7 @@ class Index(BaseHandler):
         return data
 
     def _books_in_order(self, ids):
-        books = {b["id"]: b for b in self.get_books(ids=ids, convert_to_local_tz=False)}
+        books = {b["id"]: b for b in self.get_books_for_list(ids=ids, convert_to_local_tz=False)}
         return [books[i] for i in ids if i in books]
 
     @js
@@ -1300,7 +1300,7 @@ class BookFavorite(BaseHandler):
 
         # 批量获取所有书籍
         book_ids = [state.book_id for state in reading_states]
-        books_dict = {book['id']: book for book in self.get_books(ids=book_ids)}
+        books_dict = {book['id']: book for book in self.get_books_for_list(ids=book_ids)}
 
         # 构建书籍状态字典
         state_dict = {state.book_id: state for state in reading_states}
@@ -1372,7 +1372,7 @@ class BookWantToRead(BaseHandler):
 
         # 批量获取所有书籍
         book_ids = [state.book_id for state in reading_states]
-        books_dict = {book['id']: book for book in self.get_books(ids=book_ids)}
+        books_dict = {book['id']: book for book in self.get_books_for_list(ids=book_ids)}
 
         # 构建书籍状态字典
         state_dict = {state.book_id: state for state in reading_states}
@@ -1437,7 +1437,7 @@ class BookReading(BaseHandler):
 
         # 批量获取所有书籍
         book_ids = [state.book_id for state in reading_states]
-        books_dict = {book['id']: book for book in self.get_books(ids=book_ids)}
+        books_dict = {book['id']: book for book in self.get_books_for_list(ids=book_ids)}
 
         # 构建书籍状态字典
         state_dict = {state.book_id: state for state in reading_states}
@@ -1473,7 +1473,7 @@ class PrintBooks(BaseHandler):
             start = self.get_argument_start()
             delta = CONF.get("DEFAULT_PAGE_SIZE", 60)
             ids = all_ids[start:start + delta]
-            books = self.get_books(ids=ids)
+            books = self.get_books_for_list(ids=ids)
             books.sort(key=lambda x: ids.index(x["id"]))
 
             books_result = []
@@ -1519,7 +1519,7 @@ class BookSoled(BaseHandler):
                     Item.sole == 1
                 ).count()
 
-            books = self.get_books(ids=ids)
+            books = self.get_books_for_list(ids=ids)
             books.sort(key=lambda x: x["id"], reverse=True)
 
             books_result = []
@@ -1557,7 +1557,7 @@ class BookReadDone(BaseHandler):
 
         # 批量获取所有书籍
         book_ids = [state.book_id for state in reading_states]
-        books_dict = {book['id']: book for book in self.get_books(ids=book_ids)}
+        books_dict = {book['id']: book for book in self.get_books_for_list(ids=book_ids)}
 
         # 构建书籍状态字典
         state_dict = {state.book_id: state for state in reading_states}
