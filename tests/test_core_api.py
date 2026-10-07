@@ -87,6 +87,12 @@ class TestCoreAPINamespaces(unittest.TestCase):
         self.assertEqual(self.api.calibre.all_book_ids(), [1, 2, 3])
         self.owner.get_all_book_ids.assert_called_once()
 
+    def test_calibre_get_field_map_uses_new_api_all_field_for(self):
+        self.owner.db.new_api.all_field_for.return_value = {1: ("a",), 2: ()}
+        result = self.api.calibre.get_field_map("tags", [1, 2])
+        self.owner.db.new_api.all_field_for.assert_called_once_with("tags", [1, 2])
+        self.assertEqual(result, {1: ("a",), 2: ()})
+
     def test_calibre_set_language_forwards(self):
         self.api.calibre.set_language(5, "zh")
         self.owner.set_book_language.assert_called_once_with(5, "zh")

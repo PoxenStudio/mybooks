@@ -135,7 +135,7 @@ description: Review a MyBooks Toolbox tool's code (backend webserver/toolbox/<to
 
 | 类别 | 命名空间/方法 | 操作类型 | 说明 |
 |---|---|---|---|
-| Calibre 书库 | `CoreAPI.calibre.search_books` / `get_metadata` / `get_data_as_dict` / `cover` / `all_book_ids` / `format_abspath` / `get_custom` | 读 | |
+| Calibre 书库 | `CoreAPI.calibre.search_books` / `get_metadata` / `get_data_as_dict` / `cover` / `all_book_ids` / `format_abspath` / `get_custom` / `get_field_map` | 读 | |
 | Calibre 书库 | `CoreAPI.calibre.import_book` / `import_file` / `add_format` / `set_metadata` / `set_custom` / `set_language` / `merge_formats` | ⚠️ 写/改 | 会修改书籍元数据或新增格式文件 |
 | Calibre 书库 | `CoreAPI.calibre.delete_book` / `remove_formats` | ⚠️⚠️ 删除 | 删除书籍记录或格式文件，不可逆 |
 | 应用数据库(Reader/Item) | `CoreAPI.db.get_item_by_book_id` / `get_reader` | 读 | |
