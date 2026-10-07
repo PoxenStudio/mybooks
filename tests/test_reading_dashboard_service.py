@@ -214,6 +214,36 @@ class TestReadingDashboardService(unittest.TestCase):
         self.assertEqual(period["prev7_seconds"], 300)  # 上一个 7 天窗口只有 10 天前
         self.assertEqual(period["last30_seconds"], 1000)  # 40 天前不计入
 
+    def test_near_finish_multi_format_books_do_not_eat_slots(self):
+        """评审 P4：4 本×4 格式 + 第 5 本单格式，旧实现按格式行 LIMIT 会让前 4 本占满、丢第 5 本"""
+        now = datetime.datetime.utcnow()
+        formats = ["epub", "mobi", "azw3", "pdf"]
+        percents = {
+            20: [96.0, 95.0, 94.0, 93.0],
+            21: [92.0, 91.0, 90.0, 89.0],
+            22: [88.0, 87.0, 86.0, 85.6],
+            23: [85.5, 85.4, 85.3, 85.2],
+        }
+        for book_id, book_percents in percents.items():
+            for fmt, percent in zip(formats, book_percents):
+                self.session.add(BookReadingStats(
+                    reader_id=1, book_id=book_id, format=fmt, state=0,
+                    total_seconds=int(percent * 10), progress_percent=percent,
+                    create_time=now, update_time=now,
+                ))
+        self.session.add(BookReadingStats(
+            reader_id=1, book_id=24, format="epub", state=0,
+            total_seconds=850, progress_percent=85.0,
+            create_time=now, update_time=now,
+        ))
+        self.session.commit()
+
+        rows = svc.get_stats(self.session, self.reader)["near_finish"]
+        self.assertEqual([r["book_id"] for r in rows], [20, 21, 22, 23, 24])
+        self.assertEqual(rows[4]["progress_percent"], 85.0)
+        # total_seconds 取该本进度最高的那一行（与旧去重口径一致）
+        self.assertEqual(rows[0]["total_seconds"], 960)
+
     def test_near_finish_rows_filters_and_dedupes(self):
         now = datetime.datetime.utcnow()
 
@@ -236,6 +266,99 @@ class TestReadingDashboardService(unittest.TestCase):
         rows = svc.get_stats(self.session, self.reader)["near_finish"]
         self.assertEqual([r["book_id"] for r in rows], [12, 11])
         self.assertEqual(rows[0]["progress_percent"], 92.0)
+
+    def test_lifetime_block_persisted_and_reused_after_db_wipe(self):
+        """评审 P3-2：lifetime 聚合写进 reading.json，同日第二次请求不再扫全历史"""
+        today = datetime.datetime.utcnow().date()
+        yesterday = today - datetime.timedelta(days=1)
+        self._add_reading(yesterday, duration=60, book_id=100)
+        self._add_reading(today, duration=30, book_id=200)
+
+        stats = svc.get_stats(self.session, self.reader)
+        self.assertEqual(stats["total_days"], 2)
+        self.assertEqual(stats["total_books"], 2)
+
+        with open(svc._user_cache_path(1), encoding="utf-8") as f:
+            cache = json.load(f)
+        lifetime = cache["lifetime"]
+        self.assertEqual(lifetime["computed_through"], svc._date_str(yesterday))
+        # 缓存块只算到昨天：今天的一切由读时增量现叠
+        self.assertEqual(lifetime["total_days"], 1)
+        self.assertEqual(lifetime["total_books"], 1)
+        self.assertEqual(lifetime["first_reading_date"], svc._date_str(yesterday))
+        self.assertEqual(lifetime["streak_chain"], 1)
+        self.assertEqual(lifetime["streak_best"], 1)
+
+        # 清空数据库后同日再查：聚合值应全部来自缓存块（若还在逐请求直查 DB 会掉回 0）
+        self.session.execute(text("DELETE FROM readings"))
+        self.session.commit()
+        stats2 = svc.get_stats(self.session, self.reader)
+        self.assertEqual(stats2["total_days"], 1)
+        self.assertEqual(stats2["total_books"], 1)
+        self.assertEqual(stats2["first_reading_date"], svc._date_str(yesterday))
+        self.assertEqual(stats2["streak"], {"current": 1, "best": 1})
+
+    def test_first_read_new_book_today_counts_immediately(self):
+        """今天第一次读书：至今口径立即生效（lifetime 块里没有也照常显示）"""
+        today = datetime.datetime.utcnow().date()
+        self._add_reading(today, duration=60, book_id=300)
+
+        stats = svc.get_stats(self.session, self.reader)
+        self.assertEqual(stats["first_reading_date"], svc._date_str(today))
+        self.assertEqual(stats["total_days"], 1)
+        self.assertEqual(stats["total_books"], 1)
+        self.assertEqual(stats["streak"], {"current": 1, "best": 1})
+
+        with open(svc._user_cache_path(1), encoding="utf-8") as f:
+            cache = json.load(f)
+        self.assertEqual(cache["lifetime"]["total_books"], 0)
+        self.assertIsNone(cache["lifetime"]["first_reading_date"])
+
+    def test_new_book_today_not_double_counted_when_seen_before(self):
+        """今天读的书如果以前读过，不重复计入 total_books"""
+        today = datetime.datetime.utcnow().date()
+        long_ago = today - datetime.timedelta(days=30)
+        self._add_reading(long_ago, duration=60, book_id=400)
+        svc.get_stats(self.session, self.reader)  # 先落一份 lifetime 缓存
+        self._add_reading(today, duration=60, book_id=400)
+
+        stats = svc.get_stats(self.session, self.reader)
+        self.assertEqual(stats["total_books"], 1)
+
+    def test_backfill_invalidates_lifetime_block(self):
+        """补录改历史日后 lifetime 块作废并即时重算（reading_stats_service 补录同改 DB 行）"""
+        today = datetime.datetime.utcnow().date()
+        old_day = today - datetime.timedelta(days=5)
+        self._add_reading(old_day, duration=0)
+
+        stats1 = svc.get_stats(self.session, self.reader)
+        self.assertEqual(stats1["total_days"], 0)
+
+        row = self.session.query(Reading).filter_by(reader_id=1, date=old_day).one()
+        row.duration = 600
+        self.session.commit()
+        svc.patch_cached_day(1, old_day, 600)
+
+        with open(svc._user_cache_path(1), encoding="utf-8") as f:
+            cache = json.load(f)
+        self.assertNotIn("lifetime", cache)
+
+        stats2 = svc.get_stats(self.session, self.reader)
+        self.assertEqual(stats2["total_days"], 1)
+        self.assertEqual(stats2["first_reading_date"], svc._date_str(old_day))
+        self.assertEqual(stats2["streak"], {"current": 0, "best": 1})
+
+    def test_streak_span_broken_then_restarted_across_days(self):
+        """连击链条跨天语义：昨天=前天=连续段尾，今天没读维持；今天读了 +1"""
+        today = datetime.datetime.utcnow().date()
+        for offset in (1, 2, 3, 10):
+            self._add_reading(today - datetime.timedelta(days=offset), duration=60)
+
+        stats = svc.get_stats(self.session, self.reader)
+        self.assertEqual(stats["streak"], {"current": 3, "best": 3})
+        self._add_reading(today, duration=60)
+        stats2 = svc.get_stats(self.session, self.reader)
+        self.assertEqual(stats2["streak"], {"current": 4, "best": 4})
 
     # ---- 逐日区间查询（/api/user/reading_range）----
 
@@ -278,6 +401,9 @@ class TestReadingDashboardService(unittest.TestCase):
             svc.normalize_range("2026-09-01", "2026-09-30", today),
             (datetime.date(2026, 9, 1), datetime.date(2026, 9, 30)),
         )
+        # 评审 P6-1：整体在未来的区间，end 钳到今天后 start>end，判非法而非返回坏区间
+        self.assertIsNone(svc.normalize_range("2026-12-01", "2026-12-31", today))
+        self.assertIsNone(svc.normalize_range("2026-10-08", "2026-10-08", today))
 
 
 if __name__ == "__main__":
