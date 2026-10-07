@@ -1128,6 +1128,30 @@ class UserReadingRange(BaseHandler):
         return {"err": "ok", "enabled": True, "days": days}
 
 
+class UserReadingLeaderboard(BaseHandler):
+    """阅读时长排行榜：本周 / 本月 / 总时长三档（各取前 N 名）
+
+    全站统一榜单，与查看者无关，故无 uid/日期入参——三档窗口由服务端固定
+    （周一起本周 / 本月 / 终身累计），前端只做展示，不暴露任意区间查询。
+    """
+
+    @js
+    @auth
+    def get(self):
+        from webserver.services import reading_dashboard_service
+
+        if not CONF.get("ENABLE_HOMEPAGE_READING_STATS", True):
+            return {"err": "ok", "enabled": False}
+        board = reading_dashboard_service.get_leaderboard(self.sqlite_session)
+        return {
+            "err": "ok",
+            "enabled": True,
+            "limit": reading_dashboard_service.LEADERBOARD_LIMIT,
+            "me_reader_id": self.current_user.id,
+            **board,
+        }
+
+
 class UserExpectedItems(BaseHandler):
 
     @js
@@ -1523,6 +1547,7 @@ def routes():
         (r"/api/user/history", UserReadingHistory),
         (r"/api/user/reading_stats", UserReadingDashboard),
         (r"/api/user/reading_range", UserReadingRange),
+        (r"/api/user/reading_leaderboard", UserReadingLeaderboard),
         (r"/api/user/sign_in", SignIn),
         (r"/api/user/sign_up", SignUp),
         (r"/api/user/new", UserNew),

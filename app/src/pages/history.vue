@@ -59,7 +59,7 @@
                                 <div class="card-label">
                                     <v-icon small class="mr-1">mdi-clock-outline</v-icon>{{ $t('history.dashboard.card_weekDuration') }}
                                 </div>
-                                <div class="card-number card-number-sm">{{ formatDuration(dashboard.period.last7_seconds) }}</div>
+                                <div class="card-number card-number-sm">{{ formatDuration(dashboard.period.week_to_date_seconds) }}</div>
                                 <div class="ratio-bar">
                                     <div class="ratio-bar-fill" :style="{ background: primaryColor, width: weekRatioPercent + '%' }"></div>
                                 </div>
@@ -134,6 +134,30 @@
                                 </div>
                                 <div class="card-number card-number-sm">{{ formatDuration(periodSeconds(cardId)) }}</div>
                                 <div class="ghost-number" :style="{ color: ghostColor }">{{ cardId === 'last7' ? '7' : '30' }}</div>
+                            </template>
+
+                            <!-- 阅读时长排行（全站三档：本周/本月/总时长） -->
+                            <template v-else-if="cardId === 'leaderboard'">
+                                <div class="card-label">
+                                    <v-icon small class="mr-1">mdi-trophy-outline</v-icon>{{ $t('history.dashboard.card_leaderboard') }}
+                                </div>
+                                <div class="lb-cols" v-if="leaderboard">
+                                    <div v-for="tab in LEADERBOARD_TABS" :key="tab" class="lb-col">
+                                        <div class="lb-col-head">{{ $t('history.dashboard.lb_' + tab) }}</div>
+                                        <div
+                                            v-for="(row, i) in leaderboard[tab]"
+                                            :key="tab + '-' + row.reader_id"
+                                            class="lb-row"
+                                            :style="row.reader_id === leaderboard.me_reader_id ? lbMeStyle : null"
+                                        >
+                                            <span class="lb-rank" :class="'lb-rank-' + (i + 1)">{{ i + 1 }}</span>
+                                            <span class="lb-name">{{ row.name }}</span>
+                                            <span class="lb-sec">{{ formatDuration(row.seconds) }}</span>
+                                        </div>
+                                        <div v-if="!leaderboard[tab].length" class="lb-row lb-empty">{{ $t('history.dashboard.lbEmpty') }}</div>
+                                    </div>
+                                </div>
+                                <div class="card-sub" v-else>—</div>
                             </template>
                         </div>
                     </draggable>
@@ -331,8 +355,12 @@ const CARD_DEFS = [
     { id: 'nearFinish', wide: false },
     { id: 'last7', wide: false },
     { id: 'last30', wide: false },
+    { id: 'leaderboard', wide: true },
 ];
 const CARDS_KEY = 'mybooks_reading_dash_cards';
+
+// 阅读时长排行三档（对应后端 get_leaderboard 的返回键）
+const LEADERBOARD_TABS = ['week', 'month', 'all_time'];
 
 // Vuetify 2 的主题色存在 JS 里（ AppearanceMenu 的自定义主色也写回 currentTheme），
 // 转 rgba 方便做透明度变体；非法值原样返回兜底
@@ -417,6 +445,10 @@ export default {
         ghostColor() {
             return hexToRgba(this.primaryColor, this.isDark ? 0.28 : 0.1);
         },
+        // 排行榜里"我自己"那一行跟主色淡背景
+        lbMeStyle() {
+            return { background: hexToRgba(this.primaryColor, this.isDark ? 0.22 : 0.12) };
+        },
         // ---------- 卡片 ----------
         visibleCards: {
             get() {
@@ -454,18 +486,19 @@ export default {
             return `conic-gradient(${this.primaryColor} ${percent}%, ${track} 0)`;
         },
         weekRatioPercent() {
-            const last7 = (this.dashboard && this.dashboard.period.last7_seconds) || 0;
-            const prev7 = (this.dashboard && this.dashboard.period.prev7_seconds) || 0;
-            if (prev7 <= 0) return last7 > 0 ? 100 : 0;
-            return Math.min(100, Math.round((last7 / prev7) * 100));
+            // 与排行"本周"同口径：本周至今 vs 上周同期跨度（周一至相同星期几）
+            const week = (this.dashboard && this.dashboard.period.week_to_date_seconds) || 0;
+            const prev = (this.dashboard && this.dashboard.period.prev_week_same_span_seconds) || 0;
+            if (prev <= 0) return week > 0 ? 100 : 0;
+            return Math.min(100, Math.round((week / prev) * 100));
         },
         weekVsText() {
-            const last7 = (this.dashboard && this.dashboard.period.last7_seconds) || 0;
-            const prev7 = (this.dashboard && this.dashboard.period.prev7_seconds) || 0;
-            if (prev7 <= 0) {
-                return last7 > 0 ? this.$t('history.dashboard.noLastWeek') : this.$t('history.dashboard.vsLastWeekFlat');
+            const week = (this.dashboard && this.dashboard.period.week_to_date_seconds) || 0;
+            const prev = (this.dashboard && this.dashboard.period.prev_week_same_span_seconds) || 0;
+            if (prev <= 0) {
+                return week > 0 ? this.$t('history.dashboard.noLastWeek') : this.$t('history.dashboard.vsLastWeekFlat');
             }
-            const percent = Math.round(((last7 - prev7) / prev7) * 100);
+            const percent = Math.round(((week - prev) / prev) * 100);
             if (percent === 0) return this.$t('history.dashboard.vsLastWeekFlat');
             if (percent > 0) {
                 return this.$t('history.dashboard.vsLastWeekUp', { p: Math.min(percent, 999) });
@@ -584,6 +617,8 @@ export default {
         onlineReadingBooks: [],
         clearingHistory: false,
         dashboard: null,
+        leaderboard: null,
+        LEADERBOARD_TABS,
         cardOrder: CARD_DEFS.map((d) => d.id),
         editMode: false,
         wallsOpen: false,
@@ -653,6 +688,15 @@ export default {
             .catch(error => {
                 console.warn('Failed to load reading dashboard:', error);
                 this.dashboard = null;
+            });
+            // 阅读时长排行（全站榜单，与仪表盘同一开关门控）
+            this.$backend("/user/reading_leaderboard")
+            .then( rsp => {
+                this.leaderboard = rsp.err === 'ok' && rsp.enabled ? rsp : null;
+            })
+            .catch(error => {
+                console.warn('Failed to load reading leaderboard:', error);
+                this.leaderboard = null;
             });
         },
         // ---------- 卡片配置 ----------
@@ -1106,6 +1150,135 @@ export default {
     font-weight: bold;
     line-height: 1;
     pointer-events: none;
+}
+
+/* 阅读时长排行：三栏并列，每栏 名次徽章 + 昵称 + 时长 */
+.lb-cols {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 4px;
+    flex: 1;
+    min-height: 0;
+}
+
+.lb-col {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.lb-col-head {
+    font-size: 11px;
+    color: rgba(0, 0, 0, 0.5);
+    margin-bottom: 2px;
+    white-space: nowrap;
+}
+
+.dash-cards.is-dark .lb-col-head {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.lb-row {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    line-height: 1.5;
+    border-radius: 6px;
+    padding: 0 2px;
+}
+
+.lb-rank {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    font-size: 10px;
+    font-weight: bold;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.06);
+    color: rgba(0, 0, 0, 0.6);
+    flex: none;
+}
+
+.dash-cards.is-dark .lb-rank {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.lb-rank-1 {
+    background: #f2c14e;
+    color: #5d430c;
+}
+
+.lb-rank-2 {
+    background: #c8c9cc;
+    color: #46464a;
+}
+
+.lb-rank-3 {
+    background: #d9a066;
+    color: #5a3a1c;
+}
+
+.lb-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    color: rgba(0, 0, 0, 0.75);
+}
+
+.dash-cards.is-dark .lb-name {
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.lb-sec {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: rgba(0, 0, 0, 0.55);
+    font-size: 11px;
+}
+
+.dash-cards.is-dark .lb-sec {
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.lb-empty {
+    color: rgba(0, 0, 0, 0.35);
+    justify-content: center;
+}
+
+.dash-cards.is-dark .lb-empty {
+    color: rgba(255, 255, 255, 0.35);
+}
+
+@media (max-width: 600px) {
+    .lb-cols {
+        grid-template-columns: 1fr;
+        gap: 4px;
+    }
+    .lb-col {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px 6px;
+    }
+    .lb-col-head {
+        margin-bottom: 0;
+        margin-right: 4px;
+    }
+    .lb-row {
+        grid-template-columns: 16px auto auto;
+        padding: 0 4px;
+    }
+    .lb-name {
+        max-width: 120px;
+    }
 }
 
 /* 编辑模式 */

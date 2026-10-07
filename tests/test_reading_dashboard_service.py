@@ -179,7 +179,16 @@ class TestReadingDashboardService(unittest.TestCase):
         self.assertEqual(stats["total_days"], 0)
         self.assertEqual(stats["total_books"], 0)
         self.assertEqual(stats["streak"], {"current": 0, "best": 0})
-        self.assertEqual(stats["period"], {"last7_seconds": 0, "prev7_seconds": 0, "last30_seconds": 0})
+        self.assertEqual(
+            stats["period"],
+            {
+                "last7_seconds": 0,
+                "prev7_seconds": 0,
+                "last30_seconds": 0,
+                "week_to_date_seconds": 0,
+                "prev_week_same_span_seconds": 0,
+            },
+        )
 
     def test_lifetime_fields_and_current_streak(self):
         today = datetime.datetime.utcnow().date()
@@ -221,6 +230,27 @@ class TestReadingDashboardService(unittest.TestCase):
         self.assertEqual(period["last7_seconds"], 300)  # 今天 + 3 天前
         self.assertEqual(period["prev7_seconds"], 300)  # 上一个 7 天窗口只有 10 天前
         self.assertEqual(period["last30_seconds"], 1000)  # 40 天前不计入
+
+    def test_week_to_date_period_and_leaderboard_share_week_window(self):
+        """本周时长卡的 week_to_date == 排行榜本周同一读者同一窗口（口径一致回归钉）"""
+        today = datetime.datetime.utcnow().date()
+        week_start = svc._week_start(today)
+        # 本周内两天：周一 + 今天（今天若就是周一则用不同 book 叠加，避免同日覆盖）
+        self._add_reading(week_start, 40, book_id=101)
+        if week_start != today:
+            self._add_reading(today, 100, book_id=101)
+        # 上周同期（上周一 + 与今天同星期几）也在 readings 表，但只进 prev 口径
+        self._add_reading(week_start - datetime.timedelta(days=7), 20, book_id=102)
+
+        stats = svc.get_stats(self.session, self.reader)
+        period = stats["period"]
+        # 本周至今 = 40 + (100 若今天非周一)
+        expected_week = 40 + (100 if week_start != today else 0)
+        self.assertEqual(period["week_to_date_seconds"], expected_week)
+        # 与排行榜本周档 admin 行完全一致（同 SQL 同窗口，这是用户报的不一致点）
+        board = svc.get_leaderboard(self.session, today=today)
+        admin_row = next(e for e in board["week"] if e["reader_id"] == 1)
+        self.assertEqual(admin_row["seconds"], period["week_to_date_seconds"])
 
     def test_near_finish_multi_format_books_do_not_eat_slots(self):
         """评审 P4：4 本×4 格式 + 第 5 本单格式，旧实现按格式行 LIMIT 会让前 4 本占满、丢第 5 本"""
@@ -413,6 +443,103 @@ class TestReadingDashboardService(unittest.TestCase):
         # 评审 P6-1：整体在未来的区间，end 钳到今天后 start>end，判非法而非返回坏区间
         self.assertIsNone(svc.normalize_range("2026-12-01", "2026-12-31", today))
         self.assertIsNone(svc.normalize_range("2026-10-08", "2026-10-08", today))
+
+
+class TestReadingLeaderboard(unittest.TestCase):
+    """阅读时长排行榜三档（本周 / 本月 / 总时长）"""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.conf = loader.get_settings()
+        self._orig_sync_path = self.conf.get("MYREADER_SYNC_PATH")
+        self.conf["MYREADER_SYNC_PATH"] = self.tmp_dir
+
+        engine = create_engine("sqlite://")
+        self.session = scoped_session(sessionmaker(bind=engine, autoflush=True, autocommit=False))
+        models.bind_session(self.session)
+        models.Base.metadata.create_all(engine)
+
+        self.readers = {}
+        for i in range(1, 7):
+            r = Reader()
+            r.id = i
+            r.username = "user%d" % i
+            r.name = "" if i % 2 else "昵称%d" % i  # 偶数 id 有昵称，奇数留空试 username 兜底
+            r.total_reading_seconds = i * 100
+            self.session.add(r)
+            self.readers[i] = r
+        self.session.commit()
+
+    def tearDown(self):
+        self.session.remove()
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+        if self._orig_sync_path is None:
+            self.conf.pop("MYREADER_SYNC_PATH", None)
+        else:
+            self.conf["MYREADER_SYNC_PATH"] = self._orig_sync_path
+
+    def _add(self, reader_id, date, duration=60, action=Reading.ACTION_READ, book_id=100):
+        self.session.add(
+            Reading(reader_id, book_id, action, Reading.PROTOCOL_APP,
+                    datetime.datetime.combine(date, datetime.time()), duration=duration)
+        )
+        self.session.commit()
+
+    def test_week_ranking_sums_orders_and_falls_back_to_username(self):
+        today = datetime.datetime.utcnow().date()
+        # user1 今天跨两本书累加：60+40；user3 昨天读 200
+        self._add(1, today, 60)
+        self._add(1, today, 40, book_id=101)
+        self._add(3, today - datetime.timedelta(days=1), 200)
+        # 非 read 动作与 0 秒行不入榜
+        self._add(5, today, 9999, action=Reading.ACTION_DOWNLOAD)
+        self._add(6, today, 0)
+
+        board = svc.get_leaderboard(self.session)
+        self.assertEqual([e["reader_id"] for e in board["week"]], [3, 1])
+        self.assertEqual(board["week"][0]["seconds"], 200)
+        self.assertEqual(board["week"][1]["seconds"], 100)  # 60 + 40 累加
+        # user3 奇数 id 无昵称 → username 兜底
+        self.assertEqual(board["week"][0]["name"], "user3")
+
+    def test_all_time_uses_reader_column_and_excludes_zero(self):
+        for r in self.session.query(Reader).all():
+            r.total_reading_seconds = 0 if r.id == 2 else r.id * 100
+        self.session.commit()
+
+        board = svc.get_leaderboard(self.session)
+        self.assertEqual([e["reader_id"] for e in board["all_time"]], [6, 5, 4, 3, 1])
+        self.assertEqual(board["all_time"][0]["seconds"], 600)
+        self.assertNotIn(2, [e["reader_id"] for e in board["all_time"]])
+
+    def test_limit_caps_at_leaderboard_limit(self):
+        today = datetime.datetime.utcnow().date()
+        for i in range(1, 7):
+            self._add(i, today, i * 10)
+        board = svc.get_leaderboard(self.session)
+        self.assertEqual(len(board["week"]), svc.LEADERBOARD_LIMIT)
+        self.assertEqual(len(board["month"]), svc.LEADERBOARD_LIMIT)
+
+    def test_week_and_month_windows_are_independent(self):
+        """固定 today 到月中周三：本周内的进两榜，上周但在本月的只进月榜，上月两个都不进"""
+        today = datetime.date(2026, 6, 17)
+        week_start = today - datetime.timedelta(days=today.weekday())
+        # week_start ∈ [6-11, 6-17]（6 月 17 日无论星期几）：
+        # week_start+1 必在本周且必在 6 月；6-05 早于任何 week_start，在本月不在本周
+        self._add(1, week_start + datetime.timedelta(days=1), 10)  # 本周、本月
+        self._add(3, datetime.date(2026, 6, 5), 20)                # 本月、不在本周
+        self._add(4, datetime.date(2026, 5, 30), 30)               # 上月，两榜都不进
+
+        board = svc.get_leaderboard(self.session, today=today)
+        self.assertEqual([(e["reader_id"], e["seconds"]) for e in board["week"]], [(1, 10)])
+        self.assertEqual([(e["reader_id"], e["seconds"]) for e in board["month"]], [(3, 20), (1, 10)])
+
+    def test_no_readings_returns_empty_window_lists(self):
+        board = svc.get_leaderboard(self.session)
+        self.assertEqual(board["week"], [])
+        self.assertEqual(board["month"], [])
+        # all_time 吃 Reader 列，与 readings 表无关，此处非空
+        self.assertEqual([e["reader_id"] for e in board["all_time"]], [6, 5, 4, 3, 2, 1][:svc.LEADERBOARD_LIMIT])
 
 
 if __name__ == "__main__":
