@@ -34,7 +34,10 @@ from webserver.base.global_state import get_global_state
 from webserver.i18n import _
 
 # Core API 的语义化版本号，工具 manifest.json 里的 core_api_version 据此做兼容性检查
-CORE_API_VERSION = "1.3.0"
+# 版本与 MyBooks 发行版的对应（表示从该 MyBooks 版本起支持）：
+#   1.3.0 -> v4.3.1
+#   1.4.0 -> v4.4.2
+CORE_API_VERSION = "1.4.0"
 
 
 class _NamespaceBase:
@@ -168,6 +171,11 @@ class CalibreAPI(_NamespaceBase):
 
         Returns:
             dict 列表，含 available_formats/title 等字段，顺序与 `ids` 无关。
+
+        注意：Calibre 实现是遍历整个书库、逐条判断 `id in ids` 后才过滤，所以即使 `ids`
+        只有几本书，耗时也与书库总量成正比；`ids` 为列表时每次判断还是 O(len(ids))。
+        反复按单本调用（循环里传 `[book_id]`）会退化为 O(N²)，应一次传入全部 id；
+        只需单个字段时改用 `get_field_map`。
         """
         return self._owner.db.get_data_as_dict(ids=ids)
 
@@ -231,6 +239,25 @@ class CalibreAPI(_NamespaceBase):
             该列在该书上的值，类型取决于列本身（文本/数字/布尔/列表等）。
         """
         return self._owner.db.get_custom(book_id, label=label, index_is_id=True)
+
+    def get_field_map(self, field: str, book_ids: List[int]) -> Dict[int, Any]:
+        """批量读取同一个字段在多本书上的值，不构造完整元数据，适合全库统计。
+
+        相对 `get_data_as_dict`：后者为每本书构造包含所有字段（含格式、路径、全部自定义列等）
+        的完整 dict，书多时耗时、耗内存；本方法只读取一个字段，直接走内存缓存，开销小得多，
+        且返回 `{book_id: value}`，可按 id 直接取值。只需单个字段时优先用本方法。
+
+        Args:
+            field: Calibre 字段名。内置字段直接写名字（如 `"tags"`、`"series"`、`"languages"`）；
+                自定义列须带 `#` 前缀（如 `"#category"`），与 `get_custom` 的 label 不同。
+            book_ids: 书籍 id 列表。为空时返回空 dict，**不会**回退为全部书籍；
+                全库统计需自行传入全部 id（如 `all_book_ids()`）。
+
+        Returns:
+            `{book_id: value}`；值类型取决于字段（多值字段为 tuple，无值为 None 或空 tuple）。
+            字段不存在时抛出 `KeyError`。
+        """
+        return self._owner.db.new_api.all_field_for(field, book_ids)
 
     def set_custom(self, label: str, values: dict) -> None:
         """批量写入自定义列的值。
