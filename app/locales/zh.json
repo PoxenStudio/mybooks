@@ -1521,6 +1521,7 @@
     "storeInstall": "安装",
     "storeUpdate": "更新",
     "storeFavorite": "精选工具",
+    "storeRefresh": "刷新工具商店",
     "restartRequiredTitle": "需要重启服务",
     "restartRequiredMessage": "安装成功，需要重启服务后刷新页面才能生效，是否现在重启？",
     "restartNow": "立即重启",
