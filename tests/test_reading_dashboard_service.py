@@ -11,7 +11,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import scoped_session, sessionmaker
 
 from webserver import loader, models
-from webserver.models import Reader, Reading, ReadingState
+from webserver.models import BookReadingStats, Reader, Reading, ReadingState
 from webserver.services import reading_dashboard_service as svc
 
 
@@ -162,6 +162,122 @@ class TestReadingDashboardService(unittest.TestCase):
         days = stats["heatmap"]["days"]
         self.assertEqual(days[-1]["date"], svc._date_str(today))
         self.assertEqual(days[-1]["reading_seconds"], 300)
+
+    # ---- 阅读记录页仪表盘新增字段（first_reading_date/total_days/total_books/streak/period/near_finish）----
+
+    def test_lifetime_fields_empty_user(self):
+        stats = svc.get_stats(self.session, self.reader)
+        self.assertIsNone(stats["first_reading_date"])
+        self.assertEqual(stats["total_days"], 0)
+        self.assertEqual(stats["total_books"], 0)
+        self.assertEqual(stats["streak"], {"current": 0, "best": 0})
+        self.assertEqual(stats["period"], {"last7_seconds": 0, "prev7_seconds": 0, "last30_seconds": 0})
+
+    def test_lifetime_fields_and_current_streak(self):
+        today = datetime.datetime.utcnow().date()
+        # 昨天、前天连续 + 9 天前孤立一天（当天读了两本书）；3 天前只有 0 秒空桶不算阅读日
+        for offset in (1, 2, 9):
+            self._add_reading(today - datetime.timedelta(days=offset), duration=60)
+        self._add_reading(today - datetime.timedelta(days=9), duration=60, book_id=200)
+        self._add_reading(today - datetime.timedelta(days=3), duration=0)
+
+        stats = svc.get_stats(self.session, self.reader)
+        self.assertEqual(stats["first_reading_date"], svc._date_str(today - datetime.timedelta(days=9)))
+        self.assertEqual(stats["total_days"], 3)
+        self.assertEqual(stats["total_books"], 2)
+        # 今天还没读：从昨天往回数连续 2 天；9 天前孤立一天不影响 best
+        self.assertEqual(stats["streak"], {"current": 2, "best": 2})
+
+    def test_streak_current_resets_and_best_kept(self):
+        today = datetime.datetime.utcnow().date()
+        for offset in (5, 4, 1):
+            self._add_reading(today - datetime.timedelta(days=offset), duration=60)
+
+        stats = svc.get_stats(self.session, self.reader)
+        self.assertEqual(stats["streak"], {"current": 1, "best": 2})
+
+    def test_streak_counts_today_when_read(self):
+        today = datetime.datetime.utcnow().date()
+        for offset in (0, 1, 2):
+            self._add_reading(today - datetime.timedelta(days=offset), duration=60)
+
+        stats = svc.get_stats(self.session, self.reader)
+        self.assertEqual(stats["streak"]["current"], 3)
+
+    def test_period_sums_windows(self):
+        today = datetime.datetime.utcnow().date()
+        for offset, seconds in {0: 100, 3: 200, 10: 300, 20: 400, 40: 500}.items():
+            self._add_reading(today - datetime.timedelta(days=offset), duration=seconds)
+
+        period = svc.get_stats(self.session, self.reader)["period"]
+        self.assertEqual(period["last7_seconds"], 300)  # 今天 + 3 天前
+        self.assertEqual(period["prev7_seconds"], 300)  # 上一个 7 天窗口只有 10 天前
+        self.assertEqual(period["last30_seconds"], 1000)  # 40 天前不计入
+
+    def test_near_finish_rows_filters_and_dedupes(self):
+        now = datetime.datetime.utcnow()
+
+        def add_stats(book_id, fmt, state, percent):
+            self.session.add(
+                BookReadingStats(
+                    reader_id=1, book_id=book_id, format=fmt, state=state,
+                    total_seconds=600, progress_percent=percent,
+                    create_time=now, update_time=now,
+                )
+            )
+
+        add_stats(10, "epub", 0, 50.0)  # 进度不足，排除
+        add_stats(11, "epub", 0, 85.5)  # 入选
+        add_stats(12, "epub", 0, 92.0)  # 入选，进度最高
+        add_stats(12, "mobi", 0, 88.0)  # 同书另一格式，去重保留最高
+        add_stats(13, "epub", 1, 99.0)  # 已读完，排除
+        self.session.commit()
+
+        rows = svc.get_stats(self.session, self.reader)["near_finish"]
+        self.assertEqual([r["book_id"] for r in rows], [12, 11])
+        self.assertEqual(rows[0]["progress_percent"], 92.0)
+
+    # ---- 逐日区间查询（/api/user/reading_range）----
+
+    def test_get_range_days_buckets(self):
+        today = datetime.datetime.utcnow().date()
+        start = today - datetime.timedelta(days=6)
+        self._add_reading(today - datetime.timedelta(days=5), duration=120)
+        self._add_reading(today, duration=30)
+        self._add_reading(start, action=Reading.ACTION_DOWNLOAD)
+
+        days = svc.get_range_days(self.session, 1, start, today)
+        self.assertEqual(len(days), 7)
+        by_date = {d["date"]: d for d in days}
+        self.assertEqual(by_date[svc._date_str(today - datetime.timedelta(days=5))]["reading_seconds"], 120)
+        self.assertEqual(by_date[svc._date_str(today)]["reading_seconds"], 30)
+        self.assertEqual(by_date[svc._date_str(start)]["download_count"], 1)
+        self.assertEqual(
+            by_date[svc._date_str(today - datetime.timedelta(days=2))],
+            {"date": svc._date_str(today - datetime.timedelta(days=2)),
+             "reading_seconds": 0, "download_count": 0, "push_count": 0},
+        )
+
+    def test_normalize_range_parses_and_clamps(self):
+        today = datetime.date(2026, 10, 7)
+        # 非法输入一律 None
+        self.assertIsNone(svc.normalize_range("bad", "2026-10-01", today))
+        self.assertIsNone(svc.normalize_range("2026-10-02", "2026-10-01", today))
+        self.assertIsNone(svc.normalize_range("", "", today))
+        # end 超过今天钳到今天
+        self.assertEqual(
+            svc.normalize_range("2026-10-01", "2026-12-31", today),
+            (datetime.date(2026, 10, 1), today),
+        )
+        # 超长跨度钳到 RANGE_MAX_SPAN_DAYS
+        start, end = svc.normalize_range("2000-01-01", "2026-10-07", today)
+        self.assertEqual(end, today)
+        self.assertEqual((end - start).days, svc.RANGE_MAX_SPAN_DAYS - 1)
+        # 正常区间原样通过
+        self.assertEqual(
+            svc.normalize_range("2026-09-01", "2026-09-30", today),
+            (datetime.date(2026, 9, 1), datetime.date(2026, 9, 30)),
+        )
 
 
 if __name__ == "__main__":

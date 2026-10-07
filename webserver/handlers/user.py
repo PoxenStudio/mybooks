@@ -1057,7 +1057,75 @@ class UserReadingDashboard(BaseHandler):
         )
         if stats is None:
             return {"err": "ok", "enabled": False}
+
+        # 「即将读完」卡：service 只给 book_id/进度原始行，这里补书目信息；书已删除的跳过
+        near_books = []
+        books_by_id = {}
+        raw_rows = stats.pop("near_finish", [])
+        if raw_rows:
+            ids = [row["book_id"] for row in raw_rows]
+            books_by_id = {
+                b["id"]: b for b in self.calibre_db.get_data_as_dict(ids=ids)
+            }
+        for row in raw_rows:
+            b = books_by_id.get(row["book_id"])
+            if not b:
+                continue
+            near_books.append(
+                {
+                    "book_id": row["book_id"],
+                    "progress_percent": row["progress_percent"],
+                    "total_seconds": row["total_seconds"],
+                    "title": b.get("title"),
+                    "author": ", ".join(b.get("authors") or []),
+                    "href": "/book/%d" % row["book_id"],
+                    "thumb": self.cdn_url + "/get/thumb_240_320/%(id)s.jpg?size=240x320" % b,
+                }
+            )
+        stats["near_finish_books"] = near_books
+        stats["near_finish_avg_percent"] = (
+            round(sum(b["progress_percent"] for b in near_books) / len(near_books), 1)
+            if near_books
+            else 0.0
+        )
         return dict({"err": "ok", "enabled": True}, **stats)
+
+
+class UserReadingRange(BaseHandler):
+    """阅读记录仪表盘：任意日期区间的逐日阅读聚合（周/月/年/总四种时间档的数据源）
+
+    ?start=YYYY-MM-DD&end=YYYY-MM-DD；admin 可 ?uid= 查他人（对齐 UserReadingDashboard）。
+    解析与钳制（跨度上限 / end≤今天）统一走 reading_dashboard_service.normalize_range。
+    """
+
+    @js
+    @auth
+    def get(self):
+        from webserver.services import reading_dashboard_service
+
+        if not CONF.get("ENABLE_HOMEPAGE_READING_STATS", True):
+            return {"err": "ok", "enabled": False}
+
+        user = self.current_user
+        uid = self.get_argument("uid", "").strip()
+        if uid:
+            if not self.is_admin():
+                return {"err": "failed", "msg": "permission denied"}
+            user = self.sqlite_session.query(Reader).get(int(uid))
+            if user is None:
+                return {"err": "failed", "msg": "user not found"}
+
+        rng = reading_dashboard_service.normalize_range(
+            self.get_argument("start", ""), self.get_argument("end", ""),
+            datetime.datetime.utcnow().date(),
+        )
+        if rng is None:
+            return {"err": "failed", "msg": "invalid date range"}
+        start, end = rng
+        days = reading_dashboard_service.get_range_days(
+            self.sqlite_session, user.id, start, end
+        )
+        return {"err": "ok", "enabled": True, "days": days}
 
 
 class UserExpectedItems(BaseHandler):
@@ -1454,6 +1522,7 @@ def routes():
         (r"/api/user/messages/clear", UserMessagesClear),
         (r"/api/user/history", UserReadingHistory),
         (r"/api/user/reading_stats", UserReadingDashboard),
+        (r"/api/user/reading_range", UserReadingRange),
         (r"/api/user/sign_in", SignIn),
         (r"/api/user/sign_up", SignUp),
         (r"/api/user/new", UserNew),

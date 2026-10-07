@@ -21,7 +21,7 @@ from typing import Dict, Optional
 from sqlalchemy import text
 
 from webserver import loader
-from webserver.models import Reader, Reading, ReadingState
+from webserver.models import BookReadingStats, Reader, Reading, ReadingState
 
 CONF = loader.get_settings()
 
@@ -31,6 +31,13 @@ HEATMAP_WEEKS = 13  # 近 3 个月，见 history.vue 的阅读热力图
 # 缓存要覆盖两个消费者里更长的那个（+1 周缓冲，避免自然周边界刚好缺一天）：
 # 周图表用 DISPLAY_WEEKS，热力图用 HEATMAP_WEEKS。
 CACHE_RETENTION_DAYS = (max(DISPLAY_WEEKS, HEATMAP_WEEKS) + 1) * 7
+
+# 「即将读完」卡：在读且进度 ≥ 该百分位的书才算接近完结，取前 N 本
+NEAR_FINISH_MIN_PERCENT = 80.0
+NEAR_FINISH_LIMIT = 5
+
+# 逐日区间查询（/api/user/reading_range）的最大跨度，约 10 年
+RANGE_MAX_SPAN_DAYS = 3660
 
 
 def _user_cache_path(uid) -> str:
@@ -234,6 +241,161 @@ def _book_status(db, reader_id: int, calibre_db=None) -> Dict[str, int]:
     return status
 
 
+def _read_dates(db, reader_id: int) -> list:
+    """全部"有效阅读日"（当天累计时长 > 0），升序返回 list[date]。
+
+    供连击/阅读天数/首读日期使用；与热力图同口径——0 秒的空桶不算阅读日。
+    """
+    rows = db.execute(
+        text(
+            """
+            SELECT date, SUM(duration) AS total_duration
+            FROM readings
+            WHERE reader_id = :reader_id AND action = 'read'
+            GROUP BY date
+            HAVING total_duration > 0
+            """
+        ),
+        dict(reader_id=reader_id),
+    ).fetchall()
+    dates = []
+    for row in rows:
+        d = row.date if not isinstance(row.date, str) else datetime.datetime.strptime(row.date, "%Y-%m-%d").date()
+        dates.append(d)
+    dates.sort()
+    return dates
+
+
+def _count_read_books(db, reader_id: int) -> int:
+    row = db.execute(
+        text(
+            """
+            SELECT COUNT(DISTINCT book_id) AS cnt
+            FROM readings
+            WHERE reader_id = :reader_id AND action = 'read' AND duration > 0
+            """
+        ),
+        dict(reader_id=reader_id),
+    ).fetchone()
+    return int(row.cnt or 0)
+
+
+def _compute_streaks(dates: list, today: datetime.date) -> Dict[str, int]:
+    """current = 今天（或今天还没读时的昨天）往回数的连续阅读天数；best = 史上最长连续段。"""
+    if not dates:
+        return {"current": 0, "best": 0}
+    date_set = set(dates)
+    best = run = 1
+    for prev, cur in zip(dates, dates[1:]):
+        run = run + 1 if (cur - prev).days == 1 else 1
+        best = max(best, run)
+
+    anchor = today if today in date_set else today - datetime.timedelta(days=1)
+    if anchor not in date_set:
+        return {"current": 0, "best": best}
+    current = 0
+    d = anchor
+    while d in date_set:
+        current += 1
+        d -= datetime.timedelta(days=1)
+    return {"current": current, "best": best}
+
+
+def _period_sums(days: Dict[str, Dict], today: datetime.date) -> Dict[str, int]:
+    """近 7 天 / 上一个 7 天 / 近 30 天的阅读秒数，从已加载的逐日桶里累加（今日为实时值）。"""
+
+    def _sum(start: datetime.date, end: datetime.date) -> int:
+        total = 0
+        d = start
+        while d <= end:
+            bucket = days.get(_date_str(d))
+            if bucket:
+                total += bucket.get("reading_seconds", 0)
+            d += datetime.timedelta(days=1)
+        return total
+
+    return {
+        "last7_seconds": _sum(today - datetime.timedelta(days=6), today),
+        "prev7_seconds": _sum(today - datetime.timedelta(days=13), today - datetime.timedelta(days=7)),
+        "last30_seconds": _sum(today - datetime.timedelta(days=29), today),
+    }
+
+
+def _near_finish_rows(db, reader_id: int) -> list:
+    """在读且进度接近完结的书（去重按 book_id 取各格式里进度最高的一行），进度倒序前 N。"""
+    rows = (
+        db.query(
+            BookReadingStats.book_id,
+            BookReadingStats.progress_percent,
+            BookReadingStats.total_seconds,
+        )
+        .filter(
+            BookReadingStats.reader_id == reader_id,
+            BookReadingStats.state == BookReadingStats.STATE_READING,
+            BookReadingStats.progress_percent >= NEAR_FINISH_MIN_PERCENT,
+        )
+        .order_by(BookReadingStats.progress_percent.desc())
+        .limit(NEAR_FINISH_LIMIT * 3)
+        .all()
+    )
+    by_book: Dict[int, Dict] = {}
+    for book_id, percent, total_seconds in rows:
+        if book_id in by_book:
+            continue
+        by_book[book_id] = {
+            "book_id": book_id,
+            "progress_percent": round(float(percent or 0), 1),
+            "total_seconds": int(total_seconds or 0),
+        }
+        if len(by_book) >= NEAR_FINISH_LIMIT:
+            break
+    return list(by_book.values())
+
+
+def normalize_range(start_str, end_str, today):
+    """解析并钳制逐日查询区间：非法/倒序返回 None；end 不超过今天；跨度不超过 RANGE_MAX_SPAN_DAYS。
+
+    返回 (start, end) tuple 或 None。
+    """
+
+    def _parse(value):
+        try:
+            return datetime.datetime.strptime(value, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            return None
+
+    start = _parse(start_str)
+    end = _parse(end_str)
+    if start is None or end is None or start > end:
+        return None
+    end = min(end, today)
+    if (end - start).days >= RANGE_MAX_SPAN_DAYS:
+        start = end - datetime.timedelta(days=RANGE_MAX_SPAN_DAYS - 1)
+    return start, end
+
+
+def get_range_days(db, reader_id: int, start: datetime.date, end: datetime.date) -> list:
+    """[start, end]（含两端）逐日阅读聚合，直接查 readings 表，今天的数据天然实时。
+
+    供阅读记录页周/月/年/总四种时间档的图表使用；调用方负责钳制区间长度。
+    """
+    buckets = _query_days(db, reader_id, start, end)
+    result = []
+    d = start
+    while d <= end:
+        bucket = buckets.get(_date_str(d)) or {}
+        result.append(
+            {
+                "date": _date_str(d),
+                "reading_seconds": bucket.get("reading_seconds", 0),
+                "download_count": bucket.get("download_count", 0),
+                "push_count": bucket.get("push_count", 0),
+            }
+        )
+        d += datetime.timedelta(days=1)
+    return result
+
+
 def get_stats(db, reader: Reader, calibre_db=None) -> Optional[Dict]:
     if not CONF.get("ENABLE_HOMEPAGE_READING_STATS", True):
         return None
@@ -247,6 +409,9 @@ def get_stats(db, reader: Reader, calibre_db=None) -> Optional[Dict]:
     today_bucket = _query_days(db, reader.id, today, today)
     days.update(today_bucket)
 
+    # 全历史聚合（连击/天数/首读日）直接查库：reading.json 缓存只保留 98 天，撑不起"至今"
+    read_dates = _read_dates(db, reader.id)
+
     return {
         "totals": {
             "total_reading_seconds": reader.total_reading_seconds or 0,
@@ -256,4 +421,11 @@ def get_stats(db, reader: Reader, calibre_db=None) -> Optional[Dict]:
         "weekly": _weekly_buckets(days, today),
         "heatmap": {"weeks": HEATMAP_WEEKS, "days": _heatmap_days(days, today)},
         "book_status": _book_status(db, reader.id, calibre_db),
+        # ---- 以下为阅读记录页仪表盘新增（向后兼容，首页 banner 不消费）----
+        "first_reading_date": _date_str(read_dates[0]) if read_dates else None,
+        "total_days": len(read_dates),
+        "total_books": _count_read_books(db, reader.id),
+        "streak": _compute_streaks(read_dates, today),
+        "period": _period_sums(days, today),
+        "near_finish": _near_finish_rows(db, reader.id),
     }
