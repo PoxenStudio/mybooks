@@ -328,7 +328,7 @@ const CARD_DEFS = [
     { id: 'weekDuration', wide: true },
     { id: 'streak', wide: false },
     { id: 'currentBook', wide: true },
-    { id: 'nearFinish', wide: true },
+    { id: 'nearFinish', wide: false },
     { id: 'last7', wide: false },
     { id: 'last30', wide: false },
 ];
