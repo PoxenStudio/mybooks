@@ -14,14 +14,6 @@
                         <v-icon>mdi-pencil</v-icon>
                     </v-btn>
                 </div>
-
-                <div class="dash-hint" v-if="hintVisible">
-                    <v-icon small class="mr-2">mdi-gesture-swipe</v-icon>
-                    <span class="dash-hint-text">{{ $t('history.dashboard.hint') }}</span>
-                    <v-btn icon x-small class="ml-2" @click="dismissHint">
-                        <v-icon small>mdi-close</v-icon>
-                    </v-btn>
-                </div>
             </div>
 
             <div class="dash-cards" :class="{ 'is-dark': isDark }">
@@ -69,7 +61,7 @@
                                 </div>
                                 <div class="card-number card-number-sm">{{ formatDuration(dashboard.period.last7_seconds) }}</div>
                                 <div class="ratio-bar">
-                                    <div class="ratio-bar-fill" :style="{ width: weekRatioPercent + '%' }"></div>
+                                    <div class="ratio-bar-fill" :style="{ background: primaryColor, width: weekRatioPercent + '%' }"></div>
                                 </div>
                                 <div class="card-sub">{{ weekVsText }}</div>
                             </template>
@@ -101,12 +93,12 @@
                                         <div class="current-book-meta">
                                             <div class="current-book-title">{{ currentBook.title }}</div>
                                             <div class="current-book-author">{{ currentBook.author }}</div>
+                                            <v-btn small text color="primary" class="px-0 continue-btn" :to="'/book/' + currentBook.id">
+                                                {{ $t('readingState.reading') }}
+                                                <v-icon small right>mdi-chevron-right</v-icon>
+                                            </v-btn>
                                         </div>
                                     </div>
-                                    <v-btn small text color="primary" class="px-0 continue-btn" :to="'/book/' + currentBook.id">
-                                        {{ $t('readingState.reading') }}
-                                        <v-icon small right>mdi-chevron-right</v-icon>
-                                    </v-btn>
                                 </template>
                                 <div class="card-sub" v-else>{{ $t('history.dashboard.noCurrentBook') }}</div>
                             </template>
@@ -126,7 +118,7 @@
                                     <div class="near-finish-list">
                                         <div v-for="b in nearFinishBooks.slice(0, 3)" :key="b.book_id" class="near-finish-item">
                                             <span class="near-finish-title">{{ b.title }}</span>
-                                            <span class="near-finish-percent">{{ b.progress_percent }}%</span>
+                                            <span class="near-finish-percent" :style="{ color: primaryColor }">{{ b.progress_percent }}%</span>
                                         </div>
                                     </div>
                                 </div>
@@ -140,7 +132,7 @@
                                     {{ $t(cardId === 'last7' ? 'history.dashboard.card_last7' : 'history.dashboard.card_last30') }}
                                 </div>
                                 <div class="card-number card-number-sm">{{ formatDuration(periodSeconds(cardId)) }}</div>
-                                <div class="ghost-number">{{ cardId === 'last7' ? '7' : '30' }}</div>
+                                <div class="ghost-number" :style="{ color: ghostColor }">{{ cardId === 'last7' ? '7' : '30' }}</div>
                             </template>
                         </div>
                     </draggable>
@@ -334,13 +326,26 @@ const CARD_DEFS = [
     { id: 'totalBooks', wide: false },
     { id: 'weekDuration', wide: true },
     { id: 'streak', wide: false },
-    { id: 'currentBook', wide: false },
+    { id: 'currentBook', wide: true },
     { id: 'nearFinish', wide: true },
     { id: 'last7', wide: false },
     { id: 'last30', wide: false },
 ];
 const CARDS_KEY = 'mybooks_reading_dash_cards';
-const HINT_KEY = 'mybooks_reading_dash_hint_dismissed';
+
+// Vuetify 2 的主题色存在 JS 里（ AppearanceMenu 的自定义主色也写回 currentTheme），
+// 转 rgba 方便做透明度变体；非法值原样返回兜底
+function hexToRgba(hex, alpha) {
+    const raw = (hex || '#1976d2').trim();
+    let h = raw.replace('#', '');
+    if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+    const num = parseInt(h, 16);
+    if (Number.isNaN(num) || (num >>> 0) > 0xffffff) return raw;
+    const r = (num >> 16) & 255;
+    const g = (num >> 8) & 255;
+    const b = num & 255;
+    return `rgba(${r},${g},${b},${alpha})`;
+}
 
 function toDate(dateStr) {
     return new Date(`${dateStr}T00:00:00`);
@@ -404,13 +409,12 @@ export default {
         firstReadingDate() {
             return (this.dashboard && this.dashboard.first_reading_date) || null;
         },
-        hintVisible() {
-            if (process.server) return false;
-            try {
-                return !window.localStorage.getItem(HINT_KEY);
-            } catch (e) {
-                return false;
-            }
+        primaryColor() {
+            const theme = (this.$vuetify && this.$vuetify.theme && this.$vuetify.theme.currentTheme) || {};
+            return theme.primary || '#1976d2';
+        },
+        ghostColor() {
+            return hexToRgba(this.primaryColor, this.isDark ? 0.28 : 0.1);
         },
         // ---------- 卡片 ----------
         visibleCards: {
@@ -446,7 +450,7 @@ export default {
         ringGradient() {
             const percent = Math.max(0, Math.min(100, this.nearFinishAvg));
             const track = this.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)';
-            return `conic-gradient(#1976d2 ${percent}%, ${track} 0)`;
+            return `conic-gradient(${this.primaryColor} ${percent}%, ${track} 0)`;
         },
         weekRatioPercent() {
             const last7 = (this.dashboard && this.dashboard.period.last7_seconds) || 0;
@@ -523,7 +527,7 @@ export default {
                 datasets: [{
                     label: this.$t('history.dashboard.duration'),
                     data: values,
-                    backgroundColor: 'rgba(33,150,243,0.75)',
+                    backgroundColor: hexToRgba(this.primaryColor, 0.75),
                     borderRadius: 6,
                 }],
             };
@@ -704,14 +708,6 @@ export default {
             }
             return this.$t('book.readingStats.durationHoursMinutes', { hours, minutes });
         },
-        dismissHint() {
-            try {
-                window.localStorage.setItem(HINT_KEY, '1');
-            } catch (e) {
-                /* ignore */
-            }
-            this.$forceUpdate();
-        },
         // ---------- 周/月/年/总 ----------
         resetAnchor() {
             const today = new Date();
@@ -828,22 +824,6 @@ export default {
     color: rgba(255, 255, 255, 0.55);
 }
 
-.dash-hint {
-    display: flex;
-    align-items: center;
-    margin-top: 10px;
-    padding: 8px 12px;
-    border-radius: 10px;
-    background: rgba(25, 118, 210, 0.08);
-    color: rgba(0, 0, 0, 0.65);
-    font-size: 13px;
-}
-
-.dash-header.is-dark .dash-hint {
-    background: rgba(25, 118, 210, 0.18);
-    color: rgba(255, 255, 255, 0.75);
-}
-
 /* ═══ 卡片网格 ═══ */
 .dash-cards {
     margin-bottom: 8px;
@@ -950,7 +930,6 @@ export default {
 .ratio-bar-fill {
     height: 100%;
     border-radius: 3px;
-    background: #1976d2;
     transition: width 0.4s ease;
 }
 
@@ -963,20 +942,22 @@ export default {
     line-height: 1.5;
 }
 
-/* 在读的书 */
+/* 在读的书（宽卡：大封面 + 竖排信息） */
 .current-book {
     display: flex;
-    gap: 10px;
+    gap: 14px;
     margin-top: 10px;
     min-width: 0;
+    align-items: center;
 }
 
 .current-book-cover {
-    width: 42px;
-    min-width: 42px;
-    height: 60px;
-    border-radius: 4px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    width: 64px;
+    min-width: 64px;
+    height: 96px;
+    border-radius: 6px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+    flex: none;
 }
 
 .current-book-meta {
@@ -987,25 +968,27 @@ export default {
 }
 
 .current-book-title {
-    font-size: 13px;
-    font-weight: 500;
+    font-size: 16px;
+    font-weight: 600;
     color: rgba(0, 0, 0, 0.87);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    line-height: 1.4;
 }
 
 .dash-cards.is-dark .current-book-title {
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(255, 255, 255, 0.92);
 }
 
 .current-book-author {
-    font-size: 11px;
+    font-size: 12px;
     color: rgba(0, 0, 0, 0.5);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    margin-top: 2px;
 }
 
 .dash-cards.is-dark .current-book-author {
@@ -1100,26 +1083,20 @@ export default {
 }
 
 .near-finish-percent {
-    color: #1976d2;
     font-weight: 500;
     min-width: 38px;
     text-align: right;
 }
 
-/* 近 7 天 / 近 30 天的底纹大数字 */
+/* 近 7 天 / 近 30 天的底纹大数字（颜色跟主色，见模板内联样式） */
 .ghost-number {
     position: absolute;
     right: 10px;
     bottom: -12px;
     font-size: 68px;
     font-weight: bold;
-    color: rgba(25, 118, 210, 0.08);
     line-height: 1;
     pointer-events: none;
-}
-
-.dash-cards.is-dark .ghost-number {
-    color: rgba(25, 118, 210, 0.25);
 }
 
 /* 编辑模式 */
