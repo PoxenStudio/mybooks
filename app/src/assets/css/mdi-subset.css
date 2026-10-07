@@ -1114,6 +1114,10 @@
   content: "\F05CA";
 }
 
+.mdi-trophy-outline::before {
+  content: "\F053A";
+}
+
 .mdi-unfold-more-horizontal::before {
   content: "\F054F";
 }

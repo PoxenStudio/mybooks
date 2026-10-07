@@ -43,6 +43,9 @@ NEAR_FINISH_LIMIT = 5
 # 逐日区间查询（/api/user/reading_range）的最大跨度，约 10 年
 RANGE_MAX_SPAN_DAYS = 3660
 
+# 阅读时长排行榜（/api/user/reading_leaderboard）每档取前 N 名
+LEADERBOARD_LIMIT = 5
+
 
 def _user_cache_path(uid) -> str:
     return os.path.join(
@@ -382,6 +385,26 @@ def _period_sums(days: Dict[str, Dict], today: datetime.date) -> Dict[str, int]:
     }
 
 
+def _read_seconds_between(db, reader_id: int, start: datetime.date, end: datetime.date) -> int:
+    """单用户 [start, end]（含）read 时长求和，直查库（走 (reader_id, date) 索引单点）。
+
+    自然周窗口（本周至今 / 上周同期）专用：与排行榜同源同口径——不能走 reading.json
+    的 days 缓存，那对"缓存已推进后才落库的过去日行"（补录外的直改库）会漏算，
+    导致同屏"本周时长"卡与排行榜"本周"数字不一致。
+    """
+    row = db.execute(
+        text(
+            """
+            SELECT SUM(duration) AS total
+            FROM readings
+            WHERE reader_id = :reader_id AND action = 'read' AND date BETWEEN :start AND :end
+            """
+        ),
+        dict(reader_id=reader_id, start=start, end=end),
+    ).fetchone()
+    return int(row.total or 0)
+
+
 def _near_finish_rows(db, reader_id: int) -> list:
     """在读且进度接近完结的书：先按 book_id 分组取各格式里的最高进度，再按书倒序取前 N。
 
@@ -483,6 +506,76 @@ def get_range_days(db, reader_id: int, start: datetime.date, end: datetime.date)
     return result
 
 
+def _rank_seconds(db, start: datetime.date, end: datetime.date, limit: int) -> list:
+    """[start, end]（含）内按 reader 聚合的阅读时长排行。
+
+    跨用户聚合在本表组上没有合适索引（前导列是 reader_id），但这是小规模库
+    的榜单查询，直接全表 GROUP BY，不做缓存（口径经用户确认）。JOIN readers
+    顺带取名：显示优先昵称（name），兜底 username，与书评口径一致。
+    """
+    rows = db.execute(
+        text(
+            """
+            SELECT readings.reader_id AS reader_id,
+                   readers.username AS username,
+                   readers.name AS name,
+                   SUM(readings.duration) AS total
+            FROM readings
+            JOIN readers ON readers.id = readings.reader_id
+            WHERE readings.action = 'read' AND readings.date BETWEEN :start AND :end
+            GROUP BY readings.reader_id
+            HAVING total > 0
+            ORDER BY total DESC
+            LIMIT :limit
+            """
+        ),
+        dict(start=start, end=end, limit=limit),
+    ).fetchall()
+    return [
+        {
+            "reader_id": row.reader_id,
+            "name": row.name or row.username or "",
+            "seconds": int(row.total or 0),
+        }
+        for row in rows
+    ]
+
+
+def get_leaderboard(db, today: Optional[datetime.date] = None) -> Dict:
+    """阅读时长排行榜三档：本周（周一起，UTC 日口径）/ 本月 / 总时长。
+
+    总时长直接吃 Reader.total_reading_seconds 累计列（read 心跳维护，见 models.py），
+    零聚合成本；本周/本月为 _rank_seconds 聚合。各档取前 LEADERBOARD_LIMIT 名。
+    `today` 仅供测试注入固定时钟，默认取 UTC 今天。
+    """
+    today = today or datetime.datetime.utcnow().date()
+    all_time = db.execute(
+        text(
+            """
+            SELECT id AS reader_id, username AS username, name AS name,
+                   total_reading_seconds AS total
+            FROM readers
+            WHERE total_reading_seconds > 0
+            ORDER BY total_reading_seconds DESC
+            LIMIT :limit
+            """
+        ),
+        dict(limit=LEADERBOARD_LIMIT),
+    ).fetchall()
+    return {
+        "week": _rank_seconds(db, _week_start(today), today, LEADERBOARD_LIMIT),
+        "month": _rank_seconds(db, today.replace(day=1), today, LEADERBOARD_LIMIT),
+        "all_time": [
+            {
+                "reader_id": row.reader_id,
+                "name": row.name or row.username or "",
+                "seconds": int(row.total or 0),
+            }
+            for row in all_time
+        ],
+    }
+
+
 def get_stats(db, reader: Reader, calibre_db=None) -> Optional[Dict]:
     if not CONF.get("ENABLE_HOMEPAGE_READING_STATS", True):
         return None
@@ -514,6 +607,17 @@ def get_stats(db, reader: Reader, calibre_db=None) -> Optional[Dict]:
         cache["lifetime"] = lifetime
         _save_cache(reader.id, cache)
 
+    # 自然周两口径（本周至今 / 上周同期跨度）直查库：与排行榜"本周"同源同窗口，
+    # 不走 days 缓存——"本周时长"卡与排行同屏，两个"本周"必须给同一个数字
+    week_start = _week_start(today)
+    prev_week_start = week_start - datetime.timedelta(days=7)
+    span_days = (today - week_start).days
+    period = _period_sums(days, today)
+    period["week_to_date_seconds"] = _read_seconds_between(db, reader.id, week_start, today)
+    period["prev_week_same_span_seconds"] = _read_seconds_between(
+        db, reader.id, prev_week_start, prev_week_start + datetime.timedelta(days=span_days)
+    )
+
     # 恒等式：streak_chain 恰好止于 cached_through（= 昨天）。今天读了则连击 +1
     # （昨天没读时 chain=0，+1 恰为 1）；今天没读则连击原样维持。
     read_today = (days.get(_date_str(today)) or {}).get("reading_seconds", 0) > 0
@@ -543,6 +647,6 @@ def get_stats(db, reader: Reader, calibre_db=None) -> Optional[Dict]:
         "total_days": lifetime["total_days"] + (1 if read_today else 0),
         "total_books": total_books,
         "streak": {"current": streak_current, "best": streak_best},
-        "period": _period_sums(days, today),
+        "period": period,
         "near_finish": _near_finish_rows(db, reader.id),
     }
