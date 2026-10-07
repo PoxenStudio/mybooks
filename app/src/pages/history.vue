@@ -473,8 +473,9 @@ export default {
             },
             set(value) {
                 // 自动隐藏期间拖动别的卡：draggable 回传的数组不含 leaderboard，
-                // 若直接写入会把它从用户配置里永久抹掉。按原位置补回，保证以后
-                // 有第二个读者时卡片能回到原位。
+                // 直接写入会把它从配置里抹掉——且 seen 机制下它"已被见过"，刷新后
+                // 也不会再自动补回，等同于永久删除。按原位置补回，保证以后
+                // 出现第二个读者时卡片能回到原位。
                 if (this.leaderboardAutoHidden && !value.includes('leaderboard')) {
                     const idx = this.cardOrder.indexOf('leaderboard');
                     if (idx >= 0) {
@@ -736,6 +737,26 @@ export default {
             const uid = (this.user && this.user.username) || 'anon';
             return `${CARDS_KEY}_${uid}`;
         },
+        seenStorageKey() {
+            const uid = (this.user && this.user.username) || 'anon';
+            return `${CARDS_KEY}_seen_${uid}`;
+        },
+        loadSeen() {
+            try {
+                const raw = window.localStorage.getItem(this.seenStorageKey());
+                const seen = raw ? JSON.parse(raw) : null;
+                return Array.isArray(seen) ? seen : null;
+            } catch (e) {
+                return null;
+            }
+        },
+        saveSeen(ids) {
+            try {
+                window.localStorage.setItem(this.seenStorageKey(), JSON.stringify(ids));
+            } catch (e) {
+                /* localStorage 不可用时静默降级 */
+            }
+        },
         loadCardConfig() {
             let order = null;
             try {
@@ -744,13 +765,21 @@ export default {
             } catch (e) {
                 order = null;
             }
-            if (Array.isArray(order)) {
-                const valid = order.filter((id) => CARD_DEFS.some((d) => d.id === id));
-                const missing = CARD_DEFS.map((d) => d.id).filter((id) => !valid.includes(id));
-                this.cardOrder = valid.concat(missing);
-            } else {
-                this.cardOrder = CARD_DEFS.map((d) => d.id);
+            const allIds = CARD_DEFS.map((d) => d.id);
+            if (!Array.isArray(order)) {
+                this.cardOrder = allIds.slice();
+                this.saveSeen(allIds.slice());
+                return;
             }
+            const valid = order.filter((id) => allIds.includes(id));
+            // seen 清单 = 用户已经接触过的卡。只有"没见过"的卡（版本新增）才补进布局；
+            // 手动删除的卡在 seen 里但不在 order 里 → 保持删除，刷新不复活。
+            // seen 缺失的旧配置：把当前 order 当作已知范围迁移——升级那次刷新仍会把
+            // 当时全部的 CARD_DEFS 补齐（维持旧 merge 行为），此后删除才真正持久。
+            const seen = this.loadSeen() || valid;
+            const fresh = allIds.filter((id) => !seen.includes(id) && !valid.includes(id));
+            this.cardOrder = valid.concat(fresh);
+            this.saveSeen(Array.from(new Set(seen.concat(this.cardOrder))));
         },
         saveCardConfig() {
             try {
