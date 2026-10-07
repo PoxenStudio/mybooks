@@ -45,6 +45,12 @@ class QuotaResult(NamedTuple):
 
 
 class DownloadQuotaService:
+    # 同一用户同一本书同一格式在窗口期内的多次请求（分段、续传、重试）只算一次下载
+    CHARGE_WINDOW = 600
+    _CHARGED_MAX = 2048
+    _charged = {}
+    _charged_guard = threading.Lock()
+
     _locks_guard = threading.Lock()
     _reader_locks = {}
 
@@ -128,3 +134,29 @@ class DownloadQuotaService:
         last_day = datetime.datetime.fromtimestamp(last_download).date() if last_download else None
         used = downloads.get("download", 0) if last_day == today else 0
         return QuotaResult(True, used, quota)
+
+    @classmethod
+    def charge(cls, reader: Reader, book_id, fmt: str, protocol: str, consume_quota: bool = True) -> QuotaResult:
+        """一次真实下载的统一入口：窗口期内去重 -> （可选）扣配额 -> 记录下载统计。
+
+        窗口期内重复请求返回allowed=True且不再扣配额/记统计；配额不足返回allowed=False，
+        此时既不记统计也不占用窗口，调用方负责拒绝本次下载。
+        """
+        from webserver.services.reading_stats_service import ReadingStatsService
+
+        key = (reader.id, int(book_id), str(fmt).lower())
+        now = time.time()
+        with cls._charged_guard:
+            if cls._charged.get(key, 0) >= now:
+                cls._charged[key] = now + cls.CHARGE_WINDOW
+                return cls.get_usage(reader)
+        result = cls.check_and_consume(reader) if consume_quota else cls.get_usage(reader)
+        if not result.allowed:
+            return result
+        ReadingStatsService.record_download(reader.id, int(book_id), protocol)
+        with cls._charged_guard:
+            if len(cls._charged) >= cls._CHARGED_MAX:
+                for stale in [k for k, expire in cls._charged.items() if expire < now]:
+                    del cls._charged[stale]
+            cls._charged[key] = now + cls.CHARGE_WINDOW
+        return result

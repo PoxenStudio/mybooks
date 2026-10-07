@@ -2255,27 +2255,16 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
 
     DOWNLOAD_CACHE_TTL = 60
     DOWNLOAD_CACHE_MAX = 512
-    DOWNLOAD_CHARGE_WINDOW = 600
     _download_cache = {}
-    _charged = {}
 
     def _charge_download(self, bid, fmt):
         """同一用户同一本书同一格式在窗口期内的多次请求（分段、续传、重试）只扣一次配额；HEAD 不扣。"""
         if not self.current_user or self.request.method == "HEAD":
             return
-        key = (self.current_user.id, bid, fmt)
-        now = time.time()
-        charged = BookDownload._charged
-        if charged.get(key, 0) < now:
-            result = DownloadQuotaService.check_and_consume(self.current_user)
-            if not result.allowed:
-                raise web.HTTPError(429, reason=_("今日下载次数已达上限(%d/%d)，请明天再试") % (result.used, result.quota))
-            protocol = Reading.PROTOCOL_OPDS if self.is_opds else Reading.PROTOCOL_WEB
-            ReadingStatsService.record_download(self.current_user.id, int(bid), protocol)
-            if len(charged) >= 4 * self.DOWNLOAD_CACHE_MAX:
-                for stale in [k for k, expire in charged.items() if expire < now]:
-                    del charged[stale]
-        charged[key] = now + self.DOWNLOAD_CHARGE_WINDOW
+        protocol = Reading.PROTOCOL_OPDS if self.is_opds else Reading.PROTOCOL_WEB
+        result = DownloadQuotaService.charge(self.current_user, bid, fmt, protocol)
+        if not result.allowed:
+            raise web.HTTPError(429, reason=_("今日下载次数已达上限(%d/%d)，请明天再试") % (result.used, result.quota))
 
     def parse_url_path(self, url_path: str) -> str:
         filename = url_path.split("/")[-1]
