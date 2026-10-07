@@ -124,6 +124,9 @@
       <v-row class="mt-6 mb-2" align="center">
         <v-col>
           <span class="text-h6 font-weight-bold">{{ $t('toolbox.storeTitle') }}</span>
+          <v-btn icon small class="ml-1" :title="$t('toolbox.storeRefresh')" :loading="storeLoading" @click="fetchStore(true)">
+            <v-icon small>mdi-refresh</v-icon>
+          </v-btn>
           <div class="text-caption mt-1 store-subtitle" v-html="$t('toolbox.storeSubtitle')"></div>
         </v-col>
       </v-row>
@@ -385,10 +388,10 @@ export default {
         this.loading = false;
       }
     },
-    async fetchStore() {
+    async fetchStore(refresh = false) {
       this.storeLoading = true;
       try {
-        const storeRsp = await this.$backend("/toolbox/store/index");
+        const storeRsp = await this.$backend(refresh ? "/toolbox/store/index?refresh=1" : "/toolbox/store/index");
         this.storeTools = (storeRsp && storeRsp.err === "ok" && storeRsp.tools) || [];
       } catch (e) {
         // 商店索引是锦上添花的区块，加载失败不影响上面的工具列表，静默忽略即可。

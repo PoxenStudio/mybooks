@@ -1520,6 +1520,7 @@
     "storeInstall": "Install",
     "storeUpdate": "Update",
     "storeFavorite": "Featured tool",
+    "storeRefresh": "Refresh tool store",
     "restartRequiredTitle": "Restart Required",
     "restartRequiredMessage": "Succeed installed. A restart is required for this to take effect. Restart now?",
     "restartNow": "Restart Now",
