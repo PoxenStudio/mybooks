@@ -273,20 +273,6 @@ def _read_dates(db, reader_id: int, end: Optional[datetime.date] = None) -> list
     return dates
 
 
-def _count_read_books(db, reader_id: int, end: Optional[datetime.date] = None) -> int:
-    sql = (
-        "SELECT COUNT(DISTINCT book_id) AS cnt"
-        " FROM readings"
-        " WHERE reader_id = :reader_id AND action = 'read' AND duration > 0"
-    )
-    params = {"reader_id": reader_id}
-    if end is not None:
-        sql += " AND date <= :end"
-        params["end"] = end
-    row = db.execute(text(sql), params).fetchone()
-    return int(row.cnt or 0)
-
-
 def _compute_streaks(dates: list, today: datetime.date) -> Dict[str, int]:
     """current = 今天（或今天还没读时的昨天）往回数的连续阅读天数；best = 史上最长连续段。"""
     if not dates:
@@ -324,53 +310,56 @@ def _chain_ending_at(dates: list, end: datetime.date) -> int:
 def _compute_lifetime(db, reader_id: int, through: datetime.date) -> Dict:
     """截至 `through`（含）的全历史聚合，写进 reading.json 的 lifetime 块。
 
-    这是全历史扫描（重度用户实测 ~80ms），只随 cached_through 每日推进时重算一次；
+    这是全历史扫描（重度用户实测 ~80ms），只随 cached_through 每日推进重算一次；
     streak_chain 存"恰好止于 through 的连续段"，今天开读与否由 get_stats 现叠。
+    本数存 book_ids 集合而非计数：今天首读的书用纯内存差集并入"读过 N 本"，
+    避免逐请求再查一遍 `date < today` 的回表历史行（评审一轮 P3-3：那样重度用户
+    实测每请求 28.8ms，热路径成本等于没修）。
     """
     read_dates = _read_dates(db, reader_id, end=through)
     streaks = _compute_streaks(read_dates, through)
+    book_rows = db.execute(
+        text(
+            """
+            SELECT DISTINCT book_id
+            FROM readings
+            WHERE reader_id = :reader_id AND action = 'read' AND duration > 0
+              AND date <= :end
+            """
+        ),
+        dict(reader_id=reader_id, end=through),
+    ).fetchall()
     return {
         "computed_through": _date_str(through),
         "first_reading_date": _date_str(read_dates[0]) if read_dates else None,
         "total_days": len(read_dates),
-        "total_books": _count_read_books(db, reader_id, end=through),
+        "book_ids": sorted(row.book_id for row in book_rows),
         "streak_best": streaks["best"],
         "streak_chain": _chain_ending_at(read_dates, through),
     }
 
 
-def _new_books_today(db, reader_id: int, today: datetime.date) -> int:
-    """今天首次（时长 > 0）阅读的书数。lifetime.total_books 只算到昨天，不补的话
-    第一次读一本新书的当天"读过 N 本"会少一本。两次查询都走 (reader_id, book_id)
-    前缀的索引，规模是当天读过的本数，且只在今天确实有阅读时执行。"""
-    today_ids = [
-        book_id
-        for (book_id,) in db.query(Reading.book_id)
-        .filter(
-            Reading.reader_id == reader_id,
-            Reading.action == Reading.ACTION_READ,
-            Reading.date == today,
-            Reading.duration > 0,
-        )
-        .distinct()
-        .all()
-    ]
-    if not today_ids:
-        return 0
-    prior_ids = {
-        book_id
-        for (book_id,) in db.query(Reading.book_id)
-        .filter(
-            Reading.reader_id == reader_id,
-            Reading.action == Reading.ACTION_READ,
-            Reading.date < today,
-            Reading.duration > 0,
-            Reading.book_id.in_(today_ids),
-        )
-        .distinct()
-        .all()
-    }
-    return len([b for b in today_ids if b not in prior_ids])
+def _today_read_book_ids(db, reader_id: int, today: datetime.date) -> list:
+    """今天读了（时长 > 0）的 book_id 列表。是否"新书"由调用方与 lifetime.book_ids
+    做内存差集，不再逐请求回表扫历史（评审一轮 P3-3）。
+
+    INDEXED BY 是刻意的：这组表上 SQLite 的启发式代价会在"reader_id=? AND date=?"
+    上错挑 ux_readings_read / ix_readings_reader_book_action 只用到 reader_id 前缀，
+    实测退化成整用户历史扫描（2.5~30ms/请求）。(reader_id, date) 单点才是今天桶的
+    正确形态（个位数行）。索引由 async_service.adjust_readings_table 启动时必建，
+    与 ReadingWriteBuffer upsert 依赖的部分唯一索引同一 DDL 步骤，可信赖存在。
+    """
+    rows = db.execute(
+        text(
+            """
+            SELECT DISTINCT book_id
+            FROM readings INDEXED BY ix_readings_reader_date
+            WHERE reader_id = :reader_id AND date = :today AND action = 'read' AND duration > 0
+            """
+        ),
+        dict(reader_id=reader_id, today=today),
+    ).fetchall()
+    return [row.book_id for row in rows]
 
 
 def _period_sums(days: Dict[str, Dict], today: datetime.date) -> Dict[str, int]:
@@ -513,7 +502,7 @@ def get_stats(db, reader: Reader, calibre_db=None) -> Optional[Dict]:
     # 保留 98 天，lifetime 块则扫全表算的就是"至今"。
     cached_through = cache.get("cached_through")
     lifetime = cache.get("lifetime")
-    if not isinstance(lifetime, dict) or lifetime.get("computed_through") != cached_through:
+    if not isinstance(lifetime, dict) or lifetime.get("computed_through") != cached_through or not isinstance(lifetime.get("book_ids"), list):
         # _reconcile 之后 cached_through 恒为"昨天"的合法日期串；异常缺失时钳到昨天，
         # 让今天的增量仍走统一的现叠口径（若算到今天再叠会双计今天）
         through = (
@@ -530,12 +519,15 @@ def get_stats(db, reader: Reader, calibre_db=None) -> Optional[Dict]:
     read_today = (days.get(_date_str(today)) or {}).get("reading_seconds", 0) > 0
     streak_current = lifetime["streak_chain"] + 1 if read_today else lifetime["streak_chain"]
     streak_best = max(lifetime["streak_best"], streak_current)
-    total_books = lifetime["total_books"]
+    read_book_ids = set(lifetime["book_ids"])
     first_reading_date = lifetime["first_reading_date"]
     if read_today:
-        total_books += _new_books_today(db, reader.id, today)
+        new_books = [b for b in _today_read_book_ids(db, reader.id, today) if b not in read_book_ids]
+        total_books = len(read_book_ids) + len(new_books)
         if first_reading_date is None:
             first_reading_date = _date_str(today)
+    else:
+        total_books = len(read_book_ids)
 
     return {
         "totals": {
