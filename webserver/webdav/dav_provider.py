@@ -9,7 +9,7 @@ from io import BytesIO
 from urllib.parse import unquote
 from wsgidav.dav_provider import DAVProvider, DAVCollection, DAVNonCollection
 from wsgidav.fs_dav_provider import FilesystemProvider
-from wsgidav.dav_error import DAVError
+from wsgidav.dav_error import DAVError, HTTP_FORBIDDEN
 from webserver import loader
 
 CONF = loader.get_settings()
@@ -137,8 +137,13 @@ class WebDavResource(DAVNonCollection):
             user = self.environ.get("mybooks.user")
             if user is not None:
                 from webserver.models import Reading
-                from webserver.services.reading_stats_service import ReadingStatsService
-                ReadingStatsService.record_download(user.id, self.id, Reading.PROTOCOL_WEBDAV)
+                from webserver.services.download_quota_service import DownloadQuotaService
+                result = DownloadQuotaService.charge(user, self.id, self.fmt, Reading.PROTOCOL_WEBDAV)
+                if not result.allowed:
+                    raise DAVError(
+                        HTTP_FORBIDDEN,
+                        context_info=_("今日下载次数已达上限(%d/%d)，请明天再试") % (result.used, result.quota),
+                    )
             return open(self.file_path, "rb")
         # Return an empty BytesIO object instead of raw bytes
         return BytesIO(b"")

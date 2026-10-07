@@ -169,6 +169,9 @@
                   >
                     <v-icon small>mdi-link</v-icon>
                   </v-btn>
+                  <span v-if="entry.author" class="text-caption grey--text mr-2">
+                    <v-icon x-small>mdi-account-outline</v-icon> {{ entry.author }}
+                  </span>
                   <v-chip x-small outlined>v{{ entry.latest_revision }}</v-chip>
                 </div>
                 <v-btn
