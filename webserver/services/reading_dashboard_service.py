@@ -7,7 +7,11 @@ Feeds off webserver.models.Reading/Reader/ReadingState (written by
 reading_stats_service.ReadingWriteBuffer). Historical (already-closed) daily
 buckets are cached per-user in `<MYREADER_SYNC_PATH>/<uid>/reading.json`, and
 only rewritten once a day when the cache falls behind "yesterday" — today's
-data is always computed live and never persisted.
+data is always computed live and never persisted. The "lifetime" block (streak
+/ total days / total books / first reading date, read up to yesterday) lives in
+the same file and is likewise recomputed only when cached_through advances, so
+the full-history scans behind it cost one request per user per day, not every
+homepage hit; today's deltas ride on top at read time.
 
 See document/Reading_Dashboard_Design.md for the full design.
 """
@@ -18,7 +22,7 @@ import logging
 import os
 from typing import Dict, Optional
 
-from sqlalchemy import text
+from sqlalchemy import func, text
 
 from webserver import loader
 from webserver.models import BookReadingStats, Reader, Reading, ReadingState
@@ -171,6 +175,9 @@ def patch_cached_day(reader_id: int, date: datetime.date, delta_seconds: int) ->
     days = cache.setdefault("days", {})
     bucket = days.setdefault(date_str, {"reading_seconds": 0, "download_count": 0, "push_count": 0})
     bucket["reading_seconds"] = max(0, bucket.get("reading_seconds", 0) + delta_seconds)
+    # 补录可能把某个 0 秒日变成有效阅读日（或反之），lifetime 缓存块作废，
+    # 下次 get_stats 重算
+    cache.pop("lifetime", None)
     _save_cache(reader_id, cache)
 
 
@@ -241,23 +248,23 @@ def _book_status(db, reader_id: int, calibre_db=None) -> Dict[str, int]:
     return status
 
 
-def _read_dates(db, reader_id: int) -> list:
+def _read_dates(db, reader_id: int, end: Optional[datetime.date] = None) -> list:
     """全部"有效阅读日"（当天累计时长 > 0），升序返回 list[date]。
 
     供连击/阅读天数/首读日期使用；与热力图同口径——0 秒的空桶不算阅读日。
+    `end`（含）用于 lifetime 缓存块"算到昨天为止"的口径。
     """
-    rows = db.execute(
-        text(
-            """
-            SELECT date, SUM(duration) AS total_duration
-            FROM readings
-            WHERE reader_id = :reader_id AND action = 'read'
-            GROUP BY date
-            HAVING total_duration > 0
-            """
-        ),
-        dict(reader_id=reader_id),
-    ).fetchall()
+    sql = (
+        "SELECT date, SUM(duration) AS total_duration"
+        " FROM readings"
+        " WHERE reader_id = :reader_id AND action = 'read'"
+    )
+    params = {"reader_id": reader_id}
+    if end is not None:
+        sql += " AND date <= :end"
+        params["end"] = end
+    sql += " GROUP BY date HAVING total_duration > 0"
+    rows = db.execute(text(sql), params).fetchall()
     dates = []
     for row in rows:
         d = row.date if not isinstance(row.date, str) else datetime.datetime.strptime(row.date, "%Y-%m-%d").date()
@@ -266,17 +273,17 @@ def _read_dates(db, reader_id: int) -> list:
     return dates
 
 
-def _count_read_books(db, reader_id: int) -> int:
-    row = db.execute(
-        text(
-            """
-            SELECT COUNT(DISTINCT book_id) AS cnt
-            FROM readings
-            WHERE reader_id = :reader_id AND action = 'read' AND duration > 0
-            """
-        ),
-        dict(reader_id=reader_id),
-    ).fetchone()
+def _count_read_books(db, reader_id: int, end: Optional[datetime.date] = None) -> int:
+    sql = (
+        "SELECT COUNT(DISTINCT book_id) AS cnt"
+        " FROM readings"
+        " WHERE reader_id = :reader_id AND action = 'read' AND duration > 0"
+    )
+    params = {"reader_id": reader_id}
+    if end is not None:
+        sql += " AND date <= :end"
+        params["end"] = end
+    row = db.execute(text(sql), params).fetchone()
     return int(row.cnt or 0)
 
 
@@ -301,6 +308,71 @@ def _compute_streaks(dates: list, today: datetime.date) -> Dict[str, int]:
     return {"current": current, "best": best}
 
 
+def _chain_ending_at(dates: list, end: datetime.date) -> int:
+    """恰好以 `end` 收尾的连续阅读段长度；`end` 当天没读返回 0（连击已断）。"""
+    date_set = set(dates)
+    if end not in date_set:
+        return 0
+    n = 0
+    d = end
+    while d in date_set:
+        n += 1
+        d -= datetime.timedelta(days=1)
+    return n
+
+
+def _compute_lifetime(db, reader_id: int, through: datetime.date) -> Dict:
+    """截至 `through`（含）的全历史聚合，写进 reading.json 的 lifetime 块。
+
+    这是全历史扫描（重度用户实测 ~80ms），只随 cached_through 每日推进时重算一次；
+    streak_chain 存"恰好止于 through 的连续段"，今天开读与否由 get_stats 现叠。
+    """
+    read_dates = _read_dates(db, reader_id, end=through)
+    streaks = _compute_streaks(read_dates, through)
+    return {
+        "computed_through": _date_str(through),
+        "first_reading_date": _date_str(read_dates[0]) if read_dates else None,
+        "total_days": len(read_dates),
+        "total_books": _count_read_books(db, reader_id, end=through),
+        "streak_best": streaks["best"],
+        "streak_chain": _chain_ending_at(read_dates, through),
+    }
+
+
+def _new_books_today(db, reader_id: int, today: datetime.date) -> int:
+    """今天首次（时长 > 0）阅读的书数。lifetime.total_books 只算到昨天，不补的话
+    第一次读一本新书的当天"读过 N 本"会少一本。两次查询都走 (reader_id, book_id)
+    前缀的索引，规模是当天读过的本数，且只在今天确实有阅读时执行。"""
+    today_ids = [
+        book_id
+        for (book_id,) in db.query(Reading.book_id)
+        .filter(
+            Reading.reader_id == reader_id,
+            Reading.action == Reading.ACTION_READ,
+            Reading.date == today,
+            Reading.duration > 0,
+        )
+        .distinct()
+        .all()
+    ]
+    if not today_ids:
+        return 0
+    prior_ids = {
+        book_id
+        for (book_id,) in db.query(Reading.book_id)
+        .filter(
+            Reading.reader_id == reader_id,
+            Reading.action == Reading.ACTION_READ,
+            Reading.date < today,
+            Reading.duration > 0,
+            Reading.book_id.in_(today_ids),
+        )
+        .distinct()
+        .all()
+    }
+    return len([b for b in today_ids if b not in prior_ids])
+
+
 def _period_sums(days: Dict[str, Dict], today: datetime.date) -> Dict[str, int]:
     """近 7 天 / 上一个 7 天 / 近 30 天的阅读秒数，从已加载的逐日桶里累加（今日为实时值）。"""
 
@@ -322,8 +394,31 @@ def _period_sums(days: Dict[str, Dict], today: datetime.date) -> Dict[str, int]:
 
 
 def _near_finish_rows(db, reader_id: int) -> list:
-    """在读且进度接近完结的书（去重按 book_id 取各格式里进度最高的一行），进度倒序前 N。"""
-    rows = (
+    """在读且进度接近完结的书：先按 book_id 分组取各格式里的最高进度，再按书倒序取前 N。
+
+    必须先 GROUP BY 再 LIMIT：按格式行排序去重会让多格式的书以格式行数占坑、
+    挤掉后面的书（实测 4 本×4 格式占满预取行，第 5 本被切）。total_seconds 取该
+    本最高进度那一行，与旧实现的去重口径一致。
+    """
+    top = (
+        db.query(
+            BookReadingStats.book_id,
+            func.max(BookReadingStats.progress_percent).label("max_percent"),
+        )
+        .filter(
+            BookReadingStats.reader_id == reader_id,
+            BookReadingStats.state == BookReadingStats.STATE_READING,
+            BookReadingStats.progress_percent >= NEAR_FINISH_MIN_PERCENT,
+        )
+        .group_by(BookReadingStats.book_id)
+        .order_by(func.max(BookReadingStats.progress_percent).desc())
+        .limit(NEAR_FINISH_LIMIT)
+        .all()
+    )
+    if not top:
+        return []
+    max_by_book = {row.book_id: float(row.max_percent or 0) for row in top}
+    detail = (
         db.query(
             BookReadingStats.book_id,
             BookReadingStats.progress_percent,
@@ -332,24 +427,24 @@ def _near_finish_rows(db, reader_id: int) -> list:
         .filter(
             BookReadingStats.reader_id == reader_id,
             BookReadingStats.state == BookReadingStats.STATE_READING,
-            BookReadingStats.progress_percent >= NEAR_FINISH_MIN_PERCENT,
+            BookReadingStats.book_id.in_(list(max_by_book)),
         )
-        .order_by(BookReadingStats.progress_percent.desc())
-        .limit(NEAR_FINISH_LIMIT * 3)
         .all()
     )
-    by_book: Dict[int, Dict] = {}
-    for book_id, percent, total_seconds in rows:
-        if book_id in by_book:
+    seconds_by_book: Dict[int, int] = {}
+    for book_id, percent, total_seconds in detail:
+        if book_id in seconds_by_book:
             continue
-        by_book[book_id] = {
-            "book_id": book_id,
-            "progress_percent": round(float(percent or 0), 1),
-            "total_seconds": int(total_seconds or 0),
+        if float(percent or 0) == max_by_book[book_id]:
+            seconds_by_book[book_id] = int(total_seconds or 0)
+    return [
+        {
+            "book_id": row.book_id,
+            "progress_percent": round(float(row.max_percent or 0), 1),
+            "total_seconds": seconds_by_book.get(row.book_id, 0),
         }
-        if len(by_book) >= NEAR_FINISH_LIMIT:
-            break
-    return list(by_book.values())
+        for row in top
+    ]
 
 
 def normalize_range(start_str, end_str, today):
@@ -369,6 +464,9 @@ def normalize_range(start_str, end_str, today):
     if start is None or end is None or start > end:
         return None
     end = min(end, today)
+    if start > end:
+        # end 被钳到今天之后，区间整体在未来：视为非法，不返回 start > end 的坏区间
+        return None
     if (end - start).days >= RANGE_MAX_SPAN_DAYS:
         start = end - datetime.timedelta(days=RANGE_MAX_SPAN_DAYS - 1)
     return start, end
@@ -409,8 +507,35 @@ def get_stats(db, reader: Reader, calibre_db=None) -> Optional[Dict]:
     today_bucket = _query_days(db, reader.id, today, today)
     days.update(today_bucket)
 
-    # 全历史聚合（连击/天数/首读日）直接查库：reading.json 缓存只保留 98 天，撑不起"至今"
-    read_dates = _read_dates(db, reader.id)
+    # 全历史聚合（连击/天数/首读日/本数）进 reading.json 的 lifetime 块：全历史查询
+    # 只随 cached_through 每日推进重算一次（重度用户实测 ~80ms，首页热路径不该逐请求
+    # 付费）；今天对"至今"的影响按当天桶现算增量叠加。reading.json 的 days 缓存只
+    # 保留 98 天，lifetime 块则扫全表算的就是"至今"。
+    cached_through = cache.get("cached_through")
+    lifetime = cache.get("lifetime")
+    if not isinstance(lifetime, dict) or lifetime.get("computed_through") != cached_through:
+        # _reconcile 之后 cached_through 恒为"昨天"的合法日期串；异常缺失时钳到昨天，
+        # 让今天的增量仍走统一的现叠口径（若算到今天再叠会双计今天）
+        through = (
+            datetime.datetime.strptime(cached_through, "%Y-%m-%d").date()
+            if cached_through
+            else today - datetime.timedelta(days=1)
+        )
+        lifetime = _compute_lifetime(db, reader.id, through)
+        cache["lifetime"] = lifetime
+        _save_cache(reader.id, cache)
+
+    # 恒等式：streak_chain 恰好止于 cached_through（= 昨天）。今天读了则连击 +1
+    # （昨天没读时 chain=0，+1 恰为 1）；今天没读则连击原样维持。
+    read_today = (days.get(_date_str(today)) or {}).get("reading_seconds", 0) > 0
+    streak_current = lifetime["streak_chain"] + 1 if read_today else lifetime["streak_chain"]
+    streak_best = max(lifetime["streak_best"], streak_current)
+    total_books = lifetime["total_books"]
+    first_reading_date = lifetime["first_reading_date"]
+    if read_today:
+        total_books += _new_books_today(db, reader.id, today)
+        if first_reading_date is None:
+            first_reading_date = _date_str(today)
 
     return {
         "totals": {
@@ -422,10 +547,10 @@ def get_stats(db, reader: Reader, calibre_db=None) -> Optional[Dict]:
         "heatmap": {"weeks": HEATMAP_WEEKS, "days": _heatmap_days(days, today)},
         "book_status": _book_status(db, reader.id, calibre_db),
         # ---- 以下为阅读记录页仪表盘新增（向后兼容，首页 banner 不消费）----
-        "first_reading_date": _date_str(read_dates[0]) if read_dates else None,
-        "total_days": len(read_dates),
-        "total_books": _count_read_books(db, reader.id),
-        "streak": _compute_streaks(read_dates, today),
+        "first_reading_date": first_reading_date,
+        "total_days": lifetime["total_days"] + (1 if read_today else 0),
+        "total_books": total_books,
+        "streak": {"current": streak_current, "best": streak_best},
         "period": _period_sums(days, today),
         "near_finish": _near_finish_rows(db, reader.id),
     }
