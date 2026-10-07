@@ -450,15 +450,46 @@ export default {
             return { background: hexToRgba(this.primaryColor, this.isDark ? 0.22 : 0.12) };
         },
         // ---------- 卡片 ----------
+        // 榜单里出现过的不同读者数（三档并集）。判据用"榜上有没有第二个人"而非
+        // 全站用户数：库里几人但只有一个人读书时，三栏都只有自己，排行同样无意义。
+        leaderboardReaderCount() {
+            if (!this.leaderboard) return 0;
+            const ids = new Set();
+            this.LEADERBOARD_TABS.forEach((tab) => {
+                (this.leaderboard[tab] || []).forEach((e) => ids.add(e.reader_id));
+            });
+            return ids.size;
+        },
+        // 不足两位读者 → 整卡自动隐藏（数据态，不改用户的卡片排序/显隐配置）
+        leaderboardAutoHidden() {
+            return !!this.leaderboard && this.leaderboardReaderCount < 2;
+        },
         visibleCards: {
             get() {
+                if (this.leaderboardAutoHidden) {
+                    return this.cardOrder.filter((id) => id !== 'leaderboard');
+                }
                 return this.cardOrder;
             },
             set(value) {
+                // 自动隐藏期间拖动别的卡：draggable 回传的数组不含 leaderboard，
+                // 若直接写入会把它从用户配置里永久抹掉。按原位置补回，保证以后
+                // 有第二个读者时卡片能回到原位。
+                if (this.leaderboardAutoHidden && !value.includes('leaderboard')) {
+                    const idx = this.cardOrder.indexOf('leaderboard');
+                    if (idx >= 0) {
+                        const next = value.slice();
+                        next.splice(Math.min(idx, next.length), 0, 'leaderboard');
+                        this.cardOrder = next;
+                        return;
+                    }
+                }
                 this.cardOrder = value;
             },
         },
         hiddenCardDefs() {
+            // cardOrder 里仍保留 leaderboard（自动隐藏≠用户移除），故这里不会把它
+            // 误列进"添加卡片"区——它不是被用户关掉的，是数据不够自动收起了。
             return CARD_DEFS.filter((d) => !this.cardOrder.includes(d.id));
         },
         dragOptions() {
