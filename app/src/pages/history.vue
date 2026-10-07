@@ -87,19 +87,20 @@
                                 <div class="card-label">
                                     <v-icon small class="mr-1">mdi-book-open-page-variant-outline</v-icon>{{ $t('history.dashboard.card_currentBook') }}
                                 </div>
-                                <template v-if="currentBook">
-                                    <div class="current-book">
-                                        <v-img :src="currentBook.thumb || currentBook.img" class="current-book-cover" />
+                                <div class="current-book-row" v-if="currentBooks.length">
+                                    <nuxt-link
+                                        v-for="b in currentBooks"
+                                        :key="b.id"
+                                        class="current-book-item"
+                                        :to="'/book/' + b.id"
+                                    >
+                                        <v-img :src="b.thumb || b.img" class="current-book-cover" />
                                         <div class="current-book-meta">
-                                            <div class="current-book-title">{{ currentBook.title }}</div>
-                                            <div class="current-book-author">{{ currentBook.author }}</div>
-                                            <v-btn small text color="primary" class="px-0 continue-btn" :to="'/book/' + currentBook.id">
-                                                {{ $t('readingState.reading') }}
-                                                <v-icon small right>mdi-chevron-right</v-icon>
-                                            </v-btn>
+                                            <div class="current-book-title">{{ b.title }}</div>
+                                            <div class="current-book-author">{{ b.author }}</div>
                                         </div>
-                                    </div>
-                                </template>
+                                    </nuxt-link>
+                                </div>
                                 <div class="card-sub" v-else>{{ $t('history.dashboard.noCurrentBook') }}</div>
                             </template>
 
@@ -438,8 +439,8 @@ export default {
             };
         },
         // ---------- 卡片内容 ----------
-        currentBook() {
-            return (this.currentReadingBooks && this.currentReadingBooks[0]) || null;
+        currentBooks() {
+            return (this.currentReadingBooks || []).slice(0, 3);
         },
         nearFinishBooks() {
             return (this.dashboard && this.dashboard.near_finish_books) || [];
@@ -942,21 +943,29 @@ export default {
     line-height: 1.5;
 }
 
-/* 在读的书（宽卡：大封面 + 竖排信息） */
-.current-book {
+/* 在读的书（宽卡：最多 3 本，横向排布，整项可点击） */
+.current-book-row {
     display: flex;
-    gap: 14px;
+    flex-wrap: wrap;
+    gap: 10px 16px;
     margin-top: 10px;
+}
+
+.current-book-item {
+    display: flex;
+    gap: 10px;
     min-width: 0;
-    align-items: center;
+    flex: 1 1 calc(33% - 16px);
+    text-decoration: none;
+    cursor: pointer;
 }
 
 .current-book-cover {
-    width: 64px;
-    min-width: 64px;
-    height: 96px;
-    border-radius: 6px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+    width: 48px;
+    min-width: 48px;
+    height: 72px;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
     flex: none;
 }
 
@@ -968,7 +977,7 @@ export default {
 }
 
 .current-book-title {
-    font-size: 16px;
+    font-size: 13px;
     font-weight: 600;
     color: rgba(0, 0, 0, 0.87);
     display: -webkit-box;
@@ -983,7 +992,7 @@ export default {
 }
 
 .current-book-author {
-    font-size: 12px;
+    font-size: 11px;
     color: rgba(0, 0, 0, 0.5);
     white-space: nowrap;
     overflow: hidden;
@@ -995,24 +1004,18 @@ export default {
     color: rgba(255, 255, 255, 0.55);
 }
 
-.continue-btn {
-    align-self: flex-start;
-    margin-top: 2px;
-    min-width: 0;
-}
-
 /* 即将读完 */
 .near-finish-body {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 14px;
     margin-top: 8px;
 }
 
 .ring {
-    width: 78px;
-    height: 78px;
-    min-width: 78px;
+    width: 64px;
+    height: 64px;
+    min-width: 64px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -1020,8 +1023,8 @@ export default {
 }
 
 .ring-inner {
-    width: 58px;
-    height: 58px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
     background: #ffffff;
     display: flex;
@@ -1035,7 +1038,7 @@ export default {
 }
 
 .ring-number {
-    font-size: 15px;
+    font-size: 13px;
     font-weight: bold;
     color: rgba(0, 0, 0, 0.87);
     line-height: 1;
@@ -1046,7 +1049,7 @@ export default {
 }
 
 .ring-label {
-    font-size: 9px;
+    font-size: 8px;
     color: rgba(0, 0, 0, 0.5);
     margin-top: 2px;
 }
@@ -1060,7 +1063,7 @@ export default {
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
 }
 
 .near-finish-item {
@@ -1069,6 +1072,7 @@ export default {
     align-items: center;
     gap: 8px;
     font-size: 12px;
+    line-height: 1.5;
 }
 
 .near-finish-title {
