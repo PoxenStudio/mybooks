@@ -29,6 +29,14 @@ class TestReadingDashboardService(unittest.TestCase):
         self.session.execute(
             text("CREATE UNIQUE INDEX ux_readings_read ON readings (reader_id, book_id, date) WHERE action='read'")
         )
+        # 与 async_service.adjust_readings_table 同步建齐，_today_read_book_ids 的
+        # INDEXED BY ix_readings_reader_date 依赖它存在
+        self.session.execute(
+            text("CREATE INDEX ix_readings_reader_book_action ON readings (reader_id, book_id, action)")
+        )
+        self.session.execute(
+            text("CREATE INDEX ix_readings_reader_date ON readings (reader_id, date)")
+        )
 
         self.reader = Reader()
         self.reader.id = 1
@@ -284,7 +292,8 @@ class TestReadingDashboardService(unittest.TestCase):
         self.assertEqual(lifetime["computed_through"], svc._date_str(yesterday))
         # 缓存块只算到昨天：今天的一切由读时增量现叠
         self.assertEqual(lifetime["total_days"], 1)
-        self.assertEqual(lifetime["total_books"], 1)
+        # 评审 P3-3：本数存 book_ids 集合（读时内存差集叠今天），不再存计数
+        self.assertEqual(lifetime["book_ids"], [100])
         self.assertEqual(lifetime["first_reading_date"], svc._date_str(yesterday))
         self.assertEqual(lifetime["streak_chain"], 1)
         self.assertEqual(lifetime["streak_best"], 1)
@@ -311,7 +320,7 @@ class TestReadingDashboardService(unittest.TestCase):
 
         with open(svc._user_cache_path(1), encoding="utf-8") as f:
             cache = json.load(f)
-        self.assertEqual(cache["lifetime"]["total_books"], 0)
+        self.assertEqual(cache["lifetime"]["book_ids"], [])
         self.assertIsNone(cache["lifetime"]["first_reading_date"])
 
     def test_new_book_today_not_double_counted_when_seen_before(self):
