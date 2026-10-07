@@ -187,7 +187,7 @@
                 <div class="range-body">
                     <div class="chart-box" :class="{ 'chart-box-auto': rangeView === 'month' }">
                         <bar-chart v-if="rangeView === 'week'" :chart-data="weekChartData" :chart-options="weekChartOptions" />
-                        <reading-month-calendar v-else-if="rangeView === 'month'" :days="rangeDays" />
+                        <reading-month-calendar v-else-if="rangeView === 'month'" :days="rangeDays" :month-start="rangeView === 'month' ? anchor : ''" />
                         <div v-else class="heatmap-scroll">
                             <div class="heatmap-scroll-inner" :style="{ minWidth: heatmapMinWidth }">
                                 <reading-heatmap :days="rangeDays" />

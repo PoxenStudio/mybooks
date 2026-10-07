@@ -5,7 +5,7 @@
         </div>
         <div class="month-grid">
             <span v-for="n in leadingBlanks" :key="'blank-' + n" class="month-cell is-blank"></span>
-            <v-tooltip v-for="day in days" :key="day.date" top>
+            <v-tooltip v-for="day in fullDays" :key="day.date" top>
                 <template #activator="{ on, attrs }">
                     <div
                         class="month-cell"
@@ -22,7 +22,8 @@
 
 <script>
 // 阅读记录仪表盘「月」视图：单月日历格，颜色分级与热力图共用一套 util。
-// days 由父组件传入 [本月1号 ... 本月末(或今天)] 的逐日数据；月末尚未到来的日子不渲染。
+// days 由父组件传入当月已有的逐日数据（到今天为止）；monthStart 为该月 1 号，
+// 未到的日期没有数据，也按空格子渲染，保证网格是完整的一个月。
 import { levelForSeconds, levelColor } from '~/utils/heatmapLevels';
 import { intlLocale } from '~/utils/intlLocale';
 
@@ -31,10 +32,36 @@ export default {
     props: {
         // [{date: 'YYYY-MM-DD', reading_seconds: number}, ...]，从当月 1 号开始
         days: { type: Array, default: () => [] },
+        // 该月 1 号（YYYY-MM-01）；为空时按 days 实际长度渲染
+        monthStart: { type: String, default: '' },
     },
     computed: {
         isDark() {
             return this.$vuetify.theme.dark;
+        },
+        monthStartSafe() {
+            if (this.monthStart) return this.monthStart;
+            return this.days.length ? this.days[0].date.slice(0, 8) + '01' : '';
+        },
+        daysInMonth() {
+            if (!this.monthStartSafe) return this.days.length;
+            const [y, m] = this.monthStartSafe.split('-').map(Number);
+            return new Date(y, m, 0).getDate();
+        },
+        // 完整月份的逐日格子：未来日期没有数据，按 0 秒空格子补齐
+        fullDays() {
+            if (!this.monthStartSafe) return this.days;
+            const byDate = {};
+            this.days.forEach((d) => {
+                byDate[d.date] = d;
+            });
+            const [y, m] = this.monthStartSafe.split('-').map(Number);
+            const result = [];
+            for (let day = 1; day <= this.daysInMonth; day++) {
+                const date = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                result.push(byDate[date] || { date, reading_seconds: 0 });
+            }
+            return result;
         },
         weekdayLabels() {
             const fmt = new Intl.DateTimeFormat(intlLocale(this.$i18n.locale), { weekday: 'short' });
@@ -42,8 +69,8 @@ export default {
             return Array.from({ length: 7 }, (_v, i) => fmt.format(new Date(2023, 9, 2 + i)));
         },
         leadingBlanks() {
-            if (!this.days.length) return 0;
-            const first = new Date(`${this.days[0].date}T00:00:00`);
+            if (!this.monthStartSafe) return 0;
+            const first = new Date(`${this.monthStartSafe}T00:00:00`);
             return (first.getDay() + 6) % 7; // getDay(): 周日=0 → 周一=0 的偏移
         },
     },
