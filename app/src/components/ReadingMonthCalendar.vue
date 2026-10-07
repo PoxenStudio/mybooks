@@ -9,7 +9,8 @@
                 <template #activator="{ on, attrs }">
                     <div
                         class="month-cell"
-                        :style="{ background: cellColor(day) }"
+                        :class="{ 'is-today': isToday(day) }"
+                        :style="cellStyle(day)"
                         v-bind="attrs"
                         v-on="day.reading_seconds ? on : {}"
                     >{{ dayNumber(day) }}</div>
@@ -73,10 +74,31 @@ export default {
             const first = new Date(`${this.monthStartSafe}T00:00:00`);
             return (first.getDay() + 6) % 7; // getDay(): 周日=0 → 周一=0 的偏移
         },
+        // 本地时区的今天；阅读桶按 UTC 日期存，深夜/清晨与桶日期可能差一天，标记仅作视觉参考
+        todayStr() {
+            const d = new Date();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${d.getFullYear()}-${m}-${day}`;
+        },
+        primaryColor() {
+            const theme = (this.$vuetify && this.$vuetify.theme && this.$vuetify.theme.currentTheme) || {};
+            return theme.primary || '#1976d2';
+        },
     },
     methods: {
         dayNumber(day) {
             return parseInt(day.date.slice(8), 10);
+        },
+        isToday(day) {
+            return day.date === this.todayStr;
+        },
+        cellStyle(day) {
+            const style = { background: this.cellColor(day) };
+            if (this.isToday(day)) {
+                style.boxShadow = `inset 0 0 0 2px ${this.primaryColor}`;
+            }
+            return style;
         },
         cellColor(day) {
             return levelColor(levelForSeconds(day.reading_seconds), this.isDark);
@@ -141,5 +163,10 @@ export default {
 
 .month-cell.is-blank {
     background: transparent;
+}
+
+/* 今天：主色描边 + 数字加粗（描边颜色走模板内联样式跟站点主色） */
+.month-cell.is-today {
+    font-weight: bold;
 }
 </style>
