@@ -37,6 +37,10 @@ class TestReadingDashboardService(unittest.TestCase):
         self.session.execute(
             text("CREATE INDEX ix_readings_reader_date ON readings (reader_id, date)")
         )
+        # _rank_seconds 的 INDEXED BY ix_readings_date_read 依赖（同 async_service DDL）
+        self.session.execute(
+            text("CREATE INDEX ix_readings_date_read ON readings (date, reader_id) WHERE action='read'")
+        )
 
         self.reader = Reader()
         self.reader.id = 1
@@ -458,6 +462,10 @@ class TestReadingLeaderboard(unittest.TestCase):
         self.session = scoped_session(sessionmaker(bind=engine, autoflush=True, autocommit=False))
         models.bind_session(self.session)
         models.Base.metadata.create_all(engine)
+        # _rank_seconds 依赖 date 前导部分索引（INDEXED BY），对齐 async_service 生产 DDL
+        self.session.execute(
+            text("CREATE INDEX ix_readings_date_read ON readings (date, reader_id) WHERE action='read'")
+        )
 
         self.readers = {}
         for i in range(1, 7):

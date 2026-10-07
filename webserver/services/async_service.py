@@ -272,6 +272,15 @@ class AsyncService(metaclass=SingletonType):
             CREATE INDEX IF NOT EXISTS ix_readings_reader_date
             ON readings (reader_id, date)
         """))
+        # 支撑阅读时长排行榜的"跨用户日期窗口聚合"（reading_dashboard_service._rank_seconds）：
+        # date 前导 + read 部分索引，成本只与窗口内行数成正比。此前周/月档要 SCAN 全量
+        # ux_readings_read（成本随全库总行数线性），"百万书"级库会在 ioloop 上同步跑出秒级冻结。
+        # duration 特意不进索引——心跳 upsert 每 60s 改写 duration，放进索引等于每次心跳多一处
+        # 写放大；窗口行的 rowid 回表足够便宜。
+        self.session.execute(text("""
+            CREATE INDEX IF NOT EXISTS ix_readings_date_read
+            ON readings (date, reader_id) WHERE action = 'read'
+        """))
 
     def adjust_scanfile_table(self):
         result = self.session.execute(text("PRAGMA table_info(scanfiles)")).fetchall()

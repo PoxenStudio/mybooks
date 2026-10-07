@@ -509,9 +509,12 @@ def get_range_days(db, reader_id: int, start: datetime.date, end: datetime.date)
 def _rank_seconds(db, start: datetime.date, end: datetime.date, limit: int) -> list:
     """[start, end]（含）内按 reader 聚合的阅读时长排行。
 
-    跨用户聚合在本表组上没有合适索引（前导列是 reader_id），但这是小规模库
-    的榜单查询，直接全表 GROUP BY，不做缓存（口径经用户确认）。JOIN readers
-    顺带取名：显示优先昵称（name），兜底 username，与书评口径一致。
+    INDEXED BY ix_readings_date_read：date 前导的 read 部分索引把聚合成本钉在"窗口内
+    行数"。不加提示时 SQLite 启发式会 SCAN 全量 ux_readings_read——成本随全库总行数
+    线性（14.6 万行实测 2.1ms，"百万书"级库外推即秒级，且这查询同步跑在 ioloop 上，
+    冻全站）；本表组无 ANALYZE 时启发式错选索引有前科（评审 P3-3 实测）。索引与
+    upsert 依赖的部分唯一索引同属 async_service.adjust_readings_table 启动必建。
+    JOIN readers 顺带取名：显示优先昵称（name），兜底 username，与书评口径一致。
     """
     rows = db.execute(
         text(
@@ -520,7 +523,7 @@ def _rank_seconds(db, start: datetime.date, end: datetime.date, limit: int) -> l
                    readers.username AS username,
                    readers.name AS name,
                    SUM(readings.duration) AS total
-            FROM readings
+            FROM readings INDEXED BY ix_readings_date_read
             JOIN readers ON readers.id = readings.reader_id
             WHERE readings.action = 'read' AND readings.date BETWEEN :start AND :end
             GROUP BY readings.reader_id
@@ -545,7 +548,8 @@ def get_leaderboard(db, today: Optional[datetime.date] = None) -> Dict:
     """阅读时长排行榜三档：本周（周一起，UTC 日口径）/ 本月 / 总时长。
 
     总时长直接吃 Reader.total_reading_seconds 累计列（read 心跳维护，见 models.py），
-    零聚合成本；本周/本月为 _rank_seconds 聚合。各档取前 LEADERBOARD_LIMIT 名。
+    零聚合成本；本周/本月为 _rank_seconds 聚合，走 date 前导部分索引、成本只与窗口内
+    行数相关（大库上也无需缓存，数据恒新鲜）。各档取前 LEADERBOARD_LIMIT 名。
     `today` 仅供测试注入固定时钟，默认取 UTC 今天。
     """
     today = today or datetime.datetime.utcnow().date()
