@@ -495,7 +495,9 @@ export default {
                     end: new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0),
                 };
             }
-            return { start: anchor, end: new Date(anchor.getFullYear(), 11, 31) };
+            // 热力图组件契约是周一起点分列：1 月 1 日不是周一时回退到上一个周一，
+            // 跨年那几天 get_range_days 会自动补 0 格子，分组与总视图/首页一致
+            return { start: mondayOf(anchor), end: new Date(anchor.getFullYear(), 11, 31) };
         },
         canGoNext() {
             if (!this.anchor) return false;
@@ -744,6 +746,9 @@ export default {
             this.fetchRange();
         },
         async fetchRange() {
+            // 快速连点 ‹ › 时响应可能乱序回包，用请求序号只采纳最新一次结果
+            const seq = (this.rangeReqSeq || 0) + 1;
+            this.rangeReqSeq = seq;
             const bounds = this.rangeBounds;
             if (!bounds) {
                 this.rangeDays = [];
@@ -761,12 +766,14 @@ export default {
                 const rsp = await this.$backend(
                     `/user/reading_range?start=${toDayStr(bounds.start)}&end=${toDayStr(end)}`
                 );
+                if (seq !== this.rangeReqSeq) return;
                 if (rsp.err === 'ok' && rsp.enabled) {
                     this.rangeDays = rsp.days || [];
                 } else {
                     this.rangeDays = [];
                 }
             } catch (error) {
+                if (seq !== this.rangeReqSeq) return;
                 console.warn('Failed to load reading range:', error);
                 this.rangeDays = [];
             }
