@@ -630,10 +630,6 @@
   content: "\F0295";
 }
 
-.mdi-gesture-swipe::before {
-  content: "\F0D76";
-}
-
 .mdi-github::before {
   content: "\F02A4";
 }

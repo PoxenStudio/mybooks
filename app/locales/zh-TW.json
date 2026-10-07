@@ -1115,7 +1115,6 @@
     "booksUnit": "本書",
     "dashboard": {
       "since": "至今",
-      "hint": "拖動卡片即可重新排序；手機上長按拖動。",
       "addCards": "新增卡片",
       "allCardsShown": "所有卡片都在顯示中",
       "card_totalDays": "閱讀天數",

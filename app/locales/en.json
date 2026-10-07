@@ -1120,7 +1120,6 @@
     "booksUnit": " books",
     "dashboard": {
       "since": "to now",
-      "hint": "Drag cards to reorder them; long-press to drag on mobile.",
       "addCards": "Add cards",
       "allCardsShown": "All cards are shown",
       "card_totalDays": "Days Reading",
