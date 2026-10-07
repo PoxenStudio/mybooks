@@ -1059,7 +1059,6 @@ export default {
 }
 
 .near-finish-list {
-    flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
@@ -1068,7 +1067,6 @@ export default {
 
 .near-finish-item {
     display: flex;
-    justify-content: space-between;
     align-items: center;
     gap: 8px;
     font-size: 12px;
@@ -1080,6 +1078,7 @@ export default {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    min-width: 0;
 }
 
 .dash-cards.is-dark .near-finish-title {
@@ -1088,8 +1087,7 @@ export default {
 
 .near-finish-percent {
     font-weight: 500;
-    min-width: 38px;
-    text-align: right;
+    flex: none;
 }
 
 /* 近 7 天 / 近 30 天的底纹大数字（颜色跟主色，见模板内联样式） */
