@@ -46,13 +46,19 @@ class QuotaResult(NamedTuple):
 
 class DownloadQuotaService:
     # 同一用户同一本书同一格式在窗口期内的多次请求（分段、续传、重试）只算一次下载
-    CHARGE_WINDOW = 600
+    CHARGE_WINDOW = 3600
     _CHARGED_MAX = 2048
     _charged = {}
     _charged_guard = threading.Lock()
 
     _locks_guard = threading.Lock()
     _reader_locks = {}
+    _charge_locks = {}
+
+    @classmethod
+    def _charge_lock_for(cls, reader_id: int) -> threading.Lock:
+        with cls._locks_guard:
+            return cls._charge_locks.setdefault(reader_id, threading.Lock())
 
     @classmethod
     def _lock_for(cls, reader_id: int) -> threading.Lock:
@@ -145,18 +151,18 @@ class DownloadQuotaService:
         from webserver.services.reading_stats_service import ReadingStatsService
 
         key = (reader.id, int(book_id), str(fmt).lower())
-        now = time.time()
-        with cls._charged_guard:
+        with cls._charge_lock_for(reader.id):
+            now = time.time()
             if cls._charged.get(key, 0) >= now:
                 cls._charged[key] = now + cls.CHARGE_WINDOW
                 return cls.get_usage(reader)
-        result = cls.check_and_consume(reader) if consume_quota else cls.get_usage(reader)
-        if not result.allowed:
+            result = cls.check_and_consume(reader) if consume_quota else cls.get_usage(reader)
+            if not result.allowed:
+                return result
+            ReadingStatsService.record_download(reader.id, int(book_id), protocol)
+            with cls._charged_guard:
+                if len(cls._charged) >= cls._CHARGED_MAX:
+                    for stale in [k for k, expire in cls._charged.items() if expire < now]:
+                        del cls._charged[stale]
+                cls._charged[key] = now + cls.CHARGE_WINDOW
             return result
-        ReadingStatsService.record_download(reader.id, int(book_id), protocol)
-        with cls._charged_guard:
-            if len(cls._charged) >= cls._CHARGED_MAX:
-                for stale in [k for k, expire in cls._charged.items() if expire < now]:
-                    del cls._charged[stale]
-            cls._charged[key] = now + cls.CHARGE_WINDOW
-        return result
