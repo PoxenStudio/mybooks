@@ -90,6 +90,9 @@ class AsyncService(metaclass=SingletonType):
     session = None
     scoped_session = None
     running = {}  # name -> (thread, queue)
+    # 常驻型服务名集合（以 heavy=False 注册）：不参与极速模式的单一大任务锁。
+    # 这类服务内部循环、永不返回，参与锁会在启动后永久持锁，饿死其它后台任务。
+    heavy_lock_exempt = set()
 
     def __init__(self):
         self.scoped_session = lambda: "no-session"
@@ -348,7 +351,8 @@ class AsyncService(metaclass=SingletonType):
             )
             logging.info("call: func=%s", name)
             try:
-                with AsyncService.heavy_task_lock if perf.lite_on("LITE_ONE_HEAVY_TASK") else contextlib.nullcontext():
+                use_heavy_lock = perf.lite_on("LITE_ONE_HEAVY_TASK") and name not in AsyncService.heavy_lock_exempt
+                with AsyncService.heavy_task_lock if use_heavy_lock else contextlib.nullcontext():
                     service_func(self, *args, **kwargs)
             except Exception as err:
                 logging.exception("run task error: %s", err)
@@ -383,8 +387,19 @@ class AsyncService(metaclass=SingletonType):
         return func_wrapper
 
     @staticmethod
-    def register_service(service_func):
+    def register_service(service_func=None, *, heavy=True):
+        """注册后台异步服务。
+
+        heavy=False 用于常驻型服务（函数内部循环、永不返回）：这类服务若参与
+        极速模式的单一大任务锁（LITE_ONE_HEAVY_TASK），会永久持锁并饿死其它
+        后台任务，故登记为不参与该锁；普通服务保持默认 heavy=True。
+        """
+        if service_func is None:
+            return lambda func: AsyncService.register_service(func, heavy=heavy)
+
         name = f"{service_func.__module__}.{service_func.__qualname__}"
+        if not heavy:
+            AsyncService.heavy_lock_exempt.add(name)
 
         def func_wrapper(ins: AsyncService, *args, **kwargs):
             s = AsyncService()
