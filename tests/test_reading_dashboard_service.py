@@ -510,6 +510,18 @@ class TestReadingLeaderboard(unittest.TestCase):
         # user3 奇数 id 无昵称 → username 兜底
         self.assertEqual(board["week"][0]["name"], "user3")
 
+    def test_opted_out_reader_excluded_from_all_boards(self):
+        today = datetime.datetime.utcnow().date()
+        self._add(3, today, 200)
+        self._add(1, today, 60)
+        self.readers[3].allow_statistic = False
+        self.session.commit()
+
+        board = svc.get_leaderboard(self.session)
+        self.assertEqual([e["reader_id"] for e in board["week"]], [1])
+        self.assertEqual([e["reader_id"] for e in board["month"]], [1])
+        self.assertNotIn(3, [e["reader_id"] for e in board["all_time"]])
+
     def test_all_time_uses_reader_column_and_excludes_zero(self):
         for r in self.session.query(Reader).all():
             r.total_reading_seconds = 0 if r.id == 2 else r.id * 100

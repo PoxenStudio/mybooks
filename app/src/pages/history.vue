@@ -171,7 +171,6 @@
                             v-for="def in hiddenCardDefs"
                             :key="def.id"
                             small
-                            outlined
                             color="primary"
                             class="ma-1"
                             @click="addCard(def.id)"
@@ -231,46 +230,6 @@
             </div>
             <v-expand-transition>
                 <div v-show="wallsOpen">
-                    <!-- 阅读统计卡片 -->
-                    <v-row v-if="readingStats">
-                        <v-col cols=12>
-                            <legend>{{ $t('history.readingStats') }}</legend>
-                            <v-divider class="mb-4"></v-divider>
-                        </v-col>
-                        <v-col cols=6 sm=3>
-                            <v-card class="pa-3 text-center stats-card gradient-bg-primary">
-                                <v-card-title class="justify-center pa-2">
-                                    <div class="stat-number-badge">{{ readingStats.total_reading }}</div>
-                                </v-card-title>
-                                <v-card-subtitle class="stat-label-text">{{ $t('history.totalReading') }}</v-card-subtitle>
-                            </v-card>
-                        </v-col>
-                        <v-col cols=6 sm=3>
-                            <v-card class="pa-3 text-center stats-card gradient-bg-success">
-                                <v-card-title class="justify-center pa-2">
-                                    <div class="stat-number-badge">{{ readingStats.total_read_done }}</div>
-                                </v-card-title>
-                                <v-card-subtitle class="stat-label-text">{{ $t('history.totalReadDone') }}</v-card-subtitle>
-                            </v-card>
-                        </v-col>
-                        <v-col cols=6 sm=3>
-                            <v-card class="pa-3 text-center stats-card gradient-bg-info">
-                                <v-card-title class="justify-center pa-2">
-                                    <div class="stat-number-badge">{{ readingStats.month_reading }}</div>
-                                </v-card-title>
-                                <v-card-subtitle class="stat-label-text">{{ $t('history.monthReading') }}</v-card-subtitle>
-                            </v-card>
-                        </v-col>
-                        <v-col cols=6 sm=3>
-                            <v-card class="pa-3 text-center stats-card gradient-bg-orange">
-                                <v-card-title class="justify-center pa-2">
-                                    <div class="stat-number-badge">{{ readingStats.month_read_done }}</div>
-                                </v-card-title>
-                                <v-card-subtitle class="stat-label-text">{{ $t('history.monthReadDone') }}</v-card-subtitle>
-                            </v-card>
-                        </v-col>
-                    </v-row>
-
                     <!-- 当前在读书籍 -->
                     <v-row v-if="currentReadingBooks && currentReadingBooks.length > 0">
                         <v-col cols=12>

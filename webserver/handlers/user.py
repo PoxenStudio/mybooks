@@ -1035,26 +1035,39 @@ class UserReadingHistory(BaseHandler):
         return {"err": "ok", "books": result}
 
 
+def _parse_reader_id(raw):
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 class UserReadingDashboard(BaseHandler):
     """首页阅读统计 Banner 数据源（见 document/Reading_Dashboard_Design.md）"""
 
     @js
     @auth
-    def get(self):
+    async def get(self):
         from webserver.services import reading_dashboard_service
 
-        user = self.current_user
+        reader_id = self.current_user.id
         uid = self.get_argument("uid", "").strip()
         if uid:
             if not self.is_admin():
                 return {"err": "failed", "msg": "permission denied"}
-            user = self.sqlite_session.query(Reader).get(int(uid))
-            if user is None:
+            reader_id = _parse_reader_id(uid)
+            if reader_id is None:
                 return {"err": "failed", "msg": "user not found"}
 
-        stats = reading_dashboard_service.get_stats(
-            self.sqlite_session, user, self.calibre_db
-        )
+        def _job(session):
+            reader = session.get(Reader, reader_id)
+            if reader is None:
+                return "not_found"
+            return reading_dashboard_service.get_stats(session, reader, self.calibre_db)
+
+        stats = await self.run_sqlite_async(_job)
+        if stats == "not_found":
+            return {"err": "failed", "msg": "user not found"}
         if stats is None:
             return {"err": "ok", "enabled": False}
 
@@ -1064,9 +1077,8 @@ class UserReadingDashboard(BaseHandler):
         raw_rows = stats.pop("near_finish", [])
         if raw_rows:
             ids = [row["book_id"] for row in raw_rows]
-            books_by_id = {
-                b["id"]: b for b in self.calibre_db.get_data_as_dict(ids=ids)
-            }
+            books = await self.run_calibre_read_async(self.calibre_db.get_data_as_dict, ids=ids)
+            books_by_id = {b["id"]: b for b in books}
         for row in raw_rows:
             b = books_by_id.get(row["book_id"])
             if not b:
@@ -1100,19 +1112,19 @@ class UserReadingRange(BaseHandler):
 
     @js
     @auth
-    def get(self):
+    async def get(self):
         from webserver.services import reading_dashboard_service
 
         if not CONF.get("ENABLE_HOMEPAGE_READING_STATS", True):
             return {"err": "ok", "enabled": False}
 
-        user = self.current_user
+        reader_id = self.current_user.id
         uid = self.get_argument("uid", "").strip()
         if uid:
             if not self.is_admin():
                 return {"err": "failed", "msg": "permission denied"}
-            user = self.sqlite_session.query(Reader).get(int(uid))
-            if user is None:
+            reader_id = _parse_reader_id(uid)
+            if reader_id is None:
                 return {"err": "failed", "msg": "user not found"}
 
         rng = reading_dashboard_service.normalize_range(
@@ -1122,9 +1134,15 @@ class UserReadingRange(BaseHandler):
         if rng is None:
             return {"err": "failed", "msg": "invalid date range"}
         start, end = rng
-        days = reading_dashboard_service.get_range_days(
-            self.sqlite_session, user.id, start, end
-        )
+
+        def _job(session):
+            if uid and session.get(Reader, reader_id) is None:
+                return None
+            return reading_dashboard_service.get_range_days(session, reader_id, start, end)
+
+        days = await self.run_sqlite_async(_job)
+        if days is None:
+            return {"err": "failed", "msg": "user not found"}
         return {"err": "ok", "enabled": True, "days": days}
 
 
@@ -1137,12 +1155,12 @@ class UserReadingLeaderboard(BaseHandler):
 
     @js
     @auth
-    def get(self):
+    async def get(self):
         from webserver.services import reading_dashboard_service
 
         if not CONF.get("ENABLE_HOMEPAGE_READING_STATS", True):
             return {"err": "ok", "enabled": False}
-        board = reading_dashboard_service.get_leaderboard(self.sqlite_session)
+        board = await self.run_sqlite_async(reading_dashboard_service.get_leaderboard)
         return {
             "err": "ok",
             "enabled": True,
