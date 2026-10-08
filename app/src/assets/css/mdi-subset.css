@@ -166,6 +166,10 @@
   content: "\F00BB";
 }
 
+.mdi-book-multiple-outline::before {
+  content: "\F0436";
+}
+
 .mdi-book-open::before {
   content: "\F00BD";
 }
@@ -234,8 +238,20 @@
   content: "\F00ED";
 }
 
+.mdi-calendar-month-outline::before {
+  content: "\F0E18";
+}
+
 .mdi-calendar-outline::before {
   content: "\F0B67";
+}
+
+.mdi-calendar-range::before {
+  content: "\F0679";
+}
+
+.mdi-calendar-week-begin::before {
+  content: "\F0A34";
 }
 
 .mdi-camera::before {
@@ -554,6 +570,10 @@
   content: "\F0A4E";
 }
 
+.mdi-fire::before {
+  content: "\F0238";
+}
+
 .mdi-flag-outline::before {
   content: "\F023D";
 }
@@ -866,6 +886,10 @@
   content: "\F0CBB";
 }
 
+.mdi-progress-check::before {
+  content: "\F0995";
+}
+
 .mdi-radiobox-blank::before {
   content: "\F043D";
 }
@@ -1088,6 +1112,10 @@
 
 .mdi-translate::before {
   content: "\F05CA";
+}
+
+.mdi-trophy-outline::before {
+  content: "\F053A";
 }
 
 .mdi-unfold-more-horizontal::before {
