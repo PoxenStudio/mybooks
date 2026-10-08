@@ -20,6 +20,7 @@ import datetime
 import json
 import logging
 import os
+import threading
 from typing import Dict, Optional
 
 from sqlalchemy import func, text
@@ -84,7 +85,7 @@ def _save_cache(uid, cache: Dict) -> None:
     path = _user_cache_path(uid)
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        tmp_path = path + ".tmp"
+        tmp_path = "%s.%d.tmp" % (path, threading.get_ident())
         with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(cache, f)
         os.replace(tmp_path, path)
@@ -526,6 +527,7 @@ def _rank_seconds(db, start: datetime.date, end: datetime.date, limit: int) -> l
             FROM readings INDEXED BY ix_readings_date_read
             JOIN readers ON readers.id = readings.reader_id
             WHERE readings.action = 'read' AND readings.date BETWEEN :start AND :end
+              AND readers.allow_statistic = 1
             GROUP BY readings.reader_id
             HAVING total > 0
             ORDER BY total DESC
@@ -559,7 +561,7 @@ def get_leaderboard(db, today: Optional[datetime.date] = None) -> Dict:
             SELECT id AS reader_id, username AS username, name AS name,
                    total_reading_seconds AS total
             FROM readers
-            WHERE total_reading_seconds > 0
+            WHERE total_reading_seconds > 0 AND allow_statistic = 1
             ORDER BY total_reading_seconds DESC
             LIMIT :limit
             """

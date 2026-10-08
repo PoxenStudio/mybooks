@@ -794,6 +794,24 @@ class BaseHandler(web.RequestHandler):
         """
         return await self._run_calibre(func, args, kwargs, locked=True)
 
+    async def run_sqlite_async(self, func, *args, **kwargs):
+        """在工作线程执行 func(session, *args, **kwargs)：重查询不占 ioloop。
+
+        scoped_session 是线程本地的，工作线程里必须用自己的 session（用完 remove），
+        绝不能带上 handler 的 self.sqlite_session 或绑在它上面的 ORM 对象——传 id，
+        在 func 里重新查。func 只允许读；需要写库的请求仍留在 ioloop 线程。
+        """
+        scoped = self.settings["ScopedSession"]
+
+        def _runner():
+            try:
+                return func(scoped(), *args, **kwargs)
+            finally:
+                scoped.remove()
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(utils.calibre_pool, utils.bind_threadpool_call(_runner))
+
     async def _run_calibre(self, func, args, kwargs, locked):
         call = utils.bind_threadpool_call(func, *args, **kwargs)
         name = getattr(func, "__name__", "calibre_call")
