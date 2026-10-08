@@ -1,6 +1,15 @@
 <template>
   <div>
-    <div class="d-flex justify-end mb-2">
+    <div class="d-flex justify-end flex-wrap mb-2" style="gap: 8px">
+      <v-btn
+        class="settings-hint-btn"
+        href="https://www.zhihu.com/ring/host/2091200432408376415"
+        target="_blank"
+        rel="noopener"
+      >
+        <v-icon left>mdi-forum-outline</v-icon>
+        {{ $t('settings.community') }}
+      </v-btn>
       <v-btn
         class="settings-hint-btn"
         href="https://www.mybooks.top/docs/manual/"

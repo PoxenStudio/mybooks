@@ -626,6 +626,10 @@
   content: "\F05F4";
 }
 
+.mdi-forum-outline::before {
+  content: "\F0822";
+}
+
 .mdi-function::before {
   content: "\F0295";
 }
