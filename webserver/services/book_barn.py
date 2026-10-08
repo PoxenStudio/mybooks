@@ -390,8 +390,13 @@ class BookBarnService(AsyncService):
         self.checked_release_time = None
         self.admin_uids = None
 
-    @AsyncService.register_service
+    @AsyncService.register_service(heavy=False)
     def get_daily_books(self):
+        """每日书栈检查。
+
+        常驻循环服务（while True、永不返回）：heavy=False 表示不参与极速模式的
+        单一大任务锁——否则启动后会永久持锁，饿死邮件推送等其它后台任务。
+        """
         logging.info("Start daily books checking")
         token_invalid_message = False
         output_hour = 0
