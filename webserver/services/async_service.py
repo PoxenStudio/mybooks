@@ -121,6 +121,12 @@ class AsyncService(metaclass=SingletonType):
                 self.session.rollback()
         if self.session is not None:
             try:
+                self.ensure_readings_indexes()
+                self.session.commit()
+            except Exception as err:
+                logging.warning("Failed to ensure readings indexes: %s", err)
+                self.session.rollback()
+            try:
                 self.adjust_messages_table()
                 self.session.commit()
             except Exception as err:
@@ -259,6 +265,11 @@ class AsyncService(metaclass=SingletonType):
             self.session.execute(text("DROP INDEX IF EXISTS ux_readings_read"))
 
         # 部分唯一索引，支撑 action=read 的 upsert（同一 reader_id+book_id+date 只保留一行，见 §11 upsert）
+        self.ensure_readings_indexes()
+
+    def ensure_readings_indexes(self):
+        if not self.session.execute(text("PRAGMA table_info(readings)")).fetchall():
+            return
         self.session.execute(text("""
             CREATE UNIQUE INDEX IF NOT EXISTS ux_readings_read
             ON readings (reader_id, book_id, date) WHERE action = 'read'
