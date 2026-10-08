@@ -2218,9 +2218,24 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
         self.root = "/"
         self.default_filename = None
         self.is_opds = self.get_argument("from", "") == "opds"
-        if perf.lite_on("LITE_DOWNLOAD_PATH_CACHE"):
-            self.CHUNK_SIZE = 256 * 1024
         BaseHandler.initialize(self)
+
+    # tornado 原生 get_content 的 64KB 读块硬编码在方法内、且它是 classmethod（实例
+    # 属性改不动），故以覆写方式放大 lite 模式整本下载的读块；带 Range 的请求与普通
+    # 模式委托原生实现，行为不变。
+    LITE_CHUNK_SIZE = 256 * 1024
+
+    @classmethod
+    def get_content(cls, abspath, start=None, end=None):
+        if start is not None or end is not None or not perf.lite_on("LITE_DOWNLOAD_PATH_CACHE"):
+            yield from super().get_content(abspath, start, end)
+            return
+        with open(abspath, "rb") as file:
+            while True:
+                chunk = file.read(cls.LITE_CHUNK_SIZE)
+                if not chunk:
+                    return
+                yield chunk
 
     def prepare(self):
         BaseHandler.prepare(self)
