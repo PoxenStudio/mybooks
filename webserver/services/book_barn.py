@@ -635,9 +635,11 @@ class BookBarnService(AsyncService):
             self.session.rollback()
             return None
 
-    @AsyncService.register_service
+    @AsyncService.register_service(heavy=False)
     def sync_author_list(self):
-        """遍历 author_list.txt，为本地缺失的作者从书栈拉取信息（启动后延迟触发一次）"""
+        """遍历 author_list.txt，为本地缺失的作者从书栈拉取信息（启动后延迟触发一次）。
+
+        逐个作者联网并 sleep，可能持续数小时且 CPU 占用很低：heavy=False 表示不参与极速模式的单一大任务锁，避免其它后台任务长时间排队。"""
         if not CONF.get("ENABLE_BOOKBARN", False) or not CONF.get("BOOKBARN_TOKEN", ""):
             logging.info("[BARN] author list sync skipped, bookbarn not enabled/configured")
             return

@@ -10,6 +10,7 @@ from webserver import utils
 from webserver.handlers import book as book_module
 from webserver.handlers.base import BaseHandler
 from webserver.handlers.book import BookDownload
+from webserver.services.download_quota_service import DownloadQuotaService
 
 
 class TestOpenccCache(unittest.TestCase):
@@ -27,7 +28,7 @@ class TestDownloadCache(unittest.TestCase):
 
     def setUp(self):
         BookDownload._download_cache.clear()
-        BookDownload._charged.clear()
+        DownloadQuotaService._charged.clear()
         fd, self.path = tempfile.mkstemp()
         os.close(fd)
         self.addCleanup(os.remove, self.path)
@@ -39,10 +40,11 @@ class TestDownloadCache(unittest.TestCase):
         self.book = {"id": 5, "title": "t", "fmt_epub": self.path}
         self.handler.get_book = mock.Mock(return_value=self.book)
 
-    def run_download(self):
-        with mock.patch.object(book_module.DownloadQuotaService, "check_and_consume") as quota, \
+    def run_download(self, allowed=True):
+        with mock.patch.object(DownloadQuotaService, "check_and_consume") as quota, \
+                mock.patch.object(DownloadQuotaService, "get_usage", return_value=mock.Mock(allowed=True)), \
                 mock.patch.object(book_module.ReadingStatsService, "record_download") as record:
-            quota.return_value = mock.Mock(allowed=True)
+            quota.return_value = mock.Mock(allowed=allowed, used=3, quota=3)
             path = self.handler.parse_url_path("/book/5.epub")
         return path, quota, record
 
@@ -64,8 +66,8 @@ class TestDownloadCache(unittest.TestCase):
 
     def test_charged_again_after_window(self):
         self.run_download()
-        for key in list(BookDownload._charged):
-            BookDownload._charged[key] = time.time() - 1
+        for key in list(DownloadQuotaService._charged):
+            DownloadQuotaService._charged[key] = time.time() - 1
         _, quota, _ = self.run_download()
         self.assertEqual(quota.call_count, 1)
 
@@ -81,18 +83,17 @@ class TestDownloadCache(unittest.TestCase):
         del self.book["fmt_epub"]
         with self.assertRaises(book_module.web.HTTPError):
             self.run_download()
-        self.assertEqual(BookDownload._charged, {})
+        self.assertEqual(DownloadQuotaService._charged, {})
 
     def test_quota_exceeded_blocks_new_but_not_continuation(self):
         self.run_download()
-        with mock.patch.object(book_module.DownloadQuotaService, "check_and_consume") as quota:
-            quota.return_value = mock.Mock(allowed=False, used=3, quota=3)
-            self.handler.parse_url_path("/book/5.epub")
-            BookDownload._charged.clear()
-            BookDownload._download_cache.clear()
-            with self.assertRaises(book_module.web.HTTPError) as ctx:
-                self.handler.parse_url_path("/book/5.epub")
+        self.run_download(allowed=False)
+        DownloadQuotaService._charged.clear()
+        BookDownload._download_cache.clear()
+        with self.assertRaises(book_module.web.HTTPError) as ctx:
+            self.run_download(allowed=False)
         self.assertEqual(ctx.exception.status_code, 429)
+        self.assertEqual(DownloadQuotaService._charged, {})
 
     def test_cache_is_per_user(self):
         self.run_download()

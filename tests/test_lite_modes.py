@@ -13,6 +13,7 @@ from webserver.handlers import base as base_module
 from webserver.handlers import book as book_module
 from webserver.handlers.base import BaseHandler, HeavyGate, ListHandler, throttle
 from webserver.handlers.book import BookDownload, BookUpload, SearchBook
+from webserver.services.download_quota_service import DownloadQuotaService
 
 
 def lite(**items):
@@ -242,12 +243,12 @@ class TestDownloadTtl(unittest.TestCase):
         handler.current_user = mock.Mock(id=1)
         handler.request = mock.Mock(method="GET")
         handler.set_header = mock.Mock()
-        BookDownload._charged.clear()
+        DownloadQuotaService._charged.clear()
         fd, path = tempfile.mkstemp()
         os.close(fd)
         self.addCleanup(os.remove, path)
         handler.get_book = mock.Mock(return_value={"id": 5, "title": "t", "fmt_epub": path})
-        with mock.patch.object(book_module.DownloadQuotaService, "check_and_consume", return_value=mock.Mock(allowed=True)), \
+        with mock.patch.object(DownloadQuotaService, "check_and_consume", return_value=mock.Mock(allowed=True)), \
                 mock.patch.object(book_module.ReadingStatsService, "record_download"):
             handler.parse_url_path("/x/5.epub")
         return next(iter(BookDownload._download_cache.values()))[0] - time.time()

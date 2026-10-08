@@ -97,7 +97,12 @@ class TestBookBarnRegistration(unittest.TestCase):
 
         self.assertIn(BOOKBARN_DAILY_CHECK, AsyncService.heavy_lock_exempt)
 
-    def test_author_sync_keeps_default_serialization(self):
+    def test_author_sync_is_exempt_too(self):
         from webserver.services import book_barn  # noqa: F401
 
-        self.assertNotIn(BOOKBARN_AUTHOR_SYNC, AsyncService.heavy_lock_exempt)
+        self.assertIn(BOOKBARN_AUTHOR_SYNC, AsyncService.heavy_lock_exempt)
+
+    def test_single_author_update_keeps_default_serialization(self):
+        from webserver.services import book_barn  # noqa: F401
+
+        self.assertNotIn("webserver.services.book_barn.BookBarnService.update_author_async", AsyncService.heavy_lock_exempt)
