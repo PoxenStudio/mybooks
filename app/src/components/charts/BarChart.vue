@@ -11,17 +11,13 @@ export default {
         chartOptions: { type: Object, default: () => ({}) },
     },
     watch: {
-        chartData: {
-            deep: true,
-            handler() {
-                this.renderChart(this.chartData, this.chartOptions);
-            },
+        // 不能 deep：Chart.js 渲染时会改写传入的 data/options（这里已被 Vue 观测），
+        // deep watch 会被自己的渲染反复触发，形成更新死循环。父组件每次都传新对象，监听引用即可。
+        chartData() {
+            this.renderChart(this.chartData, this.chartOptions);
         },
-        chartOptions: {
-            deep: true,
-            handler() {
-                this.renderChart(this.chartData, this.chartOptions);
-            },
+        chartOptions() {
+            this.renderChart(this.chartData, this.chartOptions);
         },
     },
     mounted() {
