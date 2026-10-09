@@ -1799,7 +1799,7 @@ export default {
     },
     apiKeyRules() {
       return [
-        (v) => !v || /^[a-zA-Z0-9-.]*$/.test(v) || this.$t('settings.api_key_rule_error'),
+        (v) => !v || /^[a-zA-Z0-9-._]*$/.test(v) || this.$t('settings.api_key_rule_error'),
         (v) => !v || (v.length >= 16 && v.length <= 128) || this.$t('settings.api_key_length_error'),
       ];
     },
