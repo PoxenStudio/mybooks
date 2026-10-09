@@ -52,7 +52,8 @@ def fast_get_data_as_dict(self, prefix=None, authors_as_string=False, ids=None, 
     keys = {}
     cached_rows = {}
     wanted = ordered
-    if cacheable and perf.lite_on("LITE_BOOK_CACHE") and hasattr(cache, "all_field_for"):
+    cache_enabled = perf.lite_on("LITE_BOOK_CACHE") and hasattr(cache, "all_field_for")
+    if cacheable and cache_enabled:
         stamps = cache.all_field_for("last_modified", ordered)
         keys = {i: (i, stamps.get(i), convert_to_local_tz, authors_as_string) for i in ordered}
         for i in ordered:
@@ -60,7 +61,7 @@ def fast_get_data_as_dict(self, prefix=None, authors_as_string=False, ids=None, 
             if row is not None:
                 cached_rows[i] = row
         wanted = [i for i in ordered if i not in cached_rows]
-    elif row_cache.stats()["entries"]:
+    elif not cache_enabled and row_cache.stats()["entries"]:
         row_cache.clear()
     data = []
     monitor = PerfMonitor.instance()
