@@ -92,7 +92,7 @@ class ScanImportSoleTest(unittest.TestCase):
         fpath = self._touch_txt()
         captured = []
 
-        def fake_import_one_file(row, user_id, scan_upload_path, session, force, sole=False):
+        def fake_import_one_file(row, user_id, scan_upload_path, session, force, sole=False, *args, **kwargs):
             captured.append(sole)
             return 501, None
 
@@ -121,7 +121,7 @@ class ScanImportSoleTest(unittest.TestCase):
 
         captured = []
 
-        def fake_import_one_file(row, user_id, scan_upload_path, session, force, sole=False):
+        def fake_import_one_file(row, user_id, scan_upload_path, session, force, sole=False, *args, **kwargs):
             captured.append(sole)
             return None, None
 

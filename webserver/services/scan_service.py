@@ -8,19 +8,23 @@
 #   - 遍历指定路径（目录或文件列表），收集合法格式的文件路径。
 #   - 对每个文件计算部分 SHA-256 哈希（小于 10MB 取前 4MB；大于等于 10MB 取首尾各 3MB）。
 #   - 根据路径和哈希进行去重：
-#       * 已通过路径或哈希成功导入（状态 IMPORTED）且书库记录仍存在 → 跳过。
+#       * 已通过路径或哈希成功导入（状态 IMPORTED）且书库记录仍存在 → 跳过。存在性
+#         走 calibre Cache.has_id（纯内存），不再每本一次 get_data_as_dict。
 #       * 存在 NEW/READY 状态的记录时复用缓存哈希，避免重复 I/O。
 #       * 否则清除同哈希的旧非导入记录，创建新 READY 状态的 ScanFile 行。
+#   - READY 行攒批落库（PHASE1_BATCH_SIZE 行一提交），提交后才把本批行 ID 入队
+#     （worker 用独立会话，入队晚于提交是跨会话可见的硬要求）。
 #   - 将 READY 行的 ID 放入有界工作队列（最大 50），自然地对阶段二施加背压。
 #
 # 阶段二（Importing）：独立后台线程执行
 #   - 从工作队列中持续取出行 ID，加载对应 ScanFile 记录。
-#   - 读取书籍元数据（calibre get_metadata），并根据标题去重：
+#   - 读取书籍元数据（calibre get_metadata），标题判重走本轮一次性构建的标题映射
+#     （首个非 force 检查时构建，同轮新书逐本补进），不再每本全库扫描：
 #       * 标题已存在（电子书）→ 追加格式（add_format）。
 #       * 标题不存在 → 全新导入（import_book），同时创建 Item 关联记录。
 #       * DJVU/UVZ/CBZ 扫描版先校验容器，以文件名编目为底合并内嵌元数据；仅唯一同名候选才并入，多候选按新书入库。
 #   - 若配置 IMPORT_CATEGORY_WITH_FOLDER=True，将文件所在上传目录的第一级子目录名
-#     作为书籍分类写入自定义字段。
+#     作为书籍分类写入自定义字段（与动态封面/译者列一起攒批写回，批提交节奏对齐）。
 #   - 若配置 REMOVE_IMPORTED_FILE=True，导入后删除源文件（仅适用于全新导入或已存在的情况）。
 #   - 每 20 个文件批量提交一次事务，完成后执行最终提交并清理 scoped_session。
 #
@@ -60,6 +64,9 @@ CONF = loader.get_settings()
 MEGA_BYTES = 1024 * 1024
 # 可扫描导入的格式与上传一致
 SCAN_EXT = constants.ACCEPTED_BOOK_FORMATS
+# Phase1 批量落库窗口：攒够这么多行 ScanFile 变更才 commit 一次。逐行 commit 在
+# 百万级扫描下是 fsync  storm；攒批后 WORKER 侧靠“commit 后再入队”保证跨会话可见。
+PHASE1_BATCH_SIZE = 500
 
 
 class ScanService(AsyncService):
@@ -173,6 +180,169 @@ class ScanService(AsyncService):
             logging.exception("save error: %s", err)
         session.rollback()
         return False
+
+    def _calibre_book_exists(self, book_id):
+        """书库存在性轻量检查：优先走 calibre Cache.has_id（纯内存映射），百万级逐文件调用友好。
+
+        旧实现每次都调 get_data_as_dict(ids=[...])——单次含 SQL 查询、文件系统校验与
+        整套字典构造，毫秒级；has_id 只是内存 dict 命中，微秒级。老版本 calibre 或
+        异常时回退旧路径；回退也失败则按“不存在”处理（触发重导分支自愈，而非整轮中断）。
+        """
+        try:
+            new_api = getattr(self.db, "new_api", None)
+            has_id = getattr(new_api, "has_id", None) if new_api is not None else None
+            if callable(has_id):
+                return bool(has_id(book_id))
+        except Exception as err:
+            logging.debug("[SCAN] has_id check failed for book_id=%s: %s", book_id, err)
+        try:
+            return bool(self.db.get_data_as_dict(ids=[book_id]))
+        except Exception as err:
+            logging.warning("[SCAN] Existence check failed for book_id=%s, treat as missing: %s", book_id, err)
+            return False
+
+    def _build_title_map(self):
+        """一次性拉取 calibre 全库 {归一化标题: {book_ids}}，失败返回 None（调用方回退逐本查询）。
+
+        books_with_same_title 每次调用都是全库 Python 扫描（O(库大小)）：百万书库下
+        逐本调是秒级×本数。归一化口径与 legacy 实现逐字一致（icu_lower(force_unicode)），
+        映射内容与逐本查询等价，只是把 O(N) 的调用次数降为 1。
+        """
+        try:
+            new_api = getattr(self.db, "new_api", None)
+            get_id_map = getattr(new_api, "get_id_map", None) if new_api is not None else None
+            if not callable(get_id_map):
+                return None
+            id_map = get_id_map("title")
+            if not isinstance(id_map, dict):
+                return None
+            from calibre import force_unicode
+            from calibre.utils.icu import lower as icu_lower
+            title_map = {}
+            for book_id, title in id_map.items():
+                if not title:
+                    continue
+                try:
+                    key = icu_lower(force_unicode(title))
+                except Exception:
+                    continue
+                title_map.setdefault(key, set()).add(book_id)
+            return title_map
+        except Exception as err:
+            logging.warning("[IMPORT] Failed to build title map, fallback to per-book check: %s", err)
+            return None
+
+    def _same_title_ids(self, mi, title_ctx):
+        """与 books_with_same_title 同语义（返回 set，空标题返回空集）。
+
+        title_ctx 为 None（直接调用/旧测试）时直接走旧路径；否则首次按需构建映射、
+        之后逐本 O(1)。构建失败（None 映射）同样回退旧路径。
+        """
+        title = getattr(mi, "title", None)
+        if not title:
+            return set()
+        if title_ctx is not None:
+            if not title_ctx.get("built"):
+                title_ctx["built"] = True
+                title_ctx["map"] = self._build_title_map()
+            title_map = title_ctx.get("map")
+            if title_map is not None:
+                try:
+                    from calibre import force_unicode
+                    from calibre.utils.icu import lower as icu_lower
+                    return set(title_map.get(icu_lower(force_unicode(title)), ()))
+                except Exception as err:
+                    logging.debug("[IMPORT] Title map lookup failed: %s", err)
+        return self.db.books_with_same_title(mi)
+
+    @staticmethod
+    def _title_map_add(title_ctx, book_id, title):
+        """本轮新入库的书补进标题映射——否则同轮同名第二本查不到刚入库的第一本，会误建成重复书。"""
+        try:
+            if title_ctx is None or title_ctx.get("map") is None or book_id is None or not title:
+                return
+            from calibre import force_unicode
+            from calibre.utils.icu import lower as icu_lower
+            title_ctx["map"].setdefault(icu_lower(force_unicode(title)), set()).add(book_id)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _begin_scan_batch(session):
+        """为批量窗口确保驱动层真实 BEGIN（pysqlite 默认模式下，无外层 BEGIN 时
+        SAVEPOINT 的释放会被驱动当成提交，批量窗口失效；有则不重复开）。"""
+        try:
+            connection = session.connection()
+            if connection.dialect.name != "sqlite":
+                return
+            dbapi_conn = connection.connection
+            if hasattr(dbapi_conn, "driver_connection"):
+                dbapi_conn = dbapi_conn.driver_connection
+            if getattr(dbapi_conn, "in_transaction", True):
+                return
+            connection.exec_driver_sql("BEGIN")
+        except Exception as err:
+            logging.debug("[SCAN] Begin scan batch skipped: %s", err)
+
+    def _phase1_save(self, row, session, batched=False):
+        """Phase1 行落库：batched=False 时与旧 save_or_rollback 完全一致（逐行 commit）。
+
+        批量模式只 add + flush（行级 SAVEPOINT 隔离单行失败），提交权归批次尾的
+        session.commit()；row.id 在 flush 后即分配，调用方可先收集、待提交后再入队。
+        """
+        if not batched:
+            return self.save_or_rollback(row, session)
+        bid = "[ book-id=%s ]" % row.book_id if row.book_id else ""
+        logging.info("update: status=%-5s, path=%s %s", row.status, row.path, bid)
+        try:
+            self._begin_scan_batch(session)
+            with session.begin_nested():
+                session.add(row)
+                session.flush()
+            return True
+        except IntegrityError as err:
+            logging.error("IntegrityError: Duplicate hash detected: %s, %s", row.hash, err)
+            return False
+        except Exception as err:
+            logging.exception("save error: %s", err)
+            return False
+
+    def _set_calibre_fields(self, column, mapping):
+        """单列批量 set_field；整批失败时逐本重试，全部 best-effort（失败只记日志）。
+
+        旧语义里 dynamic_cover/translators 的单本失败会把整行标 INVALID；批量在 flush
+        时机已脱离行上下文，无法再标行——这类失败只可能是 calibre 内部故障（非单本书
+        数据问题），记 error 日志，书本身保持已入库（下次重扫跳过，不会无限重试）。
+        """
+        if not mapping:
+            return
+        try:
+            self.db.new_api.set_field(column, mapping)
+            return
+        except Exception as err:
+            logging.error("[IMPORT] Batch set_field %s failed for %d books, retry per-book: %s", column, len(mapping), err)
+        for book_id, value in mapping.items():
+            try:
+                self.db.new_api.set_field(column, {book_id: value})
+            except Exception as err:
+                logging.error("[IMPORT] Failed to set %s for book_id=%s: %s", column, book_id, err)
+
+    def _flush_pending_calibre_fields(self, pending):
+        """把累积的 calibre 自定义列写回一次性落库并清空缓冲；空缓冲直接返回（无书库调用）。"""
+        if not pending:
+            return
+        cover_ids = pending.get("dynamic_cover") or []
+        if cover_ids:
+            self._set_calibre_fields(CALIBRE_COLUMN_DYNAMIC_COVER, {bid: 1 for bid in cover_ids})
+            del cover_ids[:]
+        translators = pending.get("translators") or {}
+        if translators:
+            self._set_calibre_fields(CALIBRE_COLUMN_TRANSLATORS, dict(translators))
+            translators.clear()
+        categories = pending.get("category") or {}
+        if categories:
+            self._set_calibre_fields(CALIBRE_COLUMN_CATEGORY, dict(categories))
+            categories.clear()
 
     def _mark_missing_scan_files(self):
         """导入完成后，将源文件已不存在的 NEW/READY 记录标记为 MISSED，避免一直残留在待导入列表中"""
@@ -677,12 +847,18 @@ class ScanService(AsyncService):
             logging.error("[IMPORT] Error reading file %s: %s", fpath, e)
             return None, ScanFile.INVALID
 
-    def _import_one_file(self, row, user_id, scan_upload_path, session, force, sole=False):
+    def _import_one_file(self, row, user_id, scan_upload_path, session, force, sole=False, title_ctx=None, pending_fields=None):
         """
             Read metadata and import one READY ScanFile into calibre.
 
             Handles all error paths internally (sets row.status, calls save_or_rollback).
             Returns book_id if a new book was successfully linked via Item, else None.
+
+            title_ctx: {"map": {...}|None, "built": bool}，Phase2 worker 内复用——首个
+                非 force 标题检查时一次性构建全库标题映射（_build_title_map），之后逐本
+                O(1)；为 None 时走旧的逐本 books_with_same_title。
+            pending_fields: worker 内累积的 calibre 自定义列缓冲（dynamic_cover 列表/
+                translators 与 category 字典），为 None 时走旧的逐本 set_field。
         """
         from calibre.ebooks.metadata.book.base import Metadata
 
@@ -762,7 +938,7 @@ class ScanService(AsyncService):
             if force or CONF.get("UPLOAD_IGNORE_TITLE_CHECKING", False):
                 ids = []
             else:
-                ids = self.db.books_with_same_title(mi)
+                ids = self._same_title_ids(mi, title_ctx)
                 logging.info("[IMPORT] Same title %d book(s) for: %s", len(ids) if ids else 0, fpath)
             if ids and fmt in SCANNED_DOCUMENT_FORMATS and len(ids) > 1:
                 # 扫描版无可信作者元数据：多个同名候选一律按新书入库，避免误并。
@@ -814,11 +990,19 @@ class ScanService(AsyncService):
                     mi.languages = CONF.get("DEFAULT_LANGUAGE", constants.DEFAULT_LANGUAGE_CODE)
                 row.book_id = self.db.import_book(mi, [fpath], notify=False, import_hooks=False)
                 if row.book_id is not None:
+                    # 本轮新书补进标题映射（同轮同名后文不再误判为新书）
+                    self._title_map_add(title_ctx, row.book_id, mi.title)
                     if dynamic_cover:
-                        self.db.new_api.set_field(CALIBRE_COLUMN_DYNAMIC_COVER, {row.book_id: 1})
+                        if pending_fields is None:
+                            self.db.new_api.set_field(CALIBRE_COLUMN_DYNAMIC_COVER, {row.book_id: 1})
+                        else:
+                            pending_fields.setdefault("dynamic_cover", []).append(row.book_id)
                     if _translators:
                         translators = ",".join(_translators)
-                        self.db.new_api.set_field(CALIBRE_COLUMN_TRANSLATORS, {row.book_id: translators})
+                        if pending_fields is None:
+                            self.db.new_api.set_field(CALIBRE_COLUMN_TRANSLATORS, {row.book_id: translators})
+                        else:
+                            pending_fields.setdefault("translators", {})[row.book_id] = translators
                 row.status = ScanFile.IMPORTED
                 logging.info("[IMPORT] Calibre import done, book_id=%d [%.3fs]", row.book_id, time.time() - start_time)
 
@@ -838,7 +1022,10 @@ class ScanService(AsyncService):
                     first_dir = rel.split(os.sep, maxsplit=1)[0] if os.sep in rel else ""
                     if first_dir and first_dir != ".." and len(first_dir) < 10 and not any(c in first_dir for c in ',:;|/\\\'"\t '):
                         try:
-                            self.db.new_api.set_field(CALIBRE_COLUMN_CATEGORY, {row.book_id: first_dir})
+                            if pending_fields is None:
+                                self.db.new_api.set_field(CALIBRE_COLUMN_CATEGORY, {row.book_id: first_dir})
+                            else:
+                                pending_fields.setdefault("category", {})[row.book_id] = first_dir
                             logging.info("[IMPORT] Set category '%s' for book_id=%d", first_dir, row.book_id)
                         except Exception as cat_err:
                             logging.warning("[IMPORT] Failed to set category for book_id=%d: %s", row.book_id, cat_err)
@@ -865,10 +1052,17 @@ class ScanService(AsyncService):
         return new_book_id, status
 
     def _importing_worker(self, work_queue, importing_imported, task_id, user_id, scan_upload_path, batch_size, force, sole=False):
-        """Worker thread for Phase 2: consumes row IDs from work_queue and imports each file."""
+        """Worker thread for Phase 2: consumes row IDs from work_queue and imports each file.
+
+        title_ctx 让本轮标题判重只拉一次全库映射（首个非 force 检查时构建，
+        同轮新书逐本补进）；pending_fields 把 calibre 自定义列写回攒批落库
+        （与下面的批提交对齐，尾批与异常路径在 finally 里兜底 flush）。
+        """
         importing_session = self.scoped_session()
         importing_index = 0
         total_count = 0
+        title_ctx = {"map": None, "built": False}
+        pending_fields = {"dynamic_cover": [], "translators": {}, "category": {}}
 
         try:
             while True:
@@ -901,7 +1095,7 @@ class ScanService(AsyncService):
                         except Exception as e:
                             logging.error("[IMPORT] Failed to update progress: %s", e)
 
-                    new_book_id, status = self._import_one_file(row, user_id, scan_upload_path, importing_session, force, sole)
+                    new_book_id, status = self._import_one_file(row, user_id, scan_upload_path, importing_session, force, sole, title_ctx, pending_fields)
                     if status:
                         if status in ScanService.static_status_cnt:
                             ScanService.static_status_cnt[status] += 1
@@ -918,12 +1112,17 @@ class ScanService(AsyncService):
                         except Exception as err:
                             logging.error("[IMPORT] Batch commit error: %s", err)
                             importing_session.rollback()
+                        self._flush_pending_calibre_fields(pending_fields)
                 finally:
                     work_queue.task_done()
         except Exception as err:
             logging.error("[IMPORT] Fatal error in worker: %s", err)
             logging.error(traceback.format_exc())
         finally:
+            try:
+                self._flush_pending_calibre_fields(pending_fields)
+            except Exception as err:
+                logging.error("[IMPORT] Final fields flush error: %s", err)
             try:
                 importing_session.commit()
                 logging.info("[IMPORT] Final commit completed")
@@ -935,9 +1134,12 @@ class ScanService(AsyncService):
             except Exception:
                 pass
 
-    def _scan_one_file(self, fpath, session, import_id, processed_paths, processed_hashes, force):
+    def _scan_one_file(self, fpath, session, import_id, processed_paths, processed_hashes, force, batched=False):
         """
             Phase scanning: 处理单个文件：计算哈希，去重，创建/更新 READY 状态的 ScanFile 记录。
+
+            batched=True 时行落库只 flush 不 commit（由 do_import_internal 按
+            PHASE1_BATCH_SIZE 统一提交并在提交后入队，保证 worker 跨会话可见）。
         """
         if not os.path.isfile(fpath) or not os.access(fpath, os.R_OK):
             logging.warning("[SCAN] Not a valid file, skip: %s", fpath)
@@ -957,7 +1159,7 @@ class ScanService(AsyncService):
         for r in same_path_rows:
             if force:
                 break
-            if r.status == ScanFile.IMPORTED and self.db.get_data_as_dict(ids=[r.book_id]):
+            if r.status == ScanFile.IMPORTED and self._calibre_book_exists(r.book_id):
                 logging.info("[SCAN] Already imported by path: %s", fpath)
                 return None, None
             elif r.status == ScanFile.EXIST:
@@ -988,7 +1190,7 @@ class ScanService(AsyncService):
         if bad_reason:
             row = ScanFile(fpath, "", import_id)
             row.status = bad_reason
-            self.save_or_rollback(row, session)
+            self._phase1_save(row, session, batched)
             return None, bad_reason
 
         row = ScanFile(fpath, hash_val, import_id)
@@ -996,7 +1198,7 @@ class ScanService(AsyncService):
             # Keep back compatibility to set unique hash.
             row.hash = hashlib.md5(fpath.encode("utf-8")).hexdigest()
             row.status = ScanFile.DROP
-            self.save_or_rollback(row, session)
+            self._phase1_save(row, session, batched)
             return None, ScanFile.DROP
 
         processed_hashes.add(hash_val)
@@ -1007,11 +1209,11 @@ class ScanService(AsyncService):
         for hash_row in hash_rows:
             if force:
                 break
-            if hash_row.status == ScanFile.IMPORTED and self.db.get_data_as_dict(ids=[hash_row.book_id]):
+            if hash_row.status == ScanFile.IMPORTED and self._calibre_book_exists(hash_row.book_id):
                 logging.info("[SCAN] Already imported by hash: %s", fpath)
                 row.hash = hashlib.md5(fpath.encode("utf-8")).hexdigest()
                 row.status = ScanFile.DROP
-                self.save_or_rollback(row, session)
+                self._phase1_save(row, session, batched)
                 return None, ScanFile.DROP
 
         if hash_rows:
@@ -1021,7 +1223,7 @@ class ScanService(AsyncService):
             ).delete(synchronize_session=False)
             session.flush()
         row.status = ScanFile.READY
-        if self.save_or_rollback(row, session):
+        if self._phase1_save(row, session, batched):
             return row.id, ScanFile.READY
         return None, None
 
@@ -1056,25 +1258,59 @@ class ScanService(AsyncService):
         importing_thread.start()
 
         # ─── Phase 1: compute sha256, dedup, create READY ScanFile records ────────
+        # 批量落库：行只 flush 不 commit，攒满 PHASE1_BATCH_SIZE 才提交并把本批 READY
+        # id 入队。入队晚于提交是跨会话可见性的硬要求（worker 用独立会话读行，旧逐行
+        # commit 隐含了这一点）。小批量（<500）在 finally 里同样提交入队，不丢行。
         session = self.session
         processed_paths: set[str] = set()
         processed_hashes: set[str] = set()
         queued_count = 0
+        pending_ids: list = []
+        uncommitted = 0
+
+        def _commit_phase1_batch():
+            nonlocal queued_count, uncommitted
+            try:
+                session.commit()
+            except Exception as err:
+                logging.error("[IMPORT] Phase1 batch commit error, drop %d pending rows: %s", len(pending_ids), err)
+                session.rollback()
+                pending_ids.clear()
+                uncommitted = 0
+                return
+            for rid in pending_ids:
+                work_queue.put(rid)
+                queued_count += 1
+            pending_ids.clear()
+            uncommitted = 0
+
+        self._begin_scan_batch(session)
         try:
             for index, fpath in enumerate(filelist):
                 if ScanService.static_abort_flag:
                     logging.info("[IMPORT] Aborting import during scanning phase at index %d/%d", index, total_count)
                     break
-                row_id, state = self._scan_one_file(fpath, session, import_id, processed_paths, processed_hashes, force)
+                row_id, state = self._scan_one_file(fpath, session, import_id, processed_paths, processed_hashes, force, batched=True)
                 if row_id is not None:
-                    work_queue.put(row_id)
-                    queued_count += 1
+                    pending_ids.append(row_id)
                 if state:
                     if state in ScanService.static_status_cnt:
                         ScanService.static_status_cnt[state] += 1
                     else:
                         ScanService.static_status_cnt[state] = 1
+                    uncommitted += 1
+                    if uncommitted >= PHASE1_BATCH_SIZE:
+                        _commit_phase1_batch()
+                        self._begin_scan_batch(session)
         finally:
+            if uncommitted or pending_ids:
+                _commit_phase1_batch()
+            else:
+                try:
+                    session.commit()
+                except Exception as err:
+                    logging.error("[IMPORT] Phase1 final commit error: %s", err)
+                    session.rollback()
             work_queue.put(None)  # sentinel: Phase 1 done
 
         logging.info("[IMPORT] Phase 1 done: %d files queued. Waiting for Phase 2...", queued_count)
