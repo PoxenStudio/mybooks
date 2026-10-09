@@ -252,6 +252,16 @@ class TestRowCache(unittest.TestCase):
         calibre_fast.fast_get_data_as_dict(self.db, ids=[3])
         self.assertEqual(calibre_fast.row_cache.stats()["entries"], 0)
 
+    def test_detail_style_call_keeps_cached_rows(self):
+        self.fetch([1, 3])
+        calibre_fast.fast_get_data_as_dict(self.db, ids=[3])
+        calibre_fast.fast_get_data_as_dict(self.db, ids=[3], verify_formats=True, with_paths=False)
+        calibre_fast.fast_get_data_as_dict(self.db, ids=[3], verify_formats=False, with_paths=True)
+        self.assertEqual(calibre_fast.row_cache.stats()["entries"], 2)
+        hits = calibre_fast.row_cache.stats()["hits"]
+        self.fetch([1, 3])
+        self.assertEqual(calibre_fast.row_cache.stats()["hits"], hits + 2)
+
     def test_disabled_outside_lite(self):
         with mock.patch.dict(calibre_fast.perf.CONF, {"PERFORMANCE_MODE": "normal"}):
             self.fetch([1, 3])
@@ -338,6 +348,33 @@ class TestAgainstRealCalibre(unittest.TestCase):
         plain = calibre_fast.fast_get_data_as_dict(self.db, ids=ids, verify_formats=False, with_paths=False)
         self.assertEqual(first, plain)
         self.assertEqual(second, plain)
+
+    def test_row_cache_follows_real_metadata_writes(self):
+        import io
+
+        from calibre.ebooks.metadata.book.base import Metadata
+        from PIL import Image
+
+        out = io.BytesIO()
+        Image.new("RGB", (60, 80), "red").save(out, "JPEG")
+        bid = sorted(self.db.all_ids())[0]
+        api = self.db.new_api
+
+        def fetch():
+            with mock.patch.dict(calibre_fast.perf.CONF, {"PERFORMANCE_MODE": "lite", "LITE_GROUP_LISTING": True}):
+                return calibre_fast.fast_get_data_as_dict(self.db, ids=[bid], verify_formats=False, with_paths=False)[0]
+
+        calibre_fast.row_cache.clear()
+        fetch()
+        api.set_field("publisher", {bid: "出版社-新"})
+        self.assertEqual(fetch()["publisher"], "出版社-新")
+        api.set_metadata(bid, Metadata("新书名-集成", ["新作者"]))
+        self.assertEqual(fetch()["title"], "新书名-集成")
+        api.set_cover({bid: None})
+        self.assertIsNone(fetch()["cover"])
+        api.set_cover({bid: out.getvalue()})
+        self.assertIsNotNone(fetch()["cover"])
+        calibre_fast.row_cache.clear()
 
     def test_unverified_keeps_available_formats(self):
         ids = sorted(self.db.all_ids())[:20]
