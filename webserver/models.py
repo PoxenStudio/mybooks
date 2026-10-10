@@ -487,15 +487,25 @@ class ScanDirSnapshot(Base, SQLAlchemyMixin):
       防隐藏目录过滤等规则漂移导致定义不一致）；
     - 任一不等/无快照/异常 → 按“变了”处理（偏安全方向，多干活不漏活）。
     随 _NEW_TABLES_AUTO_ENSURE 自动建表，纯派生数据，可随时整表重建。
+
+    主键用目录路径的 sha256（dir_hash）而非路径本身：路径列长可能远超 MySQL/InnoDB
+    索引键上限（utf8mb4 VARCHAR(2048) = 8192 字节 > 3072），直接拿长路径当主键会让
+    该库 create_all 失败并 sys.exit(1)。快照表很小且总是整表读，路径无需索引。
     """
     __tablename__ = "scan_dir_snapshots"
-    dir = Column(String(2048), primary_key=True)
+    dir_hash = Column(String(64), primary_key=True)
+    dir = Column(String(2048))
     mtime_ns = Column(BigInteger, default=0)
     entry_count = Column(Integer, default=0)
     update_time = Column(DateTime)
 
+    @staticmethod
+    def hash_for(dir_path):
+        return hashlib.sha256(dir_path.encode("utf-8")).hexdigest()
+
     def __init__(self, dir_path, mtime_ns, entry_count):
         super(ScanDirSnapshot, self).__init__()
+        self.dir_hash = ScanDirSnapshot.hash_for(dir_path)
         self.dir = dir_path
         self.mtime_ns = mtime_ns
         self.entry_count = entry_count

@@ -597,10 +597,14 @@ class ScanService(AsyncService):
 
     @staticmethod
     def _normalize_scope(skip_last_dirs):
-        """扫描范围归一化：1/2 为已删除的旧排除选项，按全量处理（保证同目录新书不漏）。"""
+        """扫描范围归一化：1/2 为已删除的旧排除选项，按全量处理（保证同目录新书不漏）。
+
+        任意非法输入（非数、inf/nan 之类 OverflowError）一律回退 0。此函数在
+        static_is_importing 置位后调用，抛异常会泄漏导入锁直到重启，故绝不外抛。
+        """
         try:
             skip_last_dirs = int(skip_last_dirs)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             logging.warning("[IMPORT] Bad skip_last_dirs=%r, treating as full scan", skip_last_dirs)
             return 0
         if skip_last_dirs in LEGACY_SKIP_SCOPES:
@@ -610,12 +614,12 @@ class ScanService(AsyncService):
 
     @staticmethod
     def _snapshot_active(paths, force, skip_last_dirs):
-        """快照剪枝开关：仅全量作用域（paths 为 None/"all"）+ 非 force + 非选项 4 时开。
+        """快照剪枝开关：仅「全量扫描」（skip_last_dirs==0，paths 为 None/"all"）时开。
 
-        显式路径/目录选择器是用户明确意图（全走，剪枝会违背意图）；force 与选项 4
-        是“无视快照但保留去重”的全量语义。抽成函数只为可单测，逻辑与调用处保持同行。
+        显式路径/目录选择器是用户明确意图（全走）；force 与选项 4 是“无视快照但保留
+        去重”的全量语义；选项 3（按分类）亦不剪枝。抽成函数只为可单测。
         """
-        return (paths is None or paths == "all") and not force and skip_last_dirs != SCAN_SCOPE_FULL_NO_SKIP
+        return (paths is None or paths == "all") and not force and skip_last_dirs == 0
 
     def _commit_dir_snapshots(self, session, visited, scan_root):
         """整轮成功后提交目录快照（单事务原子）：upsert 本轮到访目录 + 清掉已消失目录。
@@ -634,7 +638,7 @@ class ScanService(AsyncService):
         try:
             now = datetime.datetime.now()
             for d, (mtime_ns, count) in visited.items():
-                row = session.get(ScanDirSnapshot, d)
+                row = session.get(ScanDirSnapshot, ScanDirSnapshot.hash_for(d))
                 if row is None:
                     session.add(ScanDirSnapshot(d, mtime_ns, count))
                 else:
@@ -645,9 +649,9 @@ class ScanService(AsyncService):
             for (d,) in session.query(ScanDirSnapshot.dir).all():
                 under_root = d == scan_root or d.startswith(scan_root + os.sep)
                 if (under_root and not os.path.isdir(d)) or not under_root:
-                    session.query(ScanDirSnapshot).filter(ScanDirSnapshot.dir == d).delete(
-                        synchronize_session=False
-                    )
+                    session.query(ScanDirSnapshot).filter(
+                        ScanDirSnapshot.dir_hash == ScanDirSnapshot.hash_for(d)
+                    ).delete(synchronize_session=False)
                     vacuumed += 1
             session.commit()
         except Exception as err:
@@ -738,8 +742,12 @@ class ScanService(AsyncService):
         人工修好待重试的（INVALID 文件被覆盖/PERMISSION 被 chmod）。它们数量级小
         （相对全库），逐行 realpath 归一 + isfile 后并入；去重由 Phase1 的
         processed_paths 兜底。DROP（重复标记）/EXIST/IMPORTED（终态成功）/
-        MISSED（源文件已无）不并：前者重跑也是 DROP，后两者走终态口径。
-        有声书目录路径被 isfile 天然挡掉，另叠 ebook 口径双保险。
+        MISSED（源文件已无）不并：前三者重跑结论不变，MISSED 走终态口径。
+
+        已知限制（记录不修）：DROP 行是“同内容已另有副本”的标记，若之后把原书从
+        calibre 删掉，预 PR 的全量 walk 会重评该文件并补导；剪枝后不再自动补导。
+        不把 DROP 并入是为了避免每轮把全库重复文件重新枚举+重算哈希（md5 存量哈希
+        吃不到签名复用）。此类孤儿用「全量扫描（不忽略所有目录）」= 选项 4 重扫即愈。
         """
         if not scan_root:
             return filelist
@@ -833,6 +841,13 @@ class ScanService(AsyncService):
                     user_id=user_id,
                     status="warning",
                     msg=_("选择器没有找到可导入的文件，对应记录可能已失效或源文件已不存在"),
+                )
+            # 本轮虽无可导入文件，但目录已成功走完：提交快照，否则“只有非扫描格式的
+            # 目录”会每轮重走、增量永远不生效。use_snapshot 为假（显式路径/force/选项4）
+            # 时无需提交；abort 由 _commit_dir_snapshots 内部熔断兜底。
+            if use_snapshot:
+                self._commit_dir_snapshots(
+                    self.session, visited, os.path.realpath(CONF.get("scan_upload_path", ""))
                 )
             ScanService.static_is_importing = False
             ScanService.static_import_user_id = 0

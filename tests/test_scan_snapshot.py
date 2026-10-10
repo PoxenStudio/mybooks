@@ -45,6 +45,8 @@ class SnapshotTestBase(unittest.TestCase):
         self.session.remove()
         shutil.rmtree(self.tmpdir, ignore_errors=True)
         ScanService.static_abort_flag = False
+        ScanService.static_is_importing = False
+        ScanService.static_import_user_id = 0
 
     def _touch(self, relpath, content=b"x"):
         path = os.path.join(self.tmpdir, relpath)
@@ -228,25 +230,27 @@ class TestPendingUnion(SnapshotTestBase):
 
     def test_stalled_rows_requeued_despite_prune(self):
         # 剪枝目录里躺着三类行：torn 占位 NEW、修好待重试 INVALID/PERMISSION。
-        # DROP/IMPORTED/有声书目录行不并入。
+        # DROP/IMPORTED/有声书行不并入（有声书必须是真实文件路径 + import_type=2，
+        # 才真正考验 ebook_scan_filter 而非 isfile/扩展名顺带排除）。
+        # 所有文件先建好、先快照，第二轮全目录剪枝 —— 此时 filelist 只能来自并集。
         old = self._touch(os.path.join("d1", "old.txt"), b"old-bytes")
         bad = self._touch(os.path.join("d1", "bad.txt"), b"bad-bytes")
         perm = self._touch(os.path.join("d1", "perm.txt"), b"perm-bytes")
         drop = self._touch(os.path.join("d1", "drop.txt"), b"drop-bytes")
         imp = self._touch(os.path.join("d1", "imp.txt"), b"imp-bytes")
+        audio_file = self._touch(os.path.join("audiobooks", "a.epub"), b"audio-bytes")
         files, visited = self._collect()
-        self.assertEqual(len(files), 5)
+        self.assertEqual(len(files), 6)
         self._commit(visited)
-        self.assertEqual(self.session.query(ScanDirSnapshot).count(), 2)  # root + d1
+        self.assertEqual(self.session.query(ScanDirSnapshot).count(), 3)  # root + d1 + audiobooks
         self._row(old, ScanFile.NEW)
         self._row(bad, ScanFile.INVALID)
         self._row(perm, ScanFile.PERMISSION)
         self._row(drop, ScanFile.DROP)
         self._row(imp, ScanFile.IMPORTED)
-        audio = os.path.join(self.tmpdir, "audiobooks")
-        os.makedirs(audio, exist_ok=True)
-        self._row(audio, ScanFile.INVALID, import_type=constants.IMPORT_TYPE_AUDIOBOOK)
-        files2, _visited2 = self._collect()
+        self._row(audio_file, ScanFile.INVALID, import_type=constants.IMPORT_TYPE_AUDIOBOOK)
+        files2, visited2 = self._collect()
+        self.assertEqual(visited2, {})  # 全目录剪枝，走的是并集
         self.assertEqual(sorted(files2), sorted([old, bad, perm]))
 
     def test_force_skips_reuse_and_prune(self):
@@ -278,6 +282,7 @@ class TestSnapshotGating(SnapshotTestBase):
         self.assertFalse(active(["/d"], False, 3))  # dirs 选择器到这里已是路径数组
         self.assertFalse(active("all", True, 0))
         self.assertFalse(active("all", False, 4))
+        self.assertFalse(active("all", False, 3))  # 选项 3 即使误传 all 也不剪枝
 
     def test_normalize_coerces_types(self):
         norm = ScanService._normalize_scope
@@ -286,6 +291,22 @@ class TestSnapshotGating(SnapshotTestBase):
         self.assertEqual(norm("bogus"), 0)
         self.assertEqual(norm(None), 0)
         self.assertEqual(norm(0), 0)
+        self.assertEqual(norm(float("inf")), 0)  # OverflowError 不外抛
+
+
+class TestDoImportWiring(SnapshotTestBase):
+    def test_empty_filelist_still_commits_snapshot(self):
+        # 只有非扫描格式的目录：filelist 为空也应提交快照，否则每轮重走、增量失效
+        self._touch("notes.md", b"not a book")
+        # do_import 的注册器包装用的是 AsyncService 单例（与 ScanService 单例不同），
+        # 需把测试 session 也挂上去，wrapper 才会同步执行在测试会话上。
+        asc = scan_service.AsyncService()
+        asc.db = None
+        asc.scoped_session = self.session
+        self.addCleanup(setattr, asc, "scoped_session", lambda: "no-session")
+        with mock.patch.object(scan_service.AsyncService, "async_mode", lambda self: False):
+            self.svc.do_import("all", 9)
+        self.assertGreaterEqual(self.session.query(ScanDirSnapshot).count(), 1)
 
 
 class TestNullData(SnapshotTestBase):
