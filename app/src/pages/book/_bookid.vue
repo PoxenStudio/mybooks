@@ -289,6 +289,7 @@
                     </v-btn>
                     <div class="d-inline-flex" :class="tiny ? 'mx-1' : 'mx-2'">
                         <v-btn :small="tiny" dark color="primary" class="d-flex d-sm-flex" :class="{ 'read-btn-grouped': needsReadFormatChoice }"
+                               :disabled="readBlocked"
                                :style="tiny ? { padding: '0px', margin: '0px !important' } : { margin: '0px' }"
                                :href="readHref" target="_blank" @click="onReadClick($event, defaultReadFormat)">
                             <v-icon>mdi-book-open-blank-variant</v-icon>
@@ -296,7 +297,7 @@
                         </v-btn>
                         <v-menu v-if="needsReadFormatChoice" offset-y left>
                             <template v-slot:activator="{ on, attrs }">
-                                <v-btn :small="tiny" dark color="primary" min-width="0" class="read-format-btn"
+                                <v-btn :small="tiny" dark color="primary" min-width="0" class="read-format-btn" :disabled="readBlocked"
                                        :style="tiny ? { padding: '0px', margin: '0px !important' } : { padding: '0 6px', margin: '0px' }"
                                        v-bind="attrs" v-on="on">
                                     <v-icon small>mdi-dots-vertical</v-icon>
@@ -773,12 +774,12 @@
         <v-col cols="12" sm="6" class="book-action-col">
             <v-card outlined>
                 <v-list>
-                    <v-list-item :href="readHref" target="_blank" :disabled="!hasEBooks" @click="onReadClick($event, defaultReadFormat)">
-                        <v-list-item-avatar large :color="!hasEBooks ? 'grey' : 'primary'">
+                    <v-list-item :href="readHref" target="_blank" :disabled="!hasEBooks || readBlocked" @click="onReadClick($event, defaultReadFormat)">
+                        <v-list-item-avatar large :color="!hasEBooks || readBlocked ? 'grey' : 'primary'">
                             <v-icon dark>mdi-book-open-page-variant</v-icon>
                         </v-list-item-avatar>
                         <v-list-item-content>
-                            <v-list-item-title :class="{ 'grey--text': !hasEBooks }">{{ $t('book.read') }}</v-list-item-title>
+                            <v-list-item-title :class="{ 'grey--text': !hasEBooks || readBlocked }">{{ $t('book.read') }}</v-list-item-title>
                         </v-list-item-content>
                         <v-list-item-action>
                             <v-menu v-if="needsReadFormatChoice" offset-y left>
@@ -1598,6 +1599,9 @@ export default {
             return this.book.files.some(file => writableFormats.includes(file.format.toLowerCase()));
         },
 
+        readBlocked() {
+            return this.$store.state.user?.is_login !== true && !this.$store.state.sys.allow.read && !this.guest_access;
+        },
         hasEBooks() {
             if (!this.book || !this.book.files) {
                 return false;
@@ -1882,6 +1886,7 @@ export default {
         location_input: "",
         mail_to: "",
         kindle_sender: "",
+        guest_access: null,
         favoriteLoading: false,
         wantsLoading: false,
         reviewDialogOpen: false,

@@ -44,6 +44,14 @@
                     :label="form.is_public ? $t('booklist.publicHint') : $t('booklist.privateHint')"
                     color="primary"
                 ></v-switch>
+                <v-switch
+                    v-if="canSetGuestRead"
+                    v-model="form.guest_read"
+                    :disabled="!form.is_public"
+                    :label="$t('booklist.guestReadHint')"
+                    color="primary"
+                    class="mt-0"
+                ></v-switch>
     </AppDialog>
 </template>
 
@@ -66,6 +74,7 @@ export default {
                 description: '',
                 color: DEFAULT_BOOKLIST_COLOR,
                 is_public: false,
+                guest_read: false,
             },
         };
     },
@@ -77,8 +86,14 @@ export default {
         dark() {
             return this.$vuetify.theme.dark;
         },
+        canSetGuestRead() {
+            return this.$store.state.user?.is_admin === true && !this.$store.state.sys.allow.read;
+        },
     },
     watch: {
+        'form.is_public'(v) {
+            if (!v) this.form.guest_read = false;
+        },
         value(v) {
             if (v) this.resetForm();
         },
@@ -91,9 +106,10 @@ export default {
                     description: this.booklist.description || '',
                     color: this.booklist.color || DEFAULT_BOOKLIST_COLOR,
                     is_public: !!this.booklist.is_public,
+                    guest_read: !!this.booklist.guest_read,
                 };
             } else {
-                this.form = { name: '', description: '', color: DEFAULT_BOOKLIST_COLOR, is_public: false };
+                this.form = { name: '', description: '', color: DEFAULT_BOOKLIST_COLOR, is_public: false, guest_read: false };
             }
         },
         close() {
@@ -109,6 +125,7 @@ export default {
                     color: this.form.color,
                     is_public: this.form.is_public,
                 };
+                if (this.canSetGuestRead) payload.guest_read = this.form.guest_read;
                 const url = this.mode === 'edit' ? `/booklist/${this.booklist.id}/update` : '/booklist/create';
                 const rsp = await this.$backend(url, { method: 'POST', body: JSON.stringify(payload) });
                 if (rsp.err === 'ok') {

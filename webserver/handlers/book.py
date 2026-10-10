@@ -295,6 +295,7 @@ class BookDetail(BaseHandler):
         return {
             "err": "ok",
             "kindle_sender": CONF["smtp_username"],
+            "guest_access": None if self.current_user else BookAccessService.guest_read_source(self, book_id),
             "book": formated_book,
             "audios": AudioUtils.get_audios(bid, self.current_user.id if self.current_user else None),
         }

@@ -78,6 +78,7 @@ class BookListHandlerMixin:
             "color": row.color,
             "is_public": row.is_public,
             "is_sticky": row.is_sticky,
+            "guest_read": bool(row.guest_read),
             "view_count": row.view_count,
             "like_count": row.like_count,
             "book_count": row.book_count,
@@ -164,8 +165,13 @@ class BookListCreateHandler(BaseHandler, BookListHandlerMixin):
         description = (data.get("description") or "").strip()[:500]
         color = data.get("color")
         is_public = bool(data.get("is_public", False))
+        guest_read = bool(data.get("guest_read", False)) and self.is_admin()
+        if guest_read and not is_public:
+            return {"err": "params.invalid", "msg": _("仅公开书单可以开启访客阅读")}
         try:
             row = BookListService.create(self.sqlite_session, self.user_id(), name, description, color, is_public)
+            if guest_read:
+                row = BookListService.update(self.sqlite_session, row, guest_read=True)
         except BookListLimitExceeded:
             return {"err": "booklist.limit_exceeded", "msg": _("最多只能创建 %(limit)s 个书单") % {"limit": BookList.MAX_PER_USER}}
         logging.info("[booklist] user %s created booklist %s", self.user_id(), row.id)
@@ -217,7 +223,10 @@ class BookListDetailHandler(BaseHandler, BookListHandlerMixin):
             description = description.strip()[:500]
         color = data.get("color")
         is_public = data.get("is_public")
-        row = BookListService.update(self.sqlite_session, row, name=name, description=description, color=color, is_public=is_public)
+        guest_read = bool(data["guest_read"]) if self.is_admin() and "guest_read" in data else None
+        if guest_read and not (row.is_public if is_public is None else is_public):
+            return {"err": "params.invalid", "msg": _("仅公开书单可以开启访客阅读")}
+        row = BookListService.update(self.sqlite_session, row, name=name, description=description, color=color, is_public=is_public, guest_read=guest_read)
         return {"err": "ok", "booklist": self._serialize(row, viewer_id=self.user_id()), "msg": _("已更新")}
 
 

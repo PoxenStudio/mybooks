@@ -2267,6 +2267,8 @@
     "fieldDescription": "Description",
     "fieldColor": "Choose Color",
     "publicHint": "Public: visible to everyone",
+    "guestReadBadge": "Guests can read",
+    "guestReadHint": "Allow guests to read (guests can read books in this list even when guest reading is disabled)",
     "privateHint": "Private: visible to you only",
     "addBooksTitle": "Add Books",
     "searchPlaceholder": "Search by title, author, ISBN…",

@@ -14,6 +14,9 @@
                     <div class="d-flex align-center flex-wrap">
                         <span class="booklist-name text-truncate">{{ booklist.name }}</span>
                         <v-icon v-if="!booklist.is_public" small class="ml-1" color="grey">mdi-lock-outline</v-icon>
+                        <v-chip v-if="showGuestReadBadge" x-small color="teal" text-color="white" class="ml-2">
+                            <v-icon x-small left>mdi-lock-open-variant-outline</v-icon>{{ $t('booklist.guestReadBadge') }}
+                        </v-chip>
                     </div>
                     <div class="booklist-description text-truncate">{{ booklist.description || $t('booklist.noDescription') }}</div>
                 </div>
@@ -125,6 +128,9 @@ export default {
         borderColor() {
             const c = this.colors.find(item => item.key === this.booklist.color) || this.colors[0];
             return this.dark ? c.dark : c.light;
+        },
+        showGuestReadBadge() {
+            return !!this.booklist.guest_read && !this.$store.state.sys.allow.read;
         },
         covers() {
             return (this.booklist.cover_books || []).slice(0, 15);

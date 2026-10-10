@@ -2268,6 +2268,8 @@
     "fieldDescription": "描述",
     "fieldColor": "选择颜色",
     "publicHint": "公开：其他人可浏览",
+    "guestReadBadge": "访客可读",
+    "guestReadHint": "允许访客阅读（站点未开放游客阅读时，访客可在此书单中直接阅读）",
     "privateHint": "私有：仅自己可见",
     "addBooksTitle": "添加书籍",
     "searchPlaceholder": "按书名、作者、ISBN 等搜索…",

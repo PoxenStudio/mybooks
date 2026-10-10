@@ -10,6 +10,9 @@
                             <div class="d-flex align-center flex-wrap">
                                 <span class="booklist-header-name">{{ booklist.name }}</span>
                                 <v-icon v-if="!booklist.is_public" small class="ml-2" color="grey">mdi-lock-outline</v-icon>
+                                <v-chip v-if="booklist.guest_read && !$store.state.sys.allow.read" x-small color="teal" text-color="white" class="ml-2">
+                                    <v-icon x-small left>mdi-lock-open-variant-outline</v-icon>{{ $t('booklist.guestReadBadge') }}
+                                </v-chip>
                             </div>
                             <p class="mt-2 mb-2">{{ booklist.description }}</p>
                             <div class="d-flex align-center flex-wrap" style="gap: 16px">

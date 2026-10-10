@@ -37,7 +37,7 @@ class BookListService:
 
     @classmethod
     def update(cls, db, row: BookList, name: Optional[str] = None, description: Optional[str] = None,
-               color: Optional[str] = None, is_public: Optional[bool] = None) -> BookList:
+               color: Optional[str] = None, is_public: Optional[bool] = None, guest_read: Optional[bool] = None) -> BookList:
         if name is not None:
             row.name = name
         if description is not None:
@@ -46,6 +46,10 @@ class BookListService:
             row.color = color
         if is_public is not None:
             row.is_public = is_public
+        if guest_read is not None:
+            row.guest_read = guest_read
+        if not row.is_public:
+            row.guest_read = False
         row.update_time = datetime.datetime.now()
         db.commit()
         return row
