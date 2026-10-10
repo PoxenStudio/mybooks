@@ -1050,6 +1050,10 @@ class UserReadingDashboard(BaseHandler):
     async def get(self):
         from webserver.services import reading_dashboard_service
 
+        # ENABLE_HOMEPAGE_READING_STATS 只管首页（?home=1）；阅读记录页/管理端不受影响
+        if reading_dashboard_service.homepage_stats_disabled(self.get_argument("home", "") == "1"):
+            return {"err": "ok", "enabled": False}
+
         reader_id = self.current_user.id
         uid = self.get_argument("uid", "").strip()
         if uid:
@@ -1068,8 +1072,6 @@ class UserReadingDashboard(BaseHandler):
         stats = await self.run_sqlite_async(_job)
         if stats == "not_found":
             return {"err": "failed", "msg": "user not found"}
-        if stats is None:
-            return {"err": "ok", "enabled": False}
 
         # 「即将读完」卡：service 只给 book_id/进度原始行，这里补书目信息；书已删除的跳过
         near_books = []
@@ -1115,7 +1117,8 @@ class UserReadingRange(BaseHandler):
     async def get(self):
         from webserver.services import reading_dashboard_service
 
-        if not CONF.get("ENABLE_HOMEPAGE_READING_STATS", True):
+        # 该开关只门控首页请求（?home=1）：阅读记录页的时间档切换不受影响
+        if reading_dashboard_service.homepage_stats_disabled(self.get_argument("home", "") == "1"):
             return {"err": "ok", "enabled": False}
 
         reader_id = self.current_user.id
@@ -1158,7 +1161,8 @@ class UserReadingLeaderboard(BaseHandler):
     async def get(self):
         from webserver.services import reading_dashboard_service
 
-        if not CONF.get("ENABLE_HOMEPAGE_READING_STATS", True):
+        # 排行榜卡在首页与阅读记录页共用；该开关只门控首页请求（?home=1）
+        if reading_dashboard_service.homepage_stats_disabled(self.get_argument("home", "") == "1"):
             return {"err": "ok", "enabled": False}
         board = await self.run_sqlite_async(reading_dashboard_service.get_leaderboard)
         return {

@@ -40,17 +40,18 @@
     <library-overview v-if="libraryStats && showDetail" :allow-physical-books="allowPhysicalBooks"></library-overview>
 
     <div v-if="!lazyHome" class="reading-stats-banner-wrapper" :class="{ 'is-pending': readingStatsPending }" v-show="readingStatsHasData || readingStatsPending">
-        <reading-stats-banner v-if="!$vuetify.breakpoint.xsOnly" :show-title="false" @has-stats="onReadingStatsHasData"></reading-stats-banner>
+        <reading-stats-banner v-if="!$vuetify.breakpoint.xsOnly" home :show-title="false" @has-stats="onReadingStatsHasData"></reading-stats-banner>
     </div>
     <home-section-card
         v-else-if="isLoggedIn && !$vuetify.breakpoint.xsOnly"
+        v-show="readingStatsHasData || readingStatsPending"
         icon="mdi-chart-box-outline"
         :title="$t('index.readingStats.title')"
         storage-key="index.readingStats"
         :default-expanded="false"
         @toggle="onStatsToggle"
     >
-        <reading-stats-banner v-if="statsExpanded" :show-title="false"></reading-stats-banner>
+        <reading-stats-banner v-show="statsExpanded" home :show-title="false" @has-stats="onReadingStatsHasData"></reading-stats-banner>
     </home-section-card>
 
     <div class="home-sections-container">

@@ -64,12 +64,22 @@ class TestReadingDashboardService(unittest.TestCase):
         self.session.add(row)
         self.session.commit()
 
-    def test_disabled_returns_none(self):
+    def test_homepage_stats_disabled_only_for_home_request(self):
+        # 开关只对首页请求（home=1）生效：非首页请求（阅读记录页/管理端）不受影响
         self.conf["ENABLE_HOMEPAGE_READING_STATS"] = False
         try:
-            self.assertIsNone(svc.get_stats(self.session, self.reader))
+            self.assertTrue(svc.homepage_stats_disabled(True))
+            self.assertFalse(svc.homepage_stats_disabled(False))
+            self.assertFalse(svc.homepage_stats_disabled(None))
+            # 关闭首页开关时 get_stats 本身仍可用（不再全局返回 None）
+            self.assertIsNotNone(svc.get_stats(self.session, self.reader))
         finally:
             self.conf["ENABLE_HOMEPAGE_READING_STATS"] = True
+
+    def test_homepage_stats_enabled_never_gated(self):
+        self.conf["ENABLE_HOMEPAGE_READING_STATS"] = True
+        self.assertFalse(svc.homepage_stats_disabled(True))
+        self.assertFalse(svc.homepage_stats_disabled(False))
 
     def test_totals_come_from_reader_columns(self):
         stats = svc.get_stats(self.session, self.reader)

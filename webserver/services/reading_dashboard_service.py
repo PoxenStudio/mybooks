@@ -582,10 +582,17 @@ def get_leaderboard(db, today: Optional[datetime.date] = None) -> Dict:
     }
 
 
-def get_stats(db, reader: Reader, calibre_db=None) -> Optional[Dict]:
-    if not CONF.get("ENABLE_HOMEPAGE_READING_STATS", True):
-        return None
+def homepage_stats_disabled(is_home_request) -> bool:
+    """ENABLE_HOMEPAGE_READING_STATS 只对首页请求（?home=1）生效。
 
+    阅读记录页（history.vue）与管理员用户视图不带 home 参数，不受该开关影响。
+    见 webserver/handlers/user.py 三个阅读统计接口（与 ENABLE_HOMEPAGE_READING_BOOKS
+    的 home=1 约定对齐）。
+    """
+    return bool(is_home_request) and not CONF.get("ENABLE_HOMEPAGE_READING_STATS", True)
+
+
+def get_stats(db, reader: Reader, calibre_db=None) -> Dict:
     today = datetime.datetime.utcnow().date()
     cache = _load_cache(reader.id)
     cache = _reconcile(db, reader.id, cache, today)

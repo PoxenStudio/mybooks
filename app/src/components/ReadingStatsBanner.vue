@@ -66,6 +66,8 @@ export default {
     props: {
         uid: { type: [Number, String], default: null },
         showTitle: { type: Boolean, default: true },
+        // 首页 banner 传 home：后端据此让 ENABLE_HOMEPAGE_READING_STATS 生效（阅读记录页不传）
+        home: { type: Boolean, default: false },
     },
     data: () => ({
         stats: null,
@@ -188,7 +190,10 @@ export default {
                 return;
             }
             try {
-                const url = this.uid ? `/user/reading_stats?uid=${encodeURIComponent(this.uid)}` : '/user/reading_stats';
+                const params = [];
+                if (this.uid) params.push(`uid=${encodeURIComponent(this.uid)}`);
+                if (this.home) params.push('home=1');
+                const url = `/user/reading_stats${params.length ? '?' + params.join('&') : ''}`;
                 const rsp = await this.$backend(url);
                 if (rsp.err === 'ok' && rsp.enabled) {
                     this.stats = rsp;
