@@ -95,10 +95,14 @@ def _naive_utc(ts: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
 
 INDEXED_DIMENSIONS = ("author", "series", "tag", "publisher")
 
+# Placeholder author names meaning "no known author". They carry no taste signal:
+# every anonymous book would otherwise link to every other one through this key.
+UNKNOWN_AUTHORS = frozenset({"佚名", "未知", "Unknown", "unknown", ""})
+
 
 def feature_keys(book: BookFeatures) -> List[Tuple[str, str, float]]:
     """(dimension, key, share) pairs; tags share 1/sqrt(n) so heavily tagged books do not dominate a profile."""
-    keys = [("author", a, 1.0) for a in book.authors]
+    keys = [("author", a, 1.0) for a in book.authors if a not in UNKNOWN_AUTHORS]
     if book.series:
         keys.append(("series", book.series, 1.0))
     keys += [("tag", t, 1.0 / math.sqrt(len(book.tags))) for t in book.tags]

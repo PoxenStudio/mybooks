@@ -3917,7 +3917,7 @@ class BookSuggestion(ListHandler):
 
         if not similar_books:
             authors = book.get("authors", [])
-            if authors and authors[0] not in ("佚名", "Unknown"):
+            if authors and authors[0] not in ("佚名", "未知", "Unknown", "unknown"):
                 similar_books = [b for b in self.get_item_books("authors", authors[0], max_count=SUGGESTION_COUNT + 1) if b["id"] != book["id"]]
                 reason = {"type": "same_author", "value": authors[0]}
         result = []

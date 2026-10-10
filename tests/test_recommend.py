@@ -19,7 +19,7 @@ from webserver.models import BookReadingStats, BookReview, Item, Reader, Reading
 from webserver.recommend import BookFeatures, CalibreFeatureSource, FeatureIndex, RecommendConfig, RecommendContext, RecommendService, SqlCrowdSource, SqlProfileSource, home_seed
 from webserver.recommend.coread import CoReadScorer, build_coread
 from webserver.recommend.crowd import CrowdData, CrowdView, Engagement, build_crowd
-from webserver.recommend.diversity import mmr_rerank
+from webserver.recommend.diversity import book_similarity, mmr_rerank
 from webserver.recommend.features import InvertedIndex
 from webserver.recommend.profile import BookSignal, SeriesNextScorer, SimilarityScorer, WantsScorer, book_weight, build_profile
 from webserver.recommend.recommenders import NewBooksRecommender, SampledRecommender, weighted_sample
@@ -90,6 +90,15 @@ class TestDiversity(unittest.TestCase):
     def test_caps_relaxed_when_pool_too_small(self):
         scored = [(book(i, authors=("A",)), 1.0) for i in range(4)]
         self.assertEqual(len(mmr_rerank(scored, 4, 0.3, max_per_author=2, max_per_series=2)), 4)
+
+    def test_anonymous_author_is_not_a_link(self):
+        self.assertEqual(book_similarity(book(1, authors=("佚名",)), book(2, authors=("佚名",))), 0.0)
+        self.assertEqual(book_similarity(book(3, authors=("A",)), book(4, authors=("A",))), 1.0)
+
+    def test_author_cap_ignores_anonymous(self):
+        scored = [(book(i, authors=("佚名",)), 1.0 - i * 0.01) for i in range(1, 4)] + [(book(9, authors=("B",)), 0.5)]
+        picked = mmr_rerank(scored, 3, 0.0, max_per_author=2, max_per_series=2)
+        self.assertEqual([b.book_id for b in picked], [1, 2, 3])
 
 
 class TestNewBooks(unittest.TestCase):
@@ -468,6 +477,15 @@ class TestProfile(unittest.TestCase):
     def test_cold_start(self):
         profile = build_profile(1, [signal(1, wants=True)], library(book(1)), NOW, self.config)
         self.assertTrue(profile.cold)
+
+    def test_anonymous_author_excluded_from_profile(self):
+        features = library(book(1, authors=("佚名",)), book(2, authors=("佚名",)), book(3, authors=("鲁迅",)))
+        profile = build_profile(1, [signal(1, read_state=2)], features, NOW, self.config)
+        self.assertNotIn("佚名", profile.vectors.get("author", {}))
+        self.assertEqual(InvertedIndex(features).books_with("author", "佚名"), [])
+        sim = SimilarityScorer(profile, InvertedIndex(features))
+        self.assertEqual(sim.score(features[2], ctx()), 0.5)
+        self.assertIsNone(sim.explain(features[2], ctx()))
 
 
 class TestPersonalScorers(unittest.TestCase):
