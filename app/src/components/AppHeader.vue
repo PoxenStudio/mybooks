@@ -123,10 +123,16 @@
             <template v-slot:append v-if="user.is_login">
                 <div @click.stop>
                     <v-divider></v-divider>
-                    <v-list-item dense to="/logout">
-                        <v-list-item-action dense>
+                    <v-list-item dense to="/logout" :class="{ 'v-list-item--icon-only': miniVariant }">
+                        <v-list-item-action v-if="!miniVariant" class="mt-1 mb-1 mr-2" dense>
                             <v-icon>mdi-logout</v-icon>
                         </v-list-item-action>
+                        <v-tooltip v-else bottom>
+                            <template v-slot:activator="{ on, attrs }">
+                                <v-icon v-bind="attrs" v-on="on" size="24">mdi-logout</v-icon>
+                            </template>
+                            {{ $t('appHeader.logout') }}
+                        </v-tooltip>
                         <v-list-item-content v-if="!miniVariant">
                             <v-list-item-title>{{ $t('appHeader.logout') }}</v-list-item-title>
                         </v-list-item-content>

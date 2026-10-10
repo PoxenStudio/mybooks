@@ -16,6 +16,7 @@ from collections import defaultdict
 from urllib.parse import urlparse
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import func as sql_func
+from sqlalchemy import inspect as sa_inspect
 from tornado import web
 from tornado.escape import utf8
 
@@ -576,10 +577,18 @@ class BaseHandler(web.RequestHandler):
         self.sqlite_session.commit()
         return messages
 
+    def _attached_user(self):
+        user = self.current_user
+        if user is not None and sa_inspect(user).detached:
+            user = self.sqlite_session.merge(user)
+            self.current_user = user
+        return user
+
     def user_history(self, action, book):
         if not self.user_id():
             return
-        extra = self.current_user.extra
+        user = self._attached_user()
+        extra = user.extra
         history = extra.get(action, [])
         for val in history[:12]:
             if val["id"] == book["id"]:
@@ -594,7 +603,6 @@ class BaseHandler(web.RequestHandler):
         # we have five type of history, so make a average limit of max history
         ITEM_COUNT_LIMIT = 60  # = 32KB/100B/5
         extra[action] = history[:ITEM_COUNT_LIMIT]
-        user = self.current_user
         user.extra.update(extra)
         try:
             user.save()
@@ -607,10 +615,10 @@ class BaseHandler(web.RequestHandler):
             return
         if not key.endswith("_count"):
             key = key + "_count"
-        extra = self.current_user.extra
+        user = self._attached_user()
+        extra = user.extra
         count = extra.get(key, 0) + 1
         extra[key] = count
-        user = self.current_user
         user.extra.update(extra)
         try:
             user.save()
