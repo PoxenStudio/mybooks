@@ -38,6 +38,7 @@ from webserver.base.image_generator import ImageGenerator
 from webserver.base.image_helper import ImageHelper
 from webserver.base.epub_helper import EpubHelper
 from webserver.base.meta_helper import guess_authors, guess_tags
+from webserver.services.book_visit_service import BookVisitService
 from webserver.services.autofill import AutoFillService
 from webserver.services.perf_monitor import PerfMonitor
 from webserver.services.ai_fillinfo import AIFillInfoService
@@ -252,6 +253,12 @@ class BookDetail(BaseHandler):
 
         if not book:
             return {"err": "params.book.invalid", "msg": _("书籍不存在")}
+
+        if self.current_user and self.get_argument("track", "1") != "0":
+            try:
+                BookVisitService.record(self.current_user.id, book_id)
+            except Exception as e:
+                logging.error("record book visit failed: %s" % e)
 
         # 添加当前用户的阅读状态信息
         if self.current_user:
@@ -1344,6 +1351,35 @@ class BookFavorite(BaseHandler):
                 "title": _("我的收藏"),
                 "total": total_cnt,
                 "books": favorite_books}
+
+
+class BookVisits(BaseHandler):
+    @js
+    @auth
+    def get(self):
+        start = self.get_argument_start()
+        page_size = CONF.get("DEFAULT_PAGE_SIZE", 60)
+        size = max(min(int(self.get_argument("size", page_size)), 100), 0)
+        rows, total = BookVisitService.list(self.user_id(), start, size)
+        times = dict(rows)
+        books_dict = {book["id"]: book for book in self.get_books_for_list(ids=list(times))} if times else {}
+        books = []
+        for book_id, visit_time in rows:
+            book = books_dict.get(book_id)
+            if not book:
+                continue
+            data = BookFormatter(self, book).format()
+            data["visit_time"] = visit_time.isoformat()
+            books.append(data)
+        return {"err": "ok", "title": _("浏览记录"), "total": total, "books": books}
+
+
+class BookVisitsClear(BaseHandler):
+    @js
+    @auth
+    def post(self):
+        BookVisitService.clear(self.user_id())
+        return {"err": "ok", "msg": _("浏览记录已清空")}
 
 
 class BookWantToRead(BaseHandler):
@@ -4723,6 +4759,8 @@ def routes():
         (r"/api/book/([0-9]+)/reading_stats", BookFormatReadingStats),
         (r"/api/book/([0-9]+)/reading_time", BookReadingTimeCorrection),
         (r"/api/favorites", BookFavorite),
+        (r"/api/visits", BookVisits),
+        (r"/api/visits/clear", BookVisitsClear),
         (r"/api/wants", BookWantToRead),
         (r"/api/reading", BookReading),
         (r"/api/read-done", BookReadDone),

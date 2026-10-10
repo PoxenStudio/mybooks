@@ -15,12 +15,22 @@
             <v-icon>mdi-delete</v-icon>
           </v-btn>
         </template>
+        <v-btn v-if="isVisitsPage && books.length > 0" icon class="ml-2"
+               :title="$t('listBook.clearVisits')" @click="clearDialog = true">
+          <v-icon>mdi-delete-sweep-outline</v-icon>
+        </v-btn>
         <v-divider class="mt-3 mb-0"></v-divider>
       </v-col>
 
       <v-col>
         <book-cards :books="books" :isAudioPage="isAudioPage" :selectable="multiSelectMode"
-                    :selectedIds="selectedIds" @toggle-select="toggleSelect"></book-cards>
+                    :selectedIds="selectedIds" @toggle-select="toggleSelect">
+          <template v-if="isVisitsPage" v-slot:introduce="{ book }">
+            <div v-if="book.visit_time" class="caption grey--text">
+              <v-icon x-small>mdi-clock-outline</v-icon> {{ formatVisitTime(book.visit_time) }}
+            </div>
+          </template>
+        </book-cards>
       </v-col>
 
       <v-col cols=12>
@@ -47,6 +57,21 @@
       @confirm="removeSelected"
     >
       {{ confirmRemoveContent }}
+    </AppDialog>
+
+    <AppDialog
+      v-model="clearDialog"
+      :persistent="false"
+      type="confirm"
+      :title="$t('listBook.clearVisitsTitle')"
+      color="deep-orange"
+      confirm-dark
+      max-width="420"
+      :confirm-text="$t('listBook.confirm')"
+      :confirm-loading="clearing"
+      @confirm="clearVisits"
+    >
+      {{ $t('listBook.clearVisitsContent') }}
     </AppDialog>
   </div>
 </template>
@@ -78,6 +103,9 @@ export default {
     pageDisplayTitle() {
       return this.getPageTitle();
     },
+    isVisitsPage() {
+      return this.$route.path === '/visits';
+    },
     isSelectablePage() {
       return Object.prototype.hasOwnProperty.call(SELECTABLE_ACTIONS, this.$route.path);
     },
@@ -104,6 +132,8 @@ export default {
     selectedIds: [],
     confirmDialog: false,
     removing: false,
+    clearDialog: false,
+    clearing: false,
   }),
   async asyncData({route, app, res}) {
     if (res !== undefined) {
@@ -147,6 +177,10 @@ export default {
 
         case "/favorites":
           displayTitle = this.$t('listBook.favoritesBooks');
+          break;
+
+        case "/visits":
+          displayTitle = this.$t('listBook.visitsBooks');
           break;
 
         case "/wants":
@@ -244,6 +278,30 @@ export default {
         this.selectedIds = [...this.selectedIds, bookId];
       } else {
         this.selectedIds = this.selectedIds.filter((id) => id !== bookId);
+      }
+    },
+    formatVisitTime(value) {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
+    },
+    async clearVisits() {
+      if (this.clearing) return;
+      this.clearing = true;
+      try {
+        const rsp = await this.$backend('/visits/clear', { method: 'POST' });
+        if (rsp.err === 'ok') {
+          this.books = [];
+          this.total = 0;
+          this.page_cnt = 1;
+          this.clearDialog = false;
+          this.$alert('success', this.$t('listBook.clearVisitsSuccess'));
+        } else {
+          this.$alert('error', rsp.msg || this.$t('listBook.removeFailed'));
+        }
+      } catch (e) {
+        this.$alert('error', this.$t('listBook.removeFailed'));
+      } finally {
+        this.clearing = false;
       }
     },
     async removeSelected() {

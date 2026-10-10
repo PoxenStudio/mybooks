@@ -184,6 +184,8 @@ settings = {
     "SYNC_SOFT_DELETE_RETENTION_DAYS": 7,  # reading_records 软删除（deleted_at）记录保留天数，超期物理清理
     "ALLOW_USER_DISABLE_STATISTIC": False,
     "READING_STATS_FLUSH_INTERVAL_SEC": 5,
+    "VISIT_FLUSH_INTERVAL": 30,  # 浏览记录批量落库周期（秒），0 表示每次访问同步写库
+    "VISIT_FLUSH_THRESHOLD": 200,  # 浏览记录缓存达到该条数立即落库
     "ENABLE_HOMEPAGE_READING_STATS": True,
     "ENABLE_HOMEPAGE_READING_BOOKS": True,
     "ENABLE_HOMEPAGE_BOOKLISTS": False,

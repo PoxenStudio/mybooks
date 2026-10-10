@@ -556,6 +556,11 @@ def make_app():
     # 见 document/Reading_Stats_Design.md §11.4
     atexit.register(ReadingStatsService.stop)
 
+    from webserver.services.book_visit_service import BookVisitService
+    with substep("book_visit"):
+        BookVisitService.start()
+    atexit.register(BookVisitService.stop)
+
     from webserver.services.sync_service import MyReaderSyncService
     with substep("sync_service"):
         MyReaderSyncService.start()

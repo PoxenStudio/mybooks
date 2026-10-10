@@ -680,7 +680,7 @@ export default {
                 {
                     icon: "mdi-book-open-page-variant-outline",
                     text: "appHeader.readingInfo",
-                    expand: this.isPathMatch("/reading/") || this.isPathMatch("/favorites/") || this.isPathMatch("/wants/") || this.isPathMatch("/read-done/"),
+                    expand: this.isPathMatch("/reading/") || this.isPathMatch("/favorites/") || this.isPathMatch("/wants/") || this.isPathMatch("/read-done/") || this.isPathMatch("/visits/"),
                     color: "blue darken-1",
                     groups: [
                         { icon: "mdi-heart", href: "/favorites", text: "appHeader.favorites", color: "red" },
@@ -688,6 +688,7 @@ export default {
                         { icon: "mdi-book-open-page-variant", href: "/reading", text: "appHeader.reading", color: "blue" },
                         { icon: "mdi-check-circle", href: "/read-done", text: "appHeader.readDone", color: "green" },
                         { icon: "mdi-history", href: "/history", text: "appHeader.reading_history", color: "blue" },
+                        { icon: "mdi-eye-outline", href: "/visits", text: "appHeader.visits", color: "teal" },
                     ]
                 }
             ];
