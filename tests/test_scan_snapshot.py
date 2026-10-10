@@ -10,10 +10,11 @@ import tempfile
 import unittest
 from unittest import mock
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from webserver import constants
 from webserver import models
 from webserver.models import ScanDirSnapshot, ScanFile
 from webserver.services import scan_service
@@ -214,6 +215,98 @@ class TestScopeNormalize(SnapshotTestBase):
 
     def test_collect_imported_path_deleted(self):
         self.assertFalse(hasattr(ScanService, "_collect_imported_path"))
+
+
+class TestPendingUnion(SnapshotTestBase):
+    def _row(self, path, status, import_type=0):
+        row = ScanFile(path, "", 1)
+        row.status = status
+        row.import_type = import_type
+        self.session.add(row)
+        self.session.commit()
+        return row
+
+    def test_stalled_rows_requeued_despite_prune(self):
+        # 剪枝目录里躺着三类行：torn 占位 NEW、修好待重试 INVALID/PERMISSION。
+        # DROP/IMPORTED/有声书目录行不并入。
+        old = self._touch(os.path.join("d1", "old.txt"), b"old-bytes")
+        bad = self._touch(os.path.join("d1", "bad.txt"), b"bad-bytes")
+        perm = self._touch(os.path.join("d1", "perm.txt"), b"perm-bytes")
+        drop = self._touch(os.path.join("d1", "drop.txt"), b"drop-bytes")
+        imp = self._touch(os.path.join("d1", "imp.txt"), b"imp-bytes")
+        files, visited = self._collect()
+        self.assertEqual(len(files), 5)
+        self._commit(visited)
+        self.assertEqual(self.session.query(ScanDirSnapshot).count(), 2)  # root + d1
+        self._row(old, ScanFile.NEW)
+        self._row(bad, ScanFile.INVALID)
+        self._row(perm, ScanFile.PERMISSION)
+        self._row(drop, ScanFile.DROP)
+        self._row(imp, ScanFile.IMPORTED)
+        audio = os.path.join(self.tmpdir, "audiobooks")
+        os.makedirs(audio, exist_ok=True)
+        self._row(audio, ScanFile.INVALID, import_type=constants.IMPORT_TYPE_AUDIOBOOK)
+        files2, _visited2 = self._collect()
+        self.assertEqual(sorted(files2), sorted([old, bad, perm]))
+
+    def test_force_skips_reuse_and_prune(self):
+        fpath = self._touch("f.txt", b"force-content")
+        sig = ScanService.file_signature(fpath)
+        row = ScanFile(fpath, "sha256:cached", 1)
+        row.status = ScanFile.NEW
+        row.data = {scan_service.FILE_SIG_KEY: sig}
+        self.session.add(row)
+        self.session.commit()
+        staged = []
+        with mock.patch.object(
+            ScanService, "_compute_hash", return_value=("sha256:re", None)
+        ) as hc:
+            _rid, state = self.svc._scan_one_file(
+                fpath, self.session, 1, set(), set(), True, staged=staged
+            )
+        hc.assert_called_once_with(fpath)
+        self.assertEqual(state, ScanFile.READY)
+        self.assertTrue(ScanService._snapshot_active("all", True, 0) is False)
+
+
+class TestSnapshotGating(SnapshotTestBase):
+    def test_snapshot_active_matrix(self):
+        active = ScanService._snapshot_active
+        self.assertTrue(active(None, False, 0))
+        self.assertTrue(active("all", False, 0))
+        self.assertFalse(active(["/x"], False, 0))
+        self.assertFalse(active(["/d"], False, 3))  # dirs 选择器到这里已是路径数组
+        self.assertFalse(active("all", True, 0))
+        self.assertFalse(active("all", False, 4))
+
+    def test_normalize_coerces_types(self):
+        norm = ScanService._normalize_scope
+        self.assertEqual(norm("1"), 0)
+        self.assertEqual(norm("4"), 4)
+        self.assertEqual(norm("bogus"), 0)
+        self.assertEqual(norm(None), 0)
+        self.assertEqual(norm(0), 0)
+
+
+class TestNullData(SnapshotTestBase):
+    def test_null_data_recomputes(self):
+        # 真遗留 NULL（列默认 {} 是建库填充，老库手工行可能是 NULL）
+        fpath = self._touch("nulldata.txt", b"nulldata-content")
+        row = ScanFile(fpath, "sha256:old", 1)
+        row.status = ScanFile.NEW
+        self.session.add(row)
+        self.session.commit()
+        self.session.execute(text("UPDATE scanfiles SET data=NULL"))
+        self.session.commit()
+        staged = []
+        with mock.patch.object(
+            ScanService, "_compute_hash", return_value=("sha256:re", None)
+        ) as hc:
+            _rid, state = self.svc._scan_one_file(
+                fpath, self.session, 1, set(), set(), False, staged=staged
+            )
+        hc.assert_called_once_with(fpath)
+        self.assertEqual(state, ScanFile.READY)
 
 
 class TestSnapshotLocales(unittest.TestCase):

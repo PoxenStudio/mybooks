@@ -478,7 +478,6 @@
     "scan_scope": "Scan Scope",
     "scan_scope_all": "Full scan",
     "scan_scope_full_noskip": "Full scan (no directories skipped)",
-    "skip_last_dirs": "Skip directories already imported in the previous task",
     "delete": "Delete",
     "import_all": "Scan and import Books",
     "select_files": "Please select the files to be processed (by default, all books will be imported. Existing books will not be re-imported even if selected).",

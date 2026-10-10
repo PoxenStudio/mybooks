@@ -476,7 +476,6 @@
     "scan_scope": "扫描范围",
     "scan_scope_all": "全量扫描",
     "scan_scope_full_noskip": "全量扫描（不忽略所有目录）",
-    "skip_last_dirs": "导入时跳过上一次已导入的目录",
     "delete": "删除",
     "import_all": "扫描并导入书籍",
     "select_files": "请勾选需要处理的文件（默认情况下导入全部书籍即可。已存在的书籍，即使勾选了也不会重复导入）",

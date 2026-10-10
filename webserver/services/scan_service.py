@@ -598,10 +598,24 @@ class ScanService(AsyncService):
     @staticmethod
     def _normalize_scope(skip_last_dirs):
         """扫描范围归一化：1/2 为已删除的旧排除选项，按全量处理（保证同目录新书不漏）。"""
+        try:
+            skip_last_dirs = int(skip_last_dirs)
+        except (TypeError, ValueError):
+            logging.warning("[IMPORT] Bad skip_last_dirs=%r, treating as full scan", skip_last_dirs)
+            return 0
         if skip_last_dirs in LEGACY_SKIP_SCOPES:
             logging.warning("[IMPORT] Legacy skip_last_dirs=%d removed, treating as full scan", skip_last_dirs)
             return 0
         return skip_last_dirs
+
+    @staticmethod
+    def _snapshot_active(paths, force, skip_last_dirs):
+        """快照剪枝开关：仅全量作用域（paths 为 None/"all"）+ 非 force + 非选项 4 时开。
+
+        显式路径/目录选择器是用户明确意图（全走，剪枝会违背意图）；force 与选项 4
+        是“无视快照但保留去重”的全量语义。抽成函数只为可单测，逻辑与调用处保持同行。
+        """
+        return (paths is None or paths == "all") and not force and skip_last_dirs != SCAN_SCOPE_FULL_NO_SKIP
 
     def _commit_dir_snapshots(self, session, visited, scan_root):
         """整轮成功后提交目录快照（单事务原子）：upsert 本轮到访目录 + 清掉已消失目录。
@@ -681,9 +695,10 @@ class ScanService(AsyncService):
             elif os.path.isdir(p):
                 for dirpath, dirnames, filenames in os.walk(p, onerror=ScanService.os_walk_error_handler):
                     real_dirpath = os.path.realpath(dirpath)
-                    dirnames[:] = [d for d in dirnames if not d.startswith(".")]
-                    # 剪枝前口径的原始条目数（scandir 枚举自带，不另调 syscall）
+                    # scandir 原始条目数（过滤前口径）：写读两侧必须同一定义，否则隐藏目录
+                    # 增删会导致永久 miss 或永久重走。本计数含点开头条目（文件循环里再跳过）。
                     entry_count = len(dirnames) + len(filenames)
+                    dirnames[:] = [d for d in dirnames if not d.startswith(".")]
                     try:
                         dir_mtime = os.stat(dirpath).st_mtime_ns
                     except OSError:
@@ -712,7 +727,52 @@ class ScanService(AsyncService):
                 logging.warning("[SCAN] Path not found: %s", p)
         if use_snapshot:
             logging.info("[SCAN] Snapshot prune: %d dirs skipped, %d dirs visited", skipped_dirs, len(visited))
+            scan_root = os.path.realpath(CONF.get("scan_upload_path", ""))
+            filelist = self._union_pending_paths(filelist, scan_root)
         return filelist, visited
+
+    def _union_pending_paths(self, filelist, scan_root):
+        """把库里待处理（NEW/READY/INVALID/PERMISSION）的电子书记录路径并入清单。
+
+        剪枝跳过的目录里可能躺着三类行：中断续导遗留及撕裂占位（NEW/READY）、
+        人工修好待重试的（INVALID 文件被覆盖/PERMISSION 被 chmod）。它们数量级小
+        （相对全库），逐行 realpath 归一 + isfile 后并入；去重由 Phase1 的
+        processed_paths 兜底。DROP（重复标记）/EXIST/IMPORTED（终态成功）/
+        MISSED（源文件已无）不并：前者重跑也是 DROP，后两者走终态口径。
+        有声书目录路径被 isfile 天然挡掉，另叠 ebook 口径双保险。
+        """
+        if not scan_root:
+            return filelist
+        try:
+            rows = (
+                ScanService.ebook_scan_filter(self.session.query(ScanFile.path))
+                .filter(ScanFile.status.in_([ScanFile.NEW, ScanFile.READY, ScanFile.INVALID, ScanFile.PERMISSION]))
+                .filter(ScanFile.path.isnot(None))
+                .all()
+            )
+        except Exception as err:
+            logging.warning("[IMPORT] Pending union query failed, skip: %s", err)
+            return filelist
+        if not rows:
+            return filelist
+        seen = set(filelist)
+        added = 0
+        for (p,) in rows:
+            if not p or p in seen:
+                continue
+            try:
+                real = os.path.realpath(p)
+                inside = real == scan_root or real.startswith(scan_root + os.sep)
+            except (ValueError, OSError):
+                continue
+            if not inside or not os.path.isfile(p):
+                continue
+            seen.add(p)
+            filelist.append(p)
+            added += 1
+        if added:
+            logging.info("[IMPORT] Pending union: %d stalled records re-queued", added)
+        return filelist
 
     @AsyncService.register_service
     def do_import(self, paths, user_id, skip_last_dirs=0, force=False, import_id=0, cleanup_dir=None, selector=None, sole=False):
@@ -759,9 +819,8 @@ class ScanService(AsyncService):
             else:
                 paths = self.resolve_filter_paths(self.session, sel_value)
 
-        # 快照剪枝只走全量作用域：显式路径/目录选择器是用户明确意图，全走；
-        # force 与选项 4（不忽略所有目录）无视快照但保留去重。
-        use_snapshot = (paths is None or paths == "all") and not force and skip_last_dirs != SCAN_SCOPE_FULL_NO_SKIP
+        # 快照剪枝只走全量作用域（细则见 _snapshot_active）。
+        use_snapshot = ScanService._snapshot_active(paths, force, skip_last_dirs)
         filelist, visited = self._collect_files(paths, use_snapshot=use_snapshot)
         logging.info("[IMPORT] Collected %d files in %.3f seconds (skip_last_dirs=%d)", len(filelist), time.time() - start_time, skip_last_dirs)
         if not filelist:
@@ -1200,8 +1259,11 @@ class ScanService(AsyncService):
         # (PoxenStudio) Reuse cached hash if available (NEW/READY record from a previous interrupted run).
         # MISSED/PERMISSION: file was previously inaccessible, reprocess from scratch (no reuse).
         # 签名门：缓存哈希只在文件签名（size/mtime_ns/ctime_ns/ino一次 stat 全取）全等时
-        # 复用；存量无签名行/签名任一不等/stat 失败一律重算（偏安全方向）。
+        # 复用；存量无签名行/签名任一不等/stat 失败一律重算（偏安全方向）。命中用的 stat
+        # 结果直接留给行挂签，不重取——两次 stat 之间文件再变会导致（旧哈希，新签名）
+        # 的永久错配。
         reuse_hash = None
+        reuse_sig = None
         if not force:
             cached = next(
                 (r for r in same_path_rows
@@ -1209,10 +1271,11 @@ class ScanService(AsyncService):
                 None,
             )
             if cached is not None:
-                stored_sig = (cached.data or {}).get(FILE_SIG_KEY) if cached.data else None
+                stored_sig = cached.data.get(FILE_SIG_KEY) if isinstance(cached.data, dict) else None
                 current_sig = ScanService.file_signature(fpath)
                 if current_sig is not None and stored_sig == current_sig:
                     reuse_hash = cached.hash
+                    reuse_sig = current_sig
                     logging.info("[SCAN] Reusing cached hash (signature match) for: %s", fpath)
                 else:
                     logging.info("[SCAN] Signature changed, recompute hash for: %s", fpath)
@@ -1220,7 +1283,7 @@ class ScanService(AsyncService):
         current_sig = None
         if reuse_hash:
             hash_val, bad_reason = reuse_hash, None
-            current_sig = ScanService.file_signature(fpath)
+            current_sig = reuse_sig
         else:
             pre_sig = ScanService.file_signature(fpath)
             hash_val, bad_reason = self._compute_hash(fpath)
