@@ -154,6 +154,12 @@ class ScanP0TestBase(unittest.TestCase):
                 scan_service.CONF.pop(key, None)
             else:
                 scan_service.CONF[key] = value
+        # 类级运行态必须复位：wiring 用例可能置位 abort/persist_failed/is_importing，
+        # 泄漏会让后续 do_import 系用例静默跳过或误判
+        ScanService.static_abort_flag = False
+        ScanService.static_phase1_persist_failed = False
+        ScanService.static_is_importing = False
+        ScanService.static_import_user_id = 0
         self.session.remove()
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
@@ -323,10 +329,165 @@ class TestPhase1Batching(ScanP0TestBase):
 
         self.svc._import_one_file = fake_import_one_file
         self.addCleanup(self._restore_import_one_file)
+        # spy 批次边界：只断言终态时，删掉阈值触发的提交、只留批尾 flush 也照样过；
+        # 批尺寸序列 [2,2,1] 钉住阈值提交真实发生（Sourcery C8）
+        batches = []
+        orig_apply = ScanService._apply_phase1_batch
+
+        def spying_apply(svc_self, session, staged):
+            batches.append(len(staged))
+            return orig_apply(svc_self, session, staged)
+
         with mock.patch.object(scan_service, "PHASE1_BATCH_SIZE", 2):
-            self.svc.do_import_internal(files, 9)
+            with mock.patch.object(ScanService, "_apply_phase1_batch", spying_apply):
+                self.svc.do_import_internal(files, 9)
+        self.assertEqual(batches, [2, 2, 1])
         self.assertEqual(sorted(delivered), sorted(files))
         self.assertEqual(self.session.query(ScanFile).filter(ScanFile.status == ScanFile.READY).count(), 5)
+
+
+class TestPersistFailureGate(ScanP0TestBase):
+    """C2 修复：Phase1 持久化失败必须阻止快照提交与暂存清理——失败批次没落库的
+    路径一旦被快照剪枝就永久漏书（union-pending 救不了没有行的文件）。"""
+
+    def _restore_import_one_file(self):
+        if "_import_one_file" in self.svc.__dict__:
+            del self.svc._import_one_file
+
+    def _stub_import_one_file(self):
+        def fake_import_one_file(row, user_id, scan_upload_path, session, force, sole=False, *args, **kwargs):
+            return None, None
+
+        self.svc._import_one_file = fake_import_one_file
+        self.addCleanup(self._restore_import_one_file)
+
+    def _run_do_import(self, staged_dir):
+        # do_import 的注册器包装在同步模式下经 AsyncService 单例 setup 注入 db/session
+        # （与 test_scan_snapshot.TestDoImportWiring 同款）。
+        asc = scan_service.AsyncService()
+        old_scoped, old_db = asc.scoped_session, getattr(asc, "db", None)
+        asc.db = FakeCalibreDB()
+        asc.scoped_session = self.session
+        self.addCleanup(setattr, asc, "scoped_session", old_scoped)
+        self.addCleanup(setattr, asc, "db", old_db)
+        with mock.patch.object(scan_service.AsyncService, "async_mode", lambda self: False):
+            self.svc.do_import("all", 9, cleanup_dir=staged_dir)
+
+    def test_apply_failure_skips_snapshot_and_keeps_staging(self):
+        self._stub_import_one_file()
+        self._touch(os.path.join("d1", "g1.txt"), b"gated-content")
+        staged_dir = os.path.join(self.tmpdir, "staging")
+        os.makedirs(staged_dir, exist_ok=True)
+        with mock.patch.object(scan_service, "BackgroundService", mock.MagicMock()):
+            with mock.patch.object(
+                ScanService, "_apply_phase1_batch", side_effect=RuntimeError("db boom")
+            ):
+                with mock.patch.object(ScanService, "_commit_dir_snapshots") as snap:
+                    self._run_do_import(staged_dir)
+        self.assertTrue(ScanService.static_phase1_persist_failed)
+        snap.assert_not_called()
+        self.assertTrue(os.path.isdir(staged_dir))
+
+    def test_success_run_commits_snapshot_and_cleans_staging(self):
+        self._stub_import_one_file()
+        self._touch(os.path.join("d1", "g2.txt"), b"ok-content")
+        staged_dir = os.path.join(self.tmpdir, "staging")
+        os.makedirs(staged_dir, exist_ok=True)
+        with mock.patch.object(scan_service, "BackgroundService", mock.MagicMock()):
+            with mock.patch.object(ScanService, "_commit_dir_snapshots") as snap:
+                self._run_do_import(staged_dir)
+        self.assertFalse(ScanService.static_phase1_persist_failed)
+        snap.assert_called_once()
+        self.assertFalse(os.path.isdir(staged_dir))
+
+    def test_commit_failure_sets_flag(self):
+        db = FakeCalibreDB()
+        self.svc.db = db
+        fpath = self._touch("cb.txt", b"commit-boom")
+        real_session = self.session
+
+        class CommitBoom:
+            def __init__(self, real):
+                self._real = real
+
+            def commit(self, *args, **kwargs):
+                raise RuntimeError("commit boom")
+
+            def __getattr__(self, name):
+                return getattr(self._real, name)
+
+        self.svc.session = CommitBoom(real_session)
+        self._stub_import_one_file()
+        self.svc.do_import_internal([fpath], 9)
+        self.assertTrue(ScanService.static_phase1_persist_failed)
+
+    def test_dropped_save_sets_flag(self):
+        # 行级 save 被丢也必须置位（第三个置位分支）：legacy UNIQUE(hash) 库上同哈希
+        # IMPORTED 行占位时 READY 行落库被行级 SAVEPOINT 丢弃，该文件本轮无行，
+        # 不置位就会照常提交快照、路径被剪枝永久漏掉
+        self.session.execute(text("CREATE UNIQUE INDEX ux_scanfiles_hash ON scanfiles (hash)"))
+        imp = ScanFile(os.path.join(self.tmpdir, "imported.epub"), "sha256:dup", 1)
+        imp.status = ScanFile.IMPORTED
+        imp.book_id = 424242  # 不在 FakeCalibreDB：存在性为假，不走 DROP 分支
+        self.session.add(imp)
+        self.session.commit()
+        db = FakeCalibreDB()
+        self.svc.db = db
+        fpath = self._touch("dupfile.txt", b"dup-content")
+        self._stub_import_one_file()
+        with mock.patch.object(ScanService, "_compute_hash", return_value=("sha256:dup", None)):
+            self.svc.do_import_internal([fpath], 9)
+        self.assertTrue(ScanService.static_phase1_persist_failed)
+
+
+class TestUnreadableFileRow(ScanP0TestBase):
+    """C5 修复：文件在但读不了必须落 PERMISSION 行进 union-pending，否则目录快照
+    照常提交、该路径被剪枝永久漏掉。文件消失则不落行（无可重试对象）。"""
+
+    def test_unreadable_file_creates_permission_row(self):
+        db = FakeCalibreDB()
+        self.svc.db = db
+        fpath = self._touch("locked.txt", b"locked-content")
+        with mock.patch.object(scan_service.os, "access", return_value=False):
+            rid, state = self.svc._scan_one_file(fpath, self.session, 1, set(), set(), False)
+        self.assertEqual((rid, state), (None, ScanFile.PERMISSION))
+        row = self.session.query(ScanFile).filter(ScanFile.path == fpath).one()
+        self.assertEqual(row.status, ScanFile.PERMISSION)
+        self.assertEqual(row.hash, "")
+
+    def test_unreadable_file_no_duplicate_rows(self):
+        fpath = self._touch("locked2.txt", b"locked-content-2")
+        with mock.patch.object(scan_service.os, "access", return_value=False):
+            self.svc._scan_one_file(fpath, self.session, 1, set(), set(), False)
+            self.svc._scan_one_file(fpath, self.session, 1, set(), set(), False)
+        self.assertEqual(
+            self.session.query(ScanFile).filter(ScanFile.path == fpath).count(), 1
+        )
+
+    def test_vanished_file_creates_no_row(self):
+        rid, state = self.svc._scan_one_file(
+            os.path.join(self.tmpdir, "gone.txt"), self.session, 1, set(), set(), False
+        )
+        self.assertEqual((rid, state), (None, None))
+        self.assertEqual(self.session.query(ScanFile).count(), 0)
+
+    def test_unreadable_imported_file_creates_no_row(self):
+        # 已导入且书仍在：文件读不了也不落 PERMISSION 行（对齐旧预检行为，
+        # 否则 IMPORTED 行与 PERMISSION 行并存且永不清理，审查 P2-1）
+        db = FakeCalibreDB(existing={7})
+        self.svc.db = db
+        fpath = self._touch("implocked.txt", b"implocked-content")
+        row = ScanFile(fpath, "sha256:9", 1)
+        row.status = ScanFile.IMPORTED
+        row.book_id = 7
+        self.session.add(row)
+        self.session.commit()
+        with mock.patch.object(scan_service.os, "access", return_value=False):
+            rid, state = self.svc._scan_one_file(fpath, self.session, 1, set(), set(), False)
+        self.assertEqual((rid, state), (None, None))
+        self.assertEqual(
+            self.session.query(ScanFile).filter(ScanFile.path == fpath).count(), 1
+        )
 
 
 @unittest.skipUnless(HAS_CALIBRE, "needs calibre (real _import_one_file)")
@@ -364,13 +525,27 @@ class TestSetFieldBatching(ScanP0TestBase):
         self.assertEqual(len(covered), 25)
         self.assertEqual(self.session.query(ScanFile).filter(ScanFile.status == ScanFile.IMPORTED).count(), 25)
 
-    def test_pending_fields_flushed_without_category(self):
+    def test_final_flush_fires_below_threshold(self):
+        # 单本（低于水位 5）也必须落 category：只能来自 worker finally 的兜底 flush，
+        # 阈值 flush 触发不了、批提交（20 的倍数）也赶不上——删掉 finally flush 本用例必挂
+        # （原 test_pending_fields_flushed_without_category 用根目录 txt，pending 恒空，
+        # flush 是空操作，什么都钉不住——Sourcery C7）
+        old_val = scan_service.CONF.get("IMPORT_CATEGORY_WITH_FOLDER")
+        scan_service.CONF["IMPORT_CATEGORY_WITH_FOLDER"] = True
+        self.addCleanup(
+            lambda: scan_service.CONF.update({"IMPORT_CATEGORY_WITH_FOLDER": old_val})
+            if old_val is not None
+            else scan_service.CONF.pop("IMPORT_CATEGORY_WITH_FOLDER", None)
+        )
         db = FakeCalibreDB()
         self.svc.db = db
-        f1 = self._touch("plain.txt", b"plain-content")
-        self.svc.do_import_internal([f1], 9)
-        row = self.session.query(ScanFile).filter(ScanFile.path == f1).one()
+        fpath = self._touch(os.path.join("cats", "plain.txt"), b"plain-content")
+        self.svc.do_import_internal([fpath], 9)
+        row = self.session.query(ScanFile).filter(ScanFile.path == fpath).one()
         self.assertEqual(row.status, ScanFile.IMPORTED)
+        cat_calls = [m for name, m in db.new_api.set_field_calls if name == constants.CALIBRE_COLUMN_CATEGORY]
+        self.assertEqual(len(cat_calls), 1)
+        self.assertEqual(list(cat_calls[0].keys()), [row.book_id])
 
 
 class TestPhase1NoWriteHold(ScanP0TestBase):
@@ -487,6 +662,21 @@ class TestPutWork(ScanP0TestBase):
         threading.Thread(target=drain, daemon=True).start()
         ScanService._put_work(q, live, "y", timeout=5)
         self.assertEqual(q.qsize(), 1)
+
+    def test_put_gives_up_after_cancel_grace(self):
+        # 取消后连续 2 轮超时仍投不进（worker 卡死无法排空）：有界放弃而不是永久挂起
+        import queue as queue_mod
+
+        q = queue_mod.Queue(maxsize=1)
+        q.put("x")
+        live = mock.Mock()
+        live.is_alive.return_value = True
+        ScanService.static_abort_flag = True
+        try:
+            with self.assertRaises(RuntimeError):
+                ScanService._put_work(q, live, "y", timeout=0.05)
+        finally:
+            ScanService.static_abort_flag = False
 
 
 if __name__ == "__main__":

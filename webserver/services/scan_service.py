@@ -16,6 +16,8 @@
 #     PHASE1_BATCH_SIZE 经 _apply_phase1_batch 在短写事务内统一落库并提交；
 #     计数与入队只发生在提交成功后（worker 用独立会话，入队晚于提交是跨会话可见的
 #     硬要求；commit 失败整批丢弃，计数不虚高，文件在磁盘可下轮自愈）。
+#     持久化失败置 static_phase1_persist_failed：本轮不提交目录快照、不清理批量
+#     上传暂存目录——否则没落库的路径会被快照剪枝永久漏掉。
 #   - 将 READY 行的 ID 放入有界工作队列（最大 50），自然地对阶段二施加背压。
 #
 # 阶段二（Importing）：独立后台线程执行
@@ -83,6 +85,11 @@ FILE_SIG_KEY = "file_sig"
 
 class ScanService(AsyncService):
     static_abort_flag = False
+    # 本轮 Phase1 是否发生过持久化失败（批量 apply/commit 异常、行级 save 被丢）。
+    # 置位后本轮不提交目录快照、不清理批量上传暂存目录：没落库的文件下轮按老快照
+    # 全量重走自愈；若照常提交快照，这些路径会被剪枝永久漏掉（union-pending 救不了
+    # 没有行的文件）。
+    static_phase1_persist_failed = False
     static_is_importing = False
     static_import_id = 0
     static_import_files_cnt = 0
@@ -315,7 +322,11 @@ class ScanService(AsyncService):
 
         worker 正常消费慢时阻塞等待（天然背压）；只有 worker 线程已死才抛
         RuntimeError——旧无界队列在同样场景下挂在 join，同样卡死但无声。
+        取消请求生效后连续 2 轮超时（grace = 2×timeout，默认 60s）仍投不进去，
+        说明 worker 卡死在 calibre/存储调用里无法排空队列——抛错放弃，让本轮
+        结束而不是永久挂起（worker 线程泄漏为 daemon，见 do_import_internal）。
         """
+        full_waits = 0
         while True:
             try:
                 work_queue.put(item, timeout=timeout)
@@ -323,6 +334,10 @@ class ScanService(AsyncService):
             except _queue.Full:
                 if not worker_thread.is_alive():
                     raise RuntimeError("importing worker thread exited unexpectedly")
+                if ScanService.static_abort_flag:
+                    full_waits += 1
+                    if full_waits >= 2:
+                        raise RuntimeError("import cancelled and worker not draining queue")
                 logging.warning("[IMPORT] Work queue full, waiting for worker...")
 
     def _mark_missing_scan_files(self):
@@ -709,11 +724,8 @@ class ScanService(AsyncService):
                         dir_mtime = None
                     # 命中则只跳过本目录的文件枚举，下钻永远保留：深层新增只 bump
                     # 直接父目录，祖先 mtime 不变，剪下钻会漏掉深层新书。
-                    skip_files = (
-                        use_snapshot
-                        and dir_mtime is not None
-                        and snapshots.get(real_dirpath) == (dir_mtime, entry_count)
-                    )
+                    snapshot_hit = snapshots.get(real_dirpath) == (dir_mtime, entry_count)
+                    skip_files = use_snapshot and dir_mtime is not None and snapshot_hit
                     if skip_files:
                         skipped_dirs += 1
                         continue
@@ -794,7 +806,8 @@ class ScanService(AsyncService):
             import_id: 由调用方预先生成的批次id(如批量上传)，用于调用方在发起后立即拿到id去轮询逐文件结果；
                         为0时按原逻辑自动生成
             cleanup_dir: 本次导入完成/取消后需要清理的暂存目录(如批量上传的暂存文件)，
-                          仅当 KEEP_UPLOAD_SOURCE_FILE 配置为 False 时才会删除
+                          仅当 KEEP_UPLOAD_SOURCE_FILE 配置为 False 时才会删除；
+                          Phase1 持久化失败时同样保留（快照未提交，留给下轮重扫补导）
             selector: 服务端选择器 ("ready"|"filter", value)，非空时忽略 paths 参数，由本方法
                       在后台服务线程解析出文件清单——全量 .all() + 逐行 stat 在百万行表上会
                       冻住 tornado ioloop，绝不能在 handler 里做（handler 只做 COUNT 预检）
@@ -814,6 +827,7 @@ class ScanService(AsyncService):
 
         ScanService.invalid_folder.clear()
         ScanService.static_abort_flag = False
+        ScanService.static_phase1_persist_failed = False
         ScanService.static_import_user_id = user_id
         start_time = time.time()
 
@@ -890,9 +904,21 @@ class ScanService(AsyncService):
                 self._mark_missing_scan_files()
                 # 快照只在整轮正常完成时提交：abort/异常路径不调，下轮按老快照重走
                 # （多干活，不漏活）；提交点严格在全部处理之后，崩在提交中途也不产生错误跳过。
-                self._commit_dir_snapshots(
-                    self.session, visited, os.path.realpath(CONF.get("scan_upload_path", ""))
-                )
+                # Phase1 持久化失败同样不提交：失败批次没落库的文件会被快照剪枝永久漏掉。
+                if ScanService.static_phase1_persist_failed:
+                    logging.error(
+                        "[IMPORT] Phase1 persistence failures detected, skip snapshot commit "
+                        "(paths without rows would be pruned permanently)"
+                    )
+                    self.add_msg(
+                        user_id=user_id,
+                        status="warning",
+                        msg=_("部分扫描记录落库失败，本轮目录快照未提交，请重新扫描补齐"),
+                    )
+                else:
+                    self._commit_dir_snapshots(
+                        self.session, visited, os.path.realpath(CONF.get("scan_upload_path", ""))
+                    )
                 self.add_msg(
                     user_id=user_id,
                     status="success",
@@ -909,10 +935,19 @@ class ScanService(AsyncService):
             logging.error(traceback.format_exc())
         finally:
             if cleanup_dir and not CONF.get("KEEP_UPLOAD_SOURCE_FILE", False):
-                logging.info("[IMPORT] Cleaning up staging dir: %s", cleanup_dir)
-                shutil.rmtree(cleanup_dir, ignore_errors=True)
+                if ScanService.static_phase1_persist_failed:
+                    # 暂存目录在 scan_upload_path 下且本轮快照未提交：保留给下轮重扫补导，
+                    # 删了就没源文件可自愈了（补导成功后由管理员按需清理）。
+                    logging.warning(
+                        "[IMPORT] Phase1 persistence failures detected, keep staging dir: %s", cleanup_dir
+                    )
+                else:
+                    logging.info("[IMPORT] Cleaning up staging dir: %s", cleanup_dir)
+                    shutil.rmtree(cleanup_dir, ignore_errors=True)
         ScanService.static_is_importing = False
         ScanService.static_abort_flag = False
+        # static_phase1_persist_failed 有意不在此复位：失败轮结束后保持 True 直到下一轮
+        # do_import/do_import_internal 开头的复位点（读取点都在复位之后，无陈旧读）。
         ScanService.static_import_user_id = 0
 
     def _compute_hash(self, fpath):
@@ -1155,10 +1190,6 @@ class ScanService(AsyncService):
         importing_index = 0
         total_count = 0
         pending_fields = {"dynamic_cover": [], "translators": {}, "category": {}}
-        importing_session = self.scoped_session()
-        importing_index = 0
-        total_count = 0
-        pending_fields = {"dynamic_cover": [], "translators": {}, "category": {}}
 
         try:
             while True:
@@ -1246,9 +1277,30 @@ class ScanService(AsyncService):
             可横跨任意时长磁盘 IO 而不阻塞 worker 的并发写。
             返回 (None, state)：行 id 在批量 flush 后才分配，由 applier 回报。
         """
-        if not os.path.isfile(fpath) or not os.access(fpath, os.R_OK):
+        if not os.path.isfile(fpath):
             logging.warning("[SCAN] Not a valid file, skip: %s", fpath)
             return None, None
+        if not os.access(fpath, os.R_OK):
+            # 文件在但读不了（chmod/ACL）：落 PERMISSION 行进 union-pending，权限恢复后
+            # 下轮重试——不落行的话目录快照照常提交，该路径会被剪枝永久漏掉。
+            # 两类例外不落行（对齐旧预检行为，避免清不掉的残留待办）：同路径已有
+            # PERMISSION 行（每轮只留一行）；已导入且书仍在书库（此时只是读不了，
+            # 不该再出一条永远重试的待办）。
+            logging.error("[SCAN] Permission denied: %s", fpath)
+            same_rows = session.query(ScanFile).filter(ScanFile.path == fpath).all()
+            imported_alive = any(
+                r.status == ScanFile.IMPORTED and self._calibre_book_exists(r.book_id)
+                for r in same_rows
+            )
+            has_perm_row = any(r.status == ScanFile.PERMISSION for r in same_rows)
+            if not has_perm_row and not imported_alive:
+                row = ScanFile(fpath, "", import_id)
+                row.status = ScanFile.PERMISSION
+                if staged is None:
+                    self.save_or_rollback(row, session)
+                else:
+                    staged.append(("save", row, ScanFile.PERMISSION))
+            return None, None if imported_alive else ScanFile.PERMISSION
 
         fmt = fpath.split(".")[-1].lower()
         if not fmt or fmt not in SCAN_EXT:
@@ -1393,6 +1445,7 @@ class ScanService(AsyncService):
         """
         import_id = int(time.time()) if imported_id == 0 else imported_id
         ScanService.static_import_id = import_id
+        ScanService.static_phase1_persist_failed = False
         scan_upload_path = os.path.realpath(CONF.get("scan_upload_path", ""))
         total_count = len(filelist)
         batch_size = 20
@@ -1431,6 +1484,7 @@ class ScanService(AsyncService):
 
         def _commit_phase1_stage():
             nonlocal queued_count
+            save_cnt = sum(1 for op in staged if op[0] == "save")
             try:
                 outcomes = self._apply_phase1_batch(session, staged)
             except Exception as err:
@@ -1440,6 +1494,7 @@ class ScanService(AsyncService):
                 except Exception:
                     pass
                 staged.clear()
+                ScanService.static_phase1_persist_failed = True
                 return
             staged.clear()
             try:
@@ -1447,7 +1502,12 @@ class ScanService(AsyncService):
             except Exception as err:
                 logging.error("[IMPORT] Phase1 batch commit error, drop %d staged rows: %s", len(outcomes), err)
                 session.rollback()
+                ScanService.static_phase1_persist_failed = True
                 return
+            if len(outcomes) < save_cnt:
+                # 行级 save 被丢（如遗留 UNIQUE(hash) 约束冲突）：该文件本轮无行，
+                # 置持久化失败位阻止本轮快照提交，否则这些路径会被剪枝永久漏掉。
+                ScanService.static_phase1_persist_failed = True
             for rid, state in outcomes:
                 if state in ScanService.static_status_cnt:
                     ScanService.static_status_cnt[state] += 1
@@ -1459,6 +1519,7 @@ class ScanService(AsyncService):
                     self._put_work(work_queue, importing_thread, rid)
                     queued_count += 1
 
+        put_failure = None
         try:
             for index, fpath in enumerate(filelist):
                 if ScanService.static_abort_flag:
@@ -1469,19 +1530,43 @@ class ScanService(AsyncService):
                     _commit_phase1_stage()
         finally:
             if staged:
-                _commit_phase1_stage()
+                try:
+                    _commit_phase1_stage()
+                except Exception as err:
+                    # 取消且 worker 不排空时 _put_work 抛错：放弃尾批投递（行已落库的
+                    # 保持 READY，下轮 union-pending 重导）；不让 finally 的异常掩盖本轮收尾。
+                    logging.exception("[IMPORT] Phase1 tail commit failed (cancelled?)")
+                    put_failure = put_failure or err
             else:
                 try:
                     session.commit()
                 except Exception as err:
                     logging.error("[IMPORT] Phase1 final commit error: %s", err)
                     session.rollback()
-            self._put_work(work_queue, importing_thread, None)  # sentinel: Phase 1 done
+            try:
+                self._put_work(work_queue, importing_thread, None)  # sentinel: Phase 1 done
+            except Exception as err:
+                # worker 已死，或取消后 wedge 投不进：放弃 sentinel。已知残留形态：
+                # ① worker 活着但卡死在 get() 上，泄漏为 daemon 线程，进程退出即回收；
+                # ② 放弃时队列仍压着未消费的 rid，worker 脱困后（cancel 复位后不再跳过）
+                #    可能继续导入这些行——与下一轮导入并发的窗口，概率极低，接受为已知限制。
+                logging.error("[IMPORT] Failed to deliver sentinel; worker may linger: %s", err)
+                put_failure = put_failure or err
 
         logging.info("[IMPORT] Phase 1 done: %d files queued. Waiting for Phase 2...", queued_count)
 
-        # Wait for Phase 2 to finish gracefully
-        importing_thread.join()
+        # Wait for Phase 2 to finish gracefully；取消后给 worker 有界退出窗口
+        # （覆盖 busy_timeout 60s 的收尾余量），卡死的 daemon 线程就地放弃。
+        if ScanService.static_abort_flag:
+            importing_thread.join(timeout=120)
+            if importing_thread.is_alive():
+                logging.error("[IMPORT] Worker did not exit after cancel; abandoning daemon thread")
+        else:
+            importing_thread.join()
+
+        if put_failure is not None and not ScanService.static_abort_flag:
+            # worker 意外死亡（非取消）：保持旧行为——本轮显式失败，而不是被当成功收尾。
+            raise put_failure
         logging.info("[IMPORT] Both phases done in %.3fs. Queued: %d, Imported: %d",
                      time.time() - start_time, queued_count, len(importing_imported))
 
