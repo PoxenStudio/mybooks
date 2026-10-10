@@ -690,6 +690,10 @@
   content: "\F0DD4";
 }
 
+.mdi-home-outline::before {
+  content: "\F06A1";
+}
+
 .mdi-image::before {
   content: "\F02E9";
 }

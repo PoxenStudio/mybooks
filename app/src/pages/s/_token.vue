@@ -5,6 +5,10 @@
                 <v-toolbar flat dark color="primary">
                     <v-icon class="mr-2">mdi-cloud-outline</v-icon>
                     <v-toolbar-title>{{ toolbarTitle }}</v-toolbar-title>
+                    <v-spacer></v-spacer>
+                    <v-btn text to="/">
+                        <v-icon left>mdi-home-outline</v-icon>{{ $t('appHeader.home') }}
+                    </v-btn>
                 </v-toolbar>
 
                 <v-card-text v-if="err !== 'ok'" class="text-center py-8">
