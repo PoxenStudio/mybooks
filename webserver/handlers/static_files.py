@@ -18,6 +18,7 @@ from tornado import web
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 from webserver import constants, loader, perf
 from webserver.services.converter import ConverterService
+from webserver.services.book_access_service import BookAccessService
 from webserver.handlers.base import BaseHandler, js, is_admin
 from webserver.base import accel
 from webserver.base.image_generator import ImageGenerator
@@ -333,7 +334,7 @@ class ProgressHandler(BaseHandler):
 
 class EpubReader(BaseHandler):
     def get(self, bid, path):
-        if not CONF["ALLOW_GUEST_READ"] and not self.current_user:
+        if not self.current_user and not BookAccessService.guest_read_allowed(self, bid):
             return self.redirect("/login")
 
         if self.current_user:

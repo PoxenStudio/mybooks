@@ -22,6 +22,7 @@ import tornado
 
 from webserver import loader
 from webserver.handlers.base import BaseHandler
+from webserver.services.book_access_service import BookAccessService
 
 CONF = loader.get_settings()
 
@@ -55,10 +56,8 @@ class EdgeTTSProxy(BaseHandler):
 
     def _authorized(self) -> bool:
         # Same guest-access convention as AudioFile: TTS is treated as read
-        # access to the book's content, so it follows ALLOW_GUEST_READ too.
-        if CONF.get("ALLOW_GUEST_READ", False):
-            return True
-        return bool(self.current_user)
+        # access to the book's content, so it follows the guest read policy too.
+        return bool(self.current_user) or BookAccessService.guest_read_allowed(self)
 
     async def get(self):
         if not self._authorized():

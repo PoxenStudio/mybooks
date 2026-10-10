@@ -20,6 +20,7 @@ from webserver.base.appearance import (
     normalize_appearance,
     read_appearance,
 )
+from webserver.services.book_access_service import BookAccessService
 from webserver.services.mail import MailService
 from webserver.services.sync_service import MyReaderSyncService
 from webserver.handlers.base import BaseHandler, auth, js
@@ -580,7 +581,7 @@ class UserInfo(BaseHandler):
         }
 
         if not user:
-            if CONF.get("ALLOW_GUEST_READ", False):
+            if BookAccessService.guest_read_allowed(self):
                 return {
                     "is_login": False,
                     "is_admin": False,
@@ -700,7 +701,7 @@ class WhoAmI(BaseHandler):
     def get(self):
         user = self.current_user
         if not user:
-            if CONF.get("ALLOW_GUEST_READ", False):
+            if BookAccessService.guest_read_allowed(self):
                 return {
                     "err": "ok",
                     "userId": 999999,

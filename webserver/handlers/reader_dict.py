@@ -31,6 +31,7 @@ from tornado.httpclient import AsyncHTTPClient, HTTPClientError, HTTPRequest
 
 from webserver import loader
 from webserver.handlers.base import BaseHandler, is_admin, js
+from webserver.services.book_access_service import BookAccessService
 
 CONF = loader.get_settings()
 
@@ -135,9 +136,7 @@ class ReaderDictBase(BaseHandler):
     def _authorized(self) -> bool:
         # Dictionary lookups are part of reading, so they follow the same
         # guest-access convention as the reader itself (see tts.EdgeTTSProxy).
-        if CONF.get("ALLOW_GUEST_READ", False):
-            return True
-        return bool(self.current_user)
+        return bool(self.current_user) or BookAccessService.guest_read_allowed(self)
 
     def _error(self, status, message):
         self.set_status(status)

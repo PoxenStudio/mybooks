@@ -39,6 +39,7 @@ from webserver.base.image_helper import ImageHelper
 from webserver.base.epub_helper import EpubHelper
 from webserver.base.meta_helper import guess_authors, guess_tags
 from webserver.services.book_visit_service import BookVisitService
+from webserver.services.book_access_service import BookAccessService
 from webserver.services.autofill import AutoFillService
 from webserver.services.perf_monitor import PerfMonitor
 from webserver.services.ai_fillinfo import AIFillInfoService
@@ -2275,9 +2276,10 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
 
     def prepare(self):
         BaseHandler.prepare(self)
-        if not CONF["ALLOW_GUEST_DOWNLOAD"] and not self.current_user:
+        bid = self.requested_book_id()
+        if not self.current_user and not BookAccessService.guest_download_allowed(self, bid):
             self.login_by_download_sign()
-        if not CONF["ALLOW_GUEST_DOWNLOAD"] and not self.current_user:
+        if not self.current_user and not BookAccessService.guest_download_allowed(self, bid):
             if self.is_opds:
                 return self.send_error_of_not_invited()
             else:
@@ -2289,6 +2291,12 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
                     raise web.HTTPError(403, reason=_("无权操作，请先登录注册邮箱激活账号。"))
             else:
                 raise web.HTTPError(403, reason=_("无权操作"))
+
+    def requested_book_id(self):
+        try:
+            return int(self.path_args[0].split("/")[-1].split(".")[0])
+        except (IndexError, ValueError):
+            return None
 
     def login_by_download_sign(self):
         sign = self.get_argument("dl", "")
@@ -3609,7 +3617,7 @@ class BookRead(BaseHandler):
     READABLE_FORMATS = ("epub", "pdf", "mobi", "azw3", "azw", "txt", "djvu", "cbz", "fb2")
 
     async def get(self, bid):
-        if not CONF["ALLOW_GUEST_READ"] and not self.current_user:
+        if not self.current_user and not BookAccessService.guest_read_allowed(self, bid):
             return self.redirect("/login")
 
         if self.current_user:
@@ -3760,7 +3768,7 @@ class BookRead(BaseHandler):
     @js
     async def post(self, bid):
         """检测目标阅读格式是否就绪，如未就绪则按需启动转换任务"""
-        if not CONF["ALLOW_GUEST_READ"] and not self.current_user:
+        if not self.current_user and not BookAccessService.guest_read_allowed(self, bid):
             return {"err": "user.need_login", "msg": _("请先登录")}
 
         if self.current_user:
@@ -3809,7 +3817,7 @@ class BookFilePath(BaseHandler):
 
     @js
     async def get(self, bid):
-        if not CONF["ALLOW_GUEST_READ"] and not self.current_user:
+        if not self.current_user and not BookAccessService.guest_read_allowed(self, bid):
             return {"err": "user.need_login", "msg": _("请先登录")}
 
         if self.current_user:
@@ -3845,7 +3853,7 @@ class TxtRead(BaseHandler):
         fpath = book.get("fmt_txt", None)
         if not fpath:
             return {"err": "format error", "msg": _("非txt书籍")}
-        if not CONF["ALLOW_GUEST_READ"] and not self.current_user:
+        if not self.current_user and not BookAccessService.guest_read_allowed(self, bid):
             return {"err": "user.need_login", "msg": _("请先登录")}
         if self.current_user:
             if self.current_user.can_read():
@@ -3876,7 +3884,7 @@ class BookTxtParser(BaseHandler):
         fpath = book.get("fmt_txt", None)
         if not fpath:
             return {"err": "format error", "msg": _("非text书籍")}
-        if not CONF["ALLOW_GUEST_READ"] and not self.current_user:
+        if not self.current_user and not BookAccessService.guest_read_allowed(self, bid):
             return {"err": "user.need_login", "msg": _("请先登录")}
         if self.current_user:
             if self.current_user.can_read():

@@ -3,6 +3,7 @@
 import datetime
 from webserver.i18n import _
 from webserver.loader import get_settings
+from webserver.services.book_access_service import BookAccessService
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT
 from webserver.constants import CALIBRE_COLUMN_EXT_LINK, CALIBRE_COLUMN_CATEGORY, CALIBRE_COLUMN_FOLDER
 from webserver.constants import CALIBRE_COLUMN_TRANSLATORS
@@ -155,7 +156,7 @@ class BookFormatter:
                 continue
             href = self.cdn_url + "/api/book/%s.%s" % (book_id, fmt)
             h = self.handler
-            if not CONF.get("ALLOW_GUEST_DOWNLOAD", False) and h.current_user:
+            if h.current_user and not BookAccessService.guest_download_allowed(h, book_id):
                 href += "?dl=" + h.make_download_sign(h.current_user.id, book_id, fmt)
             item = {
                 "format": fmt,

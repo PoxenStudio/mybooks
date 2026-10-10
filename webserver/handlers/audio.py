@@ -10,6 +10,7 @@ import threading
 import time
 import traceback
 import urllib.parse
+from webserver.services.book_access_service import BookAccessService
 import uuid
 import zipfile
 from webserver.i18n import _
@@ -816,7 +817,7 @@ class AudioFile(BaseHandler):
     def get(self, book_id, filename):
         """提供音频文件的静态文件服务"""
         logging.info(f"AudioFile requested: book_id={book_id}, filename={filename}")
-        if not CONF.get("ALLOW_GUEST_READ", False):
+        if not BookAccessService.guest_read_allowed(self, book_id):
             user = self.get_current_user()
             if not user:
                 raise web.HTTPError(401, "未登录")
