@@ -680,7 +680,7 @@ export default {
                 console.warn('Failed to load reading dashboard:', error);
                 this.dashboard = null;
             });
-            // 阅读时长排行（全站榜单，与仪表盘同一开关门控）
+            // 阅读时长排行（全站榜单，不受首页开关影响）
             this.$backend("/user/reading_leaderboard")
             .then( rsp => {
                 this.leaderboard = rsp.err === 'ok' && rsp.enabled ? rsp : null;

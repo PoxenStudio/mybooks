@@ -592,7 +592,7 @@ def homepage_stats_disabled(is_home_request) -> bool:
     return bool(is_home_request) and not CONF.get("ENABLE_HOMEPAGE_READING_STATS", True)
 
 
-def get_stats(db, reader: Reader, calibre_db=None) -> Optional[Dict]:
+def get_stats(db, reader: Reader, calibre_db=None) -> Dict:
     today = datetime.datetime.utcnow().date()
     cache = _load_cache(reader.id)
     cache = _reconcile(db, reader.id, cache, today)
