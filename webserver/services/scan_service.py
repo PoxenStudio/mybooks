@@ -219,29 +219,27 @@ class ScanService(AsyncService):
         映射内容与逐本查询等价，只是把 O(N) 的调用次数降为 1。
 
         开销与边界（实测）：映射常驻约 350-700MB/百万书（中文 ~357MB，ASCII 长标题
-        ~702MB），另有 get_id_map 全量 .copy() 的一次性同量级峰值；超 TITLE_MAP_MAX_BOOKS
-        直接回退逐本查询（小内存机器保命）。映射是本轮开始时的快照：轮内 Web 上传的
-        同标题书（upload 路径不持导入互斥）可能被误判为新书造成重复，需手工合并；
-        同轮 Phase2 新入库的书由 _title_map_add 实时补进，不在此列。
+        ~702MB），峰值再加 get_id_map 全量 .copy() 的一次性同量级；超 TITLE_MAP_MAX_BOOKS
+        直接回退逐本查询（小内存机器保命；门限用已拷出的 id_map 计数，不另做全量拷贝）。
+        映射是本轮开始时的快照：轮内 Web 上传的同标题书（upload 路径不持导入互斥）
+        可能被误判为新书造成重复，需手工合并；同轮 Phase2 新入库的书由 _title_map_add
+        实时补进，不在此列。None/非字符串标题直接跳过（旧实现会在 icu_lower 处抛错，
+        本实现更宽容，归一化口径对合法字符串与旧实现逐字一致）。
         """
         try:
             new_api = getattr(self.db, "new_api", None)
             get_id_map = getattr(new_api, "get_id_map", None) if new_api is not None else None
             if not callable(get_id_map):
                 return None
-            all_book_ids = getattr(new_api, "all_book_ids", None)
-            if callable(all_book_ids):
-                try:
-                    if len(all_book_ids()) > TITLE_MAP_MAX_BOOKS:
-                        logging.warning(
-                            "[IMPORT] Library exceeds %d books, skip title map (fallback to per-book check)",
-                            TITLE_MAP_MAX_BOOKS,
-                        )
-                        return None
-                except Exception as err:
-                    logging.debug("[IMPORT] Title map size gate skipped: %s", err)
             id_map = get_id_map("title")
             if not isinstance(id_map, dict):
+                return None
+            if len(id_map) > TITLE_MAP_MAX_BOOKS:
+                logging.warning(
+                    "[IMPORT] Library exceeds %d books, skip title map (fallback to per-book check)",
+                    TITLE_MAP_MAX_BOOKS,
+                )
+                del id_map
                 return None
             from calibre import force_unicode
             from calibre.utils.icu import lower as icu_lower
@@ -375,43 +373,6 @@ class ScanService(AsyncService):
             except Exception as err:
                 logging.error("[IMPORT] Failed to set %s for book_id=%s: %s", column, book_id, err)
 
-    def _commit_worker_batch(self, session, span):
-        """Phase2 批提交；失败则回滚后逐行重放一次，返回 (ok, failed_spans)。
-
-        span 元素为 (row_id, status, title, author, publisher, tags, book_id) primitives
-        （rollback 后原 ORM 对象已过期，只能靠快照重填）。重放走旧的逐行
-        save_or_rollback 语义；仍失败的行返回给调用方扣减乐观计数。
-        """
-        try:
-            session.commit()
-            return True, []
-        except Exception as err:
-            logging.error("[IMPORT] Batch commit error, retrying %d rows individually: %s", len(span), err)
-            session.rollback()
-        failed = []
-        for (row_id, status, title, author, publisher, tags, book_id) in span:
-            try:
-                fresh = session.get(ScanFile, row_id)
-                if fresh is None:
-                    failed.append((row_id, status))
-                    continue
-                fresh.status = status
-                fresh.title = title
-                fresh.author = author
-                fresh.publisher = publisher
-                fresh.tags = tags
-                fresh.book_id = book_id
-                if not self.save_or_rollback(fresh, session):
-                    failed.append((row_id, status))
-            except Exception as err:
-                logging.error("[IMPORT] Row replay failed for ScanFile id=%d: %s", row_id, err)
-                try:
-                    session.rollback()
-                except Exception:
-                    pass
-                failed.append((row_id, status))
-        return False, failed
-
     def _flush_pending_calibre_fields(self, pending):
         """把累积的 calibre 自定义列写回一次性落库并清空缓冲；空缓冲直接返回（无书库调用）。"""
         if not pending:
@@ -428,6 +389,22 @@ class ScanService(AsyncService):
         if categories:
             self._set_calibre_fields(CALIBRE_COLUMN_CATEGORY, dict(categories))
             categories.clear()
+
+    @staticmethod
+    def _put_work(work_queue, worker_thread, item, timeout=30):
+        """有界队列投递：worker 意外退出时不再永久阻塞，而是明确报错结束本轮。
+
+        worker 正常消费慢时阻塞等待（天然背压）；只有 worker 线程已死才抛
+        RuntimeError——旧无界队列在同样场景下挂在 join，同样卡死但无声。
+        """
+        while True:
+            try:
+                work_queue.put(item, timeout=timeout)
+                return
+            except _queue.Full:
+                if not worker_thread.is_alive():
+                    raise RuntimeError("importing worker thread exited unexpectedly")
+                logging.warning("[IMPORT] Work queue full, waiting for worker...")
 
     def _mark_missing_scan_files(self):
         """导入完成后，将源文件已不存在的 NEW/READY 记录标记为 MISSED，避免一直残留在待导入列表中"""
@@ -1131,10 +1108,11 @@ class ScanService(AsyncService):
             logging.error(traceback.format_exc())
 
         status = row.status
-        try:
-            self.save_or_rollback(row, session)
-        except Exception as err:
-            logging.error("[IMPORT] Failed to save ScanFile record for %s: %s", fpath, err)
+        # 行落库失败必须诚实返回 (None, None)：worker 据此跳过计数/入库名单，避免
+        # “已计数但未持久化”的虚假成功；行保持旧状态，下轮重扫经标题命中收敛自愈。
+        if not self.save_or_rollback(row, session):
+            logging.error("[IMPORT] Failed to save ScanFile record for %s, will retry next run", fpath)
+            return None, None
 
         logging.info("[IMPORT] File done, status=%s [total %.3fs]: %s", row.status, time.time() - start_time, fpath)
         if time.time() - start_time > 0.25:
@@ -1153,7 +1131,6 @@ class ScanService(AsyncService):
         total_count = 0
         title_ctx = {"map": None, "built": False}
         pending_fields = {"dynamic_cover": [], "translators": {}, "category": {}}
-        batch_span: list = []
 
         try:
             while True:
@@ -1192,21 +1169,18 @@ class ScanService(AsyncService):
                             ScanService.static_status_cnt[status] += 1
                         else:
                             ScanService.static_status_cnt[status] = 1
-                        batch_span.append((row.id, status, row.title, row.author, row.publisher, row.tags, row.book_id))
 
                     if new_book_id is not None:
                         importing_imported.append(new_book_id)
 
                     if importing_index % batch_size == 0:
-                        _ok, failed = self._commit_worker_batch(importing_session, batch_span)
-                        batch_span.clear()
-                        for _rid, failed_status in failed:
-                            if ScanService.static_status_cnt.get(failed_status, 0) > 0:
-                                ScanService.static_status_cnt[failed_status] -= 1
-                        if failed:
-                            logging.error("[IMPORT] Lost %d rows at index %d after replay", len(failed), importing_index)
-                        else:
+                        # 行已在 _import_one_file 内逐行落库，此处只是安全网（正常无 pending）。
+                        try:
+                            importing_session.commit()
                             logging.info("[IMPORT] Batch committed at index %d", importing_index)
+                        except Exception as err:
+                            logging.error("[IMPORT] Batch commit error: %s", err)
+                            importing_session.rollback()
                         self._flush_pending_calibre_fields(pending_fields)
                 finally:
                     work_queue.task_done()
@@ -1219,15 +1193,8 @@ class ScanService(AsyncService):
             except Exception as err:
                 logging.error("[IMPORT] Final fields flush error: %s", err)
             try:
-                _ok, failed = self._commit_worker_batch(importing_session, batch_span)
-                batch_span.clear()
-                for _rid, failed_status in failed:
-                    if ScanService.static_status_cnt.get(failed_status, 0) > 0:
-                        ScanService.static_status_cnt[failed_status] -= 1
-                if failed:
-                    logging.error("[IMPORT] Lost %d tail rows after replay", len(failed))
-                else:
-                    logging.info("[IMPORT] Final commit completed")
+                importing_session.commit()
+                logging.info("[IMPORT] Final commit completed")
             except Exception as err:
                 logging.error("[IMPORT] Final commit error: %s", err)
                 try:
@@ -1247,7 +1214,8 @@ class ScanService(AsyncService):
             只做读（去重查询）与算（哈希 IO），写操作以描述符暂存：
             ("del_path", fpath) | ("del_hash", hash) | ("save", row, state)，
             由调用方攒批后经 _apply_phase1_batch 在短写事务内统一执行。
-            读算阶段不持有任何写事务，可横跨任意时长磁盘 IO 而不阻塞 worker 的并发写。
+            读算阶段不持有任何写事务（SELECT 自身的只读快照在 WAL 下不阻塞写者），
+            可横跨任意时长磁盘 IO 而不阻塞 worker 的并发写。
             返回 (None, state)：行 id 在批量 flush 后才分配，由 applier 回报。
         """
         if not os.path.isfile(fpath) or not os.access(fpath, os.R_OK):
@@ -1422,8 +1390,10 @@ class ScanService(AsyncService):
                     ScanService.static_status_cnt[state] += 1
                 else:
                     ScanService.static_status_cnt[state] = 1
-                if rid is not None:
-                    work_queue.put(rid)
+                # 只有 READY 行进 worker：DROP/INVALID/MISSED 等终态行只计数不导入
+                # （旧逐行路径靠返回 None id 实现同一语义）。
+                if rid is not None and state == ScanFile.READY:
+                    self._put_work(work_queue, importing_thread, rid)
                     queued_count += 1
 
         try:
@@ -1443,7 +1413,7 @@ class ScanService(AsyncService):
                 except Exception as err:
                     logging.error("[IMPORT] Phase1 final commit error: %s", err)
                     session.rollback()
-            work_queue.put(None)  # sentinel: Phase 1 done
+            self._put_work(work_queue, importing_thread, None)  # sentinel: Phase 1 done
 
         logging.info("[IMPORT] Phase 1 done: %d files queued. Waiting for Phase 2...", queued_count)
 

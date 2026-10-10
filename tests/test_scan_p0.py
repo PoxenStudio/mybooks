@@ -25,7 +25,6 @@ if not hasattr(sys, "extensions_location") and os.path.isdir("/usr/lib/calibre")
     sys.system_plugins_location = None
 
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -454,49 +453,87 @@ class TestPhase1NoWriteHold(ScanP0TestBase):
             del self.svc._import_one_file
 
 
-class TestWorkerBatchRetry(ScanP0TestBase):
-    def test_commit_failure_replays_rows_individually(self):
-        r1 = ScanFile(os.path.join(self.tmpdir, "r1.txt"), "sha256:r1", 1)
-        r1.status = ScanFile.READY
-        r2 = ScanFile(os.path.join(self.tmpdir, "r2.txt"), "sha256:r2", 1)
-        r2.status = ScanFile.READY
-        self.session.add_all([r1, r2])
-        self.session.commit()
-        span = [
-            (r1.id, ScanFile.IMPORTED, "T1", "A1", "P1", "t1", 501),
-            (r2.id, ScanFile.INVALID, "T2", "A2", "P2", "t2", 0),
-        ]
-        real_session = self.session()
-        calls = []
-        orig_commit = real_session.commit
-
-        def flaky_commit():
-            calls.append(1)
-            if len(calls) == 1:
-                raise OperationalError("commit", None, Exception("database is locked"))
-            return orig_commit()
-
-        with mock.patch.object(real_session, "commit", flaky_commit):
-            ok, failed = self.svc._commit_worker_batch(real_session, span)
-        self.assertFalse(ok)
-        self.assertEqual(failed, [])
-        rows = {r.path: r for r in self.session.query(ScanFile).all()}
-        self.assertEqual(rows[r1.path].status, ScanFile.IMPORTED)
-        self.assertEqual(rows[r1.path].title, "T1")
-        self.assertEqual(rows[r1.path].book_id, 501)
-        self.assertEqual(rows[r2.path].status, ScanFile.INVALID)
+@unittest.skipUnless(HAS_CALIBRE, "needs calibre (real _import_one_file)")
+class TestRowSaveHonesty(ScanP0TestBase):
+    def test_row_save_failure_returns_none(self):
+        # 行落库失败必须诚实返回 (None, None)，worker 才不会计数/公告幽灵成功
+        db = FakeCalibreDB()
+        self.svc.db = db
+        fpath = self._touch("honest.txt", b"honest-content")
+        row = ScanFile(fpath, "sha256:h", 1)
+        row.status = ScanFile.READY
+        with mock.patch.object(ScanService, "save_or_rollback", return_value=False):
+            new_id, status = self.svc._import_one_file(row, 9, self.tmpdir, self.session, False)
+        self.assertEqual((new_id, status), (None, None))
 
 
 class TestTitleMapThreshold(ScanP0TestBase):
     def test_huge_library_skips_title_map(self):
+        class BigDict(dict):
+            def __len__(self):
+                return scan_service.TITLE_MAP_MAX_BOOKS + 1
+
         db = FakeCalibreDB()
-        db.new_api.all_book_ids = lambda: range(scan_service.TITLE_MAP_MAX_BOOKS + 1)
+        db.new_api.get_id_map = lambda field: BigDict({1: "Only Book"})
         self.svc.db = db
         mi = SimpleNamespace(title="Huge Lib Book")
         ids = self.svc._same_title_ids(mi, {"map": None, "built": False})
-        self.assertEqual(db.new_api.get_id_map_calls, [])
         self.assertEqual(db.same_title_calls, ["Huge Lib Book"])
         self.assertEqual(ids, set())
+
+
+class TestNonReadyNotEnqueued(ScanP0TestBase):
+    def test_drop_rows_never_reach_worker(self):
+        # 同内容两文件同批：第二本 DROP 落库但绝不入队，worker 只处理 READY
+        db = FakeCalibreDB()
+        self.svc.db = db
+        f1 = self._touch("dup1.txt", b"same-bytes")
+        f2 = self._touch("dup2.txt", b"same-bytes")
+        delivered = []
+
+        def fake_import_one_file(row, user_id, scan_upload_path, session, force, sole=False, *args, **kwargs):
+            delivered.append(row.path)
+            return None, None
+
+        self.svc._import_one_file = fake_import_one_file
+        self.addCleanup(self._restore_import_one_file)
+        self.svc.do_import_internal([f1, f2], 9)
+        self.assertEqual(delivered, [f1])
+        statuses = sorted(r.status for r in self.session.query(ScanFile).all())
+        self.assertEqual(statuses, [ScanFile.DROP, ScanFile.READY])
+
+    def _restore_import_one_file(self):
+        if "_import_one_file" in self.svc.__dict__:
+            del self.svc._import_one_file
+
+
+class TestPutWork(ScanP0TestBase):
+    def test_put_raises_when_worker_dead(self):
+        import queue as queue_mod
+
+        q = queue_mod.Queue(maxsize=1)
+        q.put("x")
+        dead = mock.Mock()
+        dead.is_alive.return_value = False
+        with self.assertRaises(RuntimeError):
+            ScanService._put_work(q, dead, "y", timeout=0.1)
+
+    def test_put_waits_for_live_worker(self):
+        import queue as queue_mod
+        import threading
+
+        q = queue_mod.Queue(maxsize=1)
+        q.put("x")
+        live = mock.Mock()
+        live.is_alive.return_value = True
+
+        def drain():
+            time.sleep(0.2)
+            q.get()
+
+        threading.Thread(target=drain, daemon=True).start()
+        ScanService._put_work(q, live, "y", timeout=5)
+        self.assertEqual(q.qsize(), 1)
 
 
 if __name__ == "__main__":
