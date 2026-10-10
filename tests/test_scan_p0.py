@@ -10,6 +10,7 @@ import shutil
 import sqlite3
 import sys
 import tempfile
+import time
 import unittest
 from types import SimpleNamespace
 from unittest import mock
@@ -24,6 +25,7 @@ if not hasattr(sys, "extensions_location") and os.path.isdir("/usr/lib/calibre")
     sys.system_plugins_location = None
 
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -258,7 +260,7 @@ class TestPhase1Batching(ScanP0TestBase):
         finally:
             con.close()
 
-    def test_batched_rows_invisible_until_commit(self):
+    def test_staged_rows_invisible_until_apply_commit(self):
         dbpath = os.path.join(self.tmpdir, "batch.db").replace("\\", "/")
         engine = create_engine("sqlite:///%s" % dbpath)
         session = scoped_session(sessionmaker(bind=engine, autoflush=True, autocommit=False))
@@ -266,40 +268,48 @@ class TestPhase1Batching(ScanP0TestBase):
         models.Base.metadata.create_all(engine)
         self.svc.session = session
         self.svc.db = FakeCalibreDB()
+        staged = []
         files = [self._touch("n%d.txt" % i, b"content-%d" % i) for i in range(3)]
         for fpath in files:
-            rid, state = self.svc._scan_one_file(fpath, session, 1, set(), set(), False, batched=True)
-            self.assertEqual(state, ScanFile.READY)
-            self.assertIsNotNone(rid)
-        # 只 flush 未 commit：独立连接看不到
+            rid, state = self.svc._scan_one_file(fpath, session, 1, set(), set(), False, staged=staged)
+            self.assertEqual((rid, state), (None, ScanFile.READY))
+        # 只暂存未落库：独立连接看不到
         self.assertEqual(self._raw_count(dbpath), 0)
+        outcomes = self.svc._apply_phase1_batch(session, staged)
         session.commit()
+        self.assertEqual([st for _rid, st in outcomes], [ScanFile.READY] * 3)
+        self.assertTrue(all(rid is not None for rid, _st in outcomes))
         rows = session.query(ScanFile).order_by(ScanFile.id).all()
         self.assertEqual([r.status for r in rows], [ScanFile.READY] * 3)
         self.assertEqual(self._raw_count(dbpath), 3)
         session.remove()
 
-    def test_unbatched_rows_visible_immediately(self):
+    def test_unstaged_rows_visible_immediately(self):
         db = FakeCalibreDB()
         self.svc.db = db
         fpath = self._touch("legacy.txt", b"legacy-content")
-        rid, state = self.svc._scan_one_file(fpath, self.session, 1, set(), set(), False, batched=False)
+        rid, state = self.svc._scan_one_file(fpath, self.session, 1, set(), set(), False)
         self.assertEqual(state, ScanFile.READY)
         row = self.session.query(ScanFile).filter(ScanFile.path == fpath).one()
         self.assertEqual(row.status, ScanFile.READY)
 
-    def test_phase1_save_isolates_row_error(self):
-        # 遗留 UNIQUE(hash) 约束库：第二行 flush 失败不能毒化第一行
+    def test_apply_isolates_row_error(self):
+        # 遗留 UNIQUE(hash) 约束库：第二行落库失败不能毒化第一行
         self.session.execute(text("CREATE UNIQUE INDEX ux_scanfiles_hash ON scanfiles (hash)"))
         self.svc.db = FakeCalibreDB()
         r1 = ScanFile(os.path.join(self.tmpdir, "u1.txt"), "sha256:dup", 1)
+        r1.status = ScanFile.READY
         r2 = ScanFile(os.path.join(self.tmpdir, "u2.txt"), "sha256:dup", 1)
-        self.assertTrue(self.svc._phase1_save(r1, self.session, True))
-        self.assertFalse(self.svc._phase1_save(r2, self.session, True))
+        r2.status = ScanFile.READY
+        outcomes = self.svc._apply_phase1_batch(
+            self.session, [("save", r1, ScanFile.READY), ("save", r2, ScanFile.READY)]
+        )
         self.session.commit()
         rows = self.session.query(ScanFile).all()
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0].path, r1.path)
+        self.assertEqual(len(outcomes), 1)
+        self.assertEqual(outcomes[0][1], ScanFile.READY)
 
     def test_do_import_internal_delivers_all_rows_batched(self):
         db = FakeCalibreDB()
@@ -379,8 +389,8 @@ class TestSetFieldBatching(ScanP0TestBase):
             files.append(self._touch(os.path.join("c%d" % (i % 3), "book%02d.txt" % i), b"cat-content-%02d" % i))
         self.svc.do_import_internal(files, 9)
         cat_calls = [m for name, m in db.new_api.set_field_calls if name == constants.CALIBRE_COLUMN_CATEGORY]
-        # worker 批大小 20：20 本一批 + 尾批 5 本 = 2 次调用，而不是 25 次
-        self.assertEqual(len(cat_calls), 2)
+        # 攒批水位 5：25 本 = 5 次批量写回，而不是 25 次逐本；批提交/尾批 flush 都是空操作
+        self.assertEqual(len(cat_calls), 5)
         covered = set()
         for m in cat_calls:
             covered.update(m.keys())
@@ -394,6 +404,99 @@ class TestSetFieldBatching(ScanP0TestBase):
         self.svc.do_import_internal([f1], 9)
         row = self.session.query(ScanFile).filter(ScanFile.path == f1).one()
         self.assertEqual(row.status, ScanFile.IMPORTED)
+
+
+class TestPhase1NoWriteHold(ScanP0TestBase):
+    """P1 核心不变量：Phase1 读算阶段不持有写事务，worker 并发写永不撞锁。
+
+    文件库（真锁语义）+ timeout=0.5s + 每文件 0.3s 慢哈希 + 批大小 4（强制批中
+    并发）：旧实现（写事务横跨哈希 IO）在 0.5s 超时下必丢行；新实现零丢失。
+    """
+
+    def test_concurrent_worker_writes_never_lock(self):
+        dbpath = os.path.join(self.tmpdir, "contend.db").replace("\\", "/")
+        engine = create_engine(
+            "sqlite:///%s" % dbpath, connect_args={"timeout": 0.5, "check_same_thread": False}
+        )
+        session = scoped_session(sessionmaker(bind=engine, autoflush=True, autocommit=False))
+        models.bind_session(session)
+        models.Base.metadata.create_all(engine)
+        self.svc.session = session
+        self.svc.scoped_session = session
+        self.svc.db = FakeCalibreDB()
+        files = [self._touch("h%d.txt" % i, b"hold-content-%d" % i) for i in range(12)]
+        delivered = []
+        orig_hash = ScanService._compute_hash
+
+        def slow_hash(svc_self, fpath):
+            time.sleep(0.3)
+            return orig_hash(svc_self, fpath)
+
+        def writing_stub(row, user_id, scan_upload_path, wsession, force, sole=False, *args, **kwargs):
+            delivered.append(row.path)
+            row.status = ScanFile.IMPORTED
+            ok = self.svc.save_or_rollback(row, wsession)
+            return (None, ScanFile.IMPORTED) if ok else (None, None)
+
+        self.svc._import_one_file = writing_stub
+        self.addCleanup(self._restore_import_one_file)
+        with mock.patch.object(ScanService, "_compute_hash", slow_hash):
+            with mock.patch.object(scan_service, "PHASE1_BATCH_SIZE", 4):
+                self.svc.do_import_internal(files, 9)
+        self.assertEqual(len(delivered), 12)
+        self.assertEqual(
+            session.query(ScanFile).filter(ScanFile.status == ScanFile.IMPORTED).count(), 12
+        )
+        session.remove()
+
+    def _restore_import_one_file(self):
+        if "_import_one_file" in self.svc.__dict__:
+            del self.svc._import_one_file
+
+
+class TestWorkerBatchRetry(ScanP0TestBase):
+    def test_commit_failure_replays_rows_individually(self):
+        r1 = ScanFile(os.path.join(self.tmpdir, "r1.txt"), "sha256:r1", 1)
+        r1.status = ScanFile.READY
+        r2 = ScanFile(os.path.join(self.tmpdir, "r2.txt"), "sha256:r2", 1)
+        r2.status = ScanFile.READY
+        self.session.add_all([r1, r2])
+        self.session.commit()
+        span = [
+            (r1.id, ScanFile.IMPORTED, "T1", "A1", "P1", "t1", 501),
+            (r2.id, ScanFile.INVALID, "T2", "A2", "P2", "t2", 0),
+        ]
+        real_session = self.session()
+        calls = []
+        orig_commit = real_session.commit
+
+        def flaky_commit():
+            calls.append(1)
+            if len(calls) == 1:
+                raise OperationalError("commit", None, Exception("database is locked"))
+            return orig_commit()
+
+        with mock.patch.object(real_session, "commit", flaky_commit):
+            ok, failed = self.svc._commit_worker_batch(real_session, span)
+        self.assertFalse(ok)
+        self.assertEqual(failed, [])
+        rows = {r.path: r for r in self.session.query(ScanFile).all()}
+        self.assertEqual(rows[r1.path].status, ScanFile.IMPORTED)
+        self.assertEqual(rows[r1.path].title, "T1")
+        self.assertEqual(rows[r1.path].book_id, 501)
+        self.assertEqual(rows[r2.path].status, ScanFile.INVALID)
+
+
+class TestTitleMapThreshold(ScanP0TestBase):
+    def test_huge_library_skips_title_map(self):
+        db = FakeCalibreDB()
+        db.new_api.all_book_ids = lambda: range(scan_service.TITLE_MAP_MAX_BOOKS + 1)
+        self.svc.db = db
+        mi = SimpleNamespace(title="Huge Lib Book")
+        ids = self.svc._same_title_ids(mi, {"map": None, "built": False})
+        self.assertEqual(db.new_api.get_id_map_calls, [])
+        self.assertEqual(db.same_title_calls, ["Huge Lib Book"])
+        self.assertEqual(ids, set())
 
 
 if __name__ == "__main__":

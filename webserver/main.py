@@ -298,7 +298,10 @@ def make_app():
         def set_sqlite_pragma(db_connection, connection_record):
             cursor = db_connection.cursor()
             try:
-                cursor.execute("PRAGMA busy_timeout=30000")
+                # 60s：扫描导入 Phase1/Phase2 双写并发 + NAS fsync 长尾下，
+                # 30s 仍可能误杀正常等待的提交；后台任务写线程卡 60s 可接受，
+                # 远好于 OperationalError 丢状态。
+                cursor.execute("PRAGMA busy_timeout=60000")
                 if CONF.get("SQLITE_RELAXED", False) or perf.lite_on("LITE_SQLITE_RELAXED"):
                     cursor.execute("PRAGMA synchronous=NORMAL")
                     cursor.execute("PRAGMA temp_store=MEMORY")

@@ -12,8 +12,10 @@
 #         走 calibre Cache.has_id（纯内存），不再每本一次 get_data_as_dict。
 #       * 存在 NEW/READY 状态的记录时复用缓存哈希，避免重复 I/O。
 #       * 否则清除同哈希的旧非导入记录，创建新 READY 状态的 ScanFile 行。
-#   - READY 行攒批落库（PHASE1_BATCH_SIZE 行一提交），提交后才把本批行 ID 入队
-#     （worker 用独立会话，入队晚于提交是跨会话可见的硬要求）。
+#   - 读算与落库分离：去重查询 + 哈希 IO 在无写事务下执行，写操作暂存后攒满
+#     PHASE1_BATCH_SIZE 经 _apply_phase1_batch 在短写事务内统一落库并提交；
+#     计数与入队只发生在提交成功后（worker 用独立会话，入队晚于提交是跨会话可见的
+#     硬要求；commit 失败整批丢弃，计数不虚高，文件在磁盘可下轮自愈）。
 #   - 将 READY 行的 ID 放入有界工作队列（最大 50），自然地对阶段二施加背压。
 #
 # 阶段二（Importing）：独立后台线程执行
@@ -64,9 +66,17 @@ CONF = loader.get_settings()
 MEGA_BYTES = 1024 * 1024
 # 可扫描导入的格式与上传一致
 SCAN_EXT = constants.ACCEPTED_BOOK_FORMATS
-# Phase1 批量落库窗口：攒够这么多行 ScanFile 变更才 commit 一次。逐行 commit 在
-# 百万级扫描下是 fsync  storm；攒批后 WORKER 侧靠“commit 后再入队”保证跨会话可见。
+# Phase1 批量落库窗口：攒够这么多 staged 写操作才开一次短写事务统一落库。
+# 读（去重查询）与算（哈希 IO）一律在写事务之外，写事务内只有纯内存对象的
+# INSERT/DELETE（亚秒级），避免长写事务横跨磁盘 IO 阻塞 worker 的并发写。
 PHASE1_BATCH_SIZE = 500
+# calibre 自定义列缓冲的 flush 水位：攒够这么多本就写回一次。durability 窗口上确界
+# ≈ 水位×单本耗时（旧逐行同步是毫秒级；20 本一批是分钟级；5 本是折中）。
+PENDING_FIELDS_FLUSH_THRESHOLD = 5
+# 标题映射的建库上限：超过该书量回退逐本查询。映射常驻内存约 350-700MB/百万书
+# （中文短标题 ~357MB，ASCII 长标题 ~702MB，另有一次性的 get_id_map 全量拷贝峰值），
+# 小内存机器上宁可慢（逐本 O(库) 扫描）也不能 OOM 拖垮整机。
+TITLE_MAP_MAX_BOOKS = 2000000
 
 
 class ScanService(AsyncService):
@@ -207,12 +217,29 @@ class ScanService(AsyncService):
         books_with_same_title 每次调用都是全库 Python 扫描（O(库大小)）：百万书库下
         逐本调是秒级×本数。归一化口径与 legacy 实现逐字一致（icu_lower(force_unicode)），
         映射内容与逐本查询等价，只是把 O(N) 的调用次数降为 1。
+
+        开销与边界（实测）：映射常驻约 350-700MB/百万书（中文 ~357MB，ASCII 长标题
+        ~702MB），另有 get_id_map 全量 .copy() 的一次性同量级峰值；超 TITLE_MAP_MAX_BOOKS
+        直接回退逐本查询（小内存机器保命）。映射是本轮开始时的快照：轮内 Web 上传的
+        同标题书（upload 路径不持导入互斥）可能被误判为新书造成重复，需手工合并；
+        同轮 Phase2 新入库的书由 _title_map_add 实时补进，不在此列。
         """
         try:
             new_api = getattr(self.db, "new_api", None)
             get_id_map = getattr(new_api, "get_id_map", None) if new_api is not None else None
             if not callable(get_id_map):
                 return None
+            all_book_ids = getattr(new_api, "all_book_ids", None)
+            if callable(all_book_ids):
+                try:
+                    if len(all_book_ids()) > TITLE_MAP_MAX_BOOKS:
+                        logging.warning(
+                            "[IMPORT] Library exceeds %d books, skip title map (fallback to per-book check)",
+                            TITLE_MAP_MAX_BOOKS,
+                        )
+                        return None
+                except Exception as err:
+                    logging.debug("[IMPORT] Title map size gate skipped: %s", err)
             id_map = get_id_map("title")
             if not isinstance(id_map, dict):
                 return None
@@ -227,6 +254,8 @@ class ScanService(AsyncService):
                 except Exception:
                     continue
                 title_map.setdefault(key, set()).add(book_id)
+            del id_map
+            logging.info("[IMPORT] Title map built: %d distinct titles", len(title_map))
             return title_map
         except Exception as err:
             logging.warning("[IMPORT] Failed to build title map, fallback to per-book check: %s", err)
@@ -284,28 +313,47 @@ class ScanService(AsyncService):
         except Exception as err:
             logging.debug("[SCAN] Begin scan batch skipped: %s", err)
 
-    def _phase1_save(self, row, session, batched=False):
-        """Phase1 行落库：batched=False 时与旧 save_or_rollback 完全一致（逐行 commit）。
+    def _apply_phase1_batch(self, session, staged):
+        """在短写事务内执行一批 staged 写操作，返回成功落库的 [(row_id, state)]（按暂存顺序）。
 
-        批量模式只 add + flush（行级 SAVEPOINT 隔离单行失败），提交权归批次尾的
-        session.commit()；row.id 在 flush 后即分配，调用方可先收集、待提交后再入队。
+        staged 元素：("del_path", fpath) | ("del_hash", hash) | ("save", row, state)，
+        由 _scan_one_file 在读算阶段（无写事务、可横跨任意时长磁盘 IO）里攒出；
+        本方法只做纯内存对象的 INSERT/DELETE + flush，持写锁窗口亚秒级。
+        单个操作失败只丢该操作（行级 SAVEPOINT），不毒化整批；调用方负责 commit，
+        commit 成功后才能计数/入队（跨会话可见性），commit 失败则整批丢弃（文件在
+        磁盘，下轮重扫自愈）。
         """
-        if not batched:
-            return self.save_or_rollback(row, session)
-        bid = "[ book-id=%s ]" % row.book_id if row.book_id else ""
-        logging.info("update: status=%-5s, path=%s %s", row.status, row.path, bid)
-        try:
-            self._begin_scan_batch(session)
-            with session.begin_nested():
-                session.add(row)
-                session.flush()
-            return True
-        except IntegrityError as err:
-            logging.error("IntegrityError: Duplicate hash detected: %s, %s", row.hash, err)
-            return False
-        except Exception as err:
-            logging.exception("save error: %s", err)
-            return False
+        outcomes = []
+        if not staged:
+            return outcomes
+        self._begin_scan_batch(session)
+        for op in staged:
+            kind = op[0]
+            try:
+                with session.begin_nested():
+                    if kind == "del_path":
+                        session.query(ScanFile).filter(ScanFile.path == op[1]).delete(synchronize_session=False)
+                    elif kind == "del_hash":
+                        session.query(ScanFile).filter(
+                            ScanFile.hash == op[1], ScanFile.status != ScanFile.IMPORTED
+                        ).delete(synchronize_session=False)
+                    elif kind == "save":
+                        session.add(op[1])
+                    else:
+                        logging.error("[SCAN] Unknown staged op, drop it: %r", kind)
+                        continue
+                    session.flush()
+            except IntegrityError as err:
+                logging.error("[SCAN] Staged op %s failed, drop it: %s", kind, err)
+                continue
+            except Exception:
+                logging.exception("[SCAN] Staged op %s failed, drop it", kind)
+                continue
+            if kind == "save":
+                bid = "[ book-id=%s ]" % op[1].book_id if op[1].book_id else ""
+                logging.info("update: status=%-5s, path=%s %s", op[1].status, op[1].path, bid)
+                outcomes.append((op[1].id, op[2]))
+        return outcomes
 
     def _set_calibre_fields(self, column, mapping):
         """单列批量 set_field；整批失败时逐本重试，全部 best-effort（失败只记日志）。
@@ -326,6 +374,43 @@ class ScanService(AsyncService):
                 self.db.new_api.set_field(column, {book_id: value})
             except Exception as err:
                 logging.error("[IMPORT] Failed to set %s for book_id=%s: %s", column, book_id, err)
+
+    def _commit_worker_batch(self, session, span):
+        """Phase2 批提交；失败则回滚后逐行重放一次，返回 (ok, failed_spans)。
+
+        span 元素为 (row_id, status, title, author, publisher, tags, book_id) primitives
+        （rollback 后原 ORM 对象已过期，只能靠快照重填）。重放走旧的逐行
+        save_or_rollback 语义；仍失败的行返回给调用方扣减乐观计数。
+        """
+        try:
+            session.commit()
+            return True, []
+        except Exception as err:
+            logging.error("[IMPORT] Batch commit error, retrying %d rows individually: %s", len(span), err)
+            session.rollback()
+        failed = []
+        for (row_id, status, title, author, publisher, tags, book_id) in span:
+            try:
+                fresh = session.get(ScanFile, row_id)
+                if fresh is None:
+                    failed.append((row_id, status))
+                    continue
+                fresh.status = status
+                fresh.title = title
+                fresh.author = author
+                fresh.publisher = publisher
+                fresh.tags = tags
+                fresh.book_id = book_id
+                if not self.save_or_rollback(fresh, session):
+                    failed.append((row_id, status))
+            except Exception as err:
+                logging.error("[IMPORT] Row replay failed for ScanFile id=%d: %s", row_id, err)
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
+                failed.append((row_id, status))
+        return False, failed
 
     def _flush_pending_calibre_fields(self, pending):
         """把累积的 calibre 自定义列写回一次性落库并清空缓冲；空缓冲直接返回（无书库调用）。"""
@@ -1032,6 +1117,11 @@ class ScanService(AsyncService):
                     else:
                         logging.warning("[IMPORT] Skipping category for '%s': invalid dir name", first_dir)
 
+                if pending_fields is not None:
+                    buffered = sum(len(v) for v in pending_fields.values())
+                    if buffered >= PENDING_FIELDS_FLUSH_THRESHOLD:
+                        self._flush_pending_calibre_fields(pending_fields)
+
             if CONF.get("REMOVE_IMPORTED_FILE", False) and (not existed_ebook or row.status == ScanFile.EXIST):
                 self._remove_imported_file(fpath)
         except Exception as err:
@@ -1063,6 +1153,7 @@ class ScanService(AsyncService):
         total_count = 0
         title_ctx = {"map": None, "built": False}
         pending_fields = {"dynamic_cover": [], "translators": {}, "category": {}}
+        batch_span: list = []
 
         try:
             while True:
@@ -1074,7 +1165,7 @@ class ScanService(AsyncService):
                         # Skip all to clear the queue
                         continue
 
-                    row = importing_session.query(ScanFile).get(row_id)
+                    row = importing_session.get(ScanFile, row_id)
                     if row is None:
                         logging.warning("[IMPORT] ScanFile id=%d not found, skipping", row_id)
                         continue
@@ -1101,17 +1192,21 @@ class ScanService(AsyncService):
                             ScanService.static_status_cnt[status] += 1
                         else:
                             ScanService.static_status_cnt[status] = 1
+                        batch_span.append((row.id, status, row.title, row.author, row.publisher, row.tags, row.book_id))
 
                     if new_book_id is not None:
                         importing_imported.append(new_book_id)
 
                     if importing_index % batch_size == 0:
-                        try:
-                            importing_session.commit()
+                        _ok, failed = self._commit_worker_batch(importing_session, batch_span)
+                        batch_span.clear()
+                        for _rid, failed_status in failed:
+                            if ScanService.static_status_cnt.get(failed_status, 0) > 0:
+                                ScanService.static_status_cnt[failed_status] -= 1
+                        if failed:
+                            logging.error("[IMPORT] Lost %d rows at index %d after replay", len(failed), importing_index)
+                        else:
                             logging.info("[IMPORT] Batch committed at index %d", importing_index)
-                        except Exception as err:
-                            logging.error("[IMPORT] Batch commit error: %s", err)
-                            importing_session.rollback()
                         self._flush_pending_calibre_fields(pending_fields)
                 finally:
                     work_queue.task_done()
@@ -1124,22 +1219,36 @@ class ScanService(AsyncService):
             except Exception as err:
                 logging.error("[IMPORT] Final fields flush error: %s", err)
             try:
-                importing_session.commit()
-                logging.info("[IMPORT] Final commit completed")
+                _ok, failed = self._commit_worker_batch(importing_session, batch_span)
+                batch_span.clear()
+                for _rid, failed_status in failed:
+                    if ScanService.static_status_cnt.get(failed_status, 0) > 0:
+                        ScanService.static_status_cnt[failed_status] -= 1
+                if failed:
+                    logging.error("[IMPORT] Lost %d tail rows after replay", len(failed))
+                else:
+                    logging.info("[IMPORT] Final commit completed")
             except Exception as err:
                 logging.error("[IMPORT] Final commit error: %s", err)
-                importing_session.rollback()
+                try:
+                    importing_session.rollback()
+                except Exception:
+                    pass
             try:
                 self.scoped_session.remove()
             except Exception:
                 pass
 
-    def _scan_one_file(self, fpath, session, import_id, processed_paths, processed_hashes, force, batched=False):
+    def _scan_one_file(self, fpath, session, import_id, processed_paths, processed_hashes, force, staged=None):
         """
             Phase scanning: 处理单个文件：计算哈希，去重，创建/更新 READY 状态的 ScanFile 记录。
 
-            batched=True 时行落库只 flush 不 commit（由 do_import_internal 按
-            PHASE1_BATCH_SIZE 统一提交并在提交后入队，保证 worker 跨会话可见）。
+            staged 为 None 时走旧的立即落库（逐行 commit，兼容直接调用）；传入 list 时
+            只做读（去重查询）与算（哈希 IO），写操作以描述符暂存：
+            ("del_path", fpath) | ("del_hash", hash) | ("save", row, state)，
+            由调用方攒批后经 _apply_phase1_batch 在短写事务内统一执行。
+            读算阶段不持有任何写事务，可横跨任意时长磁盘 IO 而不阻塞 worker 的并发写。
+            返回 (None, state)：行 id 在批量 flush 后才分配，由 applier 回报。
         """
         if not os.path.isfile(fpath) or not os.access(fpath, os.R_OK):
             logging.warning("[SCAN] Not a valid file, skip: %s", fpath)
@@ -1183,14 +1292,20 @@ class ScanService(AsyncService):
         if same_path_rows:
             # Delete all same path records to avoid confusion
             logging.warning("[SCAN] Found multiple records with same path %s, count: %d. Cleaning up...", fpath, len(same_path_rows))
-            session.query(ScanFile).filter(ScanFile.path == fpath).delete(synchronize_session=False)
-            session.flush()
+            if staged is None:
+                session.query(ScanFile).filter(ScanFile.path == fpath).delete(synchronize_session=False)
+                session.flush()
+            else:
+                staged.append(("del_path", fpath))
             same_path_rows = []
 
         if bad_reason:
             row = ScanFile(fpath, "", import_id)
             row.status = bad_reason
-            self._phase1_save(row, session, batched)
+            if staged is None:
+                self.save_or_rollback(row, session)
+            else:
+                staged.append(("save", row, bad_reason))
             return None, bad_reason
 
         row = ScanFile(fpath, hash_val, import_id)
@@ -1198,7 +1313,10 @@ class ScanService(AsyncService):
             # Keep back compatibility to set unique hash.
             row.hash = hashlib.md5(fpath.encode("utf-8")).hexdigest()
             row.status = ScanFile.DROP
-            self._phase1_save(row, session, batched)
+            if staged is None:
+                self.save_or_rollback(row, session)
+            else:
+                staged.append(("save", row, ScanFile.DROP))
             return None, ScanFile.DROP
 
         processed_hashes.add(hash_val)
@@ -1213,19 +1331,28 @@ class ScanService(AsyncService):
                 logging.info("[SCAN] Already imported by hash: %s", fpath)
                 row.hash = hashlib.md5(fpath.encode("utf-8")).hexdigest()
                 row.status = ScanFile.DROP
-                self._phase1_save(row, session, batched)
+                if staged is None:
+                    self.save_or_rollback(row, session)
+                else:
+                    staged.append(("save", row, ScanFile.DROP))
                 return None, ScanFile.DROP
 
         if hash_rows:
             logging.info("[SCAN] Clear existing rows with same hash: %s, count: %d", hash_val, len(hash_rows))
-            session.query(ScanFile).filter(
-                ScanFile.hash == hash_val, ScanFile.status != ScanFile.IMPORTED
-            ).delete(synchronize_session=False)
-            session.flush()
+            if staged is None:
+                session.query(ScanFile).filter(
+                    ScanFile.hash == hash_val, ScanFile.status != ScanFile.IMPORTED
+                ).delete(synchronize_session=False)
+                session.flush()
+            else:
+                staged.append(("del_hash", hash_val))
         row.status = ScanFile.READY
-        if self._phase1_save(row, session, batched):
-            return row.id, ScanFile.READY
-        return None, None
+        if staged is None:
+            if self.save_or_rollback(row, session):
+                return row.id, ScanFile.READY
+            return None, None
+        staged.append(("save", row, ScanFile.READY))
+        return None, ScanFile.READY
 
     def do_import_internal(self, filelist, user_id, task_id=None, imported_id=0, force=False, sole=False):
         """
@@ -1239,7 +1366,9 @@ class ScanService(AsyncService):
         total_count = len(filelist)
         batch_size = 20
 
-        work_queue = _queue.Queue()
+        # 有界工作队列：Phase1 攒批提交后一次性入队可达数百 id，上界防止百万级导入
+        # 常驻内存；队满时 Phase1 阻塞等待 worker 消费（天然背压，此时不持有写事务）。
+        work_queue = _queue.Queue(maxsize=50)
         importing_imported = []
 
         start_time = time.time()
@@ -1258,53 +1387,56 @@ class ScanService(AsyncService):
         importing_thread.start()
 
         # ─── Phase 1: compute sha256, dedup, create READY ScanFile records ────────
-        # 批量落库：行只 flush 不 commit，攒满 PHASE1_BATCH_SIZE 才提交并把本批 READY
-        # id 入队。入队晚于提交是跨会话可见性的硬要求（worker 用独立会话读行，旧逐行
-        # commit 隐含了这一点）。小批量（<500）在 finally 里同样提交入队，不丢行。
+        # 读算与落库分离：_scan_one_file 只做去重查询 + 哈希 IO（不持有写事务），写操作
+        # 暂存后攒满 PHASE1_BATCH_SIZE 经 _apply_phase1_batch 在短写事务内统一执行。
+        # 计数与入队只发生在 commit 成功后（跨会话可见性 + 丢批不虚高进度）；commit 失败
+        # 整批丢弃（文件在磁盘，下轮重扫自愈）。尾批（<500）在 finally 里同样提交入队。
+        # abort 时同样提交已暂存尾批——与旧逐行 commit 下“已扫行全部持久化”净效果等价。
         session = self.session
         processed_paths: set[str] = set()
         processed_hashes: set[str] = set()
         queued_count = 0
-        pending_ids: list = []
-        uncommitted = 0
+        staged: list = []
 
-        def _commit_phase1_batch():
-            nonlocal queued_count, uncommitted
+        def _commit_phase1_stage():
+            nonlocal queued_count
+            try:
+                outcomes = self._apply_phase1_batch(session, staged)
+            except Exception as err:
+                logging.error("[IMPORT] Phase1 batch apply error, drop %d staged ops: %s", len(staged), err)
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
+                staged.clear()
+                return
+            staged.clear()
             try:
                 session.commit()
             except Exception as err:
-                logging.error("[IMPORT] Phase1 batch commit error, drop %d pending rows: %s", len(pending_ids), err)
+                logging.error("[IMPORT] Phase1 batch commit error, drop %d staged rows: %s", len(outcomes), err)
                 session.rollback()
-                pending_ids.clear()
-                uncommitted = 0
                 return
-            for rid in pending_ids:
-                work_queue.put(rid)
-                queued_count += 1
-            pending_ids.clear()
-            uncommitted = 0
+            for rid, state in outcomes:
+                if state in ScanService.static_status_cnt:
+                    ScanService.static_status_cnt[state] += 1
+                else:
+                    ScanService.static_status_cnt[state] = 1
+                if rid is not None:
+                    work_queue.put(rid)
+                    queued_count += 1
 
-        self._begin_scan_batch(session)
         try:
             for index, fpath in enumerate(filelist):
                 if ScanService.static_abort_flag:
                     logging.info("[IMPORT] Aborting import during scanning phase at index %d/%d", index, total_count)
                     break
-                row_id, state = self._scan_one_file(fpath, session, import_id, processed_paths, processed_hashes, force, batched=True)
-                if row_id is not None:
-                    pending_ids.append(row_id)
-                if state:
-                    if state in ScanService.static_status_cnt:
-                        ScanService.static_status_cnt[state] += 1
-                    else:
-                        ScanService.static_status_cnt[state] = 1
-                    uncommitted += 1
-                    if uncommitted >= PHASE1_BATCH_SIZE:
-                        _commit_phase1_batch()
-                        self._begin_scan_batch(session)
+                self._scan_one_file(fpath, session, import_id, processed_paths, processed_hashes, force, staged=staged)
+                if len(staged) >= PHASE1_BATCH_SIZE:
+                    _commit_phase1_stage()
         finally:
-            if uncommitted or pending_ids:
-                _commit_phase1_batch()
+            if staged:
+                _commit_phase1_stage()
             else:
                 try:
                     session.commit()
