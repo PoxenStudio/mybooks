@@ -1656,6 +1656,7 @@
   "share": {
     "pageTitle": "分享的書籍",
     "invalidTitle": "連結已失效",
+    "fromSite": "來自{title}分享的書籍",
     "invalidDesc": "此分享連結不存在、已被取消或已過期。",
     "passwordLabel": "請輸入提取碼",
     "submit": "確認",
@@ -1668,6 +1669,7 @@
     "link": "分享連結",
     "copyLink": "複製連結",
     "copied": "已複製到剪貼簿",
+    "cardScan": "掃碼訪問",
     "viewsUsed": "已訪問 {count} / {max} 次",
     "allowRead": "允許線上閱讀",
     "allowDownload": "允許下載",

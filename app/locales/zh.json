@@ -1663,6 +1663,7 @@
   "share": {
     "pageTitle": "分享的书籍",
     "invalidTitle": "链接已失效",
+    "fromSite": "来自{title}分享的书籍",
     "invalidDesc": "该分享链接不存在、已被取消或已过期。",
     "passwordLabel": "请输入提取码",
     "submit": "确认",
@@ -1675,6 +1676,7 @@
     "link": "分享链接",
     "copyLink": "复制链接",
     "copied": "已复制到剪贴板",
+    "cardScan": "扫码访问",
     "viewsUsed": "已访问 {count} / {max} 次",
     "allowRead": "允许在线阅读",
     "allowDownload": "允许下载",

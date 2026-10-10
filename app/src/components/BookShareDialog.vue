@@ -5,54 +5,66 @@
             type="action"
             :title="$t('share.dialogTitle')"
             icon="mdi-cloud-outline"
-            max-width="520"
+            max-width="900"
             :confirm-text="isActive ? $t('common.save') : $t('share.create')"
             :confirm-loading="submitting"
             :confirm-disabled="loading || (!form.allow_read && !form.allow_download)"
             @confirm="submit"
         >
-            <v-progress-linear v-if="loading" indeterminate></v-progress-linear>
-            <template v-else>
-                <template v-if="isActive">
-                    <v-text-field
-                        :value="shareUrl"
-                        :label="$t('share.link')"
-                        readonly
-                        append-icon="mdi-content-copy"
-                        @click:append="copy(shareUrl)"
-                    ></v-text-field>
-                    <div class="mb-4 text-caption grey--text">
-                        {{ viewsText }}
-                        <v-chip v-if="share.state !== 'active'" x-small color="orange" text-color="white" class="ml-2">{{ $t('share.state.' + share.state) }}</v-chip>
+            <v-row>
+                <v-col cols="12" md="5">
+                    <ShareCardView :image-url="cardImageUrl" :generating="cardGenerating" :alt="book.title" />
+                    <div v-if="cardImageUrl && !cardGenerating" class="text-center mt-3">
+                        <v-btn text color="primary" @click="downloadCard">
+                            <v-icon left>mdi-download</v-icon>{{ $t('book.downloadShareCard') }}
+                        </v-btn>
                     </div>
-                </template>
+                </v-col>
+                <v-col cols="12" md="7">
+                    <v-progress-linear v-if="loading" indeterminate></v-progress-linear>
+                    <template v-else>
+                        <template v-if="isActive">
+                            <v-text-field
+                                :value="shareUrl"
+                                :label="$t('share.link')"
+                                readonly
+                                append-icon="mdi-content-copy"
+                                @click:append="copy(shareUrl)"
+                            ></v-text-field>
+                            <div class="mb-4 text-caption grey--text">
+                                {{ viewsText }}
+                                <v-chip v-if="share.state !== 'active'" x-small color="orange" text-color="white" class="ml-2">{{ $t('share.state.' + share.state) }}</v-chip>
+                            </div>
+                        </template>
 
-                <v-switch v-model="form.allow_read" :label="$t('share.allowRead')" color="primary" class="mt-0" hide-details></v-switch>
-                <v-switch v-model="form.allow_download" :label="$t('share.allowDownload')" color="primary" hide-details></v-switch>
-                <div v-if="!form.allow_read && !form.allow_download" class="error--text text-caption mt-1">{{ $t('share.needOnePermission') }}</div>
+                        <v-switch v-model="form.allow_read" :label="$t('share.allowRead')" color="primary" class="mt-0" hide-details></v-switch>
+                        <v-switch v-model="form.allow_download" :label="$t('share.allowDownload')" color="primary" hide-details></v-switch>
+                        <div v-if="!form.allow_read && !form.allow_download" class="error--text text-caption mt-1">{{ $t('share.needOnePermission') }}</div>
 
-                <v-select v-model="form.expire_days" :items="expireItems" :label="$t('share.expire')" class="mt-4"></v-select>
-                <v-text-field
-                    v-model="form.max_views"
-                    :label="$t('share.maxViews')"
-                    type="number"
-                    min="0"
-                    :rules="[v => v === '' || Number(v) >= 0 || $t('share.invalidNumber')]"
-                ></v-text-field>
-                <v-text-field
-                    v-model="form.password"
-                    :label="$t('share.password')"
-                    maxlength="32"
-                    append-icon="mdi-dice-multiple-outline"
-                    @click:append="randomPassword"
-                ></v-text-field>
+                        <v-select v-model="form.expire_days" :items="expireItems" :label="$t('share.expire')" class="mt-4"></v-select>
+                        <v-text-field
+                            v-model="form.max_views"
+                            :label="$t('share.maxViews')"
+                            type="number"
+                            min="0"
+                            :rules="[v => v === '' || Number(v) >= 0 || $t('share.invalidNumber')]"
+                        ></v-text-field>
+                        <v-text-field
+                            v-model="form.password"
+                            :label="$t('share.password')"
+                            maxlength="32"
+                            append-icon="mdi-dice-multiple-outline"
+                            @click:append="randomPassword"
+                        ></v-text-field>
 
-                <div v-if="isActive" class="text-center mt-2">
-                    <v-btn text color="deep-orange" @click="cancelDialog = true">
-                        <v-icon left>mdi-link-off</v-icon>{{ $t('share.cancelShare') }}
-                    </v-btn>
-                </div>
-            </template>
+                        <div v-if="isActive" class="text-center mt-2">
+                            <v-btn text color="deep-orange" @click="cancelDialog = true">
+                                <v-icon left>mdi-link-off</v-icon>{{ $t('share.cancelShare') }}
+                            </v-btn>
+                        </div>
+                    </template>
+                </v-col>
+            </v-row>
         </AppDialog>
 
         <AppDialog
@@ -72,13 +84,15 @@
 </template>
 
 <script>
+import { downloadImage, renderBookShareCard, shareCardFileName } from '~/utils/bookShareCard';
+
 const DEFAULT_EXPIRE_DAYS = 7;
 
 export default {
     name: 'BookShareDialog',
     props: {
         value: { type: Boolean, default: false },
-        bookId: { type: Number, required: true },
+        book: { type: Object, required: true },
     },
     data() {
         return {
@@ -88,12 +102,21 @@ export default {
             cancelDialog: false,
             share: null,
             form: this.defaultForm(),
+            cardImageUrl: null,
+            cardGenerating: false,
+            cardSeq: 0,
         };
     },
     computed: {
         internalValue: {
             get() { return this.value; },
             set(v) { this.$emit('input', v); },
+        },
+        bookId() {
+            return this.book.id;
+        },
+        cardQrUrl() {
+            return this.shareUrl || `${window.location.origin}/read/${this.bookId}`;
         },
         isActive() {
             return !!this.share && this.share.status === 1;
@@ -125,7 +148,12 @@ export default {
     },
     watch: {
         value(v) {
-            if (v) this.load();
+            if (!v) return;
+            this.load();
+            this.refreshCard();
+        },
+        cardQrUrl() {
+            if (this.value) this.refreshCard();
         },
     },
     methods: {
@@ -163,10 +191,32 @@ export default {
                 this.loading = false;
             }
         },
+        async refreshCard() {
+            const seq = ++this.cardSeq;
+            this.cardGenerating = true;
+            try {
+                const url = await renderBookShareCard({
+                    title: this.book.title,
+                    comments: this.book.comments,
+                    coverUrl: this.book.img,
+                    qrUrl: this.cardQrUrl,
+                    qrLabel: this.shareUrl ? this.$t('share.cardScan') : undefined,
+                    siteTitle: localStorage.getItem('sys_title') || 'MyBooks',
+                });
+                if (seq === this.cardSeq) this.cardImageUrl = url;
+            } catch (e) {
+                if (seq === this.cardSeq) this.cardImageUrl = null;
+            } finally {
+                if (seq === this.cardSeq) this.cardGenerating = false;
+            }
+        },
+        downloadCard() {
+            if (this.cardImageUrl) downloadImage(this.cardImageUrl, `${shareCardFileName(this.book.title)}.png`);
+        },
         randomPassword() {
             const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
             let result = '';
-            for (let i = 0; i < 4; i++) result += chars[Math.floor(Math.random() * chars.length)];
+            for (let i = 0; i < 8; i++) result += chars[Math.floor(Math.random() * chars.length)];
             this.form.password = result;
         },
         async submit() {

@@ -4,7 +4,7 @@
             <v-card class="elevation-12">
                 <v-toolbar flat dark color="primary">
                     <v-icon class="mr-2">mdi-cloud-outline</v-icon>
-                    <v-toolbar-title>{{ $t('share.pageTitle') }}</v-toolbar-title>
+                    <v-toolbar-title>{{ toolbarTitle }}</v-toolbar-title>
                 </v-toolbar>
 
                 <v-card-text v-if="err !== 'ok'" class="text-center py-8">
@@ -15,14 +15,16 @@
 
                 <template v-else>
                     <v-card-text>
-                        <div class="d-flex">
-                            <v-img :src="thumb || img" :aspect-ratio="11 / 15" max-width="110" class="flex-grow-0 mr-4" style="border-radius: 8px"></v-img>
-                            <div style="min-width: 0">
+                        <v-row>
+                            <v-col cols="auto" class="pr-0">
+                                <v-img :src="thumb || img" :aspect-ratio="11 / 15" width="88" style="border-radius: 8px"></v-img>
+                            </v-col>
+                            <v-col>
                                 <div class="text-h6">{{ title }}</div>
                                 <div class="grey--text mb-2">{{ author }}</div>
                                 <div v-if="expire_time" class="text-caption grey--text">{{ $t('share.expireAt', { time: expireText }) }}</div>
-                            </div>
-                        </div>
+                            </v-col>
+                        </v-row>
                         <div v-if="comments" class="mt-4 share-comments" v-html="comments"></div>
                     </v-card-text>
 
@@ -65,6 +67,7 @@
 export default {
     data: () => ({
         err: 'ok',
+        site_title: '',
         title: '',
         author: '',
         comments: '',
@@ -89,9 +92,12 @@ export default {
         return app.$backend(`/share/${params.token}`);
     },
     head() {
-        return { title: this.title || this.$t('share.pageTitle') };
+        return { title: this.toolbarTitle };
     },
     computed: {
+        toolbarTitle() {
+            return this.site_title ? this.$t('share.fromSite', { title: this.site_title }) : this.$t('share.pageTitle');
+        },
         expireText() {
             return this.expire_time ? new Date(this.expire_time).toLocaleString() : '';
         },

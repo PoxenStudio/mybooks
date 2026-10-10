@@ -382,6 +382,10 @@
   content: "\F12CC";
 }
 
+.mdi-cloud-outline::before {
+  content: "\F0163";
+}
+
 .mdi-cloud-print-outline::before {
   content: "\F0166";
 }
@@ -474,8 +478,16 @@
   content: "\F05E9";
 }
 
+.mdi-delete-sweep-outline::before {
+  content: "\F0C62";
+}
+
 .mdi-devices::before {
   content: "\F0FB0";
+}
+
+.mdi-dice-multiple-outline::before {
+  content: "\F1156";
 }
 
 .mdi-dots-vertical::before {
@@ -730,12 +742,20 @@
   content: "\F0337";
 }
 
+.mdi-link-off::before {
+  content: "\F0338";
+}
+
 .mdi-link-variant::before {
   content: "\F0339";
 }
 
 .mdi-lock::before {
   content: "\F033E";
+}
+
+.mdi-lock-open-variant-outline::before {
+  content: "\F0FC7";
 }
 
 .mdi-lock-outline::before {

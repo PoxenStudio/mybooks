@@ -22,7 +22,7 @@ MAX_PAGE_SIZE = 100
 
 
 def _invalid():
-    return {"err": "share.invalid", "msg": _("链接无效或已失效")}
+    return {"err": "share.invalid", "msg": _("链接无效或已失效"), "site_title": CONF.get("site_title", "MyBooks")}
 
 
 class ShareHandlerMixin:
@@ -135,6 +135,7 @@ class ShareInfoHandler(BaseHandler, ShareHandlerMixin):
         info = BookFormatter(self, book).format(with_files=True)
         data = {
             "err": "ok",
+            "site_title": CONF.get("site_title", "MyBooks"),
             "title": info["title"],
             "author": info["author"],
             "comments": info["comments"],
