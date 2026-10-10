@@ -8,15 +8,19 @@ Diversity re-ranking (MMR) with per-author and per-series caps.
 from collections import Counter
 from typing import List, Sequence, Tuple
 
-from webserver.recommend.features import BookFeatures
+from webserver.recommend.features import UNKNOWN_AUTHORS, BookFeatures
 
 Scored = Tuple[BookFeatures, float]
 
 MMR_MAX_N = 100
 
 
+def _known_authors(book: BookFeatures):
+    return [a for a in book.authors if a not in UNKNOWN_AUTHORS]
+
+
 def book_similarity(a: BookFeatures, b: BookFeatures) -> float:
-    if set(a.authors) & set(b.authors):
+    if set(_known_authors(a)) & set(_known_authors(b)):
         return 1.0
     if a.series and a.series == b.series:
         return 0.8
@@ -34,12 +38,12 @@ class _Caps:
         self.series: Counter = Counter()
 
     def allows(self, book: BookFeatures) -> bool:
-        if any(self.authors[a] >= self.max_per_author for a in book.authors):
+        if any(self.authors[a] >= self.max_per_author for a in _known_authors(book)):
             return False
         return not (book.series and self.series[book.series] >= self.max_per_series)
 
     def take(self, book: BookFeatures) -> None:
-        self.authors.update(book.authors)
+        self.authors.update(_known_authors(book))
         if book.series:
             self.series[book.series] += 1
 

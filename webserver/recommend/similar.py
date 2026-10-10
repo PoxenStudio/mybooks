@@ -14,10 +14,9 @@ from typing import Dict, List, Optional, Sequence, Set, Tuple
 from webserver.recommend.config import RecommendConfig
 from webserver.recommend.context import RecommendContext
 from webserver.recommend.coread import CoReadIndex
-from webserver.recommend.features import BookFeatures, Library
+from webserver.recommend.features import UNKNOWN_AUTHORS, BookFeatures, Library
 from webserver.recommend.scoring import Reason, Scorer
 
-UNKNOWN_AUTHORS = frozenset({"佚名", "未知", "Unknown", "unknown"})
 W_AUTHOR = 3.0
 W_SERIES = 2.5
 W_TAG = 2.0
