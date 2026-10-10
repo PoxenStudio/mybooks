@@ -337,7 +337,7 @@ class EpubReader(BaseHandler):
         if not self.current_user and not BookAccessService.guest_read_allowed(self, bid):
             return self.redirect("/login")
 
-        if self.current_user:
+        if self.current_user and not BookAccessService.share_read_granted(self, bid):
             if self.current_user.can_read():
                 if not self.current_user.is_active():
                     raise web.HTTPError(403, reason=_(u"无权在线阅读，请先登录注册邮箱激活账号。"))

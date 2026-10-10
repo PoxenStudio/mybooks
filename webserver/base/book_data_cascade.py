@@ -13,6 +13,8 @@ from webserver.models import (
     BookListBook,
     BookReadingStats,
     BookReview,
+    BookShare,
+    BookVisit,
     Item,
     ManualReadingLog,
     Reading,
@@ -20,12 +22,13 @@ from webserver.models import (
     ReadingState,
 )
 from webserver.services.book_review_service import BookReviewService
+from webserver.services.book_share_service import BookShareService
 
 
 def cascade_delete_book_data(db, book_id: int, commit: bool = True) -> None:
     """书籍被删除/下架时级联清理所有关联数据：Item（收藏/待读等标记）、评价、共读同步
     记录、阅读状态（收藏/在读/待读）、手工补录的阅读时长记录、阅读时长统计
-    （Reading 按天分桶 / BookReadingStats 按格式累计），以及书单关联（同步扣减书单的 book_count）。
+    （Reading 按天分桶 / BookReadingStats 按格式累计），浏览记录、分享链接，以及书单关联（同步扣减书单的 book_count）。
 
     刻意不清理的表：
     - ReaderPaidBook：购买记录属于交易历史，书从回收站还原后应继续有效。
@@ -40,6 +43,8 @@ def cascade_delete_book_data(db, book_id: int, commit: bool = True) -> None:
     db.query(ManualReadingLog).filter(ManualReadingLog.book_id == book_id).delete(synchronize_session=False)
     db.query(Reading).filter(Reading.book_id == book_id).delete(synchronize_session=False)
     db.query(BookReadingStats).filter(BookReadingStats.book_id == book_id).delete(synchronize_session=False)
+    db.query(BookVisit).filter(BookVisit.book_id == book_id).delete(synchronize_session=False)
+    db.query(BookShare).filter(BookShare.book_id == book_id).delete(synchronize_session=False)
 
     # 书单：book_count 是计数器，删关联行时必须同步扣减，否则书单显示的数量比实际列出的多
     booklist_ids = [r[0] for r in db.query(BookListBook.booklist_id).filter(BookListBook.book_id == book_id).all()]
@@ -53,3 +58,4 @@ def cascade_delete_book_data(db, book_id: int, commit: bool = True) -> None:
     if commit:
         db.commit()
     BookReviewService.invalidate_stats(book_id)
+    BookShareService.invalidate_cache()

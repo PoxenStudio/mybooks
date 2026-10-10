@@ -12,8 +12,12 @@
                     <v-col cols=4 xs=4 sm=4 md=4 lg=4 class='col-book-img'>
                         <div class="book-img-container">
                             <v-img :src="book.thumb || book.img" :aspect-ratio="11/15" style="border-radius: 12px;" class="book-img-hover"></v-img>
+                            <!-- 管理员可见：该书存在有效分享链接 -->
+                            <div v-if="book.shared" class="shared-book-badge">
+                                <v-icon small color="white">mdi-cloud-outline</v-icon>
+                            </div>
                             <!-- 实体书角标 -->
-                            <div v-if="book.book_type === 1" class="physical-book-badge">
+                            <div v-if="book.book_type === 1" class="physical-book-badge" :class="{ 'badge-shifted': book.shared }">
                                 <v-icon small color="white">mdi-bookshelf</v-icon>
                             </div>
                             <!-- 音频书角标 -->
@@ -307,6 +311,23 @@ export default {
     justify-content: center;
     box-shadow: 0 2px 8px rgba(33, 150, 243, 0.4);
     z-index: 3;
+}
+.shared-book-badge {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    background-color: #009688;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0, 150, 136, 0.4);
+    z-index: 3;
+}
+.physical-book-badge.badge-shifted {
+    top: 34px;
 }
 .audio-book-badge {
     position: absolute;

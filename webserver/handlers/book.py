@@ -2286,7 +2286,7 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
             else:
                 return self.redirect("/login")
 
-        if self.current_user:
+        if self.current_user and not BookAccessService.share_download_granted(self, bid):
             if self.current_user.can_save():
                 if not self.current_user.is_active():
                     raise web.HTTPError(403, reason=_("无权操作，请先登录注册邮箱激活账号。"))
@@ -2319,7 +2319,7 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
 
     def _charge_download(self, bid, fmt):
         """同一用户同一本书同一格式在窗口期内的多次请求（分段、续传、重试）只扣一次配额；HEAD 不扣。"""
-        if not self.current_user or self.request.method == "HEAD":
+        if not self.current_user or self.request.method == "HEAD" or BookAccessService.share_download_granted(self, self.requested_book_id()):
             return
         protocol = Reading.PROTOCOL_OPDS if self.is_opds else Reading.PROTOCOL_WEB
         result = DownloadQuotaService.charge(self.current_user, bid, fmt, protocol)
@@ -3621,7 +3621,7 @@ class BookRead(BaseHandler):
         if not self.current_user and not BookAccessService.guest_read_allowed(self, bid):
             return self.redirect("/login")
 
-        if self.current_user:
+        if self.current_user and not BookAccessService.share_read_granted(self, bid):
             if self.current_user.can_read():
                 if not self.current_user.is_active():
                     raise web.HTTPError(403, reason=_("无权在线阅读，请先登录注册邮箱激活账号。"))
@@ -3772,7 +3772,7 @@ class BookRead(BaseHandler):
         if not self.current_user and not BookAccessService.guest_read_allowed(self, bid):
             return {"err": "user.need_login", "msg": _("请先登录")}
 
-        if self.current_user:
+        if self.current_user and not BookAccessService.share_read_granted(self, bid):
             if self.current_user.can_read():
                 if not self.current_user.is_active():
                     return {"err": "user.no_permission", "msg": _("无权在线阅读，请先登录注册邮箱激活账号。")}
@@ -3821,7 +3821,7 @@ class BookFilePath(BaseHandler):
         if not self.current_user and not BookAccessService.guest_read_allowed(self, bid):
             return {"err": "user.need_login", "msg": _("请先登录")}
 
-        if self.current_user:
+        if self.current_user and not BookAccessService.share_read_granted(self, bid):
             if self.current_user.can_read():
                 if not self.current_user.is_active():
                     return {"err": "user.no_permission", "msg": _("无权在线阅读，请先登录注册邮箱激活账号。")}
@@ -3856,7 +3856,7 @@ class TxtRead(BaseHandler):
             return {"err": "format error", "msg": _("非txt书籍")}
         if not self.current_user and not BookAccessService.guest_read_allowed(self, bid):
             return {"err": "user.need_login", "msg": _("请先登录")}
-        if self.current_user:
+        if self.current_user and not BookAccessService.share_read_granted(self, bid):
             if self.current_user.can_read():
                 if not self.current_user.is_active():
                     return {"err": "user.no_permission", "msg": _("无权在线阅读，请先登录注册邮箱激活账号。")}
@@ -3887,7 +3887,7 @@ class BookTxtParser(BaseHandler):
             return {"err": "format error", "msg": _("非text书籍")}
         if not self.current_user and not BookAccessService.guest_read_allowed(self, bid):
             return {"err": "user.need_login", "msg": _("请先登录")}
-        if self.current_user:
+        if self.current_user and not BookAccessService.share_read_granted(self, bid):
             if self.current_user.can_read():
                 if not self.current_user.is_active():
                     return {"err": "user.no_permission", "msg": _("无权在线阅读，请先登录注册邮箱激活账号。")}

@@ -407,6 +407,10 @@
                                     <v-icon>mdi-email-send</v-icon>
                                     {{ $t('book.shareToEmail') }}
                                 </v-list-item>
+                                <v-list-item v-if="isAdmin" @click="dialog_book_share = true">
+                                    <v-icon>mdi-cloud-outline</v-icon>
+                                    {{ book.shared ? $t('share.manageShare') : $t('share.createShare') }}
+                                </v-list-item>
                                 <v-list-item @click="generateShareCard" :disabled="!hasEBooks">
                                     <v-icon>mdi-card-bulleted-outline</v-icon>
                                     {{ $t('book.generateShareCard') }}
@@ -427,6 +431,7 @@
                         </v-menu>
 
                         <ReadingTimeBackfillDialog ref="reading_time_backfill" @saved="onReadingTimeSaved" />
+                        <BookShareDialog v-if="isAdmin" v-model="dialog_book_share" :book-id="book.id" @changed="onShareChanged" />
                     </template>
                 </v-toolbar>
                 <v-row>
@@ -468,6 +473,7 @@
                             <div>
                                 <p class='title mb-0'>
                                     {{ book.title }}
+                                    <v-icon v-if="isAdmin && book.shared" small color="teal" class="ml-1" :title="$t('share.sharedBadge')">mdi-cloud-outline</v-icon>
                                     <v-tooltip bottom>
                                         <template v-slot:activator="{ on, attrs }">
                                             <v-btn
@@ -1938,6 +1944,7 @@ export default {
 
         // 读书分享卡片
         dialog_share_card: false,
+        dialog_book_share: false,
         share_card_generating: false,
         share_card_image_url: null,
         // 发送到邮箱对话框
@@ -2340,6 +2347,9 @@ export default {
                 this.$alert("error", rsp.msg, "/");
             }
             if (next) next();
+        },
+        onShareChanged(shared) {
+            this.$set(this.book, "shared", shared);
         },
         switchToAudioPlayer() {
             if (this.audios.status === this.AUDIO_STATUS.CONVERTED && this.audios.count > 0) {

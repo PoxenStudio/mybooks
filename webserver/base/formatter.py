@@ -4,6 +4,7 @@ import datetime
 from webserver.i18n import _
 from webserver.loader import get_settings
 from webserver.services.book_access_service import BookAccessService
+from webserver.services.book_share_service import BookShareService
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT
 from webserver.constants import CALIBRE_COLUMN_EXT_LINK, CALIBRE_COLUMN_CATEGORY, CALIBRE_COLUMN_FOLDER
 from webserver.constants import CALIBRE_COLUMN_TRANSLATORS
@@ -146,6 +147,10 @@ class BookFormatter:
         self.api_url = tornado_handler.api_url
         self.handler = tornado_handler
 
+    def is_shared_visible(self):
+        is_admin = getattr(self.handler, "is_admin", None)
+        return bool(is_admin and is_admin() and self.book["id"] in BookShareService.shared_book_ids())
+
     def get_files(self):
         files = []
         book_id = self.book["id"]
@@ -183,6 +188,8 @@ class BookFormatter:
                 "publisher_url": self.api_url + "/publisher/" + f.val("publisher"),
             }
         )
+        if self.is_shared_visible():
+            data["shared"] = True
         if with_files:
             data["files"] = self.get_files()
         if with_perms:

@@ -559,5 +559,13 @@
   "批量删除导入记录": "Bulk delete import records",
   "浏览记录": "Browsing History",
   "浏览记录已清空": "Browsing history cleared",
-  "仅公开书单可以开启访客阅读": "Guest reading can only be enabled for public booklists"
+  "仅公开书单可以开启访客阅读": "Guest reading can only be enabled for public booklists",
+  "链接无效或已失效": "The link is invalid or has expired",
+  "尝试次数过多，请稍后再试": "Too many attempts, please try again later",
+  "提取码不正确": "Incorrect access code",
+  "分享不存在": "Share not found",
+  "分享已取消": "Sharing cancelled",
+  "分享已删除": "Share deleted",
+  "分享参数不正确": "Invalid share parameters",
+  "分享已保存": "Share saved"
 }
