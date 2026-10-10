@@ -20,8 +20,7 @@
 #
 # 阶段二（Importing）：独立后台线程执行
 #   - 从工作队列中持续取出行 ID，加载对应 ScanFile 记录。
-#   - 读取书籍元数据（calibre get_metadata），标题判重走本轮一次性构建的标题映射
-#     （首个非 force 检查时构建，同轮新书逐本补进），不再每本全库扫描：
+#   - 读取书籍元数据（calibre get_metadata），并根据标题去重：
 #       * 标题已存在（电子书）→ 追加格式（add_format）。
 #       * 标题不存在 → 全新导入（import_book），同时创建 Item 关联记录。
 #       * DJVU/UVZ/CBZ 扫描版先校验容器，以文件名编目为底合并内嵌元数据；仅唯一同名候选才并入，多候选按新书入库。
@@ -73,10 +72,6 @@ PHASE1_BATCH_SIZE = 500
 # calibre 自定义列缓冲的 flush 水位：攒够这么多本就写回一次。durability 窗口上确界
 # ≈ 水位×单本耗时（旧逐行同步是毫秒级；20 本一批是分钟级；5 本是折中）。
 PENDING_FIELDS_FLUSH_THRESHOLD = 5
-# 标题映射的建库上限：超过该书量回退逐本查询。映射常驻内存约 350-700MB/百万书
-# （中文短标题 ~357MB，ASCII 长标题 ~702MB，另有一次性的 get_id_map 全量拷贝峰值），
-# 小内存机器上宁可慢（逐本 O(库) 扫描）也不能 OOM 拖垮整机。
-TITLE_MAP_MAX_BOOKS = 2000000
 
 
 class ScanService(AsyncService):
@@ -210,89 +205,6 @@ class ScanService(AsyncService):
         except Exception as err:
             logging.warning("[SCAN] Existence check failed for book_id=%s, treat as missing: %s", book_id, err)
             return False
-
-    def _build_title_map(self):
-        """一次性拉取 calibre 全库 {归一化标题: {book_ids}}，失败返回 None（调用方回退逐本查询）。
-
-        books_with_same_title 每次调用都是全库 Python 扫描（O(库大小)）：百万书库下
-        逐本调是秒级×本数。归一化口径与 legacy 实现逐字一致（icu_lower(force_unicode)），
-        映射内容与逐本查询等价，只是把 O(N) 的调用次数降为 1。
-
-        开销与边界（实测）：映射常驻约 350-700MB/百万书（中文 ~357MB，ASCII 长标题
-        ~702MB），峰值再加 get_id_map 全量 .copy() 的一次性同量级；超 TITLE_MAP_MAX_BOOKS
-        直接回退逐本查询（小内存机器保命；门限用已拷出的 id_map 计数，不另做全量拷贝）。
-        映射是本轮开始时的快照：轮内 Web 上传的同标题书（upload 路径不持导入互斥）
-        可能被误判为新书造成重复，需手工合并；同轮 Phase2 新入库的书由 _title_map_add
-        实时补进，不在此列。None/非字符串标题直接跳过（旧实现会在 icu_lower 处抛错，
-        本实现更宽容，归一化口径对合法字符串与旧实现逐字一致）。
-        """
-        try:
-            new_api = getattr(self.db, "new_api", None)
-            get_id_map = getattr(new_api, "get_id_map", None) if new_api is not None else None
-            if not callable(get_id_map):
-                return None
-            id_map = get_id_map("title")
-            if not isinstance(id_map, dict):
-                return None
-            if len(id_map) > TITLE_MAP_MAX_BOOKS:
-                logging.warning(
-                    "[IMPORT] Library exceeds %d books, skip title map (fallback to per-book check)",
-                    TITLE_MAP_MAX_BOOKS,
-                )
-                del id_map
-                return None
-            from calibre import force_unicode
-            from calibre.utils.icu import lower as icu_lower
-            title_map = {}
-            for book_id, title in id_map.items():
-                if not title:
-                    continue
-                try:
-                    key = icu_lower(force_unicode(title))
-                except Exception:
-                    continue
-                title_map.setdefault(key, set()).add(book_id)
-            del id_map
-            logging.info("[IMPORT] Title map built: %d distinct titles", len(title_map))
-            return title_map
-        except Exception as err:
-            logging.warning("[IMPORT] Failed to build title map, fallback to per-book check: %s", err)
-            return None
-
-    def _same_title_ids(self, mi, title_ctx):
-        """与 books_with_same_title 同语义（返回 set，空标题返回空集）。
-
-        title_ctx 为 None（直接调用/旧测试）时直接走旧路径；否则首次按需构建映射、
-        之后逐本 O(1)。构建失败（None 映射）同样回退旧路径。
-        """
-        title = getattr(mi, "title", None)
-        if not title:
-            return set()
-        if title_ctx is not None:
-            if not title_ctx.get("built"):
-                title_ctx["built"] = True
-                title_ctx["map"] = self._build_title_map()
-            title_map = title_ctx.get("map")
-            if title_map is not None:
-                try:
-                    from calibre import force_unicode
-                    from calibre.utils.icu import lower as icu_lower
-                    return set(title_map.get(icu_lower(force_unicode(title)), ()))
-                except Exception as err:
-                    logging.debug("[IMPORT] Title map lookup failed: %s", err)
-        return self.db.books_with_same_title(mi)
-
-    @staticmethod
-    def _title_map_add(title_ctx, book_id, title):
-        """本轮新入库的书补进标题映射——否则同轮同名第二本查不到刚入库的第一本，会误建成重复书。"""
-        try:
-            if title_ctx is None or title_ctx.get("map") is None or book_id is None or not title:
-                return
-            from calibre import force_unicode
-            from calibre.utils.icu import lower as icu_lower
-            title_ctx["map"].setdefault(icu_lower(force_unicode(title)), set()).add(book_id)
-        except Exception:
-            pass
 
     @staticmethod
     def _begin_scan_batch(session):
@@ -909,16 +821,13 @@ class ScanService(AsyncService):
             logging.error("[IMPORT] Error reading file %s: %s", fpath, e)
             return None, ScanFile.INVALID
 
-    def _import_one_file(self, row, user_id, scan_upload_path, session, force, sole=False, title_ctx=None, pending_fields=None):
+    def _import_one_file(self, row, user_id, scan_upload_path, session, force, sole=False, pending_fields=None):
         """
             Read metadata and import one READY ScanFile into calibre.
 
             Handles all error paths internally (sets row.status, calls save_or_rollback).
             Returns book_id if a new book was successfully linked via Item, else None.
 
-            title_ctx: {"map": {...}|None, "built": bool}，Phase2 worker 内复用——首个
-                非 force 标题检查时一次性构建全库标题映射（_build_title_map），之后逐本
-                O(1)；为 None 时走旧的逐本 books_with_same_title。
             pending_fields: worker 内累积的 calibre 自定义列缓冲（dynamic_cover 列表/
                 translators 与 category 字典），为 None 时走旧的逐本 set_field。
         """
@@ -1000,7 +909,7 @@ class ScanService(AsyncService):
             if force or CONF.get("UPLOAD_IGNORE_TITLE_CHECKING", False):
                 ids = []
             else:
-                ids = self._same_title_ids(mi, title_ctx)
+                ids = self.db.books_with_same_title(mi)
                 logging.info("[IMPORT] Same title %d book(s) for: %s", len(ids) if ids else 0, fpath)
             if ids and fmt in SCANNED_DOCUMENT_FORMATS and len(ids) > 1:
                 # 扫描版无可信作者元数据：多个同名候选一律按新书入库，避免误并。
@@ -1052,8 +961,6 @@ class ScanService(AsyncService):
                     mi.languages = CONF.get("DEFAULT_LANGUAGE", constants.DEFAULT_LANGUAGE_CODE)
                 row.book_id = self.db.import_book(mi, [fpath], notify=False, import_hooks=False)
                 if row.book_id is not None:
-                    # 本轮新书补进标题映射（同轮同名后文不再误判为新书）
-                    self._title_map_add(title_ctx, row.book_id, mi.title)
                     if dynamic_cover:
                         if pending_fields is None:
                             self.db.new_api.set_field(CALIBRE_COLUMN_DYNAMIC_COVER, {row.book_id: 1})
@@ -1122,14 +1029,16 @@ class ScanService(AsyncService):
     def _importing_worker(self, work_queue, importing_imported, task_id, user_id, scan_upload_path, batch_size, force, sole=False):
         """Worker thread for Phase 2: consumes row IDs from work_queue and imports each file.
 
-        title_ctx 让本轮标题判重只拉一次全库映射（首个非 force 检查时构建，
-        同轮新书逐本补进）；pending_fields 把 calibre 自定义列写回攒批落库
-        （与下面的批提交对齐，尾批与异常路径在 finally 里兜底 flush）。
+        pending_fields 把 calibre 自定义列写回攒批落库（水位/批提交/尾批与异常路径
+        在 finally 里兜底 flush）。
         """
         importing_session = self.scoped_session()
         importing_index = 0
         total_count = 0
-        title_ctx = {"map": None, "built": False}
+        pending_fields = {"dynamic_cover": [], "translators": {}, "category": {}}
+        importing_session = self.scoped_session()
+        importing_index = 0
+        total_count = 0
         pending_fields = {"dynamic_cover": [], "translators": {}, "category": {}}
 
         try:
@@ -1163,7 +1072,7 @@ class ScanService(AsyncService):
                         except Exception as e:
                             logging.error("[IMPORT] Failed to update progress: %s", e)
 
-                    new_book_id, status = self._import_one_file(row, user_id, scan_upload_path, importing_session, force, sole, title_ctx, pending_fields)
+                    new_book_id, status = self._import_one_file(row, user_id, scan_upload_path, importing_session, force, sole, pending_fields)
                     if status:
                         if status in ScanService.static_status_cnt:
                             ScanService.static_status_cnt[status] += 1

@@ -1,9 +1,9 @@
-"""P0 扫描导入加速回归测试（calibre 轻量检查 / 标题映射 / Phase1 批量落库 / set_field 攒批）。
+"""P0 扫描导入加速回归测试（calibre 轻量检查 / Phase1 批量落库 / set_field 攒批）。
 
-- 不依赖 calibre 的用例（has_id 存在性、回退路径、批量提交可见性、行级隔离、
-  do_import_internal 行全送达）Windows 直跑；
-- 走真实 _import_one_file 的用例（标题映射、大小写归一、set_field 攒批）需要
-  calibre（函数头 import Metadata），缺 calibre 时自动跳过，WSL 全量跑。
+- 不依赖 calibre 的用例（has_id 存在性、回退路径、暂存可见性、行级隔离、
+  行全送达、写锁不变量、put 投递守卫）Windows 直跑；
+- 走真实 _import_one_file 的用例（同标题加格式、set_field 攒批、行失败诚实）
+  需要 calibre（函数头 import Metadata），缺 calibre 时自动跳过，WSL 全量跑。
 """
 import os
 import shutil
@@ -12,7 +12,6 @@ import sys
 import tempfile
 import time
 import unittest
-from types import SimpleNamespace
 from unittest import mock
 
 # apt 版 calibre（/usr/lib/calibre）需要解释器预置 extensions_location 等属性
@@ -45,21 +44,12 @@ class FakeNewAPI:
     def __init__(self, db):
         self._db = db
         self.has_id_calls = []
-        self.get_id_map_calls = []
         self.set_field_calls = []
         self.fail_set_field = False
 
     def has_id(self, book_id):
         self.has_id_calls.append(book_id)
         return book_id in self._db._ids
-
-    def all_book_ids(self):
-        return frozenset(self._db._ids)
-
-    def get_id_map(self, field):
-        self.get_id_map_calls.append(field)
-        assert field == "title"
-        return dict(self._db._titles)
 
     def set_field(self, name, mapping, **kwargs):
         self.set_field_calls.append((name, dict(mapping)))
@@ -241,15 +231,6 @@ class TestHasIdExistence(ScanP0TestBase):
         # 回退到旧的逐本 get_data_as_dict，且同样能跳过
         self.assertEqual(db.get_data_as_dict_calls, [[11]])
 
-    def test_same_title_fallback_without_new_api(self):
-        db = NoNewAPIDB()
-        db.new_api = None
-        self.svc.db = db
-        mi = SimpleNamespace(title="Fallback Title")
-        ids = self.svc._same_title_ids(mi, {"map": None, "built": True})
-        self.assertEqual(ids, set())
-        self.assertEqual(db.same_title_calls, ["Fallback Title"])
-
 
 class TestPhase1Batching(ScanP0TestBase):
     def _raw_count(self, dbpath):
@@ -349,32 +330,19 @@ class TestPhase1Batching(ScanP0TestBase):
 
 
 @unittest.skipUnless(HAS_CALIBRE, "needs calibre (real _import_one_file)")
-class TestTitleMapEndToEnd(ScanP0TestBase):
-    def test_title_map_built_once_and_no_duplicate(self):
+class TestSameTitleEndToEnd(ScanP0TestBase):
+    def test_same_title_second_file_adds_format(self):
+        # 同标题两本：逐本 books_with_same_title 判重，第二本走加格式分支，不建重复书
         db = FakeCalibreDB()
         self.svc.db = db
         f1 = self._touch(os.path.join("d1", "同名书.txt"), b"first-content-aaa")
         f2 = self._touch(os.path.join("d2", "同名书.txt"), b"second-content-bbb")
         self.svc.do_import_internal([f1, f2], 9)
-        # 全轮只拉一次全库映射；第二本走加格式分支，不建重复书
-        self.assertEqual(len(db.new_api.get_id_map_calls), 1)
         self.assertEqual(len(db.import_calls), 1)
         self.assertEqual(len(db.add_format_calls), 1)
+        self.assertEqual(len(db.same_title_calls), 2)
         statuses = sorted(r.status for r in self.session.query(ScanFile).all())
         self.assertEqual(statuses, [ScanFile.IMPORTED, ScanFile.IMPORTED])
-
-    def test_title_normalization_matches_calibre(self):
-        # 库内 "Hello Book"，文件标题全小写：精确相等会漏判，icu 口径必须命中
-        db = FakeCalibreDB(titles={5: "Hello Book"})
-        self.svc.db = db
-        f1 = self._touch("hello book.txt", b"norm-content")
-        self.svc.do_import_internal([f1], 9)
-        self.assertEqual(len(db.new_api.get_id_map_calls), 1)
-        self.assertEqual(db.import_calls, [])
-        self.assertEqual(len(db.add_format_calls), 1)
-        row = self.session.query(ScanFile).filter(ScanFile.path == f1).one()
-        self.assertEqual(row.status, ScanFile.IMPORTED)
-        self.assertEqual(row.book_id, 5)
 
 
 @unittest.skipUnless(HAS_CALIBRE, "needs calibre (real _import_one_file)")
@@ -465,21 +433,6 @@ class TestRowSaveHonesty(ScanP0TestBase):
         with mock.patch.object(ScanService, "save_or_rollback", return_value=False):
             new_id, status = self.svc._import_one_file(row, 9, self.tmpdir, self.session, False)
         self.assertEqual((new_id, status), (None, None))
-
-
-class TestTitleMapThreshold(ScanP0TestBase):
-    def test_huge_library_skips_title_map(self):
-        class BigDict(dict):
-            def __len__(self):
-                return scan_service.TITLE_MAP_MAX_BOOKS + 1
-
-        db = FakeCalibreDB()
-        db.new_api.get_id_map = lambda field: BigDict({1: "Only Book"})
-        self.svc.db = db
-        mi = SimpleNamespace(title="Huge Lib Book")
-        ids = self.svc._same_title_ids(mi, {"map": None, "built": False})
-        self.assertEqual(db.same_title_calls, ["Huge Lib Book"])
-        self.assertEqual(ids, set())
 
 
 class TestNonReadyNotEnqueued(ScanP0TestBase):
