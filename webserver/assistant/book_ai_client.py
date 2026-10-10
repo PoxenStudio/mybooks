@@ -122,7 +122,10 @@ class BookAIClient:
             logging.info("[BookAI] Testing connection to AI service at %s", self.client.base_url)
             response = self.client.chat.completions.create(
                 model=self.model,
-                messages=[{"role": "system", "content": "Check the connect, please answer with JSON format {\"response\": \"pong\"} if you can receive this message."}],
+                messages=[
+                    {"role": "system", "content": "Check the connect, please answer with JSON format {\"response\": \"pong\"} if you can receive this message."},
+                    {"role": "user", "content": "ping"},
+                ],
                 response_format={"type": "json_object"},
                 temperature=0.0,
                 max_tokens=200,
