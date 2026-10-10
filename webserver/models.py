@@ -478,6 +478,30 @@ class ScanFile(Base, SQLAlchemyMixin):
         self.update_time = datetime.datetime.now()
 
 
+class ScanDirSnapshot(Base, SQLAlchemyMixin):
+    """扫描目录快照：增量扫描的水位线（mtime 方案）。
+
+    每行记录一次成功整轮扫描见到的目录状态。目录自身 mtime 只反映直接子项
+    变化，因此剪枝必须自顶向下逐目录比对，不能只看顶层：
+    - mtime_ns + entry_count 双等才算“未变”（scandir 原始条目数，剪枝前口径，
+      防隐藏目录过滤等规则漂移导致定义不一致）；
+    - 任一不等/无快照/异常 → 按“变了”处理（偏安全方向，多干活不漏活）。
+    随 _NEW_TABLES_AUTO_ENSURE 自动建表，纯派生数据，可随时整表重建。
+    """
+    __tablename__ = "scan_dir_snapshots"
+    dir = Column(String(2048), primary_key=True)
+    mtime_ns = Column(BigInteger, default=0)
+    entry_count = Column(Integer, default=0)
+    update_time = Column(DateTime)
+
+    def __init__(self, dir_path, mtime_ns, entry_count):
+        super(ScanDirSnapshot, self).__init__()
+        self.dir = dir_path
+        self.mtime_ns = mtime_ns
+        self.entry_count = entry_count
+        self.update_time = datetime.datetime.now()
+
+
 class ReaderPaidBook(Base, SQLAlchemyMixin):
     __tablename__ = "reader_paid_books"
 
@@ -1102,7 +1126,7 @@ def user_syncdb(engine):
 # 表结构随功能迭代新增的表，不希望依赖运维方手动重新执行 `--syncdb` 才能用上
 # （`docker/start.sh` 每次启动都会跑 --syncdb，但手工部署/测试环境不一定会），
 # 在正常的 make_app() 启动路径里也顺带补建一次，checkfirst=True 天然幂等。
-_NEW_TABLES_AUTO_ENSURE = (ReadingRecord, BookReview, InstalledTool, BookReadingStats, BookList, BookListBook, BookListLike, ManualReadingLog)
+_NEW_TABLES_AUTO_ENSURE = (ReadingRecord, BookReview, InstalledTool, BookReadingStats, BookList, BookListBook, BookListLike, ManualReadingLog, ScanDirSnapshot)
 
 
 def ensure_new_tables(engine):

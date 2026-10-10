@@ -50,7 +50,7 @@ from webserver.base.image_helper import ImageHelper
 from webserver.base.image_generator import ImageGenerator
 from webserver.base.meta_helper import guess_authors, guess_tags
 from webserver.services import AsyncService
-from webserver.models import Item, ScanFile, Reader
+from webserver.models import Item, ScanFile, Reader, ScanDirSnapshot
 from webserver import utils, constants
 from webserver.services.autofill import AutoFillService
 from webserver.services.catalog import CatalogExtractService
@@ -72,6 +72,13 @@ PHASE1_BATCH_SIZE = 500
 # calibre 自定义列缓冲的 flush 水位：攒够这么多本就写回一次。durability 窗口上确界
 # ≈ 水位×单本耗时（旧逐行同步是毫秒级；20 本一批是分钟级；5 本是折中）。
 PENDING_FIELDS_FLUSH_THRESHOLD = 5
+# 扫描范围：4 = 全量扫描（不忽略所有目录）——无视目录快照、全量 walk，但保留去重。
+# 0 = 全量扫描（默认走目录快照增量）；1/2 为已删除的旧排除选项，发过来按 0 处理并告警。
+SCAN_SCOPE_FULL_NO_SKIP = 4
+LEGACY_SKIP_SCOPES = (1, 2)
+# ScanFile.data 内文件签名的键：[size, mtime_ns, ctime_ns, ino]，一次 os.stat 全取。
+# ctime 专防 cp -p/rsync -a 类“保 mtime 换内容”（mtime 能保住，ctime 保不住）。
+FILE_SIG_KEY = "file_sig"
 
 
 class ScanService(AsyncService):
@@ -560,86 +567,107 @@ class ScanService(AsyncService):
                     logging.error("[BULK-DELETE] Progress callback error", exc_info=True)
         return total, deleted_files, skipped
 
-    def _collect_imported_path(self, skip_last=False):
-        start_time = time.time()
-        base_query = (
-            self.session.query(ScanFile.path, ScanFile.import_id)
-            .filter(ScanFile.status.in_([ScanFile.IMPORTED, ScanFile.EXIST]))
-            .filter(ScanFile.path.isnot(None))
-        )
+    @staticmethod
+    def file_signature(fpath):
+        """一次 stat 取文件签名 [size, mtime_ns, ctime_ns, ino]；失败返回 None。
 
-        last_import_id = 0
-        if skip_last:
-            # Only skip last task's imported directories
-            last_row = (
-                self.session.query(ScanFile.import_id)
-                .filter(ScanFile.status.in_([ScanFile.IMPORTED, ScanFile.EXIST]))
-                .filter(ScanFile.path.isnot(None))
-                .filter(ScanFile.import_id.isnot(None))
-                .order_by(ScanFile.import_id.desc())
-                .first()
-            )
-            if not last_row:
-                return [], [], 0
-            last_import_id = last_row[0]
-            imported_rows = (
-                base_query
-                .filter(ScanFile.import_id == last_import_id)
-                .order_by(ScanFile.id.desc())
-                .all()
-            )
-        else:
-            imported_rows = base_query.order_by(ScanFile.import_id.desc(), ScanFile.id.desc()).all()
+        ctime 专防 cp -p/rsync -a 类“保 mtime 换内容”（mtime 能保住，ctime 保不住）；
+        调用方一律按“签名对不上 = 变了”处理，None 也一样（偏安全方向）。
+        全程 follow_symlinks 取目标，与 realpath 口径一致。
+        """
+        try:
+            st = os.stat(fpath)
+        except OSError:
+            return None
+        return [st.st_size, st.st_mtime_ns, st.st_ctime_ns, st.st_ino]
 
-        if not imported_rows:
-            return [], [], 0
+    @staticmethod
+    def _load_dir_snapshots(session):
+        """读出全部目录快照 {dir: (mtime_ns, entry_count)}；失败返回空（= 全量 walk）。"""
+        try:
+            return {
+                d: (m, c)
+                for (d, m, c) in session.query(
+                    ScanDirSnapshot.dir, ScanDirSnapshot.mtime_ns, ScanDirSnapshot.entry_count
+                ).all()
+            }
+        except Exception as err:
+            logging.warning("[IMPORT] Snapshot load failed, full walk: %s", err)
+            return {}
 
-        last_imported_dir = None
-        imported_dirs = set()
-        imported_files_in_last_dir = set()
+    @staticmethod
+    def _normalize_scope(skip_last_dirs):
+        """扫描范围归一化：1/2 为已删除的旧排除选项，按全量处理（保证同目录新书不漏）。"""
+        if skip_last_dirs in LEGACY_SKIP_SCOPES:
+            logging.warning("[IMPORT] Legacy skip_last_dirs=%d removed, treating as full scan", skip_last_dirs)
+            return 0
+        return skip_last_dirs
 
-        for (path, import_id) in imported_rows:
-            if not path:
-                continue
-            if last_import_id == 0:
-                last_import_id = import_id
-            fpath = os.path.realpath(path)
-            fdir = os.path.dirname(fpath)
-            if last_imported_dir is None:
-                last_imported_dir = fdir
-            if fdir == last_imported_dir:
-                imported_files_in_last_dir.add(fpath)
-            elif fdir:
-                imported_dirs.add(fdir)
+    def _commit_dir_snapshots(self, session, visited, scan_root):
+        """整轮成功后提交目录快照（单事务原子）：upsert 本轮到访目录 + 清掉已消失目录。
 
-        if last_imported_dir is None:
-            return [], [], 0
+        只在整轮正常完成时调用（abort/异常路径不调）；失败回滚并告警，下轮按老快照
+        重走（多干活，不漏活）。另带 abort 熔断做纵深：即使被误调，中止轮次也不落盘。
+        vacuum 删两类：扫描根内磁盘上已无的目录 + 已不在
+        当前扫描根内的残留行（换过 scan_upload_path 的陈旧水位）。
+        """
+        if not scan_root:
+            return
+        if ScanService.static_abort_flag:
+            logging.info("[IMPORT] Snapshot commit skipped (aborted)")
+            return
+        upserted = vacuumed = 0
+        try:
+            now = datetime.datetime.now()
+            for d, (mtime_ns, count) in visited.items():
+                row = session.get(ScanDirSnapshot, d)
+                if row is None:
+                    session.add(ScanDirSnapshot(d, mtime_ns, count))
+                else:
+                    row.mtime_ns = mtime_ns
+                    row.entry_count = count
+                    row.update_time = now
+                upserted += 1
+            for (d,) in session.query(ScanDirSnapshot.dir).all():
+                under_root = d == scan_root or d.startswith(scan_root + os.sep)
+                if (under_root and not os.path.isdir(d)) or not under_root:
+                    session.query(ScanDirSnapshot).filter(ScanDirSnapshot.dir == d).delete(
+                        synchronize_session=False
+                    )
+                    vacuumed += 1
+            session.commit()
+        except Exception as err:
+            logging.error("[IMPORT] Snapshot commit failed, will rescan fully next run: %s", err)
+            try:
+                session.rollback()
+            except Exception:
+                pass
+            return
+        logging.info("[IMPORT] Snapshots committed: %d upserted, %d vacuumed", upserted, vacuumed)
 
-        logging.info(
-            "[SCAN] Imported path cache loaded: dirs=%d, files_in_last_dir=%d, last_dir=%s, last_import_id=%d, cost=%.3f seconds",
-            len(imported_dirs),
-            len(imported_files_in_last_dir),
-            last_imported_dir,
-            last_import_id,
-            time.time() - start_time,
-        )
-        return list(imported_dirs), list(imported_files_in_last_dir), last_import_id
+    def _collect_files(self, paths, use_snapshot=True):
+        """收集待导入文件清单，返回 (filelist, visited)。
 
-    def _collect_files(self, paths, imported_dirs=None, imported_files=None):
+        use_snapshot=True 时（仅全量扫描）：自顶向下逐目录比对快照，
+        mtime_ns + entry_count 双命中则跳过该目录的文件枚举（下钻永远保留——
+        深层新增只 bump 直接父目录，剪下钻会漏新书）；剪枝掉的隐藏目录等不建快照
+        （规则内本来就不进去）。visited 记录本轮到访过的每个目录现状，供成功后
+        提交快照；剪枝只看快照，记录不分模式（显式目录同样记录，值是文件系统事实）。
+        """
         if paths is None or paths == "all":
             dirs = [CONF.get("scan_upload_path", "")]
             if not dirs[0] or not os.path.isdir(dirs[0]):
                 logging.warning("[IMPORT] scan_upload_path is not configured")
-                return []
+                return [], {}
         elif isinstance(paths, str):
             dirs = [paths]
         else:
             dirs = list(paths)
 
-        imported_dir_set = {os.path.realpath(d) for d in (imported_dirs or []) if d}
-        imported_file_set = {os.path.realpath(p) for p in (imported_files or []) if p}
-
+        snapshots = self._load_dir_snapshots(self.session) if use_snapshot else {}
         filelist = []
+        visited: dict = {}
+        skipped_dirs = 0
         for p in dirs:
             if os.path.basename(p).startswith("."):
                 logging.info(f"[SCAN]Ignore {p}")
@@ -649,20 +677,29 @@ class ScanService(AsyncService):
                 fmt = p.split(".")[-1].lower()
                 if fmt not in SCAN_EXT:
                     continue
-                real_p = os.path.realpath(p)
-                if real_p in imported_file_set or os.path.dirname(real_p) in imported_dir_set:
-                    continue
                 filelist.append(p)
             elif os.path.isdir(p):
                 for dirpath, dirnames, filenames in os.walk(p, onerror=ScanService.os_walk_error_handler):
                     real_dirpath = os.path.realpath(dirpath)
-                    dirnames[:] = [
-                        d for d in dirnames
-                        if not d.startswith(".") and os.path.realpath(os.path.join(dirpath, d)) not in imported_dir_set
-                    ]
-                    # Skip files in this directory if it's already fully imported
-                    if real_dirpath in imported_dir_set:
+                    dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+                    # 剪枝前口径的原始条目数（scandir 枚举自带，不另调 syscall）
+                    entry_count = len(dirnames) + len(filenames)
+                    try:
+                        dir_mtime = os.stat(dirpath).st_mtime_ns
+                    except OSError:
+                        dir_mtime = None
+                    # 命中则只跳过本目录的文件枚举，下钻永远保留：深层新增只 bump
+                    # 直接父目录，祖先 mtime 不变，剪下钻会漏掉深层新书。
+                    skip_files = (
+                        use_snapshot
+                        and dir_mtime is not None
+                        and snapshots.get(real_dirpath) == (dir_mtime, entry_count)
+                    )
+                    if skip_files:
+                        skipped_dirs += 1
                         continue
+                    if dir_mtime is not None:
+                        visited[real_dirpath] = (dir_mtime, entry_count)
                     for fname in filenames:
                         fmt = fname.split(".")[-1].lower()
                         if not fmt or fmt not in SCAN_EXT or fname.startswith('.'):
@@ -670,20 +707,26 @@ class ScanService(AsyncService):
                         fpath = os.path.join(dirpath, fname)
                         if not os.path.isfile(fpath):
                             continue
-                        if os.path.realpath(fpath) not in imported_file_set:
-                            filelist.append(fpath)
+                        filelist.append(fpath)
             else:
                 logging.warning("[SCAN] Path not found: %s", p)
-        return filelist
+        if use_snapshot:
+            logging.info("[SCAN] Snapshot prune: %d dirs skipped, %d dirs visited", skipped_dirs, len(visited))
+        return filelist, visited
 
     @AsyncService.register_service
     def do_import(self, paths, user_id, skip_last_dirs=0, force=False, import_id=0, cleanup_dir=None, selector=None, sole=False):
         """
-            force: 为TRUE时不检查重复的图书，直接导入
+            force: 为TRUE时不检查重复的图书，直接导入（附带无视目录快照、全量重算）
+            skip_last_dirs: 0 = 全量扫描（默认走目录快照增量）；
+                3 = 按分类导入（显式目录，不剪枝）；4 = 全量扫描（不忽略所有目录，
+                无视快照、全量 walk 但保留去重）；1/2 为已删除的旧排除选项，
+                发过来按 0 处理并告警（旧语义“按历史剪枝”在目录复用下会漏新书，
+                已由快照增量替代）。
             import_id: 由调用方预先生成的批次id(如批量上传)，用于调用方在发起后立即拿到id去轮询逐文件结果；
-                       为0时按原逻辑自动生成(或复用skip_last_dirs计算出的续跑id)
+                        为0时按原逻辑自动生成
             cleanup_dir: 本次导入完成/取消后需要清理的暂存目录(如批量上传的暂存文件)，
-                         仅当 KEEP_UPLOAD_SOURCE_FILE 配置为 False 时才会删除
+                          仅当 KEEP_UPLOAD_SOURCE_FILE 配置为 False 时才会删除
             selector: 服务端选择器 ("ready"|"filter", value)，非空时忽略 paths 参数，由本方法
                       在后台服务线程解析出文件清单——全量 .all() + 逐行 stat 在百万行表上会
                       冻住 tornado ioloop，绝不能在 handler 里做（handler 只做 COUNT 预检）
@@ -706,14 +749,8 @@ class ScanService(AsyncService):
         ScanService.static_import_user_id = user_id
         start_time = time.time()
 
-        imported_dirs = []
-        imported_files = []
-        imported_id = 0
-        if skip_last_dirs > 0:
-            skip_last = (skip_last_dirs == 1)
-            imported_dirs, imported_files, imported_id = self._collect_imported_path(skip_last)
-        if import_id:
-            imported_id = import_id
+        imported_id = import_id
+        skip_last_dirs = self._normalize_scope(skip_last_dirs)
 
         if selector is not None:
             sel_kind, sel_value = selector
@@ -722,7 +759,10 @@ class ScanService(AsyncService):
             else:
                 paths = self.resolve_filter_paths(self.session, sel_value)
 
-        filelist = self._collect_files(paths, imported_dirs=imported_dirs, imported_files=imported_files)
+        # 快照剪枝只走全量作用域：显式路径/目录选择器是用户明确意图，全走；
+        # force 与选项 4（不忽略所有目录）无视快照但保留去重。
+        use_snapshot = (paths is None or paths == "all") and not force and skip_last_dirs != SCAN_SCOPE_FULL_NO_SKIP
+        filelist, visited = self._collect_files(paths, use_snapshot=use_snapshot)
         logging.info("[IMPORT] Collected %d files in %.3f seconds (skip_last_dirs=%d)", len(filelist), time.time() - start_time, skip_last_dirs)
         if not filelist:
             # 选择器模式下 paths 是全量解析结果（百万行时单条日志上百 MB），只记条数
@@ -774,6 +814,11 @@ class ScanService(AsyncService):
             else:
                 logging.info("[IMPORT] Completed")
                 self._mark_missing_scan_files()
+                # 快照只在整轮正常完成时提交：abort/异常路径不调，下轮按老快照重走
+                # （多干活，不漏活）；提交点严格在全部处理之后，崩在提交中途也不产生错误跳过。
+                self._commit_dir_snapshots(
+                    self.session, visited, os.path.realpath(CONF.get("scan_upload_path", ""))
+                )
                 self.add_msg(
                     user_id=user_id,
                     status="success",
@@ -1154,18 +1199,47 @@ class ScanService(AsyncService):
 
         # (PoxenStudio) Reuse cached hash if available (NEW/READY record from a previous interrupted run).
         # MISSED/PERMISSION: file was previously inaccessible, reprocess from scratch (no reuse).
+        # 签名门：缓存哈希只在文件签名（size/mtime_ns/ctime_ns/ino一次 stat 全取）全等时
+        # 复用；存量无签名行/签名任一不等/stat 失败一律重算（偏安全方向）。
+        reuse_hash = None
         if not force:
-            reuse_hash = next(
-                (r.hash for r in same_path_rows
+            cached = next(
+                (r for r in same_path_rows
                     if r.status in (ScanFile.NEW, ScanFile.READY) and r.hash and r.hash.startswith("sha256:")),
                 None,
             )
-        else:
-            reuse_hash = None
-        if reuse_hash:
-            logging.info("[SCAN] Reusing cached hash for: %s", fpath)
+            if cached is not None:
+                stored_sig = (cached.data or {}).get(FILE_SIG_KEY) if cached.data else None
+                current_sig = ScanService.file_signature(fpath)
+                if current_sig is not None and stored_sig == current_sig:
+                    reuse_hash = cached.hash
+                    logging.info("[SCAN] Reusing cached hash (signature match) for: %s", fpath)
+                else:
+                    logging.info("[SCAN] Signature changed, recompute hash for: %s", fpath)
 
-        hash_val, bad_reason = (reuse_hash, None) if reuse_hash else self._compute_hash(fpath)
+        current_sig = None
+        if reuse_hash:
+            hash_val, bad_reason = reuse_hash, None
+            current_sig = ScanService.file_signature(fpath)
+        else:
+            pre_sig = ScanService.file_signature(fpath)
+            hash_val, bad_reason = self._compute_hash(fpath)
+            if not bad_reason:
+                # TOCTOU：哈希读盘期间文件被改写则本次哈希不可信——存空哈希 NEW 行占位，
+                # 下轮重扫（状态 NEW 无复用，直接重算），不把撕裂内容的哈希入库。
+                post_sig = ScanService.file_signature(fpath)
+                if pre_sig is None or post_sig is None or pre_sig != post_sig:
+                    logging.warning("[SCAN] File changed during hashing, defer to next run: %s", fpath)
+                    torn_row = ScanFile(fpath, "", import_id)
+                    torn_row.status = ScanFile.NEW
+                    if post_sig is not None:
+                        torn_row.data = {FILE_SIG_KEY: post_sig}
+                    if staged is None:
+                        self.save_or_rollback(torn_row, session)
+                    else:
+                        staged.append(("save", torn_row, ScanFile.NEW))
+                    return None, ScanFile.NEW
+                current_sig = post_sig
         if same_path_rows:
             # Delete all same path records to avoid confusion
             logging.warning("[SCAN] Found multiple records with same path %s, count: %d. Cleaning up...", fpath, len(same_path_rows))
@@ -1224,6 +1298,8 @@ class ScanService(AsyncService):
             else:
                 staged.append(("del_hash", hash_val))
         row.status = ScanFile.READY
+        if current_sig is not None:
+            row.data = {FILE_SIG_KEY: current_sig}
         if staged is None:
             if self.save_or_rollback(row, session):
                 return row.id, ScanFile.READY

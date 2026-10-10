@@ -339,8 +339,7 @@ export default {
         statusCounts: {},
         scanScopeOptions: [
             { text: "imports.scan_scope_all", value: 0 },
-            { text: "imports.scan_scope_exclude_last", value: 1 },
-            { text: "imports.scan_scope_exclude_all", value: 2 },
+            { text: "imports.scan_scope_full_noskip", value: 4 },
             { text: "imports.scope_by_dirs", value: 3 },
         ],
         options: {},
