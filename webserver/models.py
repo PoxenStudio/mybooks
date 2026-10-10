@@ -1021,6 +1021,7 @@ class BookList(Base, SQLAlchemyMixin):
     is_public = Column(Boolean, nullable=False, default=False)
     is_sticky = Column(Boolean, nullable=False, default=False)
     sticky_order = Column(Integer, nullable=True)
+    guest_read = Column(Boolean, nullable=False, default=False)
     view_count = Column(Integer, nullable=False, default=0)
     like_count = Column(Integer, nullable=False, default=0)
     book_count = Column(Integer, nullable=False, default=0)
@@ -1042,6 +1043,7 @@ class BookList(Base, SQLAlchemyMixin):
         self.color = color if color in self.COLORS else self.DEFAULT_COLOR
         self.is_public = is_public
         self.is_sticky = False
+        self.guest_read = False
         self.view_count = 0
         self.like_count = 0
         self.book_count = 0
@@ -1095,6 +1097,77 @@ class BookListLike(Base, SQLAlchemyMixin):
         self.create_time = datetime.datetime.now()
 
 
+class BookVisit(Base, SQLAlchemyMixin):
+    """用户最近浏览过的书籍（详情页），见 document/Share_Visits_GuestBooklist_Design.md。
+    (reader_id, book_id) 为主键，重复访问只刷新 visit_time；每个用户最多保留 MAX_PER_USER 条。"""
+
+    __tablename__ = "book_visits"
+
+    MAX_PER_USER = 100
+
+    reader_id = Column(Integer, ForeignKey("readers.id"), primary_key=True)
+    book_id = Column(Integer, primary_key=True)
+    visit_time = Column(DateTime, nullable=False)
+
+    __table_args__ = (Index("ix_book_visits_reader_time", "reader_id", "visit_time"), )
+
+    def __init__(self, reader_id, book_id, visit_time=None):
+        super(BookVisit, self).__init__()
+        self.reader_id = reader_id
+        self.book_id = book_id
+        self.visit_time = visit_time or datetime.datetime.now()
+
+
+class BookShare(Base, SQLAlchemyMixin):
+    """管理员创建的匿名分享链接，每本书至多一条。取消为 status=0，删除为物理删除。"""
+
+    __tablename__ = "book_shares"
+
+    STATUS_ACTIVE = 1
+    STATUS_CANCELLED = 0
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    book_id = Column(Integer, nullable=False, unique=True)
+    token = Column(String(64), nullable=False, unique=True)
+    password = Column(String(32), nullable=False, default="")
+    allow_read = Column(Boolean, nullable=False, default=True)
+    allow_download = Column(Boolean, nullable=False, default=False)
+    expire_time = Column(DateTime, nullable=True)
+    max_views = Column(Integer, nullable=False, default=0)
+    view_count = Column(Integer, nullable=False, default=0)
+    status = Column(Integer, nullable=False, default=STATUS_ACTIVE)
+    creator_id = Column(Integer, ForeignKey("readers.id"), nullable=False)
+    create_time = Column(DateTime, nullable=False)
+    update_time = Column(DateTime, nullable=False)
+
+    __table_args__ = (Index("ix_book_shares_status", "status", "update_time"), )
+
+    def __init__(self, book_id, token, creator_id, password="", allow_read=True, allow_download=False, expire_time=None, max_views=0):
+        super(BookShare, self).__init__()
+        self.book_id = book_id
+        self.token = token
+        self.creator_id = creator_id
+        self.password = password or ""
+        self.allow_read = allow_read
+        self.allow_download = allow_download
+        self.expire_time = expire_time
+        self.max_views = max_views or 0
+        self.view_count = 0
+        self.status = self.STATUS_ACTIVE
+        now = datetime.datetime.now()
+        self.create_time = now
+        self.update_time = now
+
+    def is_expired(self, now=None):
+        return self.expire_time is not None and self.expire_time <= (now or datetime.datetime.now())
+
+    def is_exhausted(self):
+        return self.max_views > 0 and self.view_count >= self.max_views
+
+    def is_valid(self, now=None):
+        return self.status == self.STATUS_ACTIVE and not self.is_expired(now) and not self.is_exhausted()
+
+
 def user_syncdb(engine):
     Base.metadata.create_all(engine)
 
@@ -1102,7 +1175,7 @@ def user_syncdb(engine):
 # 表结构随功能迭代新增的表，不希望依赖运维方手动重新执行 `--syncdb` 才能用上
 # （`docker/start.sh` 每次启动都会跑 --syncdb，但手工部署/测试环境不一定会），
 # 在正常的 make_app() 启动路径里也顺带补建一次，checkfirst=True 天然幂等。
-_NEW_TABLES_AUTO_ENSURE = (ReadingRecord, BookReview, InstalledTool, BookReadingStats, BookList, BookListBook, BookListLike, ManualReadingLog)
+_NEW_TABLES_AUTO_ENSURE = (ReadingRecord, BookReview, InstalledTool, BookReadingStats, BookList, BookListBook, BookListLike, ManualReadingLog, BookVisit, BookShare)
 
 
 def ensure_new_tables(engine):

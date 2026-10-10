@@ -116,6 +116,8 @@ class AsyncService(metaclass=SingletonType):
                     scanfile_changed = self.adjust_scanfile_table()
                 with upgrade_step("db_readings"):
                     self.adjust_readings_table()
+                with upgrade_step("db_booklists"):
+                    self.adjust_booklist_table()
                 changed = changed or reader_changed or scanfile_changed or True  # readings index creation is idempotent but must always be committed
                 if changed:
                     self.session.commit()
@@ -240,6 +242,11 @@ class AsyncService(metaclass=SingletonType):
             """))
             changed = True
         return changed
+
+    def adjust_booklist_table(self):
+        columns = [row[1] for row in self.session.execute(text("PRAGMA table_info(booklists)")).fetchall()]
+        if columns and "guest_read" not in columns:
+            self.session.execute(text("ALTER TABLE booklists ADD COLUMN guest_read BOOLEAN NOT NULL DEFAULT 0"))
 
     def adjust_messages_table(self):
         columns = [row[1] for row in self.session.execute(text("PRAGMA table_info(messages)")).fetchall()]

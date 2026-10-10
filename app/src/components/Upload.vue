@@ -1,6 +1,38 @@
 <template>
     <div>
+        <input ref="ebookInput" type="file" multiple style="display: none" @change="onFilesSelected" />
+
+        <v-menu v-if="hasServerImport" top left offset-y>
+            <template v-slot:activator="{ on, attrs }">
+                <v-btn
+                    v-show="showUploadButtons && ($store.state.sys.allow.upload || $store.state.user.is_login)"
+                    bottom
+                    color="pink"
+                    dark
+                    fab
+                    fixed
+                    right
+                    :loading="loading"
+                    v-bind="attrs"
+                    v-on="on"
+                    style="z-index: 10; margin-bottom: 80px;"
+                >
+                    <v-icon>mdi-upload</v-icon>
+                </v-btn>
+            </template>
+            <v-list dense>
+                <v-list-item @click="pickFiles">
+                    <v-list-item-icon><v-icon>mdi-file-upload-outline</v-icon></v-list-item-icon>
+                    <v-list-item-title>{{ $t('upload.selectFile') }}</v-list-item-title>
+                </v-list-item>
+                <v-list-item @click="openServerBrowser">
+                    <v-list-item-icon><v-icon>mdi-server</v-icon></v-list-item-icon>
+                    <v-list-item-title>{{ $t('upload.serverBrowse') }}</v-list-item-title>
+                </v-list-item>
+            </v-list>
+        </v-menu>
         <v-btn
+            v-else
             v-show="showUploadButtons && ($store.state.sys.allow.upload || $store.state.user.is_login)"
             bottom
             color="pink"
@@ -8,7 +40,8 @@
             fab
             fixed
             right
-            @click="dialog = !dialog"
+            :loading="loading"
+            @click="pickFiles"
             style="z-index: 10; margin-bottom: 80px;"
         >
             <v-icon>mdi-upload</v-icon>
@@ -28,34 +61,6 @@
         >
             <v-icon>mdi-book-plus</v-icon>
         </v-btn>
-
-        <AppDialog
-            v-model="dialog"
-            type="action"
-            :title="$t('upload.title')"
-            color="#003153"
-            width="360"
-            transition="dialog-bottom-transition"
-            :dismiss-label="$t('upload.close')"
-            :confirm-text="$t('upload.upload')"
-            confirm-dark
-            :confirm-loading="loading"
-            @confirm="do_upload"
-        >
-            <v-form ref="form" @submit="do_upload">
-                <v-file-input
-                    v-model="ebooks"
-                    multiple
-                    show-size
-                    counter
-                    :label="$t('upload.selectFile')"
-                ></v-file-input>
-                <v-btn v-if="$store.state.user.is_admin && $store.state.sys.allow.server_import" small @click="openServerBrowser">
-                    <v-icon left small>mdi-server</v-icon>
-                    {{ $t('upload.serverBrowse') }}
-                </v-btn>
-            </v-form>
-        </AppDialog>
 
         <ServerFileBrowser v-model="serverBrowserDialog" @imported="onServerImported" />
 
@@ -175,7 +180,6 @@ export default {
     components: { BatchImportDialog, ServerFileBrowser },
     data: () => ({
         loading: false,
-        dialog: false,
         // 选择1个文件时按单文件流程处理，选择多个时自动走批量导入流程
         ebooks: [],
         batchDialog: false,
@@ -207,6 +211,9 @@ export default {
                 return localStorage.getItem('max_upload_size') || '100MB';
             }
             return '100MB';
+        },
+        hasServerImport() {
+            return !!(this.$store.state.user.is_admin && this.$store.state.sys.allow.server_import);
         },
         showUploadButtons() {
             // 在音频播放器页面隐藏上传按钮
@@ -251,12 +258,6 @@ export default {
         },
     },
     watch: {
-        dialog(val) {
-            if (val) {
-                // 每次重新打开上传对话框时清空上一次的选择，避免残留旧文件
-                this.ebooks = [];
-            }
-        },
         // 添加实体书对话框：dialog 过渡完成后再聚焦对应字段，避免 Vuetify 的
         // setLabelWidth() 在元素尚未稳定时测量出错误宽度，导致浮动标签位置偏移。
         isbn_dialog(val) {
@@ -354,8 +355,20 @@ export default {
                 },
             ];
         },
+        pickFiles() {
+            if (this.loading) return;
+            this.$refs.ebookInput.click();
+        },
+
+        onFilesSelected(event) {
+            const files = Array.from(event.target.files || []);
+            event.target.value = '';
+            if (files.length === 0) return;
+            this.ebooks = files;
+            this.do_upload();
+        },
+
         openServerBrowser() {
-            this.dialog = false;
             this.serverBrowserDialog = true;
         },
 
@@ -402,7 +415,6 @@ export default {
                     body: data,
                 });
 
-                this.dialog = false;
                 this.handleUploadResponse(rsp);
             } catch (error) {
                 const msg = error.message ? this.$t('upload.uploadFailed') + ": " + error.message : this.$t('upload.uploadFailedDetail');
@@ -443,7 +455,6 @@ export default {
 
                     // Update progress (this is the final chunk response)
                     if (i === totalChunks - 1) {
-                        this.dialog = false;
                         this.handleUploadResponse(rsp);
                         return;
                     }
@@ -490,7 +501,6 @@ export default {
                     return;
                 }
 
-                this.dialog = false;
                 this.batchImportId = rsp.import_id;
                 this.batchDialog = true;
             } catch (error) {
