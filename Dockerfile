@@ -36,6 +36,8 @@ COPY calibre/plugins/ /opt/mybooks/calibre-plugins/
 RUN python3 /opt/mybooks/calibre-plugins/build.py --out /usr/lib/calibre/mybooks-plugins
 COPY webserver/ /var/www/mybooks/webserver/
 COPY third-party/foliate-js/ /var/www/mybooks/third-party/foliate-js/
+COPY third-party/edge-tts/ /var/www/mybooks/third-party/edge-tts/
+RUN pip install --no-cache-dir --no-compile -e /var/www/mybooks/third-party/edge-tts --break-system-packages
 RUN cd /var/www/mybooks/webserver/services/cfi_gen && npm ci --omit=dev
 COPY tests/ /var/www/mybooks/tests/
 CMD ["pytest", "/var/www/mybooks/tests"]
@@ -80,6 +82,9 @@ COPY server.py /var/www/mybooks/
 COPY docker/ /var/www/mybooks/docker/
 COPY webserver/ /var/www/mybooks/webserver/
 COPY third-party/foliate-js/ /var/www/mybooks/third-party/foliate-js/
+COPY third-party/edge-tts/ /var/www/mybooks/third-party/edge-tts/
+# edge-tts 已作为 git submodule 放入 third-party/edge-tts，避免 docker build 时依赖网络拉取
+RUN pip install --no-cache-dir --no-compile -e /var/www/mybooks/third-party/edge-tts --break-system-packages
 RUN cd /var/www/mybooks/webserver/services/cfi_gen && npm ci --omit=dev
 COPY conf/nginx/ssl.* /data/books/ssl/
 COPY conf/nginx/mybooks.conf /etc/nginx/conf.d/
