@@ -445,12 +445,12 @@ def make_app():
     # WebDAV must come before files.routes() because files has a catch-all (r"/(.*)")
     # We need to get routes from handlers module without files, add webdav, then add files
     import importlib
-    names = ["assistant", "mcp", "admin", "barcode", "scan", "opds", "book", "book_review", "booklist", "share", "user", "meta", "audio", "toolbox", "sync", "tts", "folder", "reader_dict"]
+    names = ["assistant", "mcp", "admin", "barcode", "scan", "opds", "book", "mynexus", "book_review", "booklist", "share", "user", "meta", "audio", "toolbox", "sync", "tts", "folder", "reader_dict"]
     mods = {}
     for name in names:
         with substep("import_handler:" + name):
             mods[name] = importlib.import_module("webserver.handlers." + name)
-    assistant, mcp, admin, barcode, scan, opds, book, book_review, booklist, share, user, meta, audio, toolbox, sync, tts, folder, reader_dict = (mods[n] for n in names)
+    assistant, mcp, admin, barcode, scan, opds, book, mynexus, book_review, booklist, share, user, meta, audio, toolbox, sync, tts, folder, reader_dict = (mods[n] for n in names)
 
     app_routes = []
     app_routes += social_routes.SOCIAL_AUTH_ROUTES
@@ -462,6 +462,7 @@ def make_app():
     app_routes += scan.routes()
     app_routes += opds.routes()
     app_routes += book.routes()
+    app_routes += mynexus.routes()
     app_routes += book_review.routes()
     app_routes += booklist.routes()
     app_routes += share.routes()

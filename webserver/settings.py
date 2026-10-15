@@ -77,6 +77,8 @@ settings = {
     "AI_DEEPSEEK_API_KEY": "",
     "AI_API_URL": "https://api.deepseek.com",
     "AI_ALLOW_SET_CATEGORY": True,
+    "MYNEXUS_URL": "",
+    "MYNEXUS_TOKEN": "",
     "MAIN_PAGE_RANDOM_COUNT": 12,
     "MAIN_PAGE_RECENT_COUNT": 12,
     "RECOMMEND_ENABLE": True,                 # 首页推荐引擎总开关，关闭即回到旧的随机逻辑

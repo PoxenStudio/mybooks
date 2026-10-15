@@ -210,6 +210,10 @@
   content: "\F1698";
 }
 
+.mdi-book-search::before {
+  content: "\F0E84";
+}
+
 .mdi-bookmark-outline::before {
   content: "\F00C3";
 }

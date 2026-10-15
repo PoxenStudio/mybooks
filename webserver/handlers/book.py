@@ -49,7 +49,7 @@ from webserver.services.converter import ConverterService
 from webserver.services.extract import ExtractService
 from webserver.services.mail import MailService
 from webserver.handlers.base import BaseHandler, ListHandler, auth, js, throttle
-from webserver.models import BookReadingStats as BookFormatReadingStatsModel, Item, Reading, ReadingState, Reader, ScanFile
+from webserver.models import BookReadingStats as BookFormatReadingStatsModel, Item, MyNexusBookAnalysis, Reading, ReadingState, Reader, ScanFile
 from webserver.services.reading_stats_service import ManualReadingService, ReadingStatsService
 from webserver.services.scan_service import ScanService, SCAN_EXT
 from webserver.services.download_quota_service import DownloadQuotaService
@@ -291,6 +291,18 @@ class BookDetail(BaseHandler):
         # 分格式的阅读时长/进度统计
         formated_book = BookFormatter(self, book).format(with_files=True, with_perms=True)
         formated_book["reading_stats"] = ReadingStatsService.get_book_format_stats(self.current_user.id, book_id) if self.current_user else []
+        analysis = self.sqlite_session.get(MyNexusBookAnalysis, book_id)
+        can_read_ai_data = bool(self.current_user or BookAccessService.guest_read_allowed(self, book_id))
+        formated_book["ai_companion_available"] = bool(self.current_user and analysis and analysis.status == "completed")
+        formated_book["ai_reading_guide"] = analysis.reading_guide if can_read_ai_data and analysis and analysis.status == "completed" else ""
+        if self.is_admin():
+            formated_book["mynexus_configured"] = bool(CONF.get("MYNEXUS_URL") and CONF.get("MYNEXUS_TOKEN"))
+            formated_book["mynexus_analysis"] = {
+                "status": analysis.status,
+                "progress": analysis.progress,
+                "error_msg": analysis.error_msg,
+                "can_retry": analysis.status == "failed" and not analysis.remote_book_id,
+            } if analysis else {"status": "not_started", "progress": 0, "error_msg": ""}
 
         return {
             "err": "ok",

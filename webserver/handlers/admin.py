@@ -483,7 +483,9 @@ class AdminSettings(BaseHandler):
                 "link": "https://developers.weixin.qq.com/doc/offiaccount/OA_Web_Apps/Wechat_webpage_authorization.html",
             },
         ]
-        return {"err": "ok", "settings": CONF, "sns": sns, "site_url": self.site_url}
+        settings = dict(CONF)
+        settings["MYNEXUS_TOKEN_CONFIGURED"] = bool(settings.pop("MYNEXUS_TOKEN", ""))
+        return {"err": "ok", "settings": settings, "sns": sns, "site_url": self.site_url}
 
     @js
     @auth
@@ -508,7 +510,11 @@ class AdminSettings(BaseHandler):
                         continue
                     args[key] = val
             elif key in KEYS:
+                if key == "MYNEXUS_TOKEN" and not val:
+                    continue
                 args[key] = val
+        if not data.get("MYNEXUS_TOKEN"):
+            args["MYNEXUS_TOKEN"] = CONF.get("MYNEXUS_TOKEN", "")
 
         # Check and set the favicon
         if "site_icon" not in args or not args["site_icon"]:
@@ -554,6 +560,10 @@ class AdminSettings(BaseHandler):
             "ENABLE_AUTHOR_INFO", False
         )
         result = SettingsSaver().save_extra_settings(args)
+        if result.get("rsp") and isinstance(result["rsp"], dict):
+            safe_settings = dict(result["rsp"])
+            safe_settings["MYNEXUS_TOKEN_CONFIGURED"] = bool(safe_settings.pop("MYNEXUS_TOKEN", ""))
+            result["rsp"] = safe_settings
         perf.apply_logging()
         if need_sync_authors:
             BookBarnService().sync_author_list()

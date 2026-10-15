@@ -1168,6 +1168,45 @@ class BookShare(Base, SQLAlchemyMixin):
         return self.status == self.STATUS_ACTIVE and not self.is_expired(now) and not self.is_exhausted()
 
 
+class MyNexusBookAnalysis(Base, SQLAlchemyMixin):
+    __tablename__ = "mynexus_book_analyses"
+
+    book_id = Column(Integer, primary_key=True)
+    remote_book_id = Column(String(64), nullable=False, default="")
+    status = Column(String(32), nullable=False, default="pending")
+    progress = Column(Integer, nullable=False, default=0)
+    error_msg = Column(Text, nullable=False, default="")
+    reading_guide = Column(Text, nullable=False, default="")
+    response_json = Column(Text, nullable=False, default="{}")
+    update_time = Column(DateTime, nullable=False)
+
+    def __init__(self, book_id, status="pending"):
+        self.book_id = book_id
+        self.status = status
+        self.progress = 0
+        self.error_msg = ""
+        self.reading_guide = ""
+        self.response_json = "{}"
+        self.update_time = datetime.datetime.now()
+
+
+class MyNexusChatSession(Base, SQLAlchemyMixin):
+    __tablename__ = "mynexus_chat_sessions"
+
+    reader_id = Column(Integer, ForeignKey("readers.id"), primary_key=True)
+    book_id = Column(Integer, primary_key=True)
+    remote_session_id = Column(String(64), nullable=False)
+    update_time = Column(DateTime, nullable=False)
+
+    __table_args__ = (Index("ix_mynexus_chat_sessions_book", "book_id", "reader_id"), )
+
+    def __init__(self, reader_id, book_id, remote_session_id):
+        self.reader_id = reader_id
+        self.book_id = book_id
+        self.remote_session_id = remote_session_id
+        self.update_time = datetime.datetime.now()
+
+
 def user_syncdb(engine):
     Base.metadata.create_all(engine)
 
@@ -1175,7 +1214,7 @@ def user_syncdb(engine):
 # 表结构随功能迭代新增的表，不希望依赖运维方手动重新执行 `--syncdb` 才能用上
 # （`docker/start.sh` 每次启动都会跑 --syncdb，但手工部署/测试环境不一定会），
 # 在正常的 make_app() 启动路径里也顺带补建一次，checkfirst=True 天然幂等。
-_NEW_TABLES_AUTO_ENSURE = (ReadingRecord, BookReview, InstalledTool, BookReadingStats, BookList, BookListBook, BookListLike, ManualReadingLog, BookVisit, BookShare)
+_NEW_TABLES_AUTO_ENSURE = (ReadingRecord, BookReview, InstalledTool, BookReadingStats, BookList, BookListBook, BookListLike, ManualReadingLog, BookVisit, BookShare, MyNexusBookAnalysis, MyNexusChatSession)
 
 
 def ensure_new_tables(engine):
