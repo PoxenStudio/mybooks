@@ -4,6 +4,7 @@ Supports HTTP Streamable communication (non-SSE)
 """
 
 import json
+import logging
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 if TYPE_CHECKING:
@@ -19,7 +20,7 @@ class MCPStreamClient:
     def __init__(self, base_url: str, token: str, cookies: Optional[Dict] = None):
         self.base_url = f'{base_url}?token={token}' if token is not None else base_url
         self.session: Optional["aiohttp.ClientSession"] = None
-        self.tools_cache = None
+        self.tools_cache: Optional[List[Dict]] = None
         self.cookies = cookies
         print(f"MCP Tool: {self.base_url}")
 
@@ -109,7 +110,7 @@ class MCPStreamClient:
 
     async def list_tools(self) -> List[Dict]:
         """获取可用的工具列表"""
-        if self.tools_cache:
+        if self.tools_cache is not None:
             return self.tools_cache
 
         try:
@@ -121,43 +122,16 @@ class MCPStreamClient:
             }
 
             response = await self._send_request(tools_request)
-
-            if response and "result" in response:
-                tools = response["result"].get("tools", [])
-                self.tools_cache = tools
-                return tools
-
+            if response.get("error"):
+                raise RuntimeError(response["error"].get("message", "MCP tools/list request failed"))
+            result = response.get("result")
+            if not isinstance(result, dict) or not isinstance(result.get("tools"), list):
+                raise RuntimeError("MCP tools/list response is missing a tools list")
+            self.tools_cache = result["tools"]
+            return self.tools_cache
         except Exception as e:
-            print(f"获取工具列表失败: {e}")
-
-        # 返回默认工具（用于测试）
-        return [
-            {
-                "name": "count_books",
-                "description": "统计书库中的书籍数量",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "category": {
-                            "type": "string",
-                            "description": "书籍分类（可选）"
-                        }
-                    }
-                }
-            },
-            {
-                "name": "search_books",
-                "description": "搜索书籍",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string", "description": "搜索关键词"},
-                        "limit": {"type": "integer", "description": "返回数量限制"}
-                    },
-                    "required": ["query"]
-                }
-            }
-        ]
+            logging.exception("Failed to retrieve MCP tool definitions")
+            raise RuntimeError(f"Failed to retrieve MCP tool definitions: {e}") from e
 
     async def call_tool(self, tool_name: str, arguments: Dict) -> Dict:
         """调用指定的工具"""

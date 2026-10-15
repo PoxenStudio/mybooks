@@ -1,14 +1,12 @@
 """
-OpenAI compatible API + MCP Conversation Agent
-Supports continuous conversation and tool calling
+LangGraph ReAct agent backed by the local MyBooks MCP server.
 """
 
 import json
 import logging
-import re
-from typing import Dict, List, Optional
-from webserver import loader
+from typing import Any, Dict, List, Optional, Union
 
+from webserver import loader
 from webserver.assistant.mcp_client import MCPStreamClient
 from webserver.constants import DEEPSEEK_API_BASE
 
@@ -19,217 +17,299 @@ AI_MODEL = CONF.get("AI_MODEL", "deepseek-chat")
 MCP_TOKEN = CONF.get("AI_MCP_TOKEN", "")
 MCP_SERVER_URL = "http://127.0.0.1:80/api/mcp/stream"
 
+SYSTEM_PROMPT = """你是 MyBooks 书库助手。优先使用提供的工具查询和操作 MyBooks；没有相关工具时再直接回答。
+根据工具结果回答，不要声称完成了工具未成功执行的操作。对于删除等需要确认的操作，必须先向用户说明影响并得到明确同意，再调用确认参数。"""
+
+TOOL_GROUPS = {
+    "general": {"get_user_info", "library_stats", "reading_stats", "get_books_count", "get_books", "search_books", "get_book"},
+    "books": {
+        "get_books_count", "get_books", "search_books", "search_by_category", "categories", "list_folders",
+        "search_by_folder", "list_authors", "get_author_books", "get_book",
+    },
+    "metadata": {"query_book_metadata", "auto_fill_book_info", "book_fill"},
+    "reading": {
+        "reading_stats", "get_book_reading_stats", "update_book_reading_stats", "get_reading_time",
+        "set_reading_time", "delete_reading_time", "reading", "list_reading", "read_done", "list_read_done",
+        "wants", "list_wants", "favorite", "list_favorites",
+    },
+    "notes": {"get_notes", "push_notes", "clear_imported_notes"},
+    "booklists": {
+        "list_my_booklists", "list_public_booklists", "list_liked_booklists", "get_booklist", "create_booklist",
+        "update_booklist", "delete_booklist", "booklist_add_books", "booklist_remove_book", "like_booklist",
+        "get_book_booklists",
+    },
+    "management": {"edit_book", "save_meta_to_file", "book_add_by_isbn", "set_folder", "rename_folder", "update_book_info"},
+    "delivery": {"mailto", "send_to_device", "download_book", "upload_book"},
+    "tts": {
+        "tts_save_config", "tts_test_connection", "tts_convert", "tts_progress", "tts_clone_list",
+        "tts_clone_delete", "tts_prompt_list", "tts_prompt_save", "tts_prompt_delete",
+    },
+    "auth": {"login", "logout"},
+}
+
+TOOL_GROUP_KEYWORDS = {
+    "books": (
+        "书", "书库", "图书", "作者", "isbn", "搜索", "查询", "查找", "查一下", "查查", "分类", "目录", "book", "author", "search",
+    ),
+    "metadata": (
+        "元数据", "豆瓣", "在线信息", "网上信息", "补全信息", "查资料", "出版信息", "出版社", "metadata", "douban",
+    ),
+    "reading": (
+        "阅读", "读完", "读了", "看完", "已读", "想读", "进度", "时长", "阅读时间", "分钟", "收藏", "喜欢", "wants", "favorite",
+        "reading", "finished",
+    ),
+    "notes": ("笔记", "划线", "批注", "标注", "书签", "notes", "highlight", "annotation", "bookmark"),
+    "booklists": ("书单", "书架", "清单", "booklist", "reading list"),
+    "management": (
+        "修改", "改成", "编辑", "更新信息", "重命名", "改名", "添加书", "添加实体书", "设置分类", "设置标签",
+        "写入", "edit", "update", "rename",
+    ),
+    "delivery": (
+        "发送", "推送", "邮件", "邮箱", "下载", "上传", "设备", "kindle", "send", "email", "download", "device",
+    ),
+    "tts": ("有声书", "语音", "音频", "tts", "声音", "转换成有声", "克隆音色"),
+    "auth": ("登录", "登出", "退出登录", "token", "login", "logout"),
+    "general": ("统计", "数量", "多少本", "几本", "我的信息", "账号信息", "user info", "statistics", "book count"),
+}
+
+FOLLOW_UP_REFERENCES = ("这本", "这本书", "它", "这个", "那个", "刚才", "然后", "继续", "那呢", "那本")
+BOOK_SEARCH_KEYWORDS = ("搜索", "查找", "查一下", "查查", "作者", "isbn", "分类", "目录", "search", "author")
+
 
 class AIAssistantMCPAgent:
-    """
-    AI + MCP会话代理
-    支持持续对话和工具调用
-    """
+    """Per-connection conversational agent using LangGraph ReAct and MyBooks MCP tools."""
 
     def __init__(self, cookies: Optional[Dict] = None):
-        from openai import OpenAI
-        self.ai_client = OpenAI(
-            api_key=AI_API_KEY,
-            base_url=AI_BASE_URL,
-            timeout=30.0
-        )
         self.model = AI_MODEL
-
         self.mcp_client = MCPStreamClient(MCP_SERVER_URL, MCP_TOKEN, cookies)
         self.session_active = True
-        self.conversation_history = []
+        self.conversation_history: List[Dict[str, str]] = []
+        self._chat_model = None
+        self._last_tool_names: set[str] = set()
 
     async def initialize(self):
         logging.info("Init AI-MCP agent...")
         await self.mcp_client.connect()
         logging.info("AI-MCP agent initialized successfully.")
-        logging.info("-" * 60)
 
-    def format_tool_schema(self, tool: Dict) -> str:
-        """格式化单个工具的schema为可读描述"""
-        name = tool.get('name', '')
-        description = tool.get('description', '无描述')
-        input_schema = tool.get('inputSchema', {})
+    @staticmethod
+    def select_tools(
+        user_input: str,
+        tools: List[Dict],
+        previous_tool_names: Optional[set[str]] = None,
+    ) -> List[Dict]:
+        """Select a focused domain toolset and preserve explicit conversational follow-ups."""
+        query = user_input.casefold()
+        groups = {
+            group for group, keywords in TOOL_GROUP_KEYWORDS.items()
+            if any(keyword.casefold() in query for keyword in keywords)
+        }
+        if "general" in groups and "books" in groups and not any(keyword in query for keyword in BOOK_SEARCH_KEYWORDS):
+            groups.remove("books")
+        follows_previous_turn = any(reference in query for reference in FOLLOW_UP_REFERENCES)
+        if not groups and not (follows_previous_turn and previous_tool_names):
+            return []
 
-        # 基础描述
-        result = f"- {name}: {description}"
+        selected_names = set()
+        for group in groups:
+            selected_names.update(TOOL_GROUPS[group])
+        if follows_previous_turn and previous_tool_names:
+            selected_names.update(previous_tool_names)
+        if groups & {"reading", "notes", "booklists", "management", "delivery"}:
+            selected_names.update({"search_books", "get_book"})
+        return [tool for tool in tools if tool.get("name") in selected_names]
 
-        # 添加参数说明
-        if input_schema and 'properties' in input_schema:
-            properties = input_schema['properties']
-            required = input_schema.get('required', [])
-
-            if properties:
-                result += "\n  参数："
-                for param_name, param_info in properties.items():
-                    param_type = param_info.get('type', 'any')
-                    param_desc = param_info.get('description', '')
-                    is_required = '必填' if param_name in required else '可选'
-                    result += f"\n    - {param_name} ({param_type}, {is_required}): {param_desc}"
-
-        return result
-
-    async def format_conversation(self, user_input: str) -> List[Dict]:
-        """格式化对话历史给AI模型"""
-        # 构建系统提示
-        tools = await self.mcp_client.list_tools()
-        tool_descriptions = "\n\n".join([
-            self.format_tool_schema(tool)
-            for tool in tools
-        ])
-
-        system_message = f"""你是一个智能助手，可以调用本地MyBooks工具来帮助用户。
-你可以使用的工具有：
-{tool_descriptions}
-
-当用户需要时，你可以调用这些工具。工具调用格式：
-<tool_call>
-{{
-    "tool": "工具名称",
-    "arguments": {{"参数": "值"}}
-}}
-</tool_call>
-
-工具调用示例：
-用户：查询《三体》这本书
-助手：<tool_call>
-{{
-    "tool": "query_book_metadata",
-    "arguments": {{"query": "三体"}}
-}}
-</tool_call>
-
-请根据工具的参数说明，使用正确的参数名称和类型调用工具。"""
-
-        messages = [{"role": "system", "content": system_message}]
-
-        # 添加历史对话（最近10条消息，只包含用户问题和最终回答）
-        recent_history = self.conversation_history[-10:]
-        for msg in recent_history:
-            messages.append(msg)
-
-        # 添加当前用户输入
+    async def format_conversation(self, user_input: str) -> List[Dict[str, str]]:
+        """Return the recent user/assistant turns plus the current input."""
+        messages = list(self.conversation_history[-10:])
         messages.append({"role": "user", "content": user_input})
-
         return messages
 
-    def extract_tool_call(self, response_text: str) -> Optional[Dict]:
-        """从AI模型响应中提取工具调用"""
-        # 匹配工具调用格式
-        pattern = r'<tool_call>\s*({.*?})\s*</tool_call>'
-        match = re.search(pattern, response_text, re.DOTALL)
+    @staticmethod
+    def _schema_annotation(schema: Dict[str, Any]):
+        from typing import Literal
 
-        if match:
-            try:
-                tool_call = json.loads(match.group(1))
-                return tool_call
-            except json.JSONDecodeError:
-                json_str = match.group(1).replace('\n', ' ').strip()
-                try:
-                    tool_call = json.loads(json_str)
-                    return tool_call
-                except:
-                    pass
-        return None
+        schema_types = schema.get("type")
+        if isinstance(schema_types, list):
+            options = [dict(schema, type=type_name) for type_name in schema_types]
+            annotations = [AIAssistantMCPAgent._schema_annotation(option) for option in options]
+            annotation = Union[tuple(dict.fromkeys(annotations))]
+        elif schema.get("anyOf") or schema.get("oneOf"):
+            variants = schema.get("anyOf") or schema.get("oneOf")
+            annotations = [AIAssistantMCPAgent._schema_annotation(variant) for variant in variants]
+            annotation = Union[tuple(dict.fromkeys(annotations))]
+        else:
+            schema_type = schema.get("type")
+            if schema_type == "string":
+                annotation = str
+            elif schema_type == "integer":
+                annotation = int
+            elif schema_type == "number":
+                annotation = float
+            elif schema_type == "boolean":
+                annotation = bool
+            elif schema_type == "array":
+                item_schema = schema.get('items', {})
+                annotation = List[AIAssistantMCPAgent._schema_annotation(item_schema)]
+            elif schema_type == "object":
+                annotation = Dict[str, Any]
+            else:
+                annotation = Any
 
-    def clean_response_text(self, response_text: str) -> str:
-        """清理响应文本，移除工具调用标记"""
-        # 移除工具调用标记
-        cleaned = re.sub(r'<tool_call>.*?</tool_call>', '', response_text, flags=re.DOTALL)
-        # 移除多余空行
-        cleaned = re.sub(r'\n\s*\n', '\n\n', cleaned)
-        return cleaned.strip()
+        enum_values = schema.get("enum")
+        if enum_values:
+            annotation = Literal.__getitem__(tuple(enum_values))
+        return annotation
 
-    async def process_user_input(self, user_input: str):
-        """处理用户输入，可能涉及工具调用，由WebSocketHandler调用"""
+    @classmethod
+    def _tool_args_schema(cls, tool: Dict):
+        from pydantic import Field, create_model
 
-        # 格式化对话
-        messages = await self.format_conversation(user_input)
+        input_schema = tool.get("inputSchema") or {}
+        properties = input_schema.get("properties") or {}
+        required = set(input_schema.get("required") or [])
+        fields = {}
+        for name, property_schema in properties.items():
+            annotation = cls._schema_annotation(property_schema)
+            default = ... if name in required else property_schema.get("default")
+            if name not in required and "default" not in property_schema:
+                default = None
+                annotation = Optional[annotation]
+            fields[name] = (
+                annotation,
+                Field(default, description=property_schema.get("description", "")),
+            )
+        model_name = f"MyBooksToolInput_{tool.get('name', 'unknown')}"
+        alternatives = [
+            [name for name in option.get("required", []) if name in properties]
+            for option in input_schema.get("anyOf", [])
+            if option.get("required")
+        ]
+        validators = {}
+        config = None
+        if alternatives:
+            from pydantic import ConfigDict, model_validator
 
-        try:
-            # 第一次调用：获取思考过程或工具调用
-            response = self.ai_client.chat.completions.create(
-                model=AI_MODEL,
-                messages=messages,
-                temperature=0.7,
-                max_tokens=2000,
-                stream=True
+            def require_any_alternative(instance):
+                for required_names in alternatives:
+                    if all(getattr(instance, name, None) not in (None, "") for name in required_names):
+                        return instance
+                raise ValueError("At least one valid anyOf alternative is required")
+
+            validators["validate_any_of_required"] = model_validator(mode="after")(require_any_alternative)
+            config = ConfigDict(json_schema_extra={"anyOf": [{"required": names} for names in alternatives]})
+        return create_model(model_name, __config__=config, __validators__=validators, **fields)
+
+    @staticmethod
+    def _tool_result_text(result: Dict[str, Any]) -> str:
+        content = result.get("content")
+        if isinstance(content, list):
+            text_items = [item["text"] for item in content if isinstance(item, dict) and isinstance(item.get("text"), str)]
+            if text_items:
+                return "\n".join(text_items)
+        return json.dumps(result, ensure_ascii=False)
+
+    def _build_react_agent(self, tools: List[Dict]):
+        from langchain_core.tools import StructuredTool
+        from langchain.agents import create_agent
+
+        langchain_tools = []
+        for tool_info in tools:
+            name = tool_info.get("name")
+            if not name:
+                raise ValueError("MCP tool is missing its name")
+
+            async def invoke_tool(_tool_name=name, **arguments):
+                result = await self.mcp_client.call_tool(_tool_name, arguments)
+                return self._tool_result_text(result)
+
+            langchain_tools.append(
+                StructuredTool.from_function(
+                    name=name,
+                    description=tool_info.get("description") or name,
+                    args_schema=self._tool_args_schema(tool_info),
+                    coroutine=invoke_tool,
+                )
             )
 
-            full_response_text = ""
-            for chunk in response:
-                if chunk.choices[0].delta.content:
-                    content = chunk.choices[0].delta.content
-                    full_response_text += content
-                    yield {"type": "content", "content": content}
+        return create_agent(
+            self._get_chat_model(),
+            langchain_tools,
+            system_prompt=SYSTEM_PROMPT,
+        )
 
-            # 检查是否包含工具调用
-            tool_call = self.extract_tool_call(full_response_text)
+    def _get_chat_model(self):
+        if self._chat_model is None:
+            from langchain_openai import ChatOpenAI
 
-            if tool_call:
-                logging.info(f"Detected tool call: {tool_call}")
+            self._chat_model = ChatOpenAI(
+                model=self.model,
+                api_key=AI_API_KEY,
+                base_url=AI_BASE_URL,
+                timeout=30.0,
+                temperature=0.7,
+                max_tokens=2000,
+            )
+        return self._chat_model
 
-                yield {"type": "status", "content": f"正在调用工具: {tool_call.get('tool')}..."}
+    @staticmethod
+    def _content_text(content: Any) -> str:
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            return "".join(
+                block if isinstance(block, str) else block.get("text", "")
+                for block in content
+                if isinstance(block, str) or (isinstance(block, dict) and isinstance(block.get("text"), str))
+            )
+        return ""
 
-                # 执行工具调用
-                tool_name = tool_call.get("tool")
-                arguments = tool_call.get("arguments", {})
+    async def process_user_input(self, user_input: str):
+        """Process a user turn and yield the existing WebSocket event format."""
+        try:
+            messages = await self.format_conversation(user_input)
+            available_tools = await self.mcp_client.list_tools()
+            selected_tools = self.select_tools(user_input, available_tools, self._last_tool_names)
+            if selected_tools:
+                self._last_tool_names = {tool["name"] for tool in selected_tools}
+            logging.info("Selected %d of %d MCP tools for assistant turn", len(selected_tools), len(available_tools))
+            response_parts = []
 
-                if tool_name:
-                    # 调用MCP工具
-                    tool_result = await self.mcp_client.call_tool(tool_name, arguments)
-                    logging.info(f"Tool result: {tool_result}")
-                    tool_result_str = json.dumps(tool_result, ensure_ascii=False, indent=2)
-
-                    # 将工具结果添加到对话
-                    new_messages = messages.copy()
-                    new_messages.append({"role": "assistant", "content": full_response_text})
-                    new_messages.append({
-                        "role": "user",
-                        "content": f"工具调用结果：\n{tool_result_str}\n\n请根据这个结果回答我的问题。"
-                    })
-
-                    # 第二次调用AI模型（获得针对工具结果的最终回答）
-                    final_response = self.ai_client.chat.completions.create(
-                        model=AI_MODEL,
-                        messages=new_messages,
-                        temperature=0.7,
-                        max_tokens=2000,
-                        stream=True
-                    )
-
-                    final_text = ""
-                    for chunk in final_response:
-                        if chunk.choices[0].delta.content:
-                            content = chunk.choices[0].delta.content
-                            final_text += content
+            if selected_tools:
+                agent = self._build_react_agent(selected_tools)
+                async for event in agent.astream_events(
+                    {"messages": messages},
+                    config={"recursion_limit": 16},
+                    version="v2",
+                ):
+                    if event.get("event") == "on_tool_start":
+                        tool_name = event.get("name", "unknown")
+                        yield {"type": "status", "content": f"正在调用工具: {tool_name}..."}
+                    elif event.get("event") == "on_chat_model_stream":
+                        chunk = event.get("data", {}).get("chunk")
+                        content = self._content_text(getattr(chunk, "content", ""))
+                        if content:
+                            response_parts.append(content)
                             yield {"type": "content", "content": content}
-
-                    # 只保存用户问题和最终回答到对话历史（节省token）
-                    # 工具调用的示例已经在system message中提供
-                    self.conversation_history.extend([
-                        {"role": "user", "content": user_input},
-                        {"role": "assistant", "content": final_text}
-                    ])
-                else:
-                    # 工具名称无效
-                    cleaned_result = self.clean_response_text(full_response_text)
-                    self.conversation_history.extend([
-                        {"role": "user", "content": user_input},
-                        {"role": "assistant", "content": cleaned_result}
-                    ])
             else:
-                logging.info("No tool call detected in response.")
-                # 没有工具调用
-                cleaned_result = self.clean_response_text(full_response_text)
-                self.conversation_history.extend([
-                    {"role": "user", "content": user_input},
-                    {"role": "assistant", "content": cleaned_result}
-                ])
+                from langchain_core.messages import SystemMessage
 
+                model_messages = [SystemMessage(content=SYSTEM_PROMPT)]
+                model_messages.extend(messages)
+                async for chunk in self._get_chat_model().astream(model_messages):
+                    content = self._content_text(getattr(chunk, "content", ""))
+                    if content:
+                        response_parts.append(content)
+                        yield {"type": "content", "content": content}
+
+            final_text = "".join(response_parts).strip()
+            self.conversation_history.extend([
+                {"role": "user", "content": user_input},
+                {"role": "assistant", "content": final_text},
+            ])
         except Exception as e:
-            error_msg = f"处理请求时出错: {str(e)}"
-            yield {"type": "error", "content": error_msg}
+            logging.exception("Failed to process AI assistant input")
+            yield {"type": "error", "content": f"处理请求时出错: {str(e)}"}
 
     def get_conversation_summary(self) -> str:
         if not self.conversation_history:
@@ -237,7 +317,6 @@ class AIAssistantMCPAgent:
 
         user_count = sum(1 for msg in self.conversation_history if msg["role"] == "user")
         assistant_count = sum(1 for msg in self.conversation_history if msg["role"] == "assistant")
-
         return f"对话历史：{len(self.conversation_history)}条消息（用户:{user_count}，助手:{assistant_count}）"
 
     async def close(self):
