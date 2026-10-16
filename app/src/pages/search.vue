@@ -100,6 +100,7 @@ export default {
   },
   beforeDestroy() {
     this.abortSearch();
+    this.$store.commit('search_loading', false);
   },
   beforeRouteUpdate(to, from, next) {
     // 先完成路由跳转，确保 this.$route 是最新的
@@ -127,6 +128,7 @@ export default {
 
       if (!this.searchName) {
         this.abortSearch();
+        this.$store.commit('search_loading', false);
         this.books = [];
         this.allBooks = [];
         this.total = 0;
@@ -151,12 +153,14 @@ export default {
       const start = parseInt(this.$route.query.start || 0);
       if (start > 0 && this.allBooks.length > 0) {
         this.updateBooksFromCache(start);
+        this.$store.commit('search_loading', false);
         return;
       }
 
       // 如果缓存中已有数据且是当前搜索关键词的结果，直接使用缓存
       if (this.allBooks.length > 0 && this.searchName === this.cachedSearchName) {
         this.updateBooksFromCache(0);
+        this.$store.commit('search_loading', false);
         return;
       }
 
@@ -172,6 +176,7 @@ export default {
       this.searchController = controller;
       const signal = controller.signal;
       this.searching = true;
+      this.$store.commit('search_loading', true);
       this.books = [];
       this.allBooks = [];
       this.total = 0;
@@ -254,6 +259,7 @@ export default {
           this.searching = false;
           this.extendedSearching = false;
           this.searchStatus = "";
+          this.$store.commit('search_loading', false);
         }
       }
     },

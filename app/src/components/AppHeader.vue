@@ -160,7 +160,7 @@
                             v-model="search"
                             :label="$t('appHeader.search')"
                             :loading="ai_thinking"
-                            :disabled="ai_thinking"
+                            :disabled="ai_thinking || $store.state.searchLoading"
                             class="mobile-search-field"
                         >
                             <template #prepend-inner>
@@ -174,6 +174,7 @@
                                         <v-btn
                                             v-bind="attrs"
                                             v-on="on"
+                                            :disabled="$store.state.searchLoading"
                                             class="category-selector"
                                             :class="isMobileFocused ? 'black--text' : 'white--text'"
                                             color="transparent"
@@ -195,7 +196,13 @@
                                 </v-menu>
                             </template>
                             <template #append>
-                                <v-btn dark rounded @click="doSearch" color="primary" :disabled="ai_thinking" small>{{ $t('appHeader.search') }}</v-btn>
+                                <v-progress-circular
+                                    v-if="$store.state.searchLoading"
+                                    indeterminate
+                                    color="primary"
+                                    width="3"
+                                ></v-progress-circular>
+                                <v-btn v-else dark rounded @click="doSearch" color="primary" :disabled="ai_thinking" small>{{ $t('appHeader.search') }}</v-btn>
                             </template>
                         </v-text-field>
                     </v-form>
@@ -232,7 +239,7 @@
                     name="name"
                     :label="$t('appHeader.search')"
                     :loading="ai_thinking"
-                    :disabled="ai_thinking"
+                    :disabled="ai_thinking || $store.state.searchLoading"
                     class="d-none d-sm-flex ml-8 desktop-search-field"
                 >
                     <template #prepend-inner>
@@ -246,6 +253,7 @@
                                 <v-btn
                                     v-bind="attrs"
                                     v-on="on"
+                                    :disabled="$store.state.searchLoading"
                                     rounded
                                     color="transparent"
                                     class="category-selector"
@@ -268,6 +276,13 @@
                         </v-menu>
                     </template>
                     <template #append>
+                        <v-progress-circular
+                            v-if="$store.state.searchLoading"
+                            indeterminate
+                            color="primary"
+                            width="3"
+                            class="mr-2"
+                        ></v-progress-circular>
                         <v-btn v-if="isAiFeatureEnabled" :color="isFocused ? (ai_enabled ? 'orange' : 'grey') : 'transparent'" class="black--text" rounded @click="toggleAi">AI</v-btn>
                     </template>
                 </v-text-field>
@@ -547,7 +562,6 @@ export default {
         search: "",
         searchCategory: 'all',
         searchCategories: [
-            { value: 'all', label: 'appHeader.searchAll' },
             { value: 'title', label: 'appHeader.searchTitle' },
             { value: 'title_sort', label: 'appHeader.searchTitleSort' },
             { value: 'author', label: 'appHeader.searchAuthor' },
@@ -555,6 +569,7 @@ export default {
             { value: 'comments', label: 'appHeader.searchComments' },
             { value: 'tags', label: 'appHeader.searchTags' },
             { value: 'series', label: 'appHeader.searchSeries' },
+            { value: 'all', label: 'appHeader.searchAll' },
         ],
         categoryMenu: false,
         mobileCategoryMenu: false,
@@ -1027,6 +1042,8 @@ export default {
             }
         },
         doSearch() {
+            if (this.$store.state.searchLoading || this.ai_thinking) return;
+
             if (this.search.trim() !== "") {
                 let searchText = this.search.trim();
 
@@ -1036,12 +1053,20 @@ export default {
                     searchText = this.searchCategory + ':' + searchText;
                 }
 
+                if (this.$route.path === '/search' && this.$route.query.name === searchText && !this.$route.query.start) {
+                    return;
+                }
+
                 // Save the selected category to localStorage
                 if (process.client) {
                     localStorage.setItem('searchCategory', this.searchCategory);
                 }
 
-                this.$router.push("/search?name=" + searchText);
+                this.$store.commit('search_loading', true);
+                this.$router.push("/search?name=" + searchText).catch((error) => {
+                    this.$store.commit('search_loading', false);
+                    console.error("Search navigation failed:", error);
+                });
             } else {
                 const ref = this.$refs.mobile_search || this.$refs.search;
                 if (ref) {

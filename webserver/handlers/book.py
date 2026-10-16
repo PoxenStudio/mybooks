@@ -2655,7 +2655,7 @@ class SearchBook(ListHandler):
             except Exception as e:
                 logging.error("Search book failed: %s" % e)
                 logging.error(traceback.format_exc())
-        logging.info(f"[TRACE] search took {time.time() - start:.2f} seconds.")
+        logging.info(f"[TRACE] search took {time.time() - start:.2f} seconds, found:{len(ids)}")
         return await self._render_book_ids(ids, title, exclude_id, order_by)
 
     async def _render_search(self, query, title, exclude_id, order_by):
@@ -2693,8 +2693,9 @@ class SearchBook(ListHandler):
         sole_book_ids = await self.run_sqlite_async(
             self._sole_book_ids, ids, self.user_id()
         )
+
         ids = [book_id for book_id in ids if book_id not in sole_book_ids]
-        return self.render_book_list([], ids=ids, title=title, sort_fields=order_by)
+        return await self.render_book_list([], ids=ids, title=title, sort_fields=order_by)
 
 
 class HotBook(ListHandler):

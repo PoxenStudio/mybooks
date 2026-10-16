@@ -1,5 +1,5 @@
 export const state = () => ({
-    nav: true, loading: true, count: 0, user: {
+    nav: true, loading: true, count: 0, searchLoading: false, user: {
         is_admin: false,
         is_login: false,
         nickname: "",
@@ -43,6 +43,9 @@ export const mutations = {
     */
     navbar(state, nav) {
         state.nav = nav;
+    },
+    search_loading(state, loading) {
+        state.searchLoading = loading;
     }, increment(state) {
         state.count++
     }, login(state, data) {

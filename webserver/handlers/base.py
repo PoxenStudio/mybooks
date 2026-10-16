@@ -1781,6 +1781,7 @@ class ListHandler(BaseHandler):
         else:
             count = len(all_books)
             books = all_books[start : start + delta]
+
         return {
             "err": "ok",
             "title": title,
