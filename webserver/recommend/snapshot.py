@@ -69,7 +69,7 @@ class BackgroundSnapshot(Generic[T]):
             if self._building:
                 return
             self._building = True
-        threading.Thread(target=self._build, name="recommend-" + self.name, daemon=True).start()
+        threading.Thread(target=self._build, name="mybooks-recommend-" + self.name, daemon=True).start()
 
     def _build(self) -> None:
         force, self._force = self._force, False

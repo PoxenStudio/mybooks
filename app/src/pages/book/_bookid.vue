@@ -21,7 +21,12 @@
                         :class="message.role === 'user' ? 'mynexus-chat-user' : 'mynexus-chat-assistant'"
                     >
                         <div class="text-caption font-weight-bold mb-1">{{ message.role === 'user' ? $t('book.mynexusYou') : 'MyNexus' }}</div>
-                        <div class="mynexus-chat-content">{{ message.content }}</div>
+                        <MyNexusMarkdown
+                            v-if="message.role !== 'user'"
+                            class="mynexus-chat-content"
+                            :content="message.content"
+                        />
+                        <div v-else class="mynexus-chat-content">{{ message.content }}</div>
                         <details v-for="(citation, citationIndex) in (message.citations || [])" :key="'mynexus-citation-' + index + '-' + citationIndex" class="mt-2">
                             <summary>{{ $t('book.mynexusCitation') }} {{ citationIndex + 1 }}</summary>
                             <div class="mynexus-chat-content mt-1">{{ citation.content }}</div>
@@ -854,7 +859,14 @@
                                     @click="mynexusDescriptionTab = 'guide'"
                                 >{{ $t('book.mynexusGuideTab') }}</button>
                             </div>
-                            <div v-if="mynexusDescriptionTab === 'guide' && book.ai_reading_guide" class="mynexus-reading-guide">{{ book.ai_reading_guide }}</div>
+                            <template v-if="mynexusDescriptionTab === 'guide' && book.ai_reading_guide">
+                                <client-only>
+                                <MyNexusMarkdown
+                                    class="mynexus-reading-guide"
+                                    :content="book.ai_reading_guide"
+                                />
+                                </client-only>
+                            </template>
                             <template v-else>
                                 <p v-if="book.comments" v-html="book.comments"></p>
                                 <p v-else>{{ $t('book.clickToViewDetails') }}</p>
@@ -1500,6 +1512,7 @@
 
 <script>
 import BookCards from "~/components/BookCards.vue";
+import MyNexusMarkdown from "~/components/MyNexusMarkdown.vue";
 import BookSocialInfo from "~/components/BookSocialInfo.vue";
 import BookReviewList from "~/components/BookReviewList.vue";
 import BookReviewDialog from "~/components/BookReviewDialog.vue";
@@ -1511,6 +1524,7 @@ import { toStars } from "~/utils/rating";
 export default {
     components: {
         BookCards,
+        MyNexusMarkdown,
         BookSocialInfo,
         BookReviewList,
         BookReviewDialog,
@@ -4229,7 +4243,6 @@ h1.book-detail-title {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
 }
 .mynexus-reading-guide {
-    white-space: pre-wrap;
     overflow-wrap: anywhere;
     line-height: 1.75;
 }
@@ -4256,8 +4269,8 @@ h1.book-detail-title {
     background: rgba(128, 128, 128, 0.12);
 }
 .mynexus-chat-content {
-    white-space: pre-wrap;
     line-height: 1.6;
+    overflow-wrap: anywhere;
 }
 @media (max-width: 600px) {
     .mynexus-section-tabs {

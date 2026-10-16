@@ -611,8 +611,10 @@ def log_request(handler):
 
 
 def main():
+    threading.current_thread().name = "mybooks"
     tornado.options.parse_command_line()
     setup_logging()
+    logging.debug("[thread] main thread renamed to %s", threading.current_thread().name)
 
     # 配置异步 HTTP 客户端的最大连接数
     AsyncHTTPClient.configure(None, max_clients=200)

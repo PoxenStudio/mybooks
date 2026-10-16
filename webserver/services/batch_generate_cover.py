@@ -126,11 +126,11 @@ class DynamicCoverUpdateService(AsyncService):
 
         books_to_update = idlist
         if not books_to_update:
-            logging.info("[DynamicCover] No books to update, exiting")
+            logging.debug("[DynamicCover] No books to update, exiting")
             return
 
         self.count_total = len(books_to_update)
-        logging.info("[DynamicCover] Starting cover update for %d books，dynamic_cover=%s", self.count_total, dynamic_cover)
+        logging.debug("[DynamicCover] Starting cover update for %d books，dynamic_cover=%s", self.count_total, dynamic_cover)
 
         try:
             task = BackgroundService().update_task(
@@ -159,7 +159,7 @@ class DynamicCoverUpdateService(AsyncService):
                     dynamic_cover_flag = False
                     custom_data = self.db.get_custom(book_id, label=COLUMN_DYNAMIC_COVER, index_is_id=True)
                     dynamic_cover_flag = custom_data == 1
-                    logging.info(f"[DynamicCover] Book id={book_id} already has cover data, dynamic_cover_flag={dynamic_cover_flag}")
+                    logging.debug(f"[DynamicCover] Book id={book_id} already has cover data, dynamic_cover_flag={dynamic_cover_flag}")
                     if dynamic_cover and not dynamic_cover_flag:
                         continue
                 if dynamic_cover:

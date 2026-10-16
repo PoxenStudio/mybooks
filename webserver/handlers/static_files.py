@@ -28,7 +28,7 @@ from webserver.base.thumbnail import DEFAULT_SIZES, ThumbCache, nearest_size, sc
 CONF = loader.get_settings()
 
 # 创建线程池用于执行阻塞操作
-_executor = ThreadPoolExecutor(max_workers=20)
+_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="mybooks-static-files")
 LITE_THUMB_SIZES = [(120, 200), (240, 320)]
 
 

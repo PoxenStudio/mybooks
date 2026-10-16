@@ -251,7 +251,7 @@ class RecommendService:
             self._pending[reader_key] = build
             if self._worker is not None and self._worker.is_alive():
                 return
-            self._worker = threading.Thread(target=self._drain, name="recommend-pools", daemon=True)
+            self._worker = threading.Thread(target=self._drain, name="mybooks-recommend-pools", daemon=True)
             self._worker.start()
 
     def _drain(self) -> None:

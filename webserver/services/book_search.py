@@ -36,7 +36,7 @@ class BookSearch:
         if cls._search_executor is None:
             cls._search_executor = ThreadPoolExecutor(
                 max_workers=max(1, len(_PLUGIN_CLASSES)),
-                thread_name_prefix="meta-search",
+                thread_name_prefix="mybooks-meta-search",
             )
         return cls._search_executor
 

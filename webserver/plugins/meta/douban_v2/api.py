@@ -445,7 +445,7 @@ def build_metadata_batch(items, search_url, isbn=None, copy_image=False, max_wor
         return []
     workers = min(max_workers, len(items))
     results = [None] * len(items)
-    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="douban-v2-detail") as executor:
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="mybooks-douban-v2") as executor:
         future_to_index = {
             executor.submit(build_metadata, item, search_url, isbn=isbn, copy_image=copy_image, get_detail=(get_detail and idx <= 1)): idx
             for idx, item in enumerate(items)
