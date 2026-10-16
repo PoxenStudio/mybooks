@@ -34,10 +34,10 @@ SELECTOR_STATUSES = (
 
 
 class Scanner:
-    def __init__(self, calibre_db, ScopedSession, user_id=None):
+    def __init__(self, calibre_db, ScopedSession, user_id=None, session=None):
         self.db = calibre_db
         self.user_id = user_id
-        self.session = ScopedSession()
+        self.session = session if session is not None else ScopedSession()
         self.cached_status = None
 
     def __del__(self):
@@ -133,84 +133,70 @@ class Scanner:
                 logging.error(f"Error closing session: {e}")
 
 
+def _load_import_list_data(session, calibre_db, ScopedSession, filter, sort, descending, num, start):
+    order = {
+        "id": ScanFile.id,
+        "path": ScanFile.path,
+        "name": ScanFile.name,
+        "create_time": ScanFile.create_time,
+        "update_time": ScanFile.update_time,
+        "status": ScanFile.status,
+    }.get(sort, ScanFile.create_time)
+    order = order.desc() if descending else order.asc()
+    query = ScanService.list_scan_filter(session.query(ScanFile).order_by(order), filter)
+    total = query.count()
+    response = []
+    for scan_file in query.limit(num).offset(start).all():
+        response.append({
+            "id": scan_file.id,
+            "path": scan_file.path,
+            "hash": scan_file.hash,
+            "title": scan_file.title,
+            "author": scan_file.author,
+            "publisher": scan_file.publisher,
+            "tags": scan_file.tags,
+            "status": scan_file.status,
+            "import_type": scan_file.import_type if scan_file.import_type is not None else 0,
+            "book_id": scan_file.book_id,
+            "create_time": scan_file.create_time.strftime("%Y-%m-%d %H:%M:%S") if scan_file.create_time else "N/A",
+            "update_time": scan_file.update_time.strftime("%Y-%m-%d %H:%M:%S") if scan_file.update_time else "N/A",
+        })
+    scanner = Scanner(calibre_db, ScopedSession, session=session)
+    return total, response, scanner.summary()
+
+
 class ImportList(BaseHandler):
     @js
     @auth
-    def get(self):
+    async def get(self):
         if not self.admin_user:
             return {"err": "permission.not_admin", "msg": _("当前用户非管理员")}
 
-        scanner = None
-        try:
-            num = max(10, int(self.get_argument("num", 20)))
-            page = max(0, int(self.get_argument("page", 1)) - 1)
-            sort = self.get_argument("sort", "create_time")
-            desc = self.get_argument("desc", "true")
-            filter = self.get_argument("filter", "all")
-            logging.debug("num=%d, page=%d, sort=%s, desc=%s" % (num, page, sort, desc))
-
-            # get order by query args
-            order = {
-                "id": ScanFile.id,
-                "path": ScanFile.path,
-                "name": ScanFile.name,
-                "create_time": ScanFile.create_time,
-                "update_time": ScanFile.update_time,
-                "status": ScanFile.status,
-            }.get(sort, ScanFile.create_time)
-            order = order.asc() if desc == "false" else order.desc()
-            query = self.sqlite_session.query(ScanFile).order_by(order)
-
-            # 与页签数字（summary 的 todo/done）共用同一套列表口径，页签数字才恒等于
-            # 当前页签下的 total；两边各写一遍过滤条件正是历史上对不上的根源。
-            query = ScanService.list_scan_filter(query, filter)
-            total = query.count()
-
-            start = page * num
-            response = []
-            for s in query.limit(num).offset(start).all():
-                d = {
-                    "id": s.id,
-                    "path": s.path,
-                    "hash": s.hash,
-                    "title": s.title,
-                    "author": s.author,
-                    "publisher": s.publisher,
-                    "tags": s.tags,
-                    "status": s.status,
-                    "import_type": s.import_type if s.import_type is not None else 0,
-                    "book_id": s.book_id,
-                    "create_time": (
-                        s.create_time.strftime("%Y-%m-%d %H:%M:%S")
-                        if s.create_time
-                        else "N/A"
-                    ),
-                    "update_time": (
-                        s.update_time.strftime("%Y-%m-%d %H:%M:%S")
-                        if s.update_time
-                        else "N/A"
-                    ),
-                }
-                response.append(d)
-
-            scanner = Scanner(self.calibre_db, self.settings["ScopedSession"])
-            summary = scanner.summary()
-
-            return {
-                "err": "ok",
-                "items": response,
-                "total": total,
-                "scanning": ScanService.static_is_importing,
-                "importing": ScanService.static_is_importing,
-                "summary": summary,
-                "scan_dir": CONF["scan_upload_path"],
-            }
-        finally:
-            if scanner:
-                try:
-                    scanner.close()
-                except Exception as e:
-                    logging.error(f"Error closing scanner: {e}")
+        num = max(10, int(self.get_argument("num", 20)))
+        page = max(0, int(self.get_argument("page", 1)) - 1)
+        sort = self.get_argument("sort", "create_time")
+        desc = self.get_argument("desc", "true")
+        filter = self.get_argument("filter", "all")
+        logging.debug("num=%d, page=%d, sort=%s, desc=%s" % (num, page, sort, desc))
+        total, response, summary = await self.run_sqlite_async(
+            _load_import_list_data,
+            self.calibre_db,
+            self.settings["ScopedSession"],
+            filter,
+            sort,
+            desc != "false",
+            num,
+            page * num,
+        )
+        return {
+            "err": "ok",
+            "items": response,
+            "total": total,
+            "scanning": ScanService.static_is_importing,
+            "importing": ScanService.static_is_importing,
+            "summary": summary,
+            "scan_dir": CONF["scan_upload_path"],
+        }
 
 
 class ImportDelete(BaseHandler):

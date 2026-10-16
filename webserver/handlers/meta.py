@@ -105,6 +105,16 @@ class PubBooksUpdate(ListHandler):
 
 
 class MetaList(ListHandler):
+    @staticmethod
+    def _get_sticky_values(session, reader_id, item_type):
+        return [
+            item.value
+            for item in session.query(StickyItem).filter(
+                StickyItem.reader_id == reader_id,
+                StickyItem.item_type == item_type
+            ).all()
+        ]
+
     def _filter_tags(self, tag_list):
         if not self.current_user:
             return []
@@ -119,7 +129,7 @@ class MetaList(ListHandler):
         return [t for t in tag_list if t["name"] not in limit_tags]
 
     @js
-    def get(self, meta):
+    async def get(self, meta):
         SHOW_NUMBER = 300
         if self.get_argument("show", "") == "all":
             SHOW_NUMBER = sys.maxsize
@@ -133,7 +143,7 @@ class MetaList(ListHandler):
         }
         title = titles.get(meta, _(u"未知")) % vars()
         # category = meta if meta in ["series", "publisher"] else meta + "s"
-        items = self.get_category_with_count(meta)
+        items = await self.get_category_with_count_async(meta)
         # if meta == "author":
         #     # 将自定义字段#translators中的译者也作为作者处理，与真实作者按书籍去重合并统计
         #     author_books = self.get_authors_book_ids_map()
@@ -150,22 +160,21 @@ class MetaList(ListHandler):
         if self.current_user and meta in ["tag", "author"]:
             # 0:作者, 1:Tag
             item_type = 0 if meta == "author" else 1
-            sticky_items = self.sqlite_session.query(StickyItem).filter(
-                StickyItem.reader_id == self.user_id(),
-                StickyItem.item_type == item_type
-            ).all()
+            sticky_values = await self.run_sqlite_async(
+                self._get_sticky_values, self.user_id(), item_type
+            )
 
             # 为每个置顶项查找对应的count
             items_dict = {item["name"]: item for item in items}
-            for sticky in sticky_items:
-                if sticky.value in items_dict:
+            for value in sticky_values:
+                if value in items_dict:
                     # 从items中找到并移除
-                    item = items_dict[sticky.value]
+                    item = items_dict[value]
                     pins.append({"name": item["name"], "count": item["count"]})
                     items.remove(item)
                 else:
                     # 如果items中没有，count为0
-                    pins.append({"name": sticky.value, "count": 0})
+                    pins.append({"name": value, "count": 0})
 
         if CONF.get(constants.ALLOW_READ_RANGE_SETTING, False) and meta == "tag":
             # 如果启用了阅读范围设置，过滤掉用户不可见的标签, 包括items & pins

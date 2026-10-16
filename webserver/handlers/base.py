@@ -802,6 +802,13 @@ class BaseHandler(web.RequestHandler):
         """
         return await self._run_calibre(func, args, kwargs, locked=True)
 
+    async def run_calibre_sql(self, sql, params=None):
+        """在 Calibre 专用线程池中执行原生 SQL，避免在 ioloop 等待 db_lock。"""
+        conn = self.calibre_db_cache.backend.conn
+        if params is None:
+            return await self.run_calibre_async(conn.get, sql)
+        return await self.run_calibre_async(conn.get, sql, params)
+
     async def run_sqlite_async(self, func, *args, **kwargs):
         """在工作线程执行 func(session, *args, **kwargs)：重查询不占 ioloop。
 
@@ -1173,6 +1180,18 @@ class BaseHandler(web.RequestHandler):
             BaseHandler._catalog_cache.put("all_tags_with_count", version, tags)
         return dict(tags)
 
+    async def query_all_tags_with_count_async(self):
+        """全库标签计数的非阻塞版本。"""
+        version = self.library_version()
+        tags = BaseHandler._catalog_cache.get("all_tags_with_count", version)
+        if tags is None:
+            sql = """SELECT tags.name, count(distinct book) as count
+            FROM tags left join books_tags_link on tags.id = books_tags_link.tag
+            group by tags.id order by count desc"""
+            tags = dict((row[0], row[1]) for row in await self.run_calibre_sql(sql))
+            BaseHandler._catalog_cache.put("all_tags_with_count", version, tags)
+        return dict(tags)
+
     def filter_tags_by_read_range(self, tags):
         if CONF.get(constants.ALLOW_READ_RANGE_SETTING, False):
             return self._filter_tags(tags)
@@ -1192,6 +1211,20 @@ class BaseHandler(web.RequestHandler):
                 )
 
         # 过滤掉不在当前用户阅读范围的标签
+        return self.filter_tags_by_read_range(tags)
+
+    async def all_tags_with_count_async(self):
+        cache_key = "all_tags_with_count"
+        try:
+            tags = await self.query_all_tags_with_count_async()
+            BaseHandler._query_fallback_cache[cache_key] = tags
+        except Exception as e:
+            tags = BaseHandler._query_fallback_cache.get(cache_key, {})
+            logging.error("all_tags_with_count query failed: %s", str(e))
+            if tags:
+                logging.warning(
+                    "all_tags_with_count fallback to cache, count=%d", len(tags)
+                )
         return self.filter_tags_by_read_range(tags)
 
     def get_category_with_count(self, field):
@@ -1228,6 +1261,10 @@ class BaseHandler(web.RequestHandler):
                     len(cached),
                 )
             return cached
+
+    async def get_category_with_count_async(self, field):
+        """Non-blocking counterpart to get_category_with_count()."""
+        return await self.run_calibre_async(self.get_category_with_count, field)
 
     def get_folder_count(self):
         """Return the number of distinct top-level folders in #folder."""

@@ -623,10 +623,6 @@ class BookCategories(BaseHandler):
         # read_limit == 2: 黑名单
         return [c for c in categories if c["name"] not in limit_cats]
 
-    def _query_category_rows(self, sql):
-        with self.db_lock:
-            return [(row[0], row[1]) for row in self.calibre_db_cache.backend.conn.get(sql)]
-
     @js
     async def get(self):
         # Find the custom column for category
@@ -650,7 +646,7 @@ class BookCategories(BaseHandler):
             version = self.library_version()
             rows = BaseHandler._catalog_cache.get(("categories", sql), version)
             if rows is None:
-                rows = await self.run_calibre_async(self._query_category_rows, sql)
+                rows = [(row[0], row[1]) for row in await self.run_calibre_sql(sql)]
                 BaseHandler._catalog_cache.put(("categories", sql), version, rows)
             categories = [{"name": row[0], "count": row[1]} for row in rows]
 
@@ -665,7 +661,7 @@ class BookCategories(BaseHandler):
 
 class TagSearch(BaseHandler):
     @js
-    def get(self):
+    async def get(self):
         q = (self.get_argument("q", "") or "").strip()
         limit = min(50, int(self.get_argument("limit", 20)))
         sql = """SELECT tags.name, count(distinct book) as count
@@ -673,8 +669,7 @@ class TagSearch(BaseHandler):
         WHERE tags.name LIKE ? ESCAPE '\\'
         GROUP BY tags.id ORDER BY count DESC LIMIT ?"""
         try:
-            with self.db_lock:
-                rows = self.calibre_db_cache.backend.conn.get(sql, (q + "%", limit))
+            rows = await self.run_calibre_sql(sql, (q + "%", limit))
             tags = [{"name": r[0], "count": r[1]} for r in rows]
             return {"err": "ok", "tags": tags}
         except Exception as e:
@@ -684,7 +679,7 @@ class TagSearch(BaseHandler):
 
 class AuthorSearch(BaseHandler):
     @js
-    def get(self):
+    async def get(self):
         """按输入内容动态查询已有作者，供编辑书籍时的作者输入框做自动完成。
 
         不传q（或q为空）时，默认按藏书量降序返回前100位作者。
@@ -696,8 +691,7 @@ class AuthorSearch(BaseHandler):
         WHERE authors.name LIKE ? ESCAPE '\\'
         GROUP BY authors.id ORDER BY count DESC LIMIT ?"""
         try:
-            with self.db_lock:
-                rows = self.calibre_db_cache.backend.conn.get(sql, (q + "%", limit))
+            rows = await self.run_calibre_sql(sql, (q + "%", limit))
             authors = [{"name": r[0], "count": r[1]} for r in rows]
             return {"err": "ok", "authors": authors}
         except Exception as e:
@@ -2394,8 +2388,8 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
 
 class BookNav(ListHandler):
     @js
-    def get(self):
-        tagmap = self.all_tags_with_count()
+    async def get(self):
+        tagmap = await self.all_tags_with_count_async()
         navs = []
         done = set()
         for line in CONF['BOOK_NAV'].split("\n"):
@@ -2674,12 +2668,31 @@ class SearchBook(ListHandler):
             logging.error(traceback.format_exc())
         return await self._render_book_ids(ids, title, exclude_id, order_by)
 
-    def _render_book_ids(self, ids, title, exclude_id, order_by):
+    @staticmethod
+    def _sole_book_ids(session, ids, user_id):
+        sole_book_ids = set()
+        for offset in range(0, len(ids), 500):
+            batch = ids[offset : offset + 500]
+            sole_book_ids.update(
+                book_id
+                for (book_id,) in session.query(Item.book_id)
+                .filter(
+                    Item.book_id.in_(batch),
+                    Item.sole == 1,
+                    Item.collector_id != user_id,
+                )
+                .all()
+            )
+        return sole_book_ids
+
+    async def _render_book_ids(self, ids, title, exclude_id, order_by):
         if exclude_id > 0 and exclude_id in ids:
             ids.remove(exclude_id)
 
         # 查询被别的用户标记为sole的图书ID，并将ids中对应的ID去除
-        sole_book_ids = set(item.book_id for item in self.sqlite_session.query(Item).filter(Item.sole == 1, Item.collector_id != self.user_id()).all())
+        sole_book_ids = await self.run_sqlite_async(
+            self._sole_book_ids, ids, self.user_id()
+        )
         ids = [book_id for book_id in ids if book_id not in sole_book_ids]
         return self.render_book_list([], ids=ids, title=title, sort_fields=order_by)
 

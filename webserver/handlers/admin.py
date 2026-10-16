@@ -759,9 +759,13 @@ class AdminSSL(BaseHandler):
 
 
 class AdminBookList(BaseHandler):
+    def _search_book_ids(self, search, sort, ascending):
+        self.calibre_db.sort(field=sort, ascending=ascending)
+        return list(self.calibre_db_cache.search(search))
+
     @js
     @is_admin
-    def get(self):
+    async def get(self):
         if not self.admin_user:
             return {"err": "permission.not_admin", "msg": _("当前用户非管理员")}
 
@@ -782,10 +786,11 @@ class AdminBookList(BaseHandler):
             else:
                 search = book_type_query
             logging.debug("Adjusted search query: %s" % search)
-        self.calibre_db.sort(field=sort, ascending=(not desc))
         start = page * num
         end = start + num
-        all_ids = list(self.calibre_db_cache.search(search))
+        all_ids = await self.run_calibre_async(
+            self._search_book_ids, search, sort, not desc
+        )
         total = len(all_ids)
 
         # sort by id
@@ -795,9 +800,12 @@ class AdminBookList(BaseHandler):
         books = []
         page_ids = all_ids[start:end]
         if page_ids:
+            book_rows = await self.get_books_for_list_async(ids=page_ids)
+            book_by_id = {book["id"]: book for book in book_rows}
             books = [
-                SimpleBookFormatter(b, self.cdn_url).format()
-                for b in self.get_books(ids=page_ids)
+                SimpleBookFormatter(book_by_id[book_id], self.cdn_url).format()
+                for book_id in page_ids
+                if book_id in book_by_id
             ]
 
         return {"err": "ok", "items": books, "total": total}
