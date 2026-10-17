@@ -41,9 +41,20 @@ REQUIRED_ENV_VARS = ["MYBOOKS_HOST", "MYBOOKS_USER", "MYBOOKS_PASSWORD"]
 
 API_TTS_PREFIX = "/api/toolbox/mimo_tts"
 
+# Built-in toolbox tool epub_fixer: /repair starts a background task, /progress reports it
+API_EPUB_FIXER_PREFIX = "/api/toolbox/epub_fixer"
+
 # book_upload only reads files with these extensions (blocks sending arbitrary
 # local files such as ~/.ssh/id_rsa or .env to the server)
 EBOOK_UPLOAD_EXTS = {"epub", "mobi", "azw", "azw3", "pdf", "txt", "lrf", "rtf", "djvu", "docx"}
+
+# Douban is applied by re-fetching from the plugin by provider_value; every other source
+# is applied from the metadata payload, so book_refer_apply requires it there
+DOUBAN_PROVIDER_KEY = "douban"
+
+# The server-side refer search waits up to REFER_SEARCH_TIMEOUT (default 60s) and then
+# answers with the cached candidates, so the client must not cut the connection earlier
+REFER_TIMEOUT = 90
 
 ERROR_MESSAGES = {
     "env_missing": {
@@ -85,6 +96,21 @@ def validate_host(host: str) -> str:
             sys.exit(1)
 
     return f"{parsed.scheme}://{parsed.netloc}{parsed.path}".rstrip("/")
+
+
+def parse_bool(value, default: bool = False) -> bool:
+    """
+    Coerce a tool argument to a real boolean.
+
+    JSON callers pass booleans, but CLI/agent callers often pass the strings
+    "true"/"false". Treating any non-empty string as truthy would turn
+    force=false into a destructive overwrite, so the usual spellings are honored.
+    """
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
 
 
 # ============================================================================
@@ -451,6 +477,77 @@ class MyBooksAPI:
             json={"idlist": idlist}
         )
 
+    def book_refer_search(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Search online sources for metadata candidates of one book (the search step
+        of the web UI's "联网更新信息"). Read-only; pass a candidate's provider_key /
+        provider_value to book_refer_apply.
+
+        Args:
+            book_id (int, required): Book ID
+            title (str, optional): Search with this title instead of the book's own
+            isbn (str, optional): Search with this ISBN
+            publisher (str, optional): Narrow the search by publisher
+        """
+        book_id = args.get("book_id")
+        if not book_id:
+            return {"status": "error", "message": "book_id is required"}
+
+        params = {k: args[k] for k in ("title", "isbn", "publisher") if args.get(k)}
+        # 服务端最慢要等 REFER_SEARCH_TIMEOUT（默认 60s）才回退给缓存候选，别用默认的 30s 先掐断
+        return self._call_with_auto_relogin("GET", f"/api/book/{book_id}/refer", params=params, timeout=REFER_TIMEOUT)
+
+    def book_refer_apply(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Apply one online metadata candidate to a book (the apply step of the web UI's
+        "联网更新信息"), optionally limited to a subset of fields.
+
+        Args:
+            book_id (int, required): Book ID
+            provider_key (str, required): Source key from book_refer_search (e.g. douban)
+            provider_value (str, required): Source-side ID from book_refer_search
+            mode (str, optional): full (default: info + cover) / only_meta (info without
+                cover) / only_cover / only_author_comments — one at most
+            metadata (object, optional): A candidate object from book_refer_search;
+                required unless provider_key is douban, which re-fetches from the plugin
+        """
+        book_id = args.get("book_id")
+        if not book_id:
+            return {"status": "error", "message": "book_id is required"}
+
+        provider_key = args.get("provider_key")
+        if not provider_key:
+            return {"status": "error", "message": "provider_key is required"}
+        provider_value = args.get("provider_value")
+        if not provider_value:
+            return {"status": "error", "message": "provider_value is required"}
+
+        metadata = args.get("metadata")
+        # 非豆瓣源是"用这份候选去写库"：不带 metadata 时服务端会退回用书自身元数据并返回 ok，
+        # 调用方会以为更新成功了，所以这里直接拦下
+        if not metadata and provider_key != DOUBAN_PROVIDER_KEY:
+            return {
+                "status": "error",
+                "message": f"metadata (a candidate from book_refer_search) is required for provider '{provider_key}'",
+            }
+
+        flags = {
+            "full": {},
+            "only_meta": {"only_meta": "yes"},
+            "only_cover": {"only_cover": "yes"},
+            "only_author_comments": {"only_author_comments": "yes"},
+        }
+        mode = args.get("mode") or "full"
+        if mode not in flags:
+            return {"status": "error", "message": f"mode must be one of: {', '.join(flags)}"}
+
+        data = {"provider_key": provider_key, "provider_value": provider_value}
+        if metadata:
+            data["metadata"] = metadata if isinstance(metadata, str) else json.dumps(metadata, ensure_ascii=False)
+        data.update(flags[mode])
+
+        return self._call_with_auto_relogin("POST", f"/api/book/{book_id}/refer", data=data, timeout=REFER_TIMEOUT)
+
     def save_meta_to_file(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """
         Save book metadata into the ebook file itself (epub/azw3/pdf only).
@@ -612,10 +709,15 @@ class MyBooksAPI:
 
     def book_upload(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Upload ebook file to library.
+        Upload an ebook file: import it as a new book, or — when book_id is given —
+        add one format to that existing book, optionally replacing the file of a
+        format that already exists (the web UI's "上传新格式文件").
 
         Args:
             file_path (str, required): Absolute path to local file
+            book_id (int, optional): Target this existing book instead of importing a new one
+            force (bool, optional): With book_id, replace the format file if the format
+                already exists; without it the server replies format.already_exists
         """
         file_path = args.get("file_path", "")
         if not file_path:
@@ -628,12 +730,20 @@ class MyBooksAPI:
         if ext not in EBOOK_UPLOAD_EXTS:
             return {"status": "error", "message": f"Unsupported file type '.{ext}'. Allowed: {', '.join(sorted(EBOOK_UPLOAD_EXTS))}"}
 
+        path = "/api/book/upload"
+        book_id = args.get("book_id")
+        if book_id:
+            query = {"bid": book_id}
+            if parse_bool(args.get("force")):
+                query["force"] = 1
+            path += "?" + urllib.parse.urlencode(query)
+
         try:
             with open(file_path, 'rb') as f:
                 files = {'ebook': f}
                 return self._call_with_auto_relogin(
                     "POST",
-                    "/api/book/upload",
+                    path,
                     files=files
                 )
         except Exception as e:
@@ -996,6 +1106,49 @@ class MyBooksAPI:
         return self._call_with_auto_relogin("GET", f"/api/book/{book_id}/booklists")
 
     # ========================================================================
+    # EPUB fix Tool Methods (built-in toolbox tool epub_fixer, admin only)
+    # ========================================================================
+
+    def epub_fix(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Start the EPUB structure repair task for one or more books (admin only,
+        async — poll with epub_fix_progress).
+
+        Args:
+            book_ids (int or array, required): One book ID or a list of IDs (up to 100)
+            write_mode (str, optional): overwrite (default: replaces the book's EPUB) or
+                new_book (keeps the original, imports the repaired copy as a new book)
+            backup (bool, optional): Keep a copy of the pre-repair EPUB in the tool work dir
+            reconvert (bool, optional): Also re-convert epub->epub after the structural pass
+            suffix (str, optional): Title suffix used by new_book mode (default: （精修）)
+        """
+        book_ids = args.get("book_ids")
+        if not book_ids:
+            return {"status": "error", "message": "book_ids is required: one book ID or an array of IDs"}
+        if not isinstance(book_ids, list):
+            book_ids = [book_ids]
+
+        body = {"book_ids": book_ids}
+        for key in ("write_mode", "suffix"):
+            if args.get(key) is not None:
+                body[key] = args[key]
+        # 服务端对 backup 只做 bool(...)（字符串 "false" 会变成 True），对 reconvert 才认字符串，
+        # 这里统一归一成真布尔再发
+        for key in ("backup", "reconvert"):
+            if args.get(key) is not None:
+                body[key] = parse_bool(args[key])
+
+        return self._call_with_auto_relogin("POST", f"{API_EPUB_FIXER_PREFIX}/repair", json=body)
+
+    def epub_fix_progress(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Query the EPUB repair task progress and per-book results.
+
+        Args: none
+        """
+        return self._call_with_auto_relogin("GET", f"{API_EPUB_FIXER_PREFIX}/progress")
+
+    # ========================================================================
     # TTS Tool Methods (MiMo TTS audiobook, admin only)
     # ========================================================================
 
@@ -1274,7 +1427,7 @@ class MyBooksAPI:
                 "search_books", "search_by_category", "list_folders", "search_by_folder",
                 "set_folder", "rename_folder", "get_book", "edit_book",
                 "get_notes", "push_notes", "clear_imported_notes",
-                "book_fill", "save_meta_to_file", "mailto", "send_to_device", "categories",
+                "book_fill", "book_refer_search", "book_refer_apply", "save_meta_to_file", "mailto", "send_to_device", "categories",
                 "list_authors", "get_author_books", "book_upload",
                 "book_add_by_isbn", "wants", "list_wants", "favorite",
                 "list_favorites", "reading", "list_reading", "read_done",
@@ -1283,6 +1436,7 @@ class MyBooksAPI:
                 "list_my_booklists", "list_public_booklists", "list_liked_booklists",
                 "get_booklist", "create_booklist", "update_booklist", "delete_booklist",
                 "booklist_add_books", "booklist_remove_book", "like_booklist", "get_book_booklists",
+                "epub_fix", "epub_fix_progress",
                 "tts_save_config", "tts_test_connection",
                 "tts_convert", "tts_progress", "tts_clone_upload", "tts_clone_list",
                 "tts_clone_delete", "tts_clone_audio", "tts_prompt_list",

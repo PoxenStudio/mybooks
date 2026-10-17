@@ -4603,7 +4603,12 @@ EPUB 转有声书（WAV），支持 MiMo TTS / OpenAI TTS 兼容接口。公共 
 
 ### 16.6 EPUB 修复（epub_fixer）
 
+三个任务接口（`fix` / `analyze` / `repair`）共用同一把任务锁，已有任务运行时返回 `task.running`。
+
 - `POST /api/toolbox/epub_fixer/fix`：JSON `book_id` (必填)、`backup` (bool, 默认 false)；后台执行，结果见消息通知
+- `POST /api/toolbox/epub_fixer/analyze`：JSON `book_ids` (array, 必填，最多 20 本；也接受单个 `book_id`)；结构检测，结果见 `progress`
+- `POST /api/toolbox/epub_fixer/repair`：JSON `book_ids` (array, 必填，最多 100 本)、`ops`（可选，精修项，非法值返回 `params.invalid`）、`reconvert` (bool, 默认 true，也接受 `"false"/"0"/"no"`)、`write_mode` (`overwrite` 默认替换原文件 / `new_book` 另存新书)、`backup` (bool, 默认 false)、`suffix`（`new_book` 新书名后缀，默认 `（精修）`，超 30 字截断）
+- `GET /api/toolbox/epub_fixer/progress`：`data`: `status`（`running`/`completed`/`failed`）、`progress`、`stage`、`book_index`、`book_total`、`current_title`、`results`（逐本结果）；`err` 可能为 `task.not_found` / `task.failed`
 
 ### 16.7 正文替换（text_replace）
 

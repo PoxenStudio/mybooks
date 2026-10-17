@@ -3,7 +3,7 @@ name: mybooks
 homepage: https://www.mybooks.top
 allowed-tools: Bash(python3:*)
 metadata: {"clawdbot":{},"openclaw":{"requires":{"bins":["python3"],"env":["MYBOOKS_HOST","MYBOOKS_USER","MYBOOKS_PASSWORD"]},"permissions":{"network":{"required":true,"scope":"user-configured MYBOOKS_HOST only","protocols":["http","https"]},"filesystem":{"read":"only when uploading: ebook files (book_upload) and mp3/wav samples (tts_clone_upload) at paths the user gives","write":"only tts_clone_audio save_to (.wav, never overwrites)"}}}}
-description: "MyBooks是个人书库管理系统，提供电子书及实体书管理，包括存储、分类、搜索和元数据管理功能。你可以帮助用户：查询书库统计信息和阅读统计,搜索/浏览书籍,获取书籍详情,更新书籍元数据（书名、作者、标签、分类、简介等）,自动联网填充书籍信息,发送书籍到邮箱或阅读器设备,上传电子书或通过ISBN添加实体书,管理阅读状态（想读/在读/已读/收藏）,查询/手动更新某本书分格式的阅读时长与进度,按日期补录/修改/删除阅读时间（v4.3.0+）,管理书单（创建/浏览/加书/移书/点赞，v4.3.0+）,查看作者信息和分类信息,导入第三方阅读App的划线与想法（如微信读书，需配合微信读书 skill 读取原始数据）,以及MiMo TTS有声书功能（配置TTS API、EPUB转有声书、查询转换进度、克隆音色与语音提示词管理，需管理员权限）等"
+description: "MyBooks是个人书库管理系统，提供电子书及实体书管理，包括存储、分类、搜索和元数据管理功能。你可以帮助用户：查询书库统计信息和阅读统计,搜索/浏览书籍,获取书籍详情,更新书籍元数据（书名、作者、标签、分类、简介等）,自动联网填充书籍信息,联网搜索元数据候选并按仅信息/仅封面/仅作者及简介等模式套用,调用 EPUB 修复工具精修书籍,发送书籍到邮箱或阅读器设备,上传电子书（可为已有书籍新增或替换格式文件）或通过ISBN添加实体书,管理阅读状态（想读/在读/已读/收藏）,查询/手动更新某本书分格式的阅读时长与进度,按日期补录/修改/删除阅读时间（v4.3.0+）,管理书单（创建/浏览/加书/移书/点赞，v4.3.0+）,查看作者信息和分类信息,导入第三方阅读App的划线与想法（如微信读书，需配合微信读书 skill 读取原始数据）,以及MiMo TTS有声书功能（配置TTS API、EPUB转有声书、查询转换进度、克隆音色与语音提示词管理，需管理员权限）等"
 ---
 
 # MyBooks
@@ -27,8 +27,8 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 ## 权限与网络声明
 
 - **网络访问（必需）**：本 skill 是 MyBooks 服务器的 REST 客户端，所有工具都通过 HTTP(S) 访问**且仅访问**用户自己配置的 `MYBOOKS_HOST`，不连接任何其他地址，无遥测、无第三方回传。
-- **会修改数据的工具**：`edit_book`、`set_folder`、`rename_folder`、`push_notes`(`dry_run:false`)、`clear_imported_notes`、`book_fill`、`save_meta_to_file`、`book_upload`、`book_add_by_isbn`、`wants`/`favorite`/`reading`/`read_done`、`set_reading_time`、`delete_reading_time`、书单的创建/修改/删除/增删书/点赞、以及全部 `tts_*` 写操作。删除类工具（`delete_booklist`、`delete_reading_time`）脚本内强制 `confirm:true` 两步确认。
-- **本地文件读取**：仅 `book_upload`（限电子书扩展名 epub/mobi/azw/azw3/pdf/txt/lrf/rtf/djvu/docx）和 `tts_clone_upload`（限 mp3/wav，≤7MB）会读取用户明确给出路径的文件并上传到 `MYBOOKS_HOST`；agent **不得**自行挑选文件上传。
+- **会修改数据的工具**：`edit_book`、`set_folder`、`rename_folder`、`push_notes`(`dry_run:false`)、`clear_imported_notes`、`book_fill`、`book_refer_apply`、`epub_fix`、`save_meta_to_file`、`book_upload`（含指定 `book_id` 的替换模式）、`book_add_by_isbn`、`wants`/`favorite`/`reading`/`read_done`、`set_reading_time`、`delete_reading_time`、书单的创建/修改/删除/增删书/点赞、以及全部 `tts_*` 写操作。删除类工具（`delete_booklist`、`delete_reading_time`）脚本内强制 `confirm:true` 两步确认。
+- **本地文件读取**：仅 `book_upload`（新建入库，或为已有书籍新增/替换格式文件；限电子书扩展名 epub/mobi/azw/azw3/pdf/txt/lrf/rtf/djvu/docx）和 `tts_clone_upload`（限 mp3/wav，≤7MB）会读取用户明确给出路径的文件并上传到 `MYBOOKS_HOST`；agent **不得**自行挑选文件上传。
 - **本地文件写入**：仅 `tts_clone_audio` 的 `save_to`（必须 `.wav` 结尾，且不覆盖已存在文件）。
 - **凭据**：见下方"认证方式"。
 
@@ -653,6 +653,102 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 
 ---
 
+### `book_refer_search` — 联网搜索某本书的元数据候选
+
+**使用场景**：
+- "联网搜一下《XX》的元数据，列出来让我挑一个"
+- "这本书的封面不对，从网上找个新的"
+- 需要先看候选再决定覆盖哪些字段时——比 `book_fill` 更可控（`book_fill` 是批量自动挑选源）
+
+**权限**：需要登录
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `book_id` | int | ✅ | 书籍 ID |
+| `title` | string | ❌ | 用这个书名去搜（省略则用书籍自身书名） |
+| `isbn` | string | ❌ | 用这个 ISBN 去搜 |
+| `publisher` | string | ❌ | 按出版社缩小范围 |
+
+**执行脚本**：
+```bash
+<skill-installation-path>/scripts/mybooks_api.py book_refer_search '{"book_id":42}'
+```
+
+**响应示例**：
+```json
+{
+  "err": "ok",
+  "books": [
+    {"title": "三体", "authors": ["刘慈欣"], "publisher": "重庆出版社", "comments": "……",
+     "cover_url": "https://…", "source": "douban", "provider_key": "douban", "provider_value": "2567698"}
+  ],
+  "cached": false
+}
+```
+
+**常见错误**：
+| `err` 值 | 含义 |
+|----------|------|
+| `"timeout"` | 查询超时（会带回可用的缓存候选） |
+| `"search.failed"` | 查询失败（同样可能带回缓存候选） |
+
+---
+
+### `book_refer_apply` — 套用某个元数据候选（可选只改一部分）
+
+**使用场景**：
+- "用豆瓣上那条更新一下这本书的信息"（拿 `book_refer_search` 的候选套用）
+- "只更新作者和简介，别动封面" → `mode:"only_author_comments"`
+- "只换封面，其它别动" → `mode:"only_cover"`
+- "更新信息但保留现在的封面" → `mode:"only_meta"`
+
+**权限**：需要登录，且为管理员或该书籍的所有者
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `book_id` | int | ✅ | — | 书籍 ID |
+| `provider_key` | string | ✅ | — | 数据源，取 `book_refer_search` 候选里的 `provider_key` |
+| `provider_value` | string | ✅ | — | 数据源内的 ID，取候选里的 `provider_value` |
+| `mode` | string | ❌ | `full` | `full`=信息+封面；`only_meta`=只要信息（不动封面）；`only_cover`=只换封面；`only_author_comments`=只更新作者与简介 |
+| `metadata` | object | 条件必填 | — | 候选对象（把 `book_refer_search` 的某个候选原样传入）。**非豆瓣源必填**：缺了会直接报错（服务端在这种情况下会退回用书籍自身元数据并返回 `ok`，等于静默空操作）；豆瓣源按 `provider_value` 重新拉取，可省略 |
+
+**注意**：
+- `full`（默认）是**整体替换**语义：会用候选覆盖书名、作者、简介、出版社、标签、封面等字段——与 `book_fill`"保留原书名"的行为不同。只想改一部分时用 `only_*` 模式。
+- 同一本书请先 `book_refer_search`，把候选展示给用户确认后再 `book_refer_apply`；`metadata` 一律用搜索返回的候选原样传入，**不要自行构造**（其中的 `cover_url` 会被服务端抓取）。
+- 非豆瓣源拿不到候选时，不要"先试试不带 `metadata`"——那是空操作。
+
+**执行脚本**：
+```bash
+# 完整套用某个候选
+<skill-installation-path>/scripts/mybooks_api.py book_refer_apply '{"book_id":42,"provider_key":"douban","provider_value":"2567698"}'
+
+# 只更新作者与简介
+<skill-installation-path>/scripts/mybooks_api.py book_refer_apply '{"book_id":42,"provider_key":"douban","provider_value":"2567698","mode":"only_author_comments"}'
+
+# 只换封面
+<skill-installation-path>/scripts/mybooks_api.py book_refer_apply '{"book_id":42,"provider_key":"douban","provider_value":"2567698","mode":"only_cover"}'
+```
+
+**响应示例**：
+```json
+{ "err": "ok" }
+```
+
+**常见错误**：
+| `err` 值 | 含义 |
+|----------|------|
+| `"params.conflict"` | `only_meta`/`only_cover`/`only_author_comments` 传了多个（最多一个） |
+| `"plugin.no_result"` | 该数据源没有可用信息 |
+| `"plugin.no_cover"` | 该候选没有封面（`only_cover` 模式） |
+| `"plugin.fail"` | 拉取图书信息异常 |
+| `"user.no_permission"` | 既不是管理员也不是该书籍的所有者 |
+
+---
+
 ### `save_meta_to_file` — 将元数据保存到电子书文件
 
 **使用场景**：
@@ -838,27 +934,49 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 
 ---
 
-### `book_upload` — 上传电子书
+### `book_upload` — 上传电子书（新建入库 / 为已有书籍新增或替换格式文件）
 
-**使用场景**：上传本地电子书文件到书库，支持 epub/mobi/azw/azw3/pdf/txt/lrf/rtf/djvu/docx 等格式
+**使用场景**：
+- 上传本地电子书文件到书库，支持 epub/mobi/azw/azw3/pdf/txt/lrf/rtf/djvu/docx 等格式
+- "这本书的 epub 文件坏了/是删节版，我有个新的，换成这个" → 带 `book_id` + `force:true` 替换已有格式的文件
+- "给这本书补一个 pdf 版本" → 带 `book_id`（若该格式已存在则返回 `format.already_exists`）
 
-**权限**：需要登录，且账号需有上传权限（`can_upload`）
+**权限**：需要登录，且账号需有上传权限（`can_upload`）；指定 `book_id` 时还须为管理员或该书籍的所有者
 
 **参数**：
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `file_path` | string | ✅ | 本地文件的绝对路径 |
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `file_path` | string | ✅ | — | 本地文件的绝对路径 |
+| `book_id` | int | ❌ | — | 指定后不再新建书籍，而是给这本书新增/替换该格式的文件 |
+| `force` | bool | ❌ | `false` | 与 `book_id` 同用：该格式已存在时覆盖原文件；不传则返回 `format.already_exists` |
+
+**注意**：替换会**丢弃**原有的那个格式文件，且不可撤销——先向用户确认，确认后再加上 `force:true` 重试（`format.already_exists` 就是这个确认开关）。
 
 **执行脚本**：
 ```bash
+# 新建入库
 <skill-installation-path>/scripts/mybooks_api.py book_upload '{"file_path":"/path/to/book.epub"}'
+
+# 给已有书籍补一个新格式（该格式不存在时直接成功）
+<skill-installation-path>/scripts/mybooks_api.py book_upload '{"file_path":"/path/to/book.pdf","book_id":42}'
+
+# 替换已有格式的文件（用户确认后再执行）
+<skill-installation-path>/scripts/mybooks_api.py book_upload '{"file_path":"/path/to/book.epub","book_id":42,"force":true}'
 ```
 
 **响应示例**：
 ```json
 { "err": "ok", "book_id": 123 }
 ```
+
+**常见错误**：
+| `err` 值 | 含义 |
+|----------|------|
+| `"format.already_exists"` | 该书已有该格式文件，且未带 `force` |
+| `"user.no_permission"` | 不是管理员也不是该书籍的所有者 |
+| `"params.format.unsupported"` | 文件格式不在支持列表内 |
+| `"book.not_found"` | `book_id` 对应的书籍不存在 |
 
 ---
 
@@ -1207,6 +1325,83 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 | `"permission.denied"` | 无权限（非所有者/管理员，或私有书单） |
 | `"params.invalid"` | 参数错误（名称为空、未指定书籍、书不在书单中等） |
 | `"params.book.invalid"` | `booklist_add_books` 中的书籍全部不存在 |
+
+---
+
+## EPUB 修复工具列表（内置工具箱工具，需管理员权限）
+
+### `epub_fix` — 精修 / 重转修复 EPUB
+
+**使用场景**：
+- "这本书排版/目录坏了，帮我修一下" / "EPUB 打开乱码、目录点不动"
+- "这本书里有垃圾文件、断链的目录条目、没用到的图片，清理一下"
+- 等价于书库「工具箱 → EPUB修复」页面里的批量精修
+
+**权限**：需要管理员权限
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `book_ids` | int 或 array | ✅ | — | 单个书籍 ID 或 ID 数组（最多 100 本） |
+| `write_mode` | string | ❌ | `overwrite` | `overwrite`=覆盖原文件；`new_book`=保留原书，修复结果另存为新书 |
+| `backup` | bool | ❌ | `false` | 修复前把原 EPUB 备份到工具工作目录 |
+| `reconvert` | bool | ❌ | `true` | 结构精修后再做一次 epub→epub 重转 |
+| `suffix` | string | ❌ | `（精修）` | `new_book` 模式下的新书名后缀（超 30 字截断） |
+
+**注意**：
+- 任务在后台异步执行，调用后立即返回，用 `epub_fix_progress` 查询进度与逐本结果。
+- `overwrite`（默认）会**覆盖书籍原文件**；不确定时传 `backup:true`，或先用 `write_mode:"new_book"` 另存新书。
+- 修复类任务共用同一把任务锁：已有任务在跑时返回 `task.running`，**不要重复发起**，等上一轮结束后再试。
+- `epub_fix_progress` 只返回**最近一次**修复任务，不区分发起方：并发发起两批修复时，后一批会覆盖前一批的进度视图，`book_total` 相同也不能证明是你这批发起的。单人顺序使用没有影响；需要并发时请等上一批跑完再发下一批，并以结果列表里的 `book_id` 为准。
+- 极短时间内重复提交时，服务端可能已经回过 `ok` 但任务没有真正启动（既有竞态）；确认结果列表里缺本次的 `book_id` 就重新提交。
+
+**执行脚本**：
+```bash
+# 修一本（建议先备份原文件）
+<skill-installation-path>/scripts/mybooks_api.py epub_fix '{"book_ids":42,"backup":true}'
+
+# 另存为新书，不动原文件
+<skill-installation-path>/scripts/mybooks_api.py epub_fix '{"book_ids":42,"write_mode":"new_book"}'
+```
+
+**响应示例**：
+```json
+{ "err": "ok", "msg": "EPUB 精修任务已启动，可在本页查看进度与逐本结果" }
+```
+
+---
+
+### `epub_fix_progress` — 查询 EPUB 修复进度
+
+**使用场景**：
+- `epub_fix` 之后查看进度与每本书的处理结果
+
+**权限**：需要管理员权限
+
+**参数**：无
+
+**执行脚本**：
+```bash
+<skill-installation-path>/scripts/mybooks_api.py epub_fix_progress '{}'
+```
+
+**响应示例**：
+```json
+{
+  "err": "ok",
+  "data": {
+    "status": "running", "progress": 50, "stage": "精修", "book_index": 1, "book_total": 2,
+    "current_title": "三体", "results": []
+  }
+}
+```
+
+**常见错误**：
+| `err` 值 | 含义 |
+|----------|------|
+| `"task.not_found"` | 还没有启动过修复任务（先调用 `epub_fix`） |
+| `"task.failed"` | 任务失败，`msg` 含原因；`data.results` 里可能有逐本信息 |
 
 ---
 
@@ -1595,11 +1790,20 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 ├─ "更新/补全《XX》的封面、简介、标签信息"（自动从网上获取）
 │   → book_fill（需要管理员权限，传入 book_id 数组）
 │
+├─ "联网搜一下这本书的信息，让我挑一个" / "只更新作者和简介，别动封面" / "只换个封面"
+│   → 先 book_refer_search 列候选（用户选定后）→ book_refer_apply（mode: full / only_meta / only_cover / only_author_comments）
+│
+├─ "这本书的 EPUB 坏了/目录乱/有垃圾文件，修一下"
+│   → epub_fix（需要管理员权限，建议 backup:true）→ epub_fix_progress 查结果
+│
 ├─ "手动修改《XX》的标签/分类/书名等字段"
 │   → 先 search_books 确认 book_id → 再 edit_book
 │
 ├─ "把修改后的元数据也写入电子书文件本身" / "同步元数据到文件"
 │   → save_meta_to_file（仅 epub/azw3/pdf，需管理员或书籍所有者权限）
+│
+├─ "这本书的 epub 文件不好，我有个新的换上" / "给这本书补个 pdf 版本"
+│   → book_upload（带 book_id；替换已有格式须先向用户确认再带 force:true）
 │
 ├─ "把我在微信读书上的划线/想法导入这本书" / "导入第三方批注"
 │   → 先确认目标书是 EPUB 格式，再用 push_notes（先 dry_run:true 预览，用户确认后再 dry_run:false 提交）
@@ -1616,7 +1820,7 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 │   → send_to_device（需设备在同一局域网并开启 WiFi 接收）
 │
 ├─ "上传这本书" / "添加实体书"
-│   → book_upload（电子书文件）
+│   → book_upload（电子书文件；带 book_id 可给已有书籍新增/替换格式文件）
 │   → book_add_by_isbn（实体书 ISBN）
 │
 ├─ "这本书想读" / "加入待读清单"
@@ -1718,6 +1922,14 @@ MiMo TTS 类型（`api_type=chat_completions`）内置 9 个预置音色：
 | `"sync.import.failed"` | `push_notes` 批注定位流程整体失败 | 与单条 `results[].status:"error"` 不同，是整批请求都没有结果，稍后重试或检查书籍文件是否损坏 |
 | `"task.running"` | 后台有任务在运行 | 等待当前任务完成后重试 |
 | `"book.notfound"` | ISBN 对应的书籍未在网上找到 | 换其他数据源或手动添加 |
+| `"user.no_permission"` | 不是管理员也不是该书籍的所有者 | 用管理员账号，或让书籍所有者本人操作 |
+| `"params.conflict"` | `book_refer_apply` 的 `only_*` 模式同时传了多个 | 最多一个，重选模式 |
+| `"params.provider_key.invalid"` | `provider_key`/`provider_value` 缺失或为空 | 用 `book_refer_search` 取候选后原样传入 |
+| `"plugin.no_result"` | 该数据源没有可用信息（也可能被限流） | 换一个候选/数据源，稍后再试 |
+| `"plugin.no_cover"` | 该候选没有封面（`only_cover` 模式） | 换有封面的候选，或改用 `full` |
+| `"plugin.fail"` | 拉取图书信息异常 | 稍后重试 |
+| `"format.already_exists"` | 该书已有该格式文件（`book_upload` 未带 `force`） | 先向用户确认是否替换，确认后带 `force:true` 重试 |
+| `"task.not_found"` | 还没启动过 EPUB 修复任务 | 先调用 `epub_fix`，再查 `epub_fix_progress` |
 | `"connection.failed"` | 无法连接到设备 | 检查设备 IP 和 WiFi 接收功能是否开启 |
 | `"format.not_supported"` | 书籍没有 epub/azw3/pdf 格式 | 提示用户该书无法同步元数据到文件 |
 | `"tts.converting"` | TTS 转换任务进行中 | 等待完成后重试 |
@@ -1737,11 +1949,14 @@ MiMo TTS 类型（`api_type=chat_completions`）内置 9 个预置音色：
 5. **send_to_device 限制**：仅支持本地临时推送，不支持通过服务器中转到远程设备。
 6. **在线数据源**：`book_fill` 依赖豆瓣（douban）、百科（baike）等在线源，网络不可用或书籍较冷门时可能无结果。
 7. **批量 book_fill**：建议每批不超过 10 本，避免触发后台任务冲突（`task.running` 错误）。
-8. **TTS 管理员权限**：所有 TTS 接口均需要管理员权限，普通用户无法使用。
-9. **TTS 异步转换**：`tts_convert` 启动后台任务后立即返回，需用 `tts_progress` 轮询进度。
-10. **TTS 断点续传**：重复转换同一本书时，自动跳过已存在的 WAV 文件（≥44 字节），中断后可继续。
-11. **TTS 音频输出**：转换完成后，音频输出到 `/audio/{book_id}` 页面播放，也可通过 Web 界面访问。
-12. **TTS 克隆音色限制**：MP3/WAV ≤ 7MB；上传后自动切换 `mimo-v2.5-tts-voiceclone` 模型。
-13. **TTS 提示词存储**：提示词保存在服务端 `voice_prompts.json`，跨浏览器共享，不依赖本地存储。
-14. **TTS API Key 加密**：API Key 经 PBKDF2-SHA256 + 流加密保存，密钥文件权限 0o600。
-15. **TTS 模型锁定**：MiMo TTS 类型下模型 ID 固定为 `mimo-v2.5-tts`，不可修改；`audio_speech` 和 `custom` 类型可自由修改。
+8. **book_refer_apply 的覆盖范围**：`mode:"full"`（默认）会用候选**整体替换**元数据（含书名、封面），与 `book_fill`"保留原书名"不同；只想改一部分时用 `only_meta`/`only_cover`/`only_author_comments`。同一本书先用 `book_refer_search` 把候选给用户确认。
+9. **epub_fix 单任务锁**：修复类任务（精修/检测/单本修复）共用同一把锁，已有任务运行时返回 `task.running`——等待上一轮结束，不要重复发起、不要盲目重试。
+10. **替换书籍文件不可撤销**：`book_upload` 带 `book_id` + `force:true` 会丢弃原有的那个格式文件；先向用户确认，确认后再执行（不带 `force` 时服务端返回 `format.already_exists` 作为天然的确认点）。
+11. **TTS 管理员权限**：所有 TTS 接口均需要管理员权限，普通用户无法使用。
+12. **TTS 异步转换**：`tts_convert` 启动后台任务后立即返回，需用 `tts_progress` 轮询进度。
+13. **TTS 断点续传**：重复转换同一本书时，自动跳过已存在的 WAV 文件（≥44 字节），中断后可继续。
+14. **TTS 音频输出**：转换完成后，音频输出到 `/audio/{book_id}` 页面播放，也可通过 Web 界面访问。
+15. **TTS 克隆音色限制**：MP3/WAV ≤ 7MB；上传后自动切换 `mimo-v2.5-tts-voiceclone` 模型。
+16. **TTS 提示词存储**：提示词保存在服务端 `voice_prompts.json`，跨浏览器共享，不依赖本地存储。
+17. **TTS API Key 加密**：API Key 经 PBKDF2-SHA256 + 流加密保存，密钥文件权限 0o600。
+18. **TTS 模型锁定**：MiMo TTS 类型下模型 ID 固定为 `mimo-v2.5-tts`，不可修改；`audio_speech` 和 `custom` 类型可自由修改。
