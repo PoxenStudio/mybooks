@@ -9,14 +9,14 @@
             <p>
                 <v-btn small text target="_blank" v-if="!hide_project_links" href="https://github.com/PoxenStudio/mybooks">Project</v-btn>
                 <span v-if="!hide_project_links">|</span>
-                <v-btn small text target="_blank" href="/podcast">Podcast</v-btn>
-                <span>|</span>
+                <v-btn small text target="_blank" v-if="podcastEnabled" href="/podcast">Podcast</v-btn>
+                <span v-if="podcastEnabled">|</span>
                 <v-btn small text target="_blank" v-if="!hide_project_links" href="https://mybooks.top">MyBooks</v-btn>
                 <span v-if="!hide_project_links">|</span>
-                <v-btn small text target="_blank" href="/opds-readme"> {{ $t('appHeader.opdsIntroduction') }}</v-btn>
-                <span>|</span>
-                <v-btn small text target="_blank" href="/webdav-readme"> {{ $t('appHeader.webdavIntroduction') }} </v-btn>
-                <span>|</span>
+                <v-btn small text target="_blank" v-if="opdsEnabled" href="/opds-readme"> {{ $t('appHeader.opdsIntroduction') }}</v-btn>
+                <span v-if="opdsEnabled">|</span>
+                <v-btn small text target="_blank" v-if="webdavEnabled" href="/webdav-readme"> {{ $t('appHeader.webdavIntroduction') }} </v-btn>
+                <span v-if="webdavEnabled">|</span>
                 <v-btn small text target="_blank" href="https://github.com/PoxenStudio/MyReader"> MyReader </v-btn>
             </p>
             <p v-if="version" class="version-info cursor-pointer" @click="showReleaseNotes">
@@ -79,6 +79,15 @@ export default {
         },
         hide_project_links: function () {
             return this.$store.state.sys.hide_project_links || false;
+        },
+        podcastEnabled: function () {
+            return this.$store.state.sys.enable_podcast_service || false;
+        },
+        opdsEnabled: function () {
+            return this.$store.state.sys.enable_opds_service || false;
+        },
+        webdavEnabled: function () {
+            return this.$store.state.sys.enable_webdav_service || false;
         },
         version: function () {
             return this.$store.state.sys.version || '';

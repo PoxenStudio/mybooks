@@ -169,7 +169,7 @@ settings = {
     "CALIBRE_CACHE_CLEAN_INTERVAL": 1800,
     "ENABLE_TXT_TO_TXTZ_PLUGIN": False,
 
-    "META_SELECTED_SOURCES": ["douban", "baidu", "xinhua"],
+    "META_SELECTED_SOURCES": ["douban", "baidu", "xinhua", "douban_v2"],
 
     "ENABLE_AUTHOR_INFO": True,
 
@@ -260,7 +260,7 @@ settings = {
     'douban_max_count'  : 2,
     'douban_v2_max_per_hour': 180,
     'ujxsw_max_count'   : 2,
-    'auto_fill_meta'    : False,
+    'auto_fill_meta'    : True,
     'auto_fill_qpm'     : 60,
     'auto_fill_pause_on_throttle': True,
 
