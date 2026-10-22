@@ -1507,8 +1507,10 @@ class AdminEpubMergeRun(BaseHandler):
         delete_source = epub_merge_lib.coerce_bool(data.get("delete_source"), False)
         cover = data.get("cover") or {"type": "first"}
 
-        if not isinstance(book_ids, list) or not (2 <= len(book_ids) <= 20):
-            return {"err": "params.missing", "msg": _("请选择 2–20 本书进行合并")}
+        if not isinstance(book_ids, list) or not (
+                2 <= len(book_ids) <= epub_merge_lib.MERGE_MAX_BOOKS):
+            return {"err": "params.missing",
+                    "msg": _("请选择 2–%d 本书进行合并") % epub_merge_lib.MERGE_MAX_BOOKS}
         if not title:
             return {"err": "params.missing", "msg": _("请填写合集标题")}
         if not isinstance(authors, list):

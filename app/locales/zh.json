@@ -1982,7 +1982,7 @@
   "epubMerge": {
     "title": "EPUB合并",
     "close": "关闭",
-    "hint": "从书库中选择 2–20 本 EPUB 书籍，按指定顺序合并为一个合集。原书默认保留。",
+    "hint": "从书库中选择 2 本以上（最多 {max} 本）EPUB 书籍，按指定顺序合并为一个合集。原书默认保留。",
     "searchPlaceholder": "搜索书名",
     "noResults": "未找到相关书籍",
     "addBtn": "加入",
@@ -2021,6 +2021,7 @@
     "mergeBtn": "合并为新书",
     "mergeSuccess": "合集生成成功：",
     "needTwoBooks": "至少加入 2 本书才能合并",
+    "maxReached": "最多只能合并 {max} 本书，已达上限",
     "stageStarting": "准备中",
     "stageLoading": "读取源书",
     "stageCover": "处理封面",

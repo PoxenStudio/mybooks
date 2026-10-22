@@ -1982,7 +1982,7 @@
   "epubMerge": {
     "title": "EPUB Merge",
     "close": "Close",
-    "hint": "Pick 2–20 EPUB books from the library and merge them into one collection in the specified order. Source books are kept by default.",
+    "hint": "Pick 2 or more EPUB books (up to {max}) from the library and merge them into one collection in the specified order. Source books are kept by default.",
     "searchPlaceholder": "Search by title",
     "noResults": "No books found",
     "addBtn": "Add",
@@ -2021,6 +2021,7 @@
     "mergeBtn": "Merge as new book",
     "mergeSuccess": "Collection generated successfully: ",
     "needTwoBooks": "Add at least 2 books to start merging",
+    "maxReached": "At most {max} books can be merged; the limit has been reached",
     "stageStarting": "Preparing",
     "stageLoading": "Reading source books",
     "stageCover": "Processing cover",

@@ -19,7 +19,7 @@
       <v-col cols="12" md="10" lg="8">
         <v-card rounded="xl" outlined class="pa-6" style="border: 2px solid #90CAF9;">
           <v-alert type="info" dense text rounded="lg" class="mb-5">
-            {{ $t('epubMerge.hint') }}
+            {{ $t('epubMerge.hint', { max: maxBooks }) }}
           </v-alert>
 
           <!-- Search -->
@@ -36,6 +36,7 @@
             @keydown.enter.prevent="onEnterSearch"
             @click:clear="clearSearch"
           />
+          <div v-if="limitHint" class="text-caption error--text mb-2">{{ limitHint }}</div>
           <div class="em-book-list mb-4">
             <div v-if="searching" class="text-center py-6">
               <v-progress-circular indeterminate color="primary" size="32" />
@@ -441,6 +442,10 @@ export default {
     searching: false,
     searched: false,
     selected: [],
+    // 可选书数上限：默认值与后端 epub_merge_lib.MERGE_MAX_BOOKS 一致，
+    // preview 响应会带 max_books 覆盖，改上限只需动后端常量
+    maxBooks: 200,
+    limitHint: '',
 
     dragId: null,
     dragOverId: null,
@@ -538,8 +543,9 @@ export default {
       handler() {
         this.resultBook = null;
         this.errorMsg = '';
+        this.limitHint = '';
         if (this.previewTimer) { clearTimeout(this.previewTimer); this.previewTimer = null; }
-        if (this.selected.length >= 2 && this.selected.length <= 20) {
+        if (this.selected.length >= 2 && this.selected.length <= this.maxBooks) {
           // 拖动排序会连续触发 deep watch，防抖到拖完再请求；
           // 防抖期间即置 pending，合并按钮立刻禁用
           this.previewPending = true;
@@ -585,7 +591,12 @@ export default {
       return this.selected.some((b) => b.id === id);
     },
     addBook(book) {
-      if (this.isSelected(book.id) || !this.hasEpub(book) || this.selected.length >= 20) return;
+      if (this.isSelected(book.id) || !this.hasEpub(book)) return;
+      if (this.selected.length >= this.maxBooks) {
+        // 达上限时给可见反馈（原实现静默 return，用户会以为按钮失灵）
+        this.limitHint = this.$t('epubMerge.maxReached', { max: this.maxBooks });
+        return;
+      }
       this.selected.push(book);
     },
     removeBook(index) {
@@ -688,6 +699,7 @@ export default {
     },
     applyPreview(data) {
       this.preview = data;
+      if (data.max_books) this.maxBooks = data.max_books;
       if (!this.dirty.title) this.form.title = data.default_title || '';
       this.form.authors = data.authors_union || [];
       if (!this.dirty.isbns) this.form.isbns = data.isbns_union || [];

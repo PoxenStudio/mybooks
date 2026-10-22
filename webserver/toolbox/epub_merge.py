@@ -108,7 +108,7 @@ class EpubMergeTool(BaseTool):
 
     @staticmethod
     def _normalize_ids(book_ids) -> list:
-        """校验并归一化 ID 列表（2–20 本整数，无重复；逻辑在 lib）。"""
+        """校验并归一化 ID 列表（2–`MERGE_MAX_BOOKS` 本整数，无重复；逻辑在 lib）。"""
         try:
             return epub_merge_lib.normalize_book_ids(book_ids)
         except ValueError as err:
@@ -215,6 +215,8 @@ class EpubMergeTool(BaseTool):
             "language_default": language_default,
             "description_default": description,
             "truncated": truncated,
+            # 可选书数上限随响应下发，前端不再另写一份数字（改上限只动 lib 常量）
+            "max_books": epub_merge_lib.MERGE_MAX_BOOKS,
         }
 
     # ------------------------------------------------------------ 封面上传

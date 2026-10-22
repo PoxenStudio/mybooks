@@ -550,9 +550,34 @@ class TestMerge(unittest.TestCase):
         with self.assertRaises(ValueError):
             lib.merge_epubs([{"data": good, "title": "卷"}],
                             {"title": "合集", "authors": []})
-        many = [{"data": good, "title": "卷%d" % i} for i in range(21)]
+        many = [{"data": good, "title": "卷%d" % i}
+                for i in range(lib.MERGE_MAX_BOOKS + 1)]
         with self.assertRaises(ValueError):
             lib.merge_epubs(many, {"title": "合集", "authors": []})
+        # 恰好到上限不应报本数错（此处只看本数闸，构造的是极小书，
+        # 会走到真正的合并流程并成功返回）
+        at_limit = [{"data": good, "title": "卷%d" % i}
+                    for i in range(lib.MERGE_MAX_BOOKS)]
+        self.assertIsNotNone(
+            lib.merge_epubs(at_limit, {"title": "合集", "authors": []}))
+
+    def test_output_entries_guard(self):
+        """输出条目闸：超限提前失败（防产出 ZIP64 巨型包）。
+
+        阈值临时压到 8 条模拟大合集：单本小书出包约 5 条，两本即越界。
+        """
+        good = _make_min_epub(title="卷", n_docs=2)
+        old = lib._MERGE_MAX_TOTAL_ENTRIES
+        lib._MERGE_MAX_TOTAL_ENTRIES = 8
+        try:
+            with self.assertRaises(ValueError) as ctx:
+                lib.merge_epubs(
+                    [{"data": good, "title": "卷一"},
+                     {"data": good, "title": "卷二"}],
+                    {"title": "合集", "authors": ["作者"]})
+            self.assertIn("条目过多", str(ctx.exception))
+        finally:
+            lib._MERGE_MAX_TOTAL_ENTRIES = old
 
     def test_meta_subjects_description(self):
         _out, entries = self._merge_two()
@@ -1656,6 +1681,11 @@ class TestPureHelpers(unittest.TestCase):
         for bad in ([1], [1, 1, 2], [1, "x"], "1,2"):
             with self.assertRaises(ValueError):
                 lib.normalize_book_ids(bad)
+        # 本数上限边界：恰好 MERGE_MAX_BOOKS 通过，超一本报错
+        at_limit = list(range(1, lib.MERGE_MAX_BOOKS + 1))
+        self.assertEqual(len(lib.normalize_book_ids(at_limit)), lib.MERGE_MAX_BOOKS)
+        with self.assertRaises(ValueError):
+            lib.normalize_book_ids(at_limit + [lib.MERGE_MAX_BOOKS + 1])
 
     def test_coerce_bool(self):
         for v in ("false", "0", "no", "", False):

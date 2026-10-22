@@ -343,6 +343,11 @@ class _ZipWriter:
                 dst.write(chunk)
         self._names.add(name)
 
+    @property
+    def count(self) -> int:
+        """已写入条目数（含 mimetype；供合并侧做输出条目闸）。"""
+        return len(self._names)
+
     def close(self):
         self._zf.close()
 
@@ -799,8 +804,13 @@ def default_merge_title(titles: list, max_len: int = 100) -> str:
     return title[:max_len]
 
 
-def normalize_book_ids(book_ids, min_books: int = 2, max_books: int = 20) -> list:
-    """校验并归一化 ID 列表（整数、无重复），越界/非法抛 ValueError。"""
+def normalize_book_ids(book_ids, min_books: int = 2, max_books: int = None) -> list:
+    """校验并归一化 ID 列表（整数、无重复），越界/非法抛 ValueError。
+
+    `max_books` 缺省取模块常量 `MERGE_MAX_BOOKS`：常量定义在下方常量段，
+    而默认参数在函数定义时求值，故这里用 None 哨兵延迟取值。
+    """
+    max_books = MERGE_MAX_BOOKS if max_books is None else max_books
     if not isinstance(book_ids, list) or not (min_books <= len(book_ids) <= max_books):
         raise ValueError("请选择 %d–%d 本书进行合并" % (min_books, max_books))
     ids = []
@@ -844,10 +854,18 @@ def clean_str_list(value) -> list:
 # 单次合并输出上限 1GB（与读取总量上限对齐；合集超 50MB 很常见，不再设单本上限）
 _MERGE_MAX_OUTPUT = 1024 * 1024 * 1024
 # 源文件总体积闸：合并期间全部输入与输出同时驻留内存，峰值约为总体积的数倍，
-# 不设总和闸时 20×1GB 的理论输入可拖垮后台线程（工具层加载期同样引用此值快速失败）
+# 不设总和闸时 200×1GB 的理论输入可拖垮后台线程（工具层加载期同样引用此值快速失败）
 MERGE_MAX_INPUT_TOTAL = 2 * 1024 * 1024 * 1024
 _MERGE_MIN_BOOKS = 2
-_MERGE_MAX_BOOKS = 20
+# 单次合并可选书数上限（handler / preview / 前端提示统一引用此常量）。
+# 200 本按实测中位源书（75 条目 / 1.4MB）约 1.5 万条目、300MB 级输出，
+# 仍在总量闸 2GB 与条目闸 6 万之内；引擎为流式合并、耗时随本数线性
+# （实测 200 本 285MB 用时 48s，Python 峰值内存 25MB）。
+MERGE_MAX_BOOKS = 200
+# 输出条目闸：ZIP 非 ZIP64 的条目上限是 65535，超出后 zipfile 会自动切 ZIP64，
+# 而旧阅读器 / 老 WebView 对 ZIP64 支持参差。留 5000 余量给 mimetype/opf/ncx 等，
+# 超限时提前失败并提示分批，避免产出打不开的合集。
+_MERGE_MAX_TOTAL_ENTRIES = 60000
 
 _EXTERNAL_SCHEMES = ("http:", "https:", "mailto:", "data:", "ftp:", "ftps:")
 
@@ -1513,8 +1531,8 @@ def merge_epubs(inputs: list, meta: dict, options: dict | None = None):
     out_path = options.get("out_path")
     progress_cb = options.get("progress_cb")
     cancel_event = options.get("cancel_event")
-    if not isinstance(inputs, list) or not (_MERGE_MIN_BOOKS <= len(inputs) <= _MERGE_MAX_BOOKS):
-        raise ValueError("请选择 %d–%d 本书进行合并" % (_MERGE_MIN_BOOKS, _MERGE_MAX_BOOKS))
+    if not isinstance(inputs, list) or not (_MERGE_MIN_BOOKS <= len(inputs) <= MERGE_MAX_BOOKS):
+        raise ValueError("请选择 %d–%d 本书进行合并" % (_MERGE_MIN_BOOKS, MERGE_MAX_BOOKS))
     sources = [_input_source(item) for item in inputs]
     total_input = sum(size for _src, size in sources)
     if total_input > MERGE_MAX_INPUT_TOTAL:
@@ -1798,6 +1816,11 @@ def _merge_into(out, sources: list, inputs: list, meta: dict, divider: bool,
                 # 父节点指向分卷页（开 divider 时点父节点先见卷名页），否则指向首篇
                 parent = (div_name, None) if divider else (nodes[0][1], nodes[0][2])
                 books_toc.append((book_title, parent, nodes))
+                # 输出条目闸：逐本检查，超 ZIP 非 ZIP64 上限（65535）前提前失败
+                if writer.count > _MERGE_MAX_TOTAL_ENTRIES:
+                    raise ValueError(
+                        "合集输出条目过多（超过 %d 条），已超出常见阅读器的支持范围，"
+                        "请分批合并" % _MERGE_MAX_TOTAL_ENTRIES)
 
         manifest.append(("ncx", "toc.ncx", _NCX_MEDIA_TYPE))
         manifest.append(("nav", "nav.xhtml", "application/xhtml+xml"))
