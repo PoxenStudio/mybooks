@@ -122,6 +122,16 @@ _SHARE_READ_PATH_PATTERNS = (
     re.compile(r"^/api/book/(\d+)/filepath/?$"),
 )
 
+# 不针对具体书籍的阅读附属接口（阅读器里的词典、朗读）：没有 book_id 可校验，只要持有
+# 任意一本有效分享的阅读授权就放行，与 BookAccessService.guest_read_allowed(handler, None)
+# 保持一致——否则分享访客能读正文，却查不了词、用不了朗读。
+# 生词本（/vocab）不在此列：它是写操作、且走站点共享 token，分享访客没有账号，保持登录后可用。
+_SHARE_ANY_READ_PATH_PATTERNS = (
+    re.compile(r"^/api/reader/dict-config$"),
+    re.compile(r"^/api/reader/dict/[A-Za-z0-9_-]{1,32}/(?:query|res)(?:/|$)"),
+    re.compile(r"^/api/tts/edge$"),
+)
+
 # 分享落地页在用户输入提取码之前就要显示封面（分享 API 直接返回封面/缩略图地址），
 # 所以这类图片只对"确实存在有效分享"的书籍放行，避免顺带公开未分享书籍的封面。
 _SHARE_COVER_PATH_RE = re.compile(r"^/get/(?:cover|thumb(?:_\d+_\d+)?)/(\d+)(?:\.[A-Za-z0-9]+)?$")
@@ -569,6 +579,9 @@ class BaseHandler(web.RequestHandler):
         """
         if path.startswith(("/s/", "/api/share/")):
             return BookAccessService.share_link_enabled()
+        for pattern in _SHARE_ANY_READ_PATH_PATTERNS:
+            if pattern.match(path):
+                return BookAccessService.share_any_read_granted(self)
         match = _SHARE_COVER_PATH_RE.match(path)
         if match:
             if not BookAccessService.share_link_enabled():

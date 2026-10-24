@@ -57,6 +57,15 @@ class BookAccessService:
         return book_id is not None and BookAccessService._share_allows(handler, book_id, "allow_read")
 
     @staticmethod
+    def share_any_read_granted(handler) -> bool:
+        """当前浏览器是否持有任意一本有效分享的阅读授权。
+
+        给「不针对具体书籍」的阅读附属接口用（词典、朗读）：这些接口没有 book_id 可校验，
+        语义与 guest_read_allowed(handler, None) 一致——只要手里有一份有效分享，就算"在读"。
+        """
+        return BookAccessService._share_allows(handler, None, "allow_read")
+
+    @staticmethod
     def share_download_granted(handler, book_id) -> bool:
         return book_id is not None and BookAccessService._share_allows(handler, book_id, "allow_download")
 

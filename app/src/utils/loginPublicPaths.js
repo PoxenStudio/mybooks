@@ -9,8 +9,14 @@ export const LOGIN_PUBLIC_PATHS = [
     "/install",
     "/starting",
 ];
-// 邮箱激活成功页（后端 /api/active/<user>/<code> 校验完 302 到这里，此时还没登录）
-export const LOGIN_PUBLIC_PREFIXES = ["/active/"];
+export const LOGIN_PUBLIC_PREFIXES = [
+    // 邮箱激活成功页（后端 /api/active/<user>/<code> 校验完 302 到这里，此时还没登录）
+    "/active/",
+    // 分享落地页：分享链接优先于「必须登录」，页面本身不含书籍内容，内容由后端按逐本
+    // 分享授权校验（见 webserver/handlers/base.py 的 share_grant_allows_path）。
+    // 漏掉这一条会让匿名访客打开 /s/<token> 时被守卫弹回 /login，分享链接直接失效。
+    "/s/",
+];
 
 export function normalizePath(path) {
     // /login/ 与 /login 是同一页（后端 StaticFileHandler 还会把 /login 301 到 /login/）

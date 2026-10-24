@@ -139,10 +139,11 @@ class TestLoginGateAllowList(unittest.TestCase):
 
 class TestShouldBeLoggedIn(unittest.TestCase):
     def setUp(self):
-        self._saved = CONF.get("REQUIRE_LOGIN", False)
+        self._saved = {k: CONF.get(k) for k in ("REQUIRE_LOGIN", "ENABLE_SHARE_LINK")}
 
     def tearDown(self):
-        CONF["REQUIRE_LOGIN"] = self._saved
+        for key, value in self._saved.items():
+            CONF[key] = value
 
     def test_off_never_blocks(self):
         CONF["REQUIRE_LOGIN"] = False
@@ -239,14 +240,18 @@ class TestShouldBeLoggedIn(unittest.TestCase):
 
     def test_share_cover_only_for_actually_shared_books(self):
         CONF["REQUIRE_LOGIN"] = True
+        # 分享总开关默认 False（settings.py）：不显式打开就谈不上"分享优先于必须登录"，
+        # 此前这条用例漏了这一步，靠 share_link_enabled() 的默认值假绿/假红。
+        CONF["ENABLE_SHARE_LINK"] = True
         with mock.patch.object(BookShareService, "shared_book_ids", return_value={12}):
             self.assertFalse(_bare_handler("/get/cover/12.jpg").should_be_logged_in())
             self.assertFalse(_bare_handler("/get/thumb_240_320/12.jpg").should_be_logged_in())
             handler = _bare_handler("/get/cover/13.jpg")
             with self.assertRaises(web.Finish):
                 handler.should_be_logged_in()
-        with mock.patch.object(BookShareService, "shared_book_ids", return_value={12}), \
-                mock.patch.object(BookAccessService, "share_link_enabled", return_value=False):
+        # 总开关关闭后，书确实有分享也不能匿名看封面
+        CONF["ENABLE_SHARE_LINK"] = False
+        with mock.patch.object(BookShareService, "shared_book_ids", return_value={12}):
             with self.assertRaises(web.Finish):
                 _bare_handler("/get/cover/12.jpg").should_be_logged_in()
 
@@ -340,6 +345,71 @@ class TestShouldBeLoggedIn(unittest.TestCase):
         handler.set_secure_cookie = lambda k, v: handler.saved_cookies.append(k)
         handler.login_user(SimpleNamespace(id=3, username="u"), persist=False)
         self.assertEqual(handler.saved_cookies, ["user_id", "lt"])
+
+
+class TestShareGrantedReaderTools(unittest.TestCase):
+    """分享访客在阅读器里要用词典/朗读：门禁判定必须与 BookAccessService 一致。
+
+    这些接口不针对具体书籍，handler 侧用的是 guest_read_allowed(handler, None)（即
+    "手里有任意一本有效分享"），门禁如果按普通 /api/* 拦掉，就会出现"能读正文、
+    查不了词、用不了朗读"的割裂。
+    """
+
+    def setUp(self):
+        self._saved = {k: CONF.get(k) for k in ("REQUIRE_LOGIN", "ENABLE_SHARE_LINK")}
+
+    def tearDown(self):
+        for key, value in self._saved.items():
+            CONF[key] = value
+
+    def _enable(self):
+        CONF["REQUIRE_LOGIN"] = True
+        CONF["ENABLE_SHARE_LINK"] = True
+
+    def test_reader_tools_pass_with_any_share_grant(self):
+        self._enable()
+        with mock.patch.object(BookShareService, "any_grant", return_value=True):
+            for path in (
+                "/api/reader/dict-config",
+                "/api/reader/dict/mydict/query",
+                "/api/reader/dict/mydict/res/abc.png",
+                "/api/tts/edge",
+            ):
+                handler = _bare_handler(path)
+                self.assertFalse(handler.should_be_logged_in(), path)
+                self.assertEqual(handler.written, [], path)
+
+    def test_reader_tools_blocked_without_grant(self):
+        self._enable()
+        with mock.patch.object(BookShareService, "any_grant", return_value=False):
+            for path in (
+                "/api/reader/dict-config",
+                "/api/reader/dict/mydict/query",
+                "/api/reader/dict/mydict/res/abc.png",
+                "/api/tts/edge",
+            ):
+                handler = _bare_handler(path)
+                with self.assertRaises(web.Finish, msg=path):
+                    handler.should_be_logged_in()
+                self.assertEqual(handler.written[0]["err"], "user.need_login", path)
+
+    def test_reader_tools_blocked_when_share_link_disabled(self):
+        # 总开关关掉后，已发出的分享与旧的授权 cookie 一并失效（任何入口都不该再放行）
+        self._enable()
+        CONF["ENABLE_SHARE_LINK"] = False
+        with mock.patch.object(BookShareService, "any_grant", return_value=True):
+            with self.assertRaises(web.Finish):
+                _bare_handler("/api/reader/dict-config").should_be_logged_in()
+
+    def test_vocab_stays_login_only(self):
+        # 生词本是写操作、且走站点共享 token：分享访客没有账号，有阅读授权也不放行
+        self._enable()
+        with mock.patch.object(BookShareService, "any_grant", return_value=True):
+            for path in ("/api/reader/dict/mydict/vocab", "/api/reader/dict/mydict/vocab/12"):
+                handler = _bare_handler(path)
+                with self.assertRaises(web.Finish, msg=path):
+                    handler.should_be_logged_in()
+                self.assertEqual(handler.written[0]["err"], "user.need_login", path)
 
 
 class TestInviteModeInteraction(unittest.TestCase):
