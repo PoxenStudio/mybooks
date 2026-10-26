@@ -94,6 +94,10 @@
   content: "\F0BF9";
 }
 
+.mdi-animation::before {
+  content: "\F05D8";
+}
+
 .mdi-api::before {
   content: "\F109B";
 }
