@@ -16,7 +16,7 @@
     "chart.js": "^3.9.1",
     "core-js": "^3.19.3",
     "cropperjs": "^1.6.2",
-    "dompurify": "^2.5.9",
+    "dompurify": "^3.4.17",
     "marked": "^4.3.0",
     "nuxt": "^4.6.2",
     "qrcode": "^1.5.4",
