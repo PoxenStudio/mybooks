@@ -1271,12 +1271,12 @@ const SEARCH_ALIASES = {
     统计: ["HOMEPAGE_CONFIG", "ALLOW_USER_DISABLE_STATISTIC"], banner: ["HOMEPAGE_CONFIG"], 阅读统计: ["HOMEPAGE_CONFIG"],
     在读: ["HOMEPAGE_CONFIG"], 正在阅读: ["HOMEPAGE_CONFIG"],
     书单: ["HOMEPAGE_CONFIG", "BOOK_NAV"], 书单推荐: ["HOMEPAGE_CONFIG"],
-    // 书单封面自动滚动：用户通常按「动效/轮播/动画」这类词找它（访客系统要求减少动效时，
-    // 这个功能本身也会自动停，所以「减少动效」同样是常见查询词），而标签只有
-    // 「书单封面自动滚动」，不含这几个词，故显式登记
-    动效: ["ENABLE_BOOKLIST_COVER_SCROLL"], 减少动效: ["ENABLE_BOOKLIST_COVER_SCROLL"], 减弱动态效果: ["ENABLE_BOOKLIST_COVER_SCROLL"],
-    动画: ["ENABLE_BOOKLIST_COVER_SCROLL"], 轮播: ["ENABLE_BOOKLIST_COVER_SCROLL"], 自动滚动: ["ENABLE_BOOKLIST_COVER_SCROLL"],
-    封面滚动: ["ENABLE_BOOKLIST_COVER_SCROLL"], 书单封面: ["ENABLE_BOOKLIST_COVER_SCROLL"],
+    // 首页动效：用户通常按「动效/动画/减少动效」这类词找它（关闭后进场动画、
+    // 封面淡入、书单封面自动滚动一并停用），而标签只有「首页动效」，
+    // 不含这几个词，故显式登记
+    动效: ["ENABLE_HOME_MOTION"], 减少动效: ["ENABLE_HOME_MOTION"], 减弱动态效果: ["ENABLE_HOME_MOTION"],
+    动画: ["ENABLE_HOME_MOTION"], 轮播: ["ENABLE_HOME_MOTION"], 自动滚动: ["ENABLE_HOME_MOTION"],
+    进场动画: ["ENABLE_HOME_MOTION"], 淡入: ["ENABLE_HOME_MOTION"], 书单滚动: ["ENABLE_HOME_MOTION"], 封面滚动: ["ENABLE_HOME_MOTION"],
     推荐给他人: ["ENABLE_BOOK_RECOMMEND_TO_OTHERS", "HOMEPAGE_CONFIG"], 他人推荐: ["ENABLE_BOOK_RECOMMEND_TO_OTHERS", "HOMEPAGE_CONFIG"], "留言": ["ENABLE_USER_MEMOS"],
     实体书: ["ENABLE_PHYSICAL_BOOKS", "ENABLE_BOOKS_TYPE_CONVERT_DIRECT"], 纸书: ["ENABLE_PHYSICAL_BOOKS"], 纸质书: ["ENABLE_PHYSICAL_BOOKS"], 书架: ["ENABLE_PHYSICAL_BOOKS"], 印刷: ["ENABLE_PHYSICAL_BOOKS"],
     类型转换: ["ENABLE_BOOKS_TYPE_CONVERT_DIRECT"], 直接转换: ["ENABLE_BOOKS_TYPE_CONVERT_DIRECT"],
@@ -1424,9 +1424,9 @@ const SEARCH_ALIASES = {
     統計: ["HOMEPAGE_CONFIG", "ALLOW_USER_DISABLE_STATISTIC"], banner: ["HOMEPAGE_CONFIG"], 閱讀統計: ["HOMEPAGE_CONFIG"],
     在讀: ["HOMEPAGE_CONFIG"], 正在閱讀: ["HOMEPAGE_CONFIG"],
     書單: ["HOMEPAGE_CONFIG", "BOOK_NAV"], 書單推薦: ["HOMEPAGE_CONFIG"], 推薦書單: ["HOMEPAGE_CONFIG"],
-    動效: ["ENABLE_BOOKLIST_COVER_SCROLL"], 減少動效: ["ENABLE_BOOKLIST_COVER_SCROLL"], 減弱動態效果: ["ENABLE_BOOKLIST_COVER_SCROLL"],
-    動畫: ["ENABLE_BOOKLIST_COVER_SCROLL"], 輪播: ["ENABLE_BOOKLIST_COVER_SCROLL"], 自動捲動: ["ENABLE_BOOKLIST_COVER_SCROLL"],
-    封面捲動: ["ENABLE_BOOKLIST_COVER_SCROLL"], 書單封面: ["ENABLE_BOOKLIST_COVER_SCROLL"],
+    動效: ["ENABLE_HOME_MOTION"], 減少動效: ["ENABLE_HOME_MOTION"], 減弱動態效果: ["ENABLE_HOME_MOTION"],
+    動畫: ["ENABLE_HOME_MOTION"], 輪播: ["ENABLE_HOME_MOTION"], 自動捲動: ["ENABLE_HOME_MOTION"],
+    進場動畫: ["ENABLE_HOME_MOTION"], 淡入: ["ENABLE_HOME_MOTION"], 書單捲動: ["ENABLE_HOME_MOTION"], 封面捲動: ["ENABLE_HOME_MOTION"],
     推薦給他人: ["ENABLE_BOOK_RECOMMEND_TO_OTHERS", "HOMEPAGE_CONFIG"], 他人推薦: ["ENABLE_BOOK_RECOMMEND_TO_OTHERS", "HOMEPAGE_CONFIG"], "留言": ["ENABLE_USER_MEMOS"],
     實體書: ["ENABLE_PHYSICAL_BOOKS", "ENABLE_BOOKS_TYPE_CONVERT_DIRECT"], 紙書: ["ENABLE_PHYSICAL_BOOKS"], 紙本書: ["ENABLE_PHYSICAL_BOOKS"], 書架: ["ENABLE_PHYSICAL_BOOKS"], 印刷: ["ENABLE_PHYSICAL_BOOKS"],
     類型轉換: ["ENABLE_BOOKS_TYPE_CONVERT_DIRECT"], 直接轉換: ["ENABLE_BOOKS_TYPE_CONVERT_DIRECT"], 格式轉換: ["ENABLE_BOOKS_TYPE_CONVERT_DIRECT", "ENABLE_TXT_TO_TXTZ_PLUGIN"],
@@ -1572,11 +1572,11 @@ const SEARCH_ALIASES = {
     stats: ["HOMEPAGE_CONFIG", "ALLOW_USER_DISABLE_STATISTIC"], statistics: ["HOMEPAGE_CONFIG", "ALLOW_USER_DISABLE_STATISTIC"], "reading stats": ["HOMEPAGE_CONFIG"], banner: ["HOMEPAGE_CONFIG"],
     "currently reading": ["HOMEPAGE_CONFIG"], "reading now": ["HOMEPAGE_CONFIG"], "in progress": ["HOMEPAGE_CONFIG"],
     booklist: ["HOMEPAGE_CONFIG", "BOOK_NAV"], "book list": ["HOMEPAGE_CONFIG", "BOOK_NAV"], collections: ["HOMEPAGE_CONFIG"], featured: ["HOMEPAGE_CONFIG"],
-    // People look for this switch with words like "motion" / "animation" (the animation also stops
-    // when the visitor's system requests reduced motion), while the label only says
-    // "Auto-scroll booklist covers"
-    motion: ["ENABLE_BOOKLIST_COVER_SCROLL"], "reduced motion": ["ENABLE_BOOKLIST_COVER_SCROLL"], animation: ["ENABLE_BOOKLIST_COVER_SCROLL"], animations: ["ENABLE_BOOKLIST_COVER_SCROLL"], animate: ["ENABLE_BOOKLIST_COVER_SCROLL"],
-    marquee: ["ENABLE_BOOKLIST_COVER_SCROLL"], carousel: ["ENABLE_BOOKLIST_COVER_SCROLL"], autoscroll: ["ENABLE_BOOKLIST_COVER_SCROLL"], "auto scroll": ["ENABLE_BOOKLIST_COVER_SCROLL"], "cover scroll": ["ENABLE_BOOKLIST_COVER_SCROLL"], "cover strip": ["ENABLE_BOOKLIST_COVER_SCROLL"],
+    // People look for this switch with words like "motion" / "animation" (turning it off
+    // stops entrance animations, cover fade-ins and the booklist cover auto-scroll),
+    // while the label only says "Homepage animations"
+    motion: ["ENABLE_HOME_MOTION"], "reduced motion": ["ENABLE_HOME_MOTION"], animation: ["ENABLE_HOME_MOTION"], animations: ["ENABLE_HOME_MOTION"], animate: ["ENABLE_HOME_MOTION"],
+    marquee: ["ENABLE_HOME_MOTION"], carousel: ["ENABLE_HOME_MOTION"], autoscroll: ["ENABLE_HOME_MOTION"], "auto scroll": ["ENABLE_HOME_MOTION"], "cover scroll": ["ENABLE_HOME_MOTION"], "entrance animation": ["ENABLE_HOME_MOTION"], "fade in": ["ENABLE_HOME_MOTION"],
     "recommend to others": ["ENABLE_BOOK_RECOMMEND_TO_OTHERS", "HOMEPAGE_CONFIG"], "share books": ["ENABLE_BOOK_RECOMMEND_TO_OTHERS", "HOMEPAGE_CONFIG"], "memo": ["ENABLE_USER_MEMOS"],
     physical: ["ENABLE_PHYSICAL_BOOKS", "ENABLE_BOOKS_TYPE_CONVERT_DIRECT"], hardcopy: ["ENABLE_PHYSICAL_BOOKS"], print: ["ENABLE_PHYSICAL_BOOKS"], printed: ["ENABLE_PHYSICAL_BOOKS"], "paper books": ["ENABLE_PHYSICAL_BOOKS"], shelf: ["ENABLE_PHYSICAL_BOOKS"], bookshelf: ["ENABLE_PHYSICAL_BOOKS"],
     convert: ["ENABLE_BOOKS_TYPE_CONVERT_DIRECT", "ENABLE_TXT_TO_TXTZ_PLUGIN"], conversion: ["ENABLE_BOOKS_TYPE_CONVERT_DIRECT", "ENABLE_TXT_TO_TXTZ_PLUGIN"],
@@ -1878,10 +1878,11 @@ export default {
               { icon: "mdi-auto-fix", key: "RECOMMEND_ENABLE", label: "settings.recommend_enable", type: "checkbox" },
               { icon: "mdi-account-group-outline", key: "RECOMMEND_USE_CROWD", label: "settings.recommend_use_crowd", type: "checkbox" },
               {
-                icon: "mdi-image-multiple-outline",
-                key: "ENABLE_BOOKLIST_COVER_SCROLL",
-                label: "settings.booklist_cover_scroll",
+                icon: "mdi-animation",
+                key: "ENABLE_HOME_MOTION",
+                label: "settings.home_motion",
                 type: "checkbox",
+                tips: "settings.home_motion_tips",
               },
               {
                 icon: "mdi-book-multiple",

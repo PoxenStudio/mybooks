@@ -1,6 +1,6 @@
 <template>
     <div>
-    <div class="home-sections-container">
+    <div class="home-sections-container" :class="{ 'home-motion-reduced': !homeMotionEnabled }">
         <div v-if="isSectionEnabled('libraryStats')" class="home-section-slot" :style="{ order: sectionOrder.indexOf('libraryStats') }">
             <v-row class="library-stats-bar">
                 <v-col cols="12">
@@ -183,7 +183,7 @@
                 storage-key="index.randomRecommendation"
             >
                 <template #header-extra>
-                    <v-icon color="primary" class="ml-1 refresh-icon" @click="refreshBooks('random')">mdi-refresh</v-icon>
+                    <v-icon color="primary" class="ml-1 refresh-icon" :class="{ 'refresh-icon--spinning': refreshing.random }" @click="refreshBooks('random')">mdi-refresh</v-icon>
                 </template>
                 <v-row>
                     <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="(book,idx) in get_random_books" :key="'rec'+idx+book.id" class="book-card">
@@ -217,7 +217,7 @@
                 storage-key="index.newRecommendation"
             >
                 <template #header-extra>
-                    <v-icon color="primary" class="ml-1 refresh-icon" @click="refreshBooks('new')">mdi-refresh</v-icon>
+                    <v-icon color="primary" class="ml-1 refresh-icon" :class="{ 'refresh-icon--spinning': refreshing.new }" @click="refreshBooks('new')">mdi-refresh</v-icon>
                 </template>
                 <v-row>
                     <v-col cols="12">
@@ -392,6 +392,12 @@ export default {
             const lite = this.$store.state.sys && this.$store.state.sys.lite;
             return !!(lite && lite.homeCollapse);
         },
+        // 首页动效总开关（设置 › 站点与外观 › 首页与列表 › 首页动效，含书单封面自动滚动）。
+        // sys 尚未加载时按开启处理，避免首屏误判成关闭；系统「减少动效」偏好在 CSS 层另行兜底
+        homeMotionEnabled() {
+            const sys = this.$store.state.sys;
+            return !sys || sys.home_motion !== false;
+        },
         allowPhysicalBooks() {
             return !!(this.$store.state.sys && this.$store.state.sys.allow && this.$store.state.sys.allow.physical_books);
         },
@@ -492,6 +498,11 @@ export default {
             return this.$t('index.reason.' + reason.type, { value: reason.value });
         },
         refreshBooks(section) {
+            // 请求在途时忽略重复点击，图标以自旋反馈加载状态
+            if (this.refreshing[section]) {
+                return;
+            }
+            this.$set(this.refreshing, section, true);
             const shown = this.random_books.concat(this.new_books).map(b => b.id);
             this.$backend('/index?refresh=1&exclude=' + shown.join(',')).then( rsp => {
                 if (rsp.err !== 'ok') {
@@ -504,6 +515,8 @@ export default {
                 }
             }).catch( error => {
                 console.error('Failed to refresh books:', error);
+            }).finally( () => {
+                this.$set(this.refreshing, section, false);
             });
         },
         async loadReadingBooks() {
@@ -636,6 +649,7 @@ export default {
         social_recommend_books: [],
         homepage_booklists: [],
         reading_books: [],
+        refreshing: { random: false, new: false },
         readingStatsHasData: false,
         readingStatsResolved: false,
         readingLoading: false,
@@ -785,6 +799,69 @@ export default {
     flex-direction: column;
 }
 
+/* ── #140-1 首屏区块 / 封面进场过渡 ───────────────────────────────
+   纯 CSS keyframes：SSR 首帧 HTML 与 hydration 前一致，动画由浏览器在首绘时
+   自行启动。区块整体 fade + 轻微上浮；封面在区块内按相邻次序 30ms 递进 stagger
+   （.book-list-card 是 BookCards 的横排卡，新书推荐区走它），
+   第 12 个之后不再递增——新书区块可达上百本，不能把尾部拖得太久 */
+.home-section-slot {
+    animation: home-section-in 400ms cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+}
+
+@keyframes home-section-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+}
+
+.home-section-slot .book-card,
+.home-section-slot .book-list-card {
+    animation: home-cover-in 360ms cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+}
+
+@keyframes home-cover-in {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+}
+
+/* 「换一批」返回后数组整体替换、卡片 key 变化重新插入，这里的进场动画会随之
+   重放一遍，正好充当换书过渡；书没变的卡（key 未变）不重放、不闪 */
+.home-section-slot .book-card:nth-child(n+2),
+.home-section-slot .book-list-card:nth-child(n+2) { animation-delay: 30ms; }
+
+.home-section-slot .book-card:nth-child(n+3),
+.home-section-slot .book-list-card:nth-child(n+3) { animation-delay: 60ms; }
+
+.home-section-slot .book-card:nth-child(n+4),
+.home-section-slot .book-list-card:nth-child(n+4) { animation-delay: 90ms; }
+
+.home-section-slot .book-card:nth-child(n+5),
+.home-section-slot .book-list-card:nth-child(n+5) { animation-delay: 120ms; }
+
+.home-section-slot .book-card:nth-child(n+6),
+.home-section-slot .book-list-card:nth-child(n+6) { animation-delay: 150ms; }
+
+.home-section-slot .book-card:nth-child(n+7),
+.home-section-slot .book-list-card:nth-child(n+7) { animation-delay: 180ms; }
+
+.home-section-slot .book-card:nth-child(n+8),
+.home-section-slot .book-list-card:nth-child(n+8) { animation-delay: 210ms; }
+
+.home-section-slot .book-card:nth-child(n+9),
+.home-section-slot .book-list-card:nth-child(n+9) { animation-delay: 240ms; }
+
+.home-section-slot .book-card:nth-child(n+10),
+.home-section-slot .book-list-card:nth-child(n+10) { animation-delay: 270ms; }
+
+.home-section-slot .book-card:nth-child(n+11),
+.home-section-slot .book-list-card:nth-child(n+11) { animation-delay: 300ms; }
+
+.home-section-slot .book-card:nth-child(n+12),
+.home-section-slot .book-list-card:nth-child(n+12) { animation-delay: 330ms; }
+
 .refresh-icon {
     cursor: pointer;
     transition: transform 0.28s ease, color 0.28s ease;
@@ -795,12 +872,31 @@ export default {
     color: #1976d2 !important;
 }
 
+/* #140-2 「换一批」请求在途时的自旋反馈。这是功能性加载指示（与
+   v-progress-circular 同类），站长关闭首页动效 / 系统减少动效时也保留 */
+@keyframes refresh-icon-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.refresh-icon--spinning {
+    animation: refresh-icon-spin 0.8s linear infinite;
+    opacity: 0.75;
+}
+
 .book-img-container {
     position: relative;
     display: block;
     width: 100%;
     aspect-ratio: 11 / 15;
     overflow: hidden;
+    /* #140-3 封面加载期间的占位底色，弱网下不再是一片空白 */
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.theme--dark .book-img-container {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 /* 确保图片容器保持正确的宽高比 */
@@ -880,6 +976,17 @@ export default {
 
 .cover-fill-img .v-image__image {
     background-size: 100% 100% !important;
+}
+
+/* ── #140-3 封面加载淡入 ─────────────────────────────────────────
+   VImg 自带 fade-transition（Vue 2 对组件 vnode 会从 data.attrs 兜底提取
+   props，VImg 挂在 attrs 上的 name/mode 实际有效，默认 0.3s 淡入本就生效）。
+   这里把首页封面该过渡调长到 450ms，弱网下加载完成的浮现更柔和；
+   前缀限定在首页区块内，其他页面维持原生 0.3s。
+   Vuetify 对 transition-default() 生成的规则自带 !important，覆盖必须跟随；
+   图片自身 loading 期间由 .book-img-container 的占位底色兜住 */
+.home-section-slot .v-image__image.fade-transition-enter-active {
+    transition: opacity 450ms ease !important;
 }
 
 .reading-hover-overlay {
@@ -1022,6 +1129,32 @@ export default {
     .book-img-hover,
     .library-stats-bar {
         transition: none;
+    }
+}
+
+/* ── 首页动效总开关的关闭态（ENABLE_HOME_MOTION=False → .home-motion-reduced）
+   与系统 prefers-reduced-motion：停用 #140 新增的进场 / 淡入动画，区块直接呈现
+   终态（书单封面自动滚动在 BookListCard 里另行停止）。
+   「换一批」在途自旋是功能性加载指示，两种模式下都保留 */
+.home-motion-reduced .home-section-slot,
+.home-motion-reduced .home-section-slot .book-card,
+.home-motion-reduced .home-section-slot .book-list-card {
+    animation: none;
+}
+
+.home-motion-reduced .home-section-slot .v-image__image.fade-transition-enter-active {
+    transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .home-section-slot,
+    .home-section-slot .book-card,
+    .home-section-slot .book-list-card {
+        animation: none;
+    }
+
+    .home-section-slot .v-image__image.fade-transition-enter-active {
+        transition: none !important;
     }
 }
 </style>

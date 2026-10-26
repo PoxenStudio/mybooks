@@ -1912,8 +1912,8 @@ class BaseHandler(web.RequestHandler):
                 "standalone": CONF.get("STANDALONE", False),
                 "hide_project_links": CONF.get("HIDE_PROJECT_LINKS", False),
                 "enable_podcast_service": CONF.get("ENABLE_PODCAST_SERVICE", False),
-                # 书单卡片封面条是否自动轮播（站长级总开关，默认开）
-                "booklist_cover_scroll": CONF.get("ENABLE_BOOKLIST_COVER_SCROLL", True),
+                # 首页动效总开关：进场动画/换书过渡/封面淡入/书单封面自动滚动（默认开）
+                "home_motion": CONF.get("ENABLE_HOME_MOTION", True),
                 "enable_opds_service": CONF.get("ENABLE_OPDS_SERVICE", True),
                 "enable_webdav_service": CONF.get("ENABLE_WEBDAV_SERVICE", True),
                 # 读取期下发：迁移标记未置位时补齐旧默认缺的 authors/friends/booklists，
