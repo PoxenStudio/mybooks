@@ -33,6 +33,7 @@ class AutoFillService(AsyncService):
         self.current_book_id = None
         self.start_time = None
         self.task_id = None
+        self.cancel_requested = False
         AsyncService.__init__(self)
 
     def status(self):
@@ -47,6 +48,13 @@ class AutoFillService(AsyncService):
             "count_fail": self.count_fail,
             "task_id": self.task_id,
         }
+
+    def cancel(self):
+        """请求中断当前刮削任务。"""
+        if not self.is_running:
+            return False
+        self.cancel_requested = True
+        return True
 
     @AsyncService.register_service
     def auto_fill_all(self, idlist: list, only_tags=False, force=False, qpm=None):
@@ -63,6 +71,7 @@ class AutoFillService(AsyncService):
 
         # 设置运行状态
         self.is_running = True
+        self.cancel_requested = False
         self.start_time = time.time()
         self.count_total = len(idlist)
         self.count_skip = 0
@@ -92,7 +101,7 @@ class AutoFillService(AsyncService):
         # 分批处理，减少长时间持有数据库锁
         throttle_aborted = False
         for batch_start in range(0, len(idlist), batch_size):
-            if throttle_aborted:
+            if throttle_aborted or self.cancel_requested:
                 break
             batch_end = min(batch_start + batch_size, len(idlist))
             batch_ids = idlist[batch_start:batch_end]
@@ -100,6 +109,8 @@ class AutoFillService(AsyncService):
             # 第一阶段：批量读取元数据（持有锁的时间短）
             books_to_update = []
             for book_id in batch_ids:
+                if self.cancel_requested:
+                    break
                 self.current_book_id = book_id
                 try:
                     mi = self.db.get_metadata(book_id, index_is_id=True)
@@ -115,7 +126,11 @@ class AutoFillService(AsyncService):
             # 第二阶段：网络请求获取信息（不持有数据库锁）
             updates = []
             for book_id, mi in books_to_update:
+                if self.cancel_requested:
+                    break
                 time.sleep(sleep_seconds)
+                if self.cancel_requested:
+                    break
                 try:
                     refer_mi = self._fetch_refer(mi, only_tags)
                     if refer_mi is None and pause_on_throttle and BookSearch.throttle_wait_seconds():
@@ -126,9 +141,13 @@ class AutoFillService(AsyncService):
                         # 检查），不与限流源无关的正常无结果冲突。
                         logging.warning(_("书籍 id=%d 获取信息落空且限流源预算耗尽，暂停等待预算恢复后重试"), book_id)
                         if not self._throttle_pause():
+                            if self.cancel_requested:
+                                break
                             logging.error(_("元数据源限流暂停超过上限，中止本轮自动填充，剩余书目下轮重扫或手动触发"))
                             self._restore_progress()
                             throttle_aborted = True
+                            break
+                        if self.cancel_requested:
                             break
                         time.sleep(sleep_seconds)
                         refer_mi = self._fetch_refer(mi, only_tags)
@@ -189,7 +208,10 @@ class AutoFillService(AsyncService):
         # 完成任务
         if self.task_id:
             try:
-                BackgroundService().complete_task(task_id=self.task_id)
+                if self.cancel_requested:
+                    BackgroundService().cancel_task(task_id=self.task_id)
+                else:
+                    BackgroundService().complete_task(task_id=self.task_id)
             except Exception as e:
                 logging.error(f"Failed to complete task: {e}")
 
@@ -214,6 +236,8 @@ class AutoFillService(AsyncService):
         PAUSE_MAX_ROUNDS——源持续不可用时不再无限空转。
         """
         while True:
+            if self.cancel_requested:
+                return False
             wait = BookSearch.throttle_wait_seconds()
             if not wait:
                 # 预算恢复：连续不可用计数清零（保险丝只拦"持续不可用"，
@@ -229,6 +253,8 @@ class AutoFillService(AsyncService):
             self._update_paused_progress(resume_at, wait)
             deadline = time.time() + wait
             while time.time() < deadline:
+                if self.cancel_requested:
+                    return False
                 time.sleep(min(PAUSE_SLICE_SECONDS, max(0.05, deadline - time.time())))
             self._restore_progress()
 

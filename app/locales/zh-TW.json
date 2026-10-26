@@ -297,6 +297,8 @@
       "extractCatalogAllConfirm": "將遍歷所有書籍提取目錄資訊（已有目錄資訊的書籍將被跳過）。這個操作可能需要較長時間，確認繼續？",
       "clearRareTagsConfirm": "會將少於 3 本書的標籤所對應的書籍重新更新標籤。此操作可能需要一些時間，確認繼續？",
       "deleteSelected": "刪除選中圖書",
+      "cancelTask": "取消任務",
+      "cancelTaskConfirm": "確定要取消當前任務嗎？已處理的書籍會保留。",
       "selectedCount": "已選中 {count} 條",
       "exchangeType": "圖書類型互轉",
       "exchangeTypeConfirm": "會將所選電子書的圖書類型進行切換，電子書轉為實體書，實體書則轉為電子書。如當前無有效 ISBN 或已有電子書格式的檔案，則忽略。",

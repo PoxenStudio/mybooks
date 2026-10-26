@@ -879,8 +879,13 @@ class AdminBookFill(BaseHandler):
     @js
     @is_admin
     def post(self):
-        req = tornado.escape.json_decode(self.request.body)
-        idlist = req["idlist"]
+        req = tornado.escape.json_decode(self.request.body) if self.request.body else {}
+        if req.get("cancel"):
+            if not AutoFillService().cancel():
+                return {"err": "task.not_running", "msg": _("当前没有正在运行的任务")}
+            return {"err": "ok", "msg": _("已取消任务")}
+
+        idlist = req.get("idlist")
         if not idlist:
             return {"err": "params.error", "msg": _("参数错误")}
 
@@ -925,7 +930,12 @@ class AdminBookAIFill(BaseHandler):
     @js
     @is_admin
     def post(self):
-        req = tornado.escape.json_decode(self.request.body)
+        req = tornado.escape.json_decode(self.request.body) if self.request.body else {}
+        if req.get("cancel"):
+            if not AIFillInfoService().cancel():
+                return {"err": "task.not_running", "msg": _("当前没有正在运行的任务")}
+            return {"err": "ok", "msg": _("已取消任务")}
+
         idlist = req.get("idlist", [])
         if not idlist:
             return {"err": "params.error", "msg": _("参数错误")}

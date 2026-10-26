@@ -24,6 +24,7 @@ class AIFillInfoService(AsyncService):
         self.current_book_id = None
         self.start_time = None
         self.task_id = None
+        self.cancel_requested = False
         AsyncService.__init__(self)
 
     def status(self):
@@ -37,6 +38,13 @@ class AIFillInfoService(AsyncService):
             "count_fail": self.count_fail,
             "task_id": self.task_id,
         }
+
+    def cancel(self):
+        """请求中断当前 AI 更新任务。"""
+        if not self.is_running:
+            return False
+        self.cancel_requested = True
+        return True
 
     def _make_client(self) -> BookAIClient:
         return BookAIClient()
@@ -160,6 +168,7 @@ class AIFillInfoService(AsyncService):
             return
 
         self.is_running = True
+        self.cancel_requested = False
         self.start_time = time.time()
         self.count_total = len(idlist)
         self.count_skip = 0
@@ -194,9 +203,13 @@ class AIFillInfoService(AsyncService):
         batch_size = 5  # 每批处理数量（AI 调用有延迟，不宜过大）
 
         for batch_start in range(0, len(idlist), batch_size):
+            if self.cancel_requested:
+                break
             batch_ids = idlist[batch_start: batch_start + batch_size]
             pending = []
             for book_id in batch_ids:
+                if self.cancel_requested:
+                    break
                 self.current_book_id = book_id
                 try:
                     mi = self.db.get_metadata(book_id, index_is_id=True)
@@ -211,6 +224,8 @@ class AIFillInfoService(AsyncService):
 
             updates = []
             for book_id, mi in pending:
+                if self.cancel_requested:
+                    break
                 authors = list(mi.authors) if mi.authors else []
                 try:
                     info = client.get_book_info(
@@ -238,7 +253,7 @@ class AIFillInfoService(AsyncService):
                 else:
                     self.count_fail += 1
             self._update_task_progress()
-        self._finish_task()
+        self._finish_task(cancelled=self.cancel_requested)
 
     def _update_task_progress(self):
         if not self.task_id:
@@ -260,14 +275,17 @@ class AIFillInfoService(AsyncService):
         except Exception as e:
             logging.error("[AIFill] Failed to update task progress: %s", e)
 
-    def _finish_task(self, failed: bool = False, error_msg: str = ""):
+    def _finish_task(self, failed: bool = False, error_msg: str = "", cancelled: bool = False):
         if self.task_id:
             try:
-                # complete_task 传入 error_message 时会将状态设为 FAILED
-                BackgroundService().complete_task(
-                    task_id=self.task_id,
-                    error_message=error_msg if failed else None,
-                )
+                if cancelled:
+                    BackgroundService().cancel_task(task_id=self.task_id)
+                else:
+                    # complete_task 传入 error_message 时会将状态设为 FAILED
+                    BackgroundService().complete_task(
+                        task_id=self.task_id,
+                        error_message=error_msg if failed else None,
+                    )
             except Exception as e:
                 logging.error("[AIFill] Failed to finish task: %s", e)
 

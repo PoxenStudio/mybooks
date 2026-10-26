@@ -130,6 +130,17 @@
                         <v-icon>mdi-delete</v-icon>
                         <span v-if="!$vuetify.breakpoint.xs">{{ $t('admin.books.deleteSelected') }}</span>
                     </v-btn>
+                    <v-btn
+                        v-if="anyTaskRunning"
+                        color="orange darken-4"
+                        @click="cancel_dialog = true"
+                        class="flex-shrink-0 white--text"
+                        :icon="$vuetify.breakpoint.xs"
+                        :small="$vuetify.breakpoint.xs"
+                    >
+                        <v-icon>mdi-stop-circle-outline</v-icon>
+                        <span v-if="!$vuetify.breakpoint.xs">{{ $t('admin.books.cancelTask') }}</span>
+                    </v-btn>
                     <v-select
                         v-if="allowPhysicalBooks"
                         dense
@@ -166,6 +177,17 @@
             class="mb-4"
         >
             <strong class="white--text">{{ $t('admin.books.scraping') }} {{ progress.count_processed }} / {{ progress.count_total }} ({{ $t('admin.books.failed') }}: {{ progress.count_failed }}, {{ $t('admin.books.skipped') }}: {{ progress.count_skipped }}) ({{ progressPercent }}%)</strong>
+        </v-progress-linear>
+        <v-progress-linear
+            v-if="ai_scraping && ai_progress.count_total > 0"
+            :value="aiProgressPercent"
+            height="24"
+            color="green"
+            background-color="green"
+            style="opacity: 1;"
+            class="mb-4"
+        >
+            <strong class="white--text">{{ $t('admin.books.aiUpdate') }} {{ ai_progress.count_processed }} / {{ ai_progress.count_total }} ({{ $t('admin.books.failed') }}: {{ ai_progress.count_failed }}, {{ $t('admin.books.skipped') }}: {{ ai_progress.count_skipped }}) ({{ aiProgressPercent }}%)</strong>
         </v-progress-linear>
         <v-data-table
             dense
@@ -498,6 +520,22 @@
             <p> {{ $t('admin.books.reminder.estimate', { minutes: auto_fill_mins }) }} </p>
         </AppDialog>
 
+        <!-- 取消任务确认对话框 -->
+        <AppDialog
+            v-model="cancel_dialog"
+            type="confirm"
+            :title="$t('admin.books.reminderTitle')"
+            color="orange darken-4"
+            confirm-dark
+            width="500"
+            transition="dialog-bottom-transition"
+            :dismiss-label="$t('admin.books.cancel')"
+            :confirm-text="$t('admin.books.cancelTask')"
+            @confirm="cancelFillTasks"
+        >
+            <p> {{ $t('admin.books.cancelTaskConfirm') }} </p>
+        </AppDialog>
+
         <!-- 批量设置目录 -->
         <AppDialog
             v-model="folder_batch_dialog"
@@ -670,6 +708,7 @@ export default {
         snackColor: "",
         snackText: "",
         meta_dialog: false,
+        cancel_dialog: false,
         exchange_type_dialog: false,
         clear_rare_tags_dialog: false,
         kindle_convert_dialog: false,
@@ -706,9 +745,17 @@ export default {
         total: 0,
         loading: false,
         scraping: false,
+        ai_scraping: false,
         options: { sortBy: ["id"], sortDesc: [true] },
         use_dynamic_cover: false,
         progress: {
+            count_total: 0,
+            count_processed: 0,
+            count_done: 0,
+            count_failed: 0,
+            count_skipped: 0,
+        },
+        ai_progress: {
             count_total: 0,
             count_processed: 0,
             count_done: 0,
@@ -720,6 +767,7 @@ export default {
     }),
     created() {
         this.checkCurrentState();
+        this.checkAIState();
         this.getSettings();
     },
     watch: {
@@ -763,6 +811,18 @@ export default {
             if (pct < 0) return 0;
             if (pct > 100) return 100;
             return pct;
+        },
+        aiProgressPercent() {
+            if (!this.ai_progress.count_total) {
+                return 0;
+            }
+            const pct = Math.round((this.ai_progress.count_processed / this.ai_progress.count_total) * 100);
+            if (pct < 0) return 0;
+            if (pct > 100) return 100;
+            return pct;
+        },
+        anyTaskRunning() {
+            return this.scraping || this.ai_scraping;
         },
         topPagination() {
             const { page = 1, itemsPerPage = 100 } = this.options;
@@ -1203,6 +1263,7 @@ export default {
                 this.$alert("success", rsp.msg);
                 // Start checking status
                 this.checkCurrentState();
+                setTimeout(() => this.checkCurrentState(), 1000);
             })
         },
 
@@ -1218,6 +1279,33 @@ export default {
                     return;
                 }
                 this.$alert("success", rsp.msg);
+                this.checkAIState();
+                setTimeout(() => this.checkAIState(), 1000);
+            });
+        },
+
+        cancelFillTasks() {
+            this.cancel_dialog = false;
+            const requests = [];
+            if (this.scraping) {
+                requests.push(this.$backend("/admin/book/fill", {
+                    method: "POST",
+                    body: JSON.stringify({ cancel: true }),
+                }));
+            }
+            if (this.ai_scraping) {
+                requests.push(this.$backend("/admin/book/aifill", {
+                    method: "POST",
+                    body: JSON.stringify({ cancel: true }),
+                }));
+            }
+            Promise.all(requests).then((rsps) => {
+                const ok = rsps.find((rsp) => rsp.err === "ok");
+                if (ok) {
+                    this.$alert("success", ok.msg);
+                } else if (rsps.length > 0) {
+                    this.$alert("error", rsps[0].msg);
+                }
             });
         },
 
@@ -1289,6 +1377,7 @@ export default {
             }, 2000);
         },
         checkCurrentState() {
+            if (this.scraping) return;
             this.$backend("/admin/book/fill", {
                 method: "GET",
             })
@@ -1323,6 +1412,44 @@ export default {
                     this.progress.count_done = 0;
                     this.progress.count_failed = 0;
                     this.progress.count_skipped = 0;
+                }
+            })
+        },
+        checkAIState() {
+            if (this.ai_scraping) return;
+            this.$backend("/admin/book/aifill", {
+                method: "GET",
+            })
+            .then((rsp) => {
+                if (rsp.err !== "ok" || !rsp.status) {
+                    return;
+                }
+                if (rsp.status.running) {
+                    this.ai_scraping = true;
+                    this.checkStatusInLoop("/admin/book/aifill", (rsp) => {
+                        this.ai_progress.count_total = rsp.status.total || 0;
+                        this.ai_progress.count_failed = rsp.status.fail || 0;
+                        this.ai_progress.count_skipped = rsp.status.skip || 0;
+                        this.ai_progress.count_done = rsp.status.done || 0;
+                        this.ai_progress.count_processed = (rsp.status.done || 0) + (rsp.status.fail || 0) + (rsp.status.skip || 0);
+                        if (!rsp.status.running) {
+                            this.ai_scraping = false;
+                            this.ai_progress.count_total = 0;
+                            this.ai_progress.count_processed = 0;
+                            this.ai_progress.count_done = 0;
+                            this.ai_progress.count_failed = 0;
+                            this.ai_progress.count_skipped = 0;
+                            return false;
+                        }
+                        return true;
+                    });
+                } else {
+                    this.ai_scraping = false;
+                    this.ai_progress.count_total = 0;
+                    this.ai_progress.count_processed = 0;
+                    this.ai_progress.count_done = 0;
+                    this.ai_progress.count_failed = 0;
+                    this.ai_progress.count_skipped = 0;
                 }
             })
         },
