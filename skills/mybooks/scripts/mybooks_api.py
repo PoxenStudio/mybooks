@@ -159,6 +159,7 @@ _CONF_ORDER = {"high": 3, "medium": 2, "low": 1, "none": 0}
 # detail endpoint before judging or writing, otherwise every book looks like it is
 # missing a description and a fill would happily overwrite existing text.
 LIST_OMITTED_FIELDS = ("comments",)
+DEFAULT_RESEARCH_RULES = [rule for rule in RESEARCH_RULES if rule not in LIST_OMITTED_FIELDS]
 
 
 def _tool_wuming_search(args: Dict[str, Any]) -> Dict[str, Any]:
@@ -250,7 +251,8 @@ def _build_todo(books: list, rules: list) -> list:
             "category": book.get("category"),
             "need": need,
             "current": {k: book.get(k) for k in
-                        ("isbn", "publisher", "pubdate", "category", "tags", "authors")},
+                        ("isbn", "publisher", "pubdate", "category", "tags", "authors",
+                         "comments")},
         })
     return todo
 
@@ -1782,7 +1784,10 @@ class MyBooksAPI:
                 if dry_run:
                     return {"book_id": book_id, "ok": True, "title": book.get("title"),
                             "dry_run": True, "diff": diff}
-                self._write_book(book_id, fields)
+                resp = self._write_book(book_id, fields)
+                if isinstance(resp, dict) and resp.get("err") not in (None, "ok"):
+                    return {"book_id": book_id, "ok": False, "title": book.get("title"),
+                            "error": f"write rejected: {str(resp)[:180]}"}
                 if not verify:
                     return {"book_id": book_id, "ok": True, "title": book.get("title"), "diff": diff}
                 after = self._read_book(book_id)
@@ -1950,7 +1955,7 @@ class MyBooksAPI:
             shard_size (int, optional): Also return ``shards`` of this many books each
             output_file (str, optional): Write the full result to a JSON path
         """
-        rules = args.get("rules") or list(RESEARCH_RULES)
+        rules = args.get("rules") or list(DEFAULT_RESEARCH_RULES)
         unknown = [r for r in rules if r not in RESEARCH_RULES]
         if unknown:
             return {"status": "error",
@@ -1958,6 +1963,7 @@ class MyBooksAPI:
 
         started = time.time()
         books, total = self._fetch_library()
+        books = self._hydrate(books, rules)
         todo = _build_todo(books, rules)
         metrics = {rule: sum(1 for t in todo if rule in t["need"]) for rule in rules}
         ids = [t["id"] for t in todo]
@@ -2005,8 +2011,10 @@ class MyBooksAPI:
             wanted = set(ids)
             targets = [b for b in books if b.get("id") in wanted]
         else:
-            default_rules = ["isbn", "publisher", "pubdate", "category", "tags", "authors"]
-            rules = [r for r in (args.get("rules") or default_rules) if r in RESEARCH_RULES]
+            rules = [r for r in (args.get("rules") or DEFAULT_RESEARCH_RULES)
+                     if r in RESEARCH_RULES]
+            if set(rules) & set(LIST_OMITTED_FIELDS):
+                books = self._hydrate(books, rules)
             targets = [b for b in books if any(_rule_hit(b, r) for r in rules)]
         if limit:
             targets = targets[:limit]
@@ -2135,7 +2143,7 @@ class MyBooksAPI:
             dry_run (bool, optional): Default true - preview the diff only
             verify (bool, optional): Default true - read back every written book
         """
-        items = list(args.get("items") or [])
+        items = args.get("items") or []
         plan_file = args.get("plan_file")
         if not items and plan_file:
             with open(plan_file, encoding="utf-8") as handle:
@@ -2144,11 +2152,28 @@ class MyBooksAPI:
                 items = data.get("plan") or data.get("items") or data.get("results") or []
             else:
                 items = data
-        if not items:
+        if isinstance(items, dict):
+            items = [items]
+        if not isinstance(items, list) or not items:
             return {"status": "error", "message": "provide items or plan_file"}
 
+        normalized = []
+        for item in items:
+            if not isinstance(item, dict):
+                return {"status": "error", "message": f"invalid plan item: {item}"}
+            if not item.get("book_id") and not item.get("id"):
+                return {"status": "error", "message": f"plan item has no book_id: {item}"}
+            proposed = item.get("proposed")
+            if isinstance(proposed, dict):
+                if not proposed:
+                    continue
+                item = {"book_id": item.get("book_id") or item.get("id"), **proposed}
+            normalized.append(item)
+        if not normalized:
+            return {"status": "error", "message": "plan contains no applicable fields"}
+
         return self._apply_plan(
-            items,
+            normalized,
             workers=max(1, min(int(args.get("workers", 3)), 6)),
             dry_run=parse_bool(args.get("dry_run"), True),
             verify=parse_bool(args.get("verify"), True),
@@ -2171,7 +2196,8 @@ class MyBooksAPI:
             write_workers (int, optional): Default 3, max 6
         """
         fields = [str(f) for f in (args.get("fields") or ["publisher", "pubdate"])]
-        rules = [r for r in (args.get("rules") or list(RESEARCH_RULES)) if r in RESEARCH_RULES]
+        rules = [r for r in (args.get("rules") or DEFAULT_RESEARCH_RULES)
+                 if r in RESEARCH_RULES]
         dry_run = parse_bool(args.get("dry_run"), True)
         allow = parse_bool(args.get("allow_title_isbn"), False)
         overwrite = parse_bool(args.get("overwrite"), False)
@@ -2187,6 +2213,8 @@ class MyBooksAPI:
             wanted = set(ids)
             targets = [b for b in books if b.get("id") in wanted]
         else:
+            if set(rules) & set(LIST_OMITTED_FIELDS):
+                books = self._hydrate(books, rules)
             targets = [b for b in books if any(_rule_hit(b, r) for r in rules)]
 
         targets = self._hydrate(targets, fields)
@@ -2260,17 +2288,43 @@ class MyBooksAPI:
             return {"status": "error", "message": f"book345 lookup failed: {result}"}
 
         books = result.get("books")
-        candidate = books[0] if books else (result if result.get("title") else None)
-        if not candidate:
+        if isbn:
+            candidates = [result] if result.get("title") else []
+        else:
+            candidates = list(books or [])
+            if not candidates and result.get("title"):
+                candidates = [result]
+        if not candidates:
             return {"status": "not_found", "message": "book345 has no matching book"}
 
-        candidate_isbn = str(candidate.get("isbn") or "").strip()
-        preview = {key: candidate.get(key) for key in
-                   ("title", "author", "isbn", "publisher", "pubDate", "rate", "url")}
+        def preview_of(book: Dict[str, Any]) -> Dict[str, Any]:
+            return {key: book.get(key) for key in
+                    ("title", "author", "isbn", "publisher", "pubDate", "rate", "url")}
 
+        previews = [preview_of(book) for book in candidates[:5]]
         if not auto_add:
-            return {"status": "candidates", "candidates": [preview],
-                    "message": "not in the local library; call again with auto_add=true to import"}
+            return {"status": "candidates", "candidates": previews,
+                    "message": "not in the local library; confirm a candidate, then call again "
+                               "with isbn or auto_add=true"}
+
+        query_norm = re.sub(r"\s+", "", query)
+        query_isbn = re.sub(r"[\s-]", "", query).upper()
+
+        def is_exact(book: Dict[str, Any]) -> bool:
+            if isbn:
+                return True
+            title_match = re.sub(r"\s+", "", str(book.get("title") or "")) == query_norm
+            isbn_match = (query_isbn and
+                          str(book.get("isbn") or "").replace("-", "").upper() == query_isbn)
+            return bool(title_match or isbn_match)
+
+        exact = [book for book in candidates if is_exact(book)]
+        if len(exact) != 1:
+            return {"status": "candidates", "candidates": previews,
+                    "message": "no unique exact match; pass isbn or pick one manually"}
+        candidate = exact[0]
+        candidate_isbn = str(candidate.get("isbn") or "").strip()
+        preview = preview_of(candidate)
 
         # The ISBN may already be taken by another record
         if candidate_isbn:

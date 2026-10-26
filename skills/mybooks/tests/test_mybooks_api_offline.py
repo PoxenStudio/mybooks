@@ -11,6 +11,7 @@ Run with:
 """
 
 import importlib.util
+import json
 import os
 import sys
 
@@ -116,6 +117,22 @@ def test_todo_marks_needed_rules(api):
     assert todo[3]["need"] == ["isbn"]
 
 
+def test_default_todo_ignores_omitted_comments(api):
+    api._fetch_library = lambda page_size=100, workers=3: (
+        [{**book, "comments": ""} for book in BOOKS], len(BOOKS))
+    result = api.library_research_todo({})
+    assert "comments" not in result["metrics"]
+    assert all("comments" not in item["need"] for item in result["todo"])
+
+
+def test_todo_hydrates_comments_when_explicitly_requested(api):
+    api._fetch_library = lambda page_size=100, workers=3: (
+        [{**book, "comments": ""} for book in BOOKS], len(BOOKS))
+    api._read_book = lambda book_id: {"id": int(book_id), "comments": "详情简介"}
+    result = api.library_research_todo({"rules": ["comments"]})
+    assert result["metrics"]["comments"] == 0
+
+
 # ------------------------------------------------------------ authors_normalize
 
 
@@ -162,6 +179,14 @@ def test_batch_edit_writes_when_dry_run_is_false(api):
     assert result["ok"] == 1
 
 
+def test_batch_edit_reports_rejected_write(api):
+    api._write_book = lambda book_id, fields: {"err": "permission", "msg": "denied"}
+    result = api.batch_edit({"items": [{"book_id": 2, "category": "小说"}],
+                             "dry_run": False, "verify": False})
+    assert result["status"] == "error"
+    assert result["ok"] == 0
+
+
 # ------------------------------------------------------------- library_enrich_apply
 
 
@@ -174,6 +199,21 @@ def test_apply_plan_dry_run_skips_unchanged(api):
 
 def test_apply_plan_rejects_non_editable_field(api):
     assert api._apply_plan([{"book_id": 2, "nope": 1}], dry_run=True)["failed"] == 1
+
+
+def test_apply_plan_accepts_library_research_output(api, tmp_path):
+    plan = {"status": "ok", "results": [
+        {"book_id": 2, "title": "诛仙", "proposed": {"publisher": "百花文艺出版社"},
+         "confidence": "high", "source": "book345 detail/1", "note": None,
+         "candidates": []},
+    ]}
+    path = tmp_path / "plan.json"
+    path.write_text(json.dumps(plan, ensure_ascii=False), encoding="utf-8")
+
+    result = api.library_enrich_apply({"plan_file": str(path), "dry_run": True})
+    assert result["status"] == "ok"
+    assert result["changed"] == 1
+    assert result["results"][0]["diff"]["publisher"]["after"] == "百花文艺出版社"
 
 
 # ---------------------------------------------------------------- safety defaults
@@ -192,3 +232,31 @@ def test_wuming_tools_are_credential_free_and_validate_args(mb):
     assert mb.AUTH_FREE_TOOLS["wuming_search"]({})["status"] == "error"
     assert mb.AUTH_FREE_TOOLS["wuming_detail"]({})["status"] == "error"
     assert mb.AUTH_FREE_TOOLS["wuming_guide"]({})["status"] == "error"
+
+
+def test_book_add_from_wuming_requires_unique_exact_title(api, mb, monkeypatch):
+    api.search_books = lambda args: {"books": []}
+    monkeypatch.setattr(mb.wuming_client, "search_books", lambda query, count=10: {
+        "books": [{"title": "替身", "isbn": "111"}, {"title": "另一个替身", "isbn": "222"}],
+    })
+    imported = []
+    api.book_add_by_isbn = lambda args: imported.append(args) or {"err": "ok", "book_id": 9}
+
+    result = api.book_add_from_wuming({"query": "目标书名", "auto_add": True})
+    assert result["status"] == "candidates"
+    assert len(result["candidates"]) == 2
+    assert imported == []
+
+
+def test_book_add_from_wuming_imports_unique_exact_title(api, mb, monkeypatch):
+    api.search_books = lambda args: {"books": []}
+    monkeypatch.setattr(mb.wuming_client, "search_books", lambda query, count=10: {
+        "books": [{"title": "目标书名", "author": "作者", "isbn": "9780000000001"}],
+    })
+    imported = []
+    api.book_add_by_isbn = lambda args: imported.append(args) or {"err": "ok", "book_id": 9}
+    api.edit_book = lambda args: {"err": "ok"}
+
+    result = api.book_add_from_wuming({"query": "目标书名", "auto_add": True})
+    assert result["status"] == "added"
+    assert imported == [{"isbn": "9780000000001"}]

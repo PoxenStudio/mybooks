@@ -1197,7 +1197,7 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 |------|------|------|------|
 | `query` | string | 二选一 | 关键词（书名/作者/ISBN） |
 | `isbn` | string | 二选一 | 直接按 ISBN 精确查询 |
-| `auto_add` | bool | ❌ | 默认 false：仅返回候选供确认；true 才真正入库 |
+| `auto_add` | bool | ❌ | 默认 false：仅返回候选供确认；true 时还需唯一精确同名（或显式 `isbn`）才真正入库 |
 | `fields` | array | ❌ | 入库写入的字段，默认 `["title","authors","publisher","isbn","pubdate","category","rating","comments"]` |
 | `include_source` | bool | ❌ | 默认 false：是否把 book345 页面链接追加进 `comments` |
 
@@ -1215,7 +1215,7 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 | `status` | 含义 | 后续动作 |
 |---|---|---|
 | `exists` | 本地已有同书（按 ISBN 或书名命中） | 无需入库，直接 `get_book` 查看 |
-| `candidates` | 本地没有，`auto_add=false` | 让用户确认候选，再带 `auto_add:true` 重试 |
+| `candidates` | 本地没有，或 `auto_add=true` 但没有唯一精确同名 | 让用户确认候选，再用 `isbn` 或精确书名重试 |
 | `added` | 已借 ISBN 建档并回填字段 | 用 `get_book` 复读确认 |
 | `needs_isbn` | 源站无 ISBN，无法凭空建档 | 改用 `book_upload` 上传电子书，或 `book_add_by_isbn` 手动添加 |
 
@@ -1545,7 +1545,7 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `rules` | array | ❌ | 启用规则，默认全部 |
+| `rules` | array | ❌ | 启用规则；默认除 `comments` 外的全部（显式传入 `comments` 会先逐本补读详情） |
 | `shard_size` | int | ❌ | 每片本数，传入则返回 `shards`（覆盖全、不重叠、保序） |
 | `output_file` | string | ❌ | 把完整结果写入 JSON 文件 |
 
@@ -1618,7 +1618,7 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 |------|------|------|------|
 | `ids` | array | ❌ | 指定书目；缺省按 `rules` 自动选待办 |
 | `fields` | array | ❌ | 默认 `["publisher","pubdate"]` |
-| `rules` | array | ❌ | 默认全部规则 |
+| `rules` | array | ❌ | 默认除 `comments` 外的全部规则；显式传入 `comments` 会先补读详情再选目标 |
 | `dry_run` | bool | ❌ | **默认 true**；false 才真正写入 |
 | `allow_title_isbn` | bool | ❌ | 默认 false |
 | `apply_confidence` | string | ❌ | `high`（默认）或 `medium`，决定哪些考证结果可自动写 |
