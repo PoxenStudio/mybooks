@@ -2,8 +2,8 @@
 name: mybooks
 homepage: https://www.mybooks.top
 allowed-tools: Bash(python3:*)
-metadata: {"clawdbot":{},"openclaw":{"requires":{"bins":["python3"],"env":["MYBOOKS_HOST","MYBOOKS_USER","MYBOOKS_PASSWORD"]},"permissions":{"network":{"required":true,"scope":"user-configured MYBOOKS_HOST only","protocols":["http","https"]},"filesystem":{"read":"only when uploading: ebook files (book_upload) and mp3/wav samples (tts_clone_upload) at paths the user gives","write":"only tts_clone_audio save_to (.wav, never overwrites)"}}}}
-description: "MyBooks是个人书库管理系统，提供电子书及实体书管理，包括存储、分类、搜索和元数据管理功能。你可以帮助用户：查询书库统计信息和阅读统计,搜索/浏览书籍,获取书籍详情,更新书籍元数据（书名、作者、标签、分类、简介等）,自动联网填充书籍信息,联网搜索元数据候选并按仅信息/仅封面/仅作者及简介等模式套用,调用 EPUB 修复工具精修书籍,发送书籍到邮箱或阅读器设备,上传电子书（可为已有书籍新增或替换格式文件）或通过ISBN添加实体书,管理阅读状态（想读/在读/已读/收藏）,查询/手动更新某本书分格式的阅读时长与进度,按日期补录/修改/删除阅读时间（v4.3.0+）,管理书单（创建/浏览/加书/移书/点赞，v4.3.0+）,查看作者信息和分类信息,导入第三方阅读App的划线与想法（如微信读书，需配合微信读书 skill 读取原始数据）,以及MiMo TTS有声书功能（配置TTS API、EPUB转有声书、查询转换进度、克隆音色与语音提示词管理，需管理员权限）等"
+metadata: {"clawdbot":{},"openclaw":{"requires":{"bins":["python3"],"env":["MYBOOKS_HOST","MYBOOKS_USER","MYBOOKS_PASSWORD"]},"permissions":{"network":{"required":true,"scope":"user-configured MYBOOKS_HOST, plus the public https://www.book345.com API used only by the wuming_* tools","protocols":["http","https"]},"filesystem":{"read":"only when uploading: ebook files (book_upload) and mp3/wav samples (tts_clone_upload) at paths the user gives","write":"only tts_clone_audio save_to (.wav, never overwrites)"}}}}
+description: "MyBooks是个人书库管理系统，提供电子书及实体书管理，包括存储、分类、搜索和元数据管理功能。你可以帮助用户：查询书库统计信息和阅读统计,搜索/浏览书籍,获取书籍详情,更新书籍元数据（书名、作者、标签、分类、简介等）,自动联网填充书籍信息,联网搜索元数据候选并按仅信息/仅封面/仅作者及简介等模式套用,调用 EPUB 修复工具精修书籍,发送书籍到邮箱或阅读器设备,上传电子书（可为已有书籍新增或替换格式文件）或通过ISBN添加实体书,管理阅读状态（想读/在读/已读/收藏）,查询/手动更新某本书分格式的阅读时长与进度,按日期补录/修改/删除阅读时间（v4.3.0+）,管理书单（创建/浏览/加书/移书/点赞，v4.3.0+）,查看作者信息和分类信息,导入第三方阅读App的划线与想法（如微信读书，需配合微信读书 skill 读取原始数据）,以及MiMo TTS有声书功能（配置TTS API、EPUB转有声书、查询转换进度、克隆音色与语音提示词管理，需管理员权限）,免凭据的外部元数据检索（无名图书 book345：搜书/榜单/详情/AI导读）,批量编辑多本书的元数据,整库体检与并发考证（缺 ISBN/出版社/出版日期等）,按计划合并写回并复读校验,以及作者名规范化（拆分/清洗/归一，只出计划）等"
 ---
 
 # MyBooks
@@ -22,12 +22,17 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 <skill-installation-path>/scripts/mybooks_api.py <tool-name> '<json-args>'
 ```
 
+> **例外**：`wuming_search` / `wuming_toplist` / `wuming_recent_hot` / `wuming_detail` /
+> `wuming_guide` / `wuming_tags` 访问的是公开站点 book345，**不需要上面三个环境变量**，
+> 其余工具仍然必须配置。
+
 > **安全提示**：请勿将凭据写入共享或全局配置文件（如 `~/.openclaw/.env`），以避免凭据被其他 agent 或进程意外读取。建议通过会话级环境变量或专用密钥管理工具传入凭据。
 
 ## 权限与网络声明
 
-- **网络访问（必需）**：本 skill 是 MyBooks 服务器的 REST 客户端，所有工具都通过 HTTP(S) 访问**且仅访问**用户自己配置的 `MYBOOKS_HOST`，不连接任何其他地址，无遥测、无第三方回传。
-- **会修改数据的工具**：`edit_book`、`set_folder`、`rename_folder`、`push_notes`(`dry_run:false`)、`clear_imported_notes`、`book_fill`、`book_refer_apply`、`epub_fix`、`save_meta_to_file`、`book_upload`（含指定 `book_id` 的替换模式）、`book_add_by_isbn`、`wants`/`favorite`/`reading`/`read_done`、`set_reading_time`、`delete_reading_time`、书单的创建/修改/删除/增删书/点赞、以及全部 `tts_*` 写操作。删除类工具（`delete_booklist`、`delete_reading_time`）脚本内强制 `confirm:true` 两步确认。
+- **网络访问（必需）**：本 skill 是 MyBooks 服务器的 REST 客户端，除 `wuming_*` 外的所有工具都通过 HTTP(S) 访问**且仅访问**用户自己配置的 `MYBOOKS_HOST`，不连接任何其他地址，无遥测、无第三方回传。
+- **外部网络（仅 `wuming_*`）**：`wuming_search` / `wuming_toplist` / `wuming_recent_hot` / `wuming_detail` / `wuming_guide` / `wuming_tags` 会访问公开站点 `https://www.book345.com/api`；**不携带任何凭据、不上传任何本地数据**，只用于读取公开图书元数据。
+- **会修改数据的工具**：`edit_book`、`set_folder`、`rename_folder`、`push_notes`(`dry_run:false`)、`clear_imported_notes`、`book_fill`、`book_refer_apply`、`epub_fix`、`save_meta_to_file`、`book_upload`（含指定 `book_id` 的替换模式）、`book_add_by_isbn`、`wants`/`favorite`/`reading`/`read_done`、`set_reading_time`、`delete_reading_time`、书单的创建/修改/删除/增删书/点赞、以及全部 `tts_*` 写操作、`batch_edit`(`dry_run:false`)、`library_enrich_apply`(`dry_run:false`)、`library_enrich`(`dry_run:false`)、`book_add_from_wuming`(`auto_add:true`)。`authors_normalize` 与 `library_audit` / `library_research*` 为只读。删除类工具（`delete_booklist`、`delete_reading_time`）脚本内强制 `confirm:true` 两步确认。
 - **本地文件读取**：仅 `book_upload`（新建入库，或为已有书籍新增/替换格式文件；限电子书扩展名 epub/mobi/azw/azw3/pdf/txt/lrf/rtf/djvu/docx）和 `tts_clone_upload`（限 mp3/wav，≤7MB）会读取用户明确给出路径的文件并上传到 `MYBOOKS_HOST`；agent **不得**自行挑选文件上传。
 - **本地文件写入**：仅 `tts_clone_audio` 的 `save_to`（必须 `.wav` 结尾，且不覆盖已存在文件）。
 - **凭据**：见下方"认证方式"。
@@ -70,6 +75,134 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 - **必须**在调用前配置 `MYBOOKS_HOST`、`MYBOOKS_USER`、`MYBOOKS_PASSWORD` 三个环境变量，否则脚本直接报错退出
 
 ---
+
+## 外部元数据源工具列表（无名图书 book345，无需凭据）
+
+> 这一组工具直接访问公开站点 `https://www.book345.com/api`，**不需要 `MYBOOKS_HOST/USER/PASSWORD`**，
+> 不携带任何凭据、不上传任何本地数据，全部只读。适合「先把书查清楚，再决定是否入库」以及
+> 「书库服务器没开 / 还没有书库」的场景。
+
+---
+
+### `wuming_search` — 搜书（外部）
+
+**使用场景**：按书名/作者/ISBN/关键词在 book345 检索，拿到 ISBN、出版社、出版日期、评分、简介后再决定入库
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `query` | string | ✅ | 关键词：书名、作者、ISBN 均可 |
+| `count` | int | ❌ | 返回数量，默认 10 |
+
+**执行脚本**：
+```bash
+<skill-installation-path>/scripts/mybooks_api.py wuming_search '{"query":"三体","count":5}'
+```
+
+**响应示例**（裁剪）：
+```json
+{
+  "page": 1, "count": 5, "totalCount": 1,
+  "books": [{
+    "isbn": "9787536692930", "title": "三体", "author": "刘慈欣",
+    "publisher": "重庆出版社", "pubDate": "2007-12-31", "rate": 8.9,
+    "tags": ["科幻", "刘慈欣"], "summary": "……", "img": "/covers/s/9787536692930.jpg"
+  }]
+}
+```
+
+> 源站字段是 `pubDate`（驼峰），不是 `pub_date`。
+
+---
+
+### `wuming_toplist` — 精选榜单（外部）
+
+**使用场景**：逛高分榜/新书榜，发现值得加入想读清单的书（配合 `wants` 使用）
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `type` | string | ❌ | `top` 高分（默认）/ `cold` 遗珠 / `new` 新书 / `weekly` 周更 / `law` / `social` / `career` / `history` / `tech` |
+| `count` | int | ❌ | 数量，默认 10 |
+
+**执行脚本**：
+```bash
+<skill-installation-path>/scripts/mybooks_api.py wuming_toplist '{"type":"top","count":10}'
+```
+
+---
+
+### `wuming_recent_hot` — 近期热门（外部）
+
+**使用场景**：看最近更新/热门的书，可按分类过滤
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `tag` | string | ❌ | 分类筛选，如「文学」「历史」 |
+| `count` | int | ❌ | 数量，默认 10 |
+
+**执行脚本**：
+```bash
+<skill-installation-path>/scripts/mybooks_api.py wuming_recent_hot '{"tag":"文学","count":10}'
+```
+
+---
+
+### `wuming_detail` — 图书详情（外部）
+
+**使用场景**：已知 ISBN，取权威详情用于核对或回填（作者、出版社、出版日期、页数、定价、评分、简介、目录）
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `isbn` | string | ✅ | ISBN |
+
+**执行脚本**：
+```bash
+<skill-installation-path>/scripts/mybooks_api.py wuming_detail '{"isbn":"9787536692930"}'
+```
+
+**响应关键字段**：`title` / `author` / `publisher` / `pubDate` / `summary` / `tags` / `rate` / `binding` / `price` / `catelogues`
+
+---
+
+### `wuming_guide` — AI 导读（外部）
+
+**使用场景**：给一本书生成/获取 AI 书评、核心看点、读者共识、章节摘要
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `isbn` | string | ✅ | ISBN |
+
+**执行脚本**：
+```bash
+<skill-installation-path>/scripts/mybooks_api.py wuming_guide '{"isbn":"9787536692930"}'
+```
+
+> 源站对部分书目返回 `{"summarys": null}`，属正常情况，不是调用失败。
+
+---
+
+### `wuming_tags` — 分类列表（外部）
+
+**使用场景**：查 book345 支持哪些分类 tag，供 `wuming_recent_hot` 的 `tag` 参数使用
+
+**参数**：无
+
+**执行脚本**：
+```bash
+<skill-installation-path>/scripts/mybooks_api.py wuming_tags '{}'
+```
+
+---
+
 
 ## 工具列表
 
@@ -418,6 +551,51 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 ```json
 { "err": "ok", "msg": "更新成功", "books": [42] }
 ```
+
+---
+
+### `batch_edit` — 批量编辑多个书籍的元数据
+
+**使用场景**：一次要改很多本书的同一批字段（分类、标签、出版社、作者等），逐本 `edit_book` 太慢且容易漏
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `items` | array | 二选一 | 逐本字段：`[{"book_id":1,"category":"小说"}, ...]` |
+| `ids` + `set` | array + object | 二选一 | 简化写法：多本书套用同一组字段 |
+| `workers` | int | ❌ | 并发数，默认 4，上限 8 |
+| `dry_run` | bool | ❌ | **默认 true**：只返回逐本 diff，不写库 |
+| `verify` | bool | ❌ | 默认 true：写后逐本复读比对，不一致计入 `failed` |
+| `skip_unchanged` | bool | ❌ | 默认 true：目标字段与现值一致时跳过写入 |
+
+可写字段：`title` / `authors` / `tags` / `publisher` / `isbn` / `series` / `series_index` / `rating` / `languages` / `translators` / `pubdate` / `category` / `comments` / `book_count` / `book_type`。
+
+**执行脚本**：
+```bash
+# 1) 先干跑，看逐本 diff
+<skill-installation-path>/scripts/mybooks_api.py batch_edit '{"ids":[12,15,18],"set":{"category":"小说"},"dry_run":true}'
+
+# 2) 用户确认后写入
+<skill-installation-path>/scripts/mybooks_api.py batch_edit '{"ids":[12,15,18],"set":{"category":"小说"},"dry_run":false}'
+```
+
+**响应示例**（裁剪）：
+```json
+{
+  "status": "ok", "dry_run": true, "verify": true, "workers": 4,
+  "total": 3, "ok": 3, "failed": 0, "skipped": 1, "changed": 2,
+  "elapsed_seconds": 1.23,
+  "results": [
+    {"book_id": 12, "ok": true, "title": "三体",
+     "diff": {"category": {"before": "", "after": "小说"}}},
+    {"book_id": 15, "ok": true, "title": "活着", "skipped": true,
+     "reason": "fields already match"}
+  ]
+}
+```
+
+> **三步不可省**：`dry_run` 预览 → 用户确认 → `dry_run:false` 执行；执行后检查 `failed` / `results[].mismatch`。
 
 ---
 
@@ -1009,6 +1187,43 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 
 ---
 
+### `book_add_from_wuming` — 从无名图书入库
+
+**使用场景**：书库里没有这本书，先在 book345 查到，再按 ISBN 建档并回填元数据
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `query` | string | 二选一 | 关键词（书名/作者/ISBN） |
+| `isbn` | string | 二选一 | 直接按 ISBN 精确查询 |
+| `auto_add` | bool | ❌ | 默认 false：仅返回候选供确认；true 才真正入库 |
+| `fields` | array | ❌ | 入库写入的字段，默认 `["title","authors","publisher","isbn","pubdate","category","rating","comments"]` |
+| `include_source` | bool | ❌ | 默认 false：是否把 book345 页面链接追加进 `comments` |
+
+**执行脚本**：
+```bash
+# 1) 先看候选与查重结果（不会写库）
+<skill-installation-path>/scripts/mybooks_api.py book_add_from_wuming '{"query":"可能性的艺术"}'
+
+# 2) 确认后入库
+<skill-installation-path>/scripts/mybooks_api.py book_add_from_wuming '{"query":"可能性的艺术","auto_add":true}'
+```
+
+**返回的四种状态**：
+
+| `status` | 含义 | 后续动作 |
+|---|---|---|
+| `exists` | 本地已有同书（按 ISBN 或书名命中） | 无需入库，直接 `get_book` 查看 |
+| `candidates` | 本地没有，`auto_add=false` | 让用户确认候选，再带 `auto_add:true` 重试 |
+| `added` | 已借 ISBN 建档并回填字段 | 用 `get_book` 复读确认 |
+| `needs_isbn` | 源站无 ISBN，无法凭空建档 | 改用 `book_upload` 上传电子书，或 `book_add_by_isbn` 手动添加 |
+
+> 入库只写元数据记录，**不含电子书文件**。需要文件时用 `book_upload` 补上并关联。
+> `include_source` 默认关闭，避免把外部链接写进书库简介。
+
+---
+
 ### `wants` — 标记/取消想读
 
 **使用场景**：将书籍加入/移出"想读（待读）"清单
@@ -1264,6 +1479,197 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 |----------|------|
 | `"params.invalid"` | 日期格式错误/是未来日期、缺少或超出范围的 `duration_seconds`、书籍没有可阅读的电子书格式 |
 | `"params.book.invalid"` | 书籍不存在 |
+
+---
+
+## 书库体检与批量补齐工具列表
+
+> 这一组工具面向「整库」而非单本书：先体检出问题清单，再并发考证，最后合并写回并复读校验。
+>
+> **整库读取机制**：优先用普通账号可用的 `/api/search` + Calibre `all:true` 表达式分页拉全库；
+> 若服务端不支持（返回空或报错），自动降级到 `/api/admin/book/list`——**该降级路径需要管理员账号**。
+> 两条路径都失败时，工具会返回明确的错误说明，不会返回空结果。
+>
+> **翻页按「实际返回条数」推进**，不按请求的 `num`：服务端可能把单页压得更小（lite 性能模式下固定 60 条），
+> 按请求条数推进偏移会整页漏书（实测 235 本的库只拉到 155 本）。
+>
+> **列表接口不返回 `comments`**（只有详情接口才有）。凡涉及简介的判定，工具会根据 `LIST_OMITTED_FIELDS`
+> 自动补读详情，不会把「列表里没有」误判成「库里没有」。
+
+---
+
+### `library_audit` — 全库体检
+
+**使用场景**：想知道「书库哪些字段有问题、各有几本」，不修改任何数据
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `input_file` | string | ❌ | 改为体检本地 JSON 导出；不传则读实时书库 |
+| `rules` | array | ❌ | 只查指定规则；默认全部 |
+
+规则名：`isbn`（缺 ISBN）、`publisher`（缺出版社或为 Unknown/-）、`publisher_year`（出版社带年份）、
+`pubdate`（缺出版日期或占位 `0101-01-01`）、`category`（缺分类）、`tags`（无标签）、
+`authors`（缺作者或作者元素含分隔符未拆分）、`comments`（缺简介）。
+
+**执行脚本**：
+```bash
+<skill-installation-path>/scripts/mybooks_api.py library_audit '{}'
+```
+
+**响应示例**（裁剪）：
+```json
+{
+  "status": "ok", "source": "live library", "total": 235,
+  "metrics": {"isbn": 18, "publisher": 0, "pubdate": 0, "category": 0,
+              "tags": 0, "authors": 0, "publisher_year": 0, "comments": 3},
+  "complete": 214,
+  "isbn": [{"id": 12, "title": "三体", "current": ""}],
+  "elapsed_seconds": 1.4
+}
+```
+
+> 每个规则都返回命中书目明细（`id` / `title` / `current`），不是只有计数。
+>
+> **耗时**：不含 `comments` 的体检只读列表，235 本约 2s；含 `comments` 时需逐本读详情，
+> 235 本约 25s（列表接口不返回简介）。响应里的 `hydrated_fields` 会列出本次补读详情的字段。
+
+---
+
+### `library_research_todo` — 生成考证待办 + 分片（只读）
+
+**使用场景**：需要把大批待考证的书拆成若干片，交给人工或多个子代理并行处理
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `rules` | array | ❌ | 启用规则，默认全部 |
+| `shard_size` | int | ❌ | 每片本数，传入则返回 `shards`（覆盖全、不重叠、保序） |
+| `output_file` | string | ❌ | 把完整结果写入 JSON 文件 |
+
+**执行脚本**：
+```bash
+<skill-installation-path>/scripts/mybooks_api.py library_research_todo '{"shard_size":50}'
+```
+
+**响应关键字段**：`total_books` / `complete` / `todo_count` / `metrics` / `shards` / `todo[]`（含 `id`、`title`、`need`、`current`）
+
+---
+
+### `library_research` — 并发考证（只读，不写库）
+
+**使用场景**：只想知道「这几本/这批书在网上查得到什么」，并要来源与置信度，暂不写库
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `ids` | array | ❌ | 指定书目；缺省按 `rules` 自动选待办 |
+| `fields` | array | ❌ | 默认 `["publisher","pubdate"]`，可加 `comments` / `isbn` |
+| `rules` | array | ❌ | 缺省时的选书规则 |
+| `allow_title_isbn` | bool | ❌ | 默认 false：无 ISBN 时是否允许书名精确匹配回填 |
+| `limit` | int | ❌ | 最多考证多少本 |
+| `workers` | int | ❌ | 并发数，默认 6，上限 8（只读，可放心并发） |
+| `output_file` | string | ❌ | 把完整结果写入 JSON 文件 |
+
+**执行脚本**：
+```bash
+<skill-installation-path>/scripts/mybooks_api.py library_research '{"fields":["publisher","pubdate"],"limit":20}'
+```
+
+**响应关键字段**：逐本 `proposed`（建议值）、`confidence`（high/medium/low/none）、`source`、`candidates`、`note`
+
+> 有 ISBN 走详情接口（high）；无 ISBN 只给候选、不擅自套用。同名多版本被判为 low，需人工选定。
+
+---
+
+### `library_enrich_apply` — 按计划合并写回
+
+**使用场景**：已经有一份考证计划（自己的 JSON，或 `library_research` 的输出），要写回书库
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `items` | array | 二选一 | `[{"book_id":1,"publisher":"...","pubdate":"..."}]` |
+| `plan_file` | string | 二选一 | 从 JSON 读计划（兼容 `library_research` 输出） |
+| `workers` | int | ❌ | 写并发，默认 3，上限 6（服务端逐本串行，开大无益） |
+| `dry_run` | bool | ❌ | **默认 true**：仅预览 diff |
+| `verify` | bool | ❌ | 默认 true：只对写过的书复读比对 |
+
+**执行脚本**：
+```bash
+<skill-installation-path>/scripts/mybooks_api.py library_enrich_apply '{"plan_file":"plan.json","dry_run":false}'
+```
+
+> 写前先拉一次全库快照做比对，值已一致的书 0 请求跳过；每本多字段合并为一次写。
+
+---
+
+### `library_enrich` — 一站式补齐（待办 → 并发考证 → 写回 → 校验）
+
+**使用场景**：一句话把「缺出版社/出版日期的书」补齐，不想分步调用
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `ids` | array | ❌ | 指定书目；缺省按 `rules` 自动选待办 |
+| `fields` | array | ❌ | 默认 `["publisher","pubdate"]` |
+| `rules` | array | ❌ | 默认全部规则 |
+| `dry_run` | bool | ❌ | **默认 true**；false 才真正写入 |
+| `allow_title_isbn` | bool | ❌ | 默认 false |
+| `apply_confidence` | string | ❌ | `high`（默认）或 `medium`，决定哪些考证结果可自动写 |
+| `overwrite` | bool | ❌ | 默认 false：**只补空缺/脏值，不覆盖已有非空值** |
+| `research_workers` / `write_workers` | int | ❌ | 默认 6 / 3 |
+
+**执行脚本**：
+```bash
+# 先看计划（不写库）
+<skill-installation-path>/scripts/mybooks_api.py library_enrich '{"fields":["publisher","pubdate"]}'
+
+# 确认后写入
+<skill-installation-path>/scripts/mybooks_api.py library_enrich '{"fields":["publisher","pubdate"],"dry_run":false}'
+```
+
+> **安全默认值**：`dry_run=true` + `apply_confidence=high` + `overwrite=false`，三者叠加保证「不误写、不抖动、不覆盖」。
+> 源站 `pubDate` 与库内 `pubdate` 可能存在 1 天时区差，因此默认不覆盖已有日期；确需统一时再显式 `overwrite:true`。
+
+---
+
+### `authors_normalize` — 作者名规范化（只出计划，不写库）
+
+**使用场景**：同一作者跨书异写（如 `箫鼎`/`萧鼎`、`【美】xx`/`(美)xx`）、作者元素里塞了分隔符、带水印或「著/编/译」后缀
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `input_file` | string | ❌ | 读本地 JSON 导出；不传则读实时书库 |
+| `canon` | object | ❌ | 自定义归一表：`{"旧名":"统一名"}`，在清洗之后应用 |
+| `output_file` | string | ❌ | 把计划写入 JSON 文件 |
+
+内置规则：拆分分隔符 → 去水印（如 `ePUBw.COM`）→ 国别前缀统一为半角 `(美)` 形式（覆盖 `【美】`/`（美）`/`(美国)`/`[美]` 等变体）→ 归一间隔号 `·` → 去角色后缀 → 去重。
+**只收敛国别前缀这一类括号**，`（Stephen Wolfram）` 这类原名括号保持原样——避免为格式统一而改动数十本无问题的书。
+
+**执行脚本**：
+```bash
+<skill-installation-path>/scripts/mybooks_api.py authors_normalize '{"canon":{"箫鼎":"萧鼎"}}'
+```
+
+**响应示例**（裁剪）：
+```json
+{
+  "status": "ok", "read_only": true, "total_books": 235, "changed_books": 2,
+  "plan": [{"book_id": 135, "title": "诛仙", "before": ["箫鼎"],
+            "after": ["萧鼎"], "why": "split / clean / unify / merge duplicates"}]
+}
+```
+
+> 本工具**永不写库**。审阅计划后，用 `batch_edit` 应用 `authors` 字段：
+> `{"items":[{"book_id":135,"authors":["萧鼎"]}],"dry_run":false}`
 
 ---
 
@@ -1792,6 +2198,31 @@ export MYBOOKS_SSL_VERIFY="false"   # 如服务器使用自签名证书，设为
 │
 ├─ "联网搜一下这本书的信息，让我挑一个" / "只更新作者和简介，别动封面" / "只换个封面"
 │   → 先 book_refer_search 列候选（用户选定后）→ book_refer_apply（mode: full / only_meta / only_cover / only_author_comments）
+│
+├─ "这本书不在库里，帮我从网上查一下作者/出版社/日期"（不需要服务器凭据）
+│   → wuming_search / wuming_detail / wuming_guide / wuming_toplist
+│
+├─ "把网上查到的这本书加进书库"
+│   → book_add_from_wuming（先 auto_add:false 看候选与查重 → 确认后 auto_add:true）
+│
+├─ "批量改一批书的分类/标签/出版社/作者"
+│   → batch_edit（先 dry_run:true 看逐本 diff → 用户确认 → dry_run:false）
+│
+├─ "体检书库：哪些书缺 ISBN/出版社/出版日期/分类/标签，作者名不规范"
+│   → library_audit（按规则分桶 + metrics，只读）
+│
+├─ "把待考证的书拆成几片，分头找人/子代理处理"
+│   → library_research_todo（shard_size）
+│
+├─ "只查证不写库，要来源和置信度"
+│   → library_research
+│
+├─ "批量补齐元数据（缺什么补什么）"
+│   → library_enrich（默认 dry_run=true、只补空缺不覆盖）→ 核实后再 dry_run:false
+│   → 已有计划要写回：library_enrich_apply
+│
+├─ "作者名不规范，同一人跨书异写 / 作者里混了分隔符"
+│   → authors_normalize（只出计划）→ batch_edit 应用 authors 字段
 │
 ├─ "这本书的 EPUB 坏了/目录乱/有垃圾文件，修一下"
 │   → epub_fix（需要管理员权限，建议 backup:true）→ epub_fix_progress 查结果
