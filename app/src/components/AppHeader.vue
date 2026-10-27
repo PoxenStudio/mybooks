@@ -734,13 +734,13 @@ export default {
                 this.user = storeUser;
             }
             this.$store.commit("set_title", rsp.sys.title);
-            this.$store.state.site_title_template = "%s | " + rsp.sys.title;
-            this.$store.state.ai_enabled = rsp.sys.aiEnabled;
-            this.$store.state.default_page_size = rsp.sys.defaultPageSize;
-            this.$store.state.index_page = rsp.sys.indexPage;
-            this.$store.state.showUserInfo = rsp.sys.showUserInfo;
+            // 这五个字段必须走 mutation：dev 模式 store.strict=true，直接赋值会抛错
+            this.$store.commit("sync_sys", rsp.sys);
             localStorage.setItem('sys_title', rsp.sys.title);
-            if (rsp.sys.language !== '') {
+            // 'auto' 是后端的出厂默认值，并不是一个可用的 locale：直接赋给
+            // $i18n.locale 会让 i18n 插件去 import('../../locales/auto.json')，
+            // 文件不存在 → 抛错 → 整页 error layout。auto 时保持插件的浏览器语言推断
+            if (rsp.sys.language && rsp.sys.language !== 'auto') {
                 this.$i18n.locale = rsp.sys.language;
             }
             // 对外链接的站点基地址（管理员可在设置里指定对外域名），
@@ -775,8 +775,9 @@ export default {
                 this.$store.dispatch("appearance/applyFromServer", rsp.user && rsp.user.appearance);
             }
             if (rsp.sys.footer === '') {
-                rsp.sys.footer = this.$t('appHeader.defaultFooter');
-                this.$store.commit("set_footer", rsp.sys.footer);
+                // 不能回写 rsp.sys：上面的 commit("login", rsp) 已让 state.sys 指向
+                // 同一个对象，回写等于在 mutation 外改 state，dev 模式 store.strict 会抛错
+                this.$store.commit("set_footer", this.$t('appHeader.defaultFooter'));
             }
             this.$store.commit("set_footer_watermark", rsp.sys.footer_watermark);
             this.$store.commit("set_standalone", rsp.sys.standalone);
