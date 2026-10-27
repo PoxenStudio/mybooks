@@ -11,18 +11,18 @@
                         <div class="stats-content">
                             <div class="stat-group">
                                 <span class="stat-label">{{ $t('index.totalBooks') }}:</span>
-                                <span class="stat-value">{{ stats.total_books }}</span>
+                                <span class="stat-value">{{ statValue('total_books') }}</span>
                             </div>
                             <div class="stat-separator">|</div>
                             <div class="stat-group">
                                 <span class="stat-label">{{ $t('index.ebookCount') }}:</span>
-                                <span class="stat-value">{{ stats.ebook_count }}</span>
+                                <span class="stat-value">{{ statValue('ebook_count') }}</span>
                             </div>
                             <template v-if="allowPhysicalBooks">
                                 <div class="stat-separator">|</div>
                                 <div class="stat-group">
                                     <span class="stat-label">{{ $t('index.physicalCount') }}:</span>
-                                    <span class="stat-value">{{ stats.physical_count }}</span>
+                                    <span class="stat-value">{{ statValue('physical_count') }}</span>
                                 </div>
                             </template>
                             <div class="stat-separator">|</div>
@@ -86,7 +86,7 @@
                 storage-key="index.myReading"
             >
                 <v-row>
-                    <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="(book,idx) in get_reading_books" :key="'reading'+idx+book.id" class="book-card">
+                    <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="(book,idx) in get_reading_books" :key="'reading'+idx+book.id" class="book-card" :style="{ '--i': idx }">
                         <v-card :to="book.href" class="ma-1">
                             <div class="book-img-container reading-book-cover" :title="book.title">
                                 <v-img
@@ -121,7 +121,7 @@
                 storage-key="index.socialRecommendation"
             >
                 <v-row>
-                    <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="(book,idx) in get_social_recommend_books" :key="'social-rec'+idx+book.id" class="book-card">
+                    <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="(book,idx) in get_social_recommend_books" :key="'social-rec'+idx+book.id" class="book-card" :style="{ '--i': idx }">
                         <v-card :to="book.href" class="ma-1">
                             <div class="book-img-container" :title="book.title">
                                 <v-img
@@ -174,6 +174,7 @@
         <div
             v-if="isSectionEnabled('index.randomRecommendation')"
             class="home-section-slot"
+            :data-phase="refreshPhase.random"
             :style="{ order: sectionOrder.indexOf('index.randomRecommendation') }"
         >
             <home-section-card
@@ -186,7 +187,7 @@
                     <v-icon color="primary" class="ml-1 refresh-icon" :class="{ 'refresh-icon--spinning': refreshing.random }" @click="refreshBooks('random')">mdi-refresh</v-icon>
                 </template>
                 <v-row>
-                    <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="(book,idx) in get_random_books" :key="'rec'+idx+book.id" class="book-card">
+                    <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="(book,idx) in get_random_books" :key="'rec'+idx+book.id" class="book-card" :style="{ '--i': idx }">
                         <v-card :to="book.href" class="ma-1">
                             <div class="book-img-container" :title="reasonText(book) || book.title">
                                 <v-img
@@ -208,6 +209,7 @@
         <div
             v-if="isSectionEnabled('index.newRecommendation')"
             class="home-section-slot"
+            :data-phase="refreshPhase.new"
             :style="{ order: sectionOrder.indexOf('index.newRecommendation') }"
         >
             <home-section-card
@@ -403,6 +405,14 @@ export default {
         },
     },
     watch: {
+        // 统计数字是异步回填的（libraryStats 初始为空、模板退回占位符「-」），
+        // 所以滚动的触发点必须在这里，而不是 mounted——mounted 时还没有真实数字
+        libraryStats(val) {
+            if (!val) {
+                return;
+            }
+            this.rollStats();
+        },
         indexPage: {
             handler: function(val) {
                 this.checkRedirect(val);
@@ -503,11 +513,22 @@ export default {
                 return;
             }
             this.$set(this.refreshing, section, true);
+            // 旧书先依次抽出（phase=out），数据回来后再依次弹回（phase=in）。
+            // 两段都只靠 data-phase 驱动，不依赖 v-if 重挂载，所以书没变时也不会闪
+            this.$set(this.refreshPhase, section, 'out');
             const shown = this.random_books.concat(this.new_books).map(b => b.id);
-            this.$backend('/index?refresh=1&exclude=' + shown.join(',')).then( rsp => {
-                if (rsp.err !== 'ok') {
+            // 退场动画总时长（末张卡片 24ms x 11 + 300ms ≈ 564ms）内不切数据，
+            // 否则接口快于动画时卡片会在半途被换掉，退场只播了一半
+            const minExit = new Promise(resolve => setTimeout(resolve, 580));
+            const request = this.$backend('/index?refresh=1&exclude=' + shown.join(','));
+            Promise.all([request, minExit]).then( ([rsp]) => {
+                if (!rsp || rsp.err !== 'ok') {
+                    this.$set(this.refreshPhase, section, null);
                     return;
                 }
+                // 切阶段与换数组放在同一 tick：新卡片一挂载就处在入场动画里，
+                // 不会再叠加一次常规进场（home-cover-in）
+                this.$set(this.refreshPhase, section, 'in');
                 if (section === 'new') {
                     this.new_books = rsp.new_books || [];
                 } else {
@@ -515,9 +536,55 @@ export default {
                 }
             }).catch( error => {
                 console.error('Failed to refresh books:', error);
+                this.$set(this.refreshPhase, section, null);
             }).finally( () => {
                 this.$set(this.refreshing, section, false);
             });
+        },
+        // 统计条读数：滚动中读 statsDisplay，结束后交回 stats
+        statValue(key) {
+            if (this.statsDisplay && this.statsDisplay[key] !== undefined) {
+                return this.statsDisplay[key];
+            }
+            return this.stats[key];
+        },
+        // 统计数字 0 → 目标值。只在首页动效开启且系统未要求减少动效时执行；
+        // 数据回填前模板显示的是占位符「-」，所以从 0 起滚不会出现数字跳变
+        rollStats() {
+            if (this._statsRolled || !this.homeMotionEnabled) {
+                return;
+            }
+            if (typeof window === 'undefined' || !window.matchMedia) {
+                return;
+            }
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                return;
+            }
+            const keys = ['total_books', 'ebook_count', 'physical_count'];
+            const target = {};
+            keys.forEach((k) => { target[k] = Number(this.stats[k]) || 0; });
+            // 空库（或统计接口失败）时数字太小，滚动没有意义，直接显示原值
+            if (target.total_books < 10) {
+                return;
+            }
+            this._statsRolled = true;
+            const started = performance.now();
+            const duration = 1200;
+            this.statsDisplay = { total_books: 0, ebook_count: 0, physical_count: 0 };
+            const tick = (now) => {
+                const p = Math.min(1, (now - started) / duration);
+                const eased = 1 - Math.pow(1 - p, 3);
+                const next = {};
+                keys.forEach((k) => { next[k] = Math.round(target[k] * eased); });
+                this.statsDisplay = next;
+                if (p < 1) {
+                    this._statsRaf = requestAnimationFrame(tick);
+                } else {
+                    this.statsDisplay = null;
+                    this._statsRaf = null;
+                }
+            };
+            this._statsRaf = requestAnimationFrame(tick);
         },
         async loadReadingBooks() {
             if (!this.isLoggedIn || !this.isSectionEnabled('index.myReading')) {
@@ -622,6 +689,10 @@ export default {
     },
     beforeDestroy() {
         this.deferTimers.forEach((id) => clearTimeout(id));
+        if (this._statsRaf) {
+            cancelAnimationFrame(this._statsRaf);
+            this._statsRaf = null;
+        }
         if (this.countdownTimer) {
             clearInterval(this.countdownTimer);
         }
@@ -650,6 +721,10 @@ export default {
         homepage_booklists: [],
         reading_books: [],
         refreshing: { random: false, new: false },
+        // 「换一批」的两段过渡阶段：out=旧书抽出中，in=新书弹回中，null=静止
+        refreshPhase: { random: null, new: null },
+        // 统计数字滚动期间的显示值；null 表示直接用 stats（computed）
+        statsDisplay: null,
         readingStatsHasData: false,
         readingStatsResolved: false,
         readingLoading: false,
@@ -728,6 +803,8 @@ export default {
 }
 
 .stat-value {
+    /* 数字滚动时逐帧改文本，等宽字形避免整条统计栏宽度抖动 */
+    font-variant-numeric: tabular-nums;
     background: rgba(0,0,0,0.3);
     color: #ffffff;
     padding: 4px 12px;
@@ -801,66 +878,116 @@ export default {
 
 /* ── #140-1 首屏区块 / 封面进场过渡 ───────────────────────────────
    纯 CSS keyframes：SSR 首帧 HTML 与 hydration 前一致，动画由浏览器在首绘时
-   自行启动。区块整体 fade + 轻微上浮；封面在区块内按相邻次序 30ms 递进 stagger
-   （.book-list-card 是 BookCards 的横排卡，新书推荐区走它），
-   第 12 个之后不再递增——新书区块可达上百本，不能把尾部拖得太久 */
+   自行启动。
+
+   区块用「景深进场」：46px 上浮 + 缩到 0.972 + 从 blur(11px) 清晰化，而不是
+   单纯位移。人眼对 <10px 的位移几乎无感（旧版就是 10px，观感接近「直接出现」），
+   而模糊→清晰（模拟对焦）的感知强度远高于同幅度位移。缓动用 expo-out
+   cubic-bezier(0.16, 1, 0.3, 1)：起步极快、末段拖长，才有「甩到位」的速度感。
+
+   封面用「从书脊立起」：绕左边缘 rotateY(-76deg) 转到正面，78% 处过冲 5deg 再
+   回正，配一层 brightness 由暗到亮——读起来像从书架上抽出一本再摊平。
+   stagger 用 --i（模板里由 v-for 的 idx 写入），58ms 递进、第 14 个封顶：
+   新书区块可达上百本，不能把尾部拖得太久。 */
 .home-section-slot {
-    animation: home-section-in 400ms cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+    animation: home-section-in 740ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
+/* 区块之间 90ms 递进，让「一屏一屏落下来」的顺序感成立。
+   用 nth-child 而不是变量：区块数量少且由 v-if 决定，不值得再往模板里塞变量 */
+.home-section-slot:nth-child(2) { animation-delay: 90ms; }
+.home-section-slot:nth-child(3) { animation-delay: 180ms; }
+.home-section-slot:nth-child(4) { animation-delay: 270ms; }
+.home-section-slot:nth-child(5) { animation-delay: 360ms; }
+.home-section-slot:nth-child(6) { animation-delay: 450ms; }
+.home-section-slot:nth-child(7) { animation-delay: 540ms; }
+.home-section-slot:nth-child(8) { animation-delay: 630ms; }
+
 @keyframes home-section-in {
-    from {
+    0% {
         opacity: 0;
-        transform: translateY(10px);
+        transform: translateY(46px) scale(0.972);
+        filter: blur(11px);
+    }
+    62% {
+        opacity: 1;
+        filter: blur(0);
+    }
+    100% {
+        opacity: 1;
+        transform: none;
+        filter: none;
     }
 }
 
 .home-section-slot .book-card,
 .home-section-slot .book-list-card {
-    animation: home-cover-in 360ms cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+    animation: home-cover-in 780ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    animation-delay: calc(min(var(--i, 0), 13) * 58ms);
+    /* 绕左侧书脊旋转，而不是绕中心——绕中心会像「卡片翻转」，绕左边才像从书架抽出 */
+    transform-origin: left center;
+    backface-visibility: hidden;
 }
 
 @keyframes home-cover-in {
-    from {
+    0% {
         opacity: 0;
-        transform: translateY(8px);
+        transform: perspective(1100px) rotateY(-76deg) translateZ(-70px) scale(0.92);
+        filter: brightness(0.55);
+    }
+    55% {
+        opacity: 1;
+    }
+    78% {
+        transform: perspective(1100px) rotateY(5deg) translateZ(6px) scale(1.012);
+        filter: brightness(1.06);
+    }
+    100% {
+        opacity: 1;
+        transform: none;
+        filter: none;
     }
 }
 
-/* 「换一批」返回后数组整体替换、卡片 key 变化重新插入，这里的进场动画会随之
-   重放一遍，正好充当换书过渡；书没变的卡（key 未变）不重放、不闪 */
-.home-section-slot .book-card:nth-child(n+2),
-.home-section-slot .book-list-card:nth-child(n+2) { animation-delay: 30ms; }
+/* ── 换一批的两段过渡 ─────────────────────────────────────────────
+   data-phase 由 refreshBooks 驱动：out 把旧书依次抽走，in 让新书依次弹回。
+   两段都靠 !important 压过上面的常规进场，避免「退场还没播完就重播进场」。
+   只写在有 data-phase 的区块上，所以其它区块不受影响 */
+.home-section-slot[data-phase="out"] .book-card,
+.home-section-slot[data-phase="out"] .book-list-card {
+    animation: home-cover-out 300ms cubic-bezier(0.4, 0, 0.9, 0.4) forwards !important;
+    animation-delay: calc(min(var(--i, 0), 13) * 24ms) !important;
+}
 
-.home-section-slot .book-card:nth-child(n+3),
-.home-section-slot .book-list-card:nth-child(n+3) { animation-delay: 60ms; }
+@keyframes home-cover-out {
+    0% {
+        opacity: 1;
+        transform: none;
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-44px) rotate(4deg) scale(0.76);
+    }
+}
 
-.home-section-slot .book-card:nth-child(n+4),
-.home-section-slot .book-list-card:nth-child(n+4) { animation-delay: 90ms; }
+.home-section-slot[data-phase="in"] .book-card,
+.home-section-slot[data-phase="in"] .book-list-card {
+    animation: home-cover-return 620ms cubic-bezier(0.34, 1.42, 0.5, 1) backwards !important;
+    animation-delay: calc(min(var(--i, 0), 13) * 42ms) !important;
+    transform-origin: left center;
+}
 
-.home-section-slot .book-card:nth-child(n+5),
-.home-section-slot .book-list-card:nth-child(n+5) { animation-delay: 120ms; }
-
-.home-section-slot .book-card:nth-child(n+6),
-.home-section-slot .book-list-card:nth-child(n+6) { animation-delay: 150ms; }
-
-.home-section-slot .book-card:nth-child(n+7),
-.home-section-slot .book-list-card:nth-child(n+7) { animation-delay: 180ms; }
-
-.home-section-slot .book-card:nth-child(n+8),
-.home-section-slot .book-list-card:nth-child(n+8) { animation-delay: 210ms; }
-
-.home-section-slot .book-card:nth-child(n+9),
-.home-section-slot .book-list-card:nth-child(n+9) { animation-delay: 240ms; }
-
-.home-section-slot .book-card:nth-child(n+10),
-.home-section-slot .book-list-card:nth-child(n+10) { animation-delay: 270ms; }
-
-.home-section-slot .book-card:nth-child(n+11),
-.home-section-slot .book-list-card:nth-child(n+11) { animation-delay: 300ms; }
-
-.home-section-slot .book-card:nth-child(n+12),
-.home-section-slot .book-list-card:nth-child(n+12) { animation-delay: 330ms; }
+/* 1.42 的过冲：末段冲过目标再弹回，弹回的落点比线性停住更有「落定」感 */
+@keyframes home-cover-return {
+    0% {
+        opacity: 0;
+        transform: translateY(40px) scale(0.80);
+    }
+    100% {
+        opacity: 1;
+        transform: none;
+    }
+}
 
 .refresh-icon {
     cursor: pointer;
@@ -1138,8 +1265,10 @@ export default {
    「换一批」在途自旋是功能性加载指示，两种模式下都保留 */
 .home-motion-reduced .home-section-slot,
 .home-motion-reduced .home-section-slot .book-card,
-.home-motion-reduced .home-section-slot .book-list-card {
-    animation: none;
+.home-motion-reduced .home-section-slot .book-list-card,
+.home-motion-reduced .home-section-slot[data-phase] .book-card,
+.home-motion-reduced .home-section-slot[data-phase] .book-list-card {
+    animation: none !important;
 }
 
 .home-motion-reduced .home-section-slot .v-image__image.fade-transition-enter-active {
@@ -1149,8 +1278,10 @@ export default {
 @media (prefers-reduced-motion: reduce) {
     .home-section-slot,
     .home-section-slot .book-card,
-    .home-section-slot .book-list-card {
-        animation: none;
+    .home-section-slot .book-list-card,
+    .home-section-slot[data-phase] .book-card,
+    .home-section-slot[data-phase] .book-list-card {
+        animation: none !important;
     }
 
     .home-section-slot .v-image__image.fade-transition-enter-active {
