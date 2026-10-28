@@ -12,6 +12,7 @@ from webserver import constants
 import tornado
 
 from webserver import loader
+from webserver.base.modules import MODULE_AUDIO, ModuleGateMixin
 from webserver.handlers.base import BaseHandler, auth, js, is_admin
 from webserver.models import ScanFile
 from webserver.services.scan_service import ScanService, SCAN_EXT as SERVER_SCAN_EXT, ImportOptions
@@ -454,7 +455,9 @@ class BatchAddStatus(BaseHandler):
                     logging.error(f"Error closing scanner: {e}")
 
 
-class AudioImportRun(BaseHandler):
+class AudioImportRun(ModuleGateMixin, BaseHandler):
+    module_id = MODULE_AUDIO
+
     @js
     @is_admin
     def post(self):
@@ -467,7 +470,9 @@ class AudioImportRun(BaseHandler):
         return {"err": "ok", "msg": _("有声书导入任务已启动")}
 
 
-class AudioImportStatus(BaseHandler):
+class AudioImportStatus(ModuleGateMixin, BaseHandler):
+    module_id = MODULE_AUDIO
+
     @js
     @is_admin
     def get(self):

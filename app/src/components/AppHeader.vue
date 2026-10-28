@@ -601,6 +601,8 @@ export default {
             sidebar_items: [],
             socials: [],
             friends: [],
+            // 功能模块快照（audio 等）；加载完成前按全开处理
+            modules: { audio: true },
             allow: {
                 register: true,
                 download: true,
@@ -739,7 +741,7 @@ export default {
             const showItem = (key) => !this.sys.sidebar_items || this.sys.sidebar_items.length === 0 || this.sys.sidebar_items.includes(key);
             const navLinks = [
                 ...(showItem("folders") && this.sys.allow.folder ? [{ icon: "mdi-folder-multiple-outline", href: "/folder", text: "appHeader.folders", count: this.sys.folders, color: "amber darken-2" }] : []),
-                ...(showItem("audiobooks") ? [{ icon: "mdi-headphones", href: "/audiobooks", text: "appHeader.audioBooks", count: this.sys.audiobooks, color: "purple"}] : []),
+                ...(showItem("audiobooks") && this.moduleOn("audio") ? [{ icon: "mdi-headphones", href: "/audiobooks", text: "appHeader.audioBooks", count: this.sys.audiobooks, color: "purple"}] : []),
                 // 实体书入口不参与上面的 SIDEBAR_ITEMS（侧边栏显示项目）：它是功能而非浏览维度，
                 // 由「站点与外观 → 实体书」开关（ENABLE_PHYSICAL_BOOKS / sys.allow.physical_books）
                 // 唯一决定——打开即显示，关闭即隐藏，与侧边栏勾选项无关。
@@ -885,6 +887,15 @@ export default {
         },
     },
     methods: {
+        /**
+         * 功能模块是否开启（模块级开关，见 webserver/base/modules.py）。
+         * 服务端还没下发 sys.modules 时按开启处理：宁可多显示一秒，
+         * 也不要在首屏把入口闪没。
+         */
+        moduleOn(id) {
+            const mods = (this.sys && this.sys.modules) || {};
+            return mods[id] !== false;
+        },
         refreshUserInfo() {
             this.$backend("/user/info").then((rsp) => {
                 if (!rsp || !rsp.sys) return;

@@ -31,6 +31,7 @@ from webserver.base.image_helper import ImageHelper
 from webserver.base.epub_helper import EpubHelper
 from webserver.base.meta_helper import guess_authors, guess_tags
 from webserver.base.homepage import get_homepage_config
+from webserver.base import modules as feature_modules
 from webserver.services.book_visit_service import BookVisitService
 from webserver.services.book_access_service import BookAccessService
 from webserver.services.autofill import AutoFillService
@@ -352,7 +353,13 @@ class BookDetail(BaseHandler):
             "kindle_sender": CONF["smtp_username"],
             "guest_access": None if self.current_user else BookAccessService.guest_read_source(self, book_id),
             "book": formated_book,
-            "audios": AudioUtils.get_audios(bid, self.current_user.id if self.current_user else None),
+            # 有声书模块关闭时不再扫音频目录：详情页拿不到 audios，
+            # 前端也就不会渲染播放/转写入口（关闭只隐藏，不动磁盘文件）。
+            "audios": (
+                AudioUtils.get_audios(bid, self.current_user.id if self.current_user else None)
+                if feature_modules.module_enabled(feature_modules.MODULE_AUDIO)
+                else {"status": "unavailable", "msg": _("有声书功能已关闭"), "count": 0}
+            ),
         }
 
 

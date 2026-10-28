@@ -29,6 +29,7 @@ from webserver.base.formatter import BookFormatter
 from webserver.base.query_cache import VersionedCache, library_version
 from webserver.base.global_state import get_global_state
 from webserver.base.sidebar import get_sidebar_items
+from webserver.base import modules as feature_modules
 from webserver.services.resource_service import ResourceService
 from webserver.services.perf_monitor import PerfMonitor
 from webserver.services.book_access_service import BookAccessService
@@ -1252,14 +1253,17 @@ class BaseHandler(web.RequestHandler):
         self._build_custom_column_map()
         merge_start = time.perf_counter()
 
-        # Get audio book ids set once for better performance
+        # Get audio book ids set once for better performance.
+        # 有声书模块关闭时不查这份缓存：既省一次全盘扫描，也让列表不再带
+        # has_audio 角标（前端 BookCards 只看这个字段，无需另加判断）。
         audio_book_ids = set()
-        try:
-            from webserver.handlers.audio import AudioBooksCache
+        if feature_modules.module_enabled(feature_modules.MODULE_AUDIO):
+            try:
+                from webserver.handlers.audio import AudioBooksCache
 
-            audio_book_ids = AudioBooksCache.get_audio_book_ids_set()
-        except Exception as e:
-            logging.error(f"Error getting audio book ids: {e}")
+                audio_book_ids = AudioBooksCache.get_audio_book_ids_set()
+            except Exception as e:
+                logging.error(f"Error getting audio book ids: {e}")
 
         maps, empty_item = item_maps or self._item_maps([book["id"] for book in books])
 
@@ -1856,7 +1860,12 @@ class BaseHandler(web.RequestHandler):
             "books": db.count(),
             "tags": len(db.all_tags()),
             "authors": len(db.all_authors()),
-            "audiobooks": self.get_audio_books_count(),
+            # 模块关闭时不再扫音频目录，也不把数量下发（导航那一项本来也不出现）
+            "audiobooks": (
+                self.get_audio_books_count()
+                if feature_modules.module_enabled(feature_modules.MODULE_AUDIO)
+                else 0
+            ),
             "publishers": len(db.all_publishers()),
             "series": len(db.all_series()),
             "categories": self.get_custom_category_count(),
@@ -1905,6 +1914,9 @@ class BaseHandler(web.RequestHandler):
                 "footer_watermark": CONF.get("FOOTER_WATERMARK", ""),
                 "header": CONF["HEADER"] if "HEADER" in CONF else "",
                 "allow": self.allow_flags(),
+                # 功能模块总开关快照（模块级，见 webserver/base/modules.py）：
+                # 前端据 sys.modules.<id> 决定导航、菜单、详情页按钮与设置区块的显隐。
+                "modules": feature_modules.snapshot(CONF),
                 "indexPage": CONF.get("INDEX_PAGE_TYPE", "index"),
                 "epub_viewer": CONF.get("EPUB_VIEWER", "MyReader"),
                 "defaultPageSize": CONF.get("DEFAULT_PAGE_SIZE", 60),

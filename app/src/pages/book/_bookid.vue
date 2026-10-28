@@ -17,6 +17,7 @@
             </v-dialog>
 
             <AppDialog
+                v-if="audioModuleOn"
                 v-model="dialog_epub2audio"
                 type="action"
                 :title="$t('book.convertToAudio')"
@@ -62,6 +63,7 @@
             </AppDialog>
 
             <AudioListDialog
+                v-if="audioModuleOn"
                 :open.sync="dialog_audiolist"
                 :audios="audios"
                 :audio-status="AUDIO_STATUS"
@@ -209,7 +211,7 @@
                         class="mx-2 d-flex d-sm-flex"
                         :style="tiny ? { padding: '0px', margin: '0px 1px !important' } : {}"
                         @click="switchToAudioPlayer"
-                        v-if="hasEBooks"
+                        v-if="hasEBooks && audioModuleOn"
                     >
                         <v-icon v-if="tiny">mdi-music-note</v-icon>
                         <template v-else>
@@ -837,7 +839,7 @@
         <v-col cols="12" sm="6" class="book-action-col">
             <v-card outlined>
                 <v-list>
-                    <v-list-item @click="switchAudioDialog" :disabled="!hasEBooks">
+                    <v-list-item @click="switchAudioDialog" :disabled="!hasEBooks" v-if="audioModuleOn">
                         <v-list-item-avatar large :color="!hasEBooks ? 'grey' : (audios.status === AUDIO_STATUS.FAILED ? 'red' : 'primary')">
                             <v-icon dark>{{ audios.status === AUDIO_STATUS.FAILED ? 'mdi-alert-circle' : 'mdi-playlist-music' }}</v-icon>
                         </v-list-item-avatar>
@@ -1481,6 +1483,14 @@ export default {
                 return false;
             }
             return true;
+        },
+        /**
+         * 有声书模块是否开启（sys.modules.audio）。关闭时详情页的转写/播放按钮、
+         * 处理菜单项与两个对话框一起消失，音频进度也不轮询。
+         */
+        audioModuleOn() {
+            const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
+            return mods.audio !== false;
         },
 
         hasTxt() {
@@ -2755,6 +2765,10 @@ export default {
         },
         startAudioProgressPolling() {
             this.stopAudioProgressPolling(); // Clear any existing timer
+            // 模块关闭时后端已不再返回 audios，这里再兜一层：不轮询，省请求
+            if (!this.audioModuleOn) {
+                return;
+            }
             this.progressTimer = setInterval(() => {
                 this.updateAudioProgress();
             }, 10000); // Poll every 10 seconds
