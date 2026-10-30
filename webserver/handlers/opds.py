@@ -728,6 +728,11 @@ class OpdsHandler(BaseHandler):
                 ):
                     raise web.HTTPError(404, reason="Tag %r not found" % which)
 
+        # "I" 分支会用 which 里的后缀覆盖 category，必须再查一次，
+        # 否则 category=tags + which=I<id>:#location 能绕过位置分类下线
+        if self._physical_category_hidden(category):
+            raise web.HTTPError(404, reason="Category not found")
+
         categories = self.calibre_db.get_categories()
         if category not in categories:
             raise web.HTTPError(404, reason="Category %r not found" % which)

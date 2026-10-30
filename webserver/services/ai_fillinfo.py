@@ -263,6 +263,10 @@ class AIFillInfoService(AsyncService):
                     self.count_fail += 1
 
             for book_id, mi, info in updates:
+                if self._module_disabled():
+                    logging.warning("[AIFill] AI module disabled before apply, stop")
+                    self._finish_task(failed=True, error_msg=_("AI 功能已关闭"))
+                    return
                 ok = self._apply_ai_info(book_id, mi, info)
                 if ok:
                     self.count_done += 1

@@ -228,7 +228,7 @@ async def edit_book(call, args):
     # 实体书模块关闭时 handler 会丢弃这两个字段；这里直接报错，避免助手收到
     # 「修改成功」却实际没改的假象
     if not feature_modules.module_enabled(feature_modules.MODULE_PHYSICAL):
-        physical_keys = [k for k in ("book_count", "book_type") if k in body]
+        physical_keys = [k for k in ("book_count", "book_type", "location") if k in body]
         if physical_keys:
             return _err("physical book fields are disabled: %s" % ", ".join(physical_keys))
     return await call("POST", f"/api/book/{book_id}/edit", json=body)

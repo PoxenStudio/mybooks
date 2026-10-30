@@ -527,6 +527,15 @@ export default {
                     .then((rsp) => {
                         if (rsp.err != "ok") {
                             this.$alert("error", rsp.msg);
+                            // 任务运行期间模块被关闭：后端门禁返回 module.disabled，
+                            // 停止轮询并复位任务态，避免页面一直停在加载中
+                            if (rsp.err === "module.disabled") {
+                                this.loading = false;
+                                this.importing = false;
+                                this.audioImporting = false;
+                                this.batchAdding = false;
+                                this.bulkDeleting = false;
+                            }
                             return;
                         }
                         if (callback(rsp)) {

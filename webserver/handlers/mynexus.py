@@ -208,6 +208,9 @@ async def _poll_analysis(book_id, scoped_session):
     except MyNexusError:
         return
     for _ in range(720):
+        if not feature_modules.module_enabled(feature_modules.MODULE_AI):
+            # AI 模块关闭：停止后台轮询，避免继续外呼与写解析状态
+            return
         await asyncio.sleep(5)
         try:
             response = await utils.run_in_threadpool(client.analysis_status, book_id)
