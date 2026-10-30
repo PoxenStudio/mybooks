@@ -602,8 +602,8 @@ export default {
             sidebar_items: [],
             socials: [],
             friends: [],
-            // 功能模块快照（audio 等）；加载完成前按全开处理
-            modules: { audio: true },
+            // 功能模块快照（audio / community 等）；加载完成前按全开处理
+            modules: { audio: true, community: true },
             allow: {
                 register: true,
                 download: true,

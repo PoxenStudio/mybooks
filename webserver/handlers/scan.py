@@ -12,7 +12,13 @@ from webserver import constants
 import tornado
 
 from webserver import loader
-from webserver.base.modules import MODULE_AUDIO, ModuleGateMixin
+from webserver.base.modules import (
+    MODULE_AUDIO,
+    MODULE_COMMUNITY,
+    ModuleGateMixin,
+    module_disabled_error,
+    module_enabled,
+)
 from webserver.handlers.base import BaseHandler, auth, js, is_admin
 from webserver.models import ScanFile
 from webserver.services.scan_service import ScanService, SCAN_EXT as SERVER_SCAN_EXT, ImportOptions
@@ -273,6 +279,9 @@ class ImportRun(BaseHandler):
             skip_last_dirs = req.get("skip_last_dirs", 0)
             force = req.get("force", False)
             sole = bool(req.get("sole", False))
+            if sole and not module_enabled(MODULE_COMMUNITY):
+                # 私藏属于社区互动模块：模块关闭时仍允许导入，只是不能顺带写私藏标记
+                return module_disabled_error(MODULE_COMMUNITY)
             if not filelist:
                 return {"err": "params.error", "msg": _("参数错误")}
             if ScanService.is_importing():

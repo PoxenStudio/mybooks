@@ -139,10 +139,12 @@ class TestModuleKeysArePersistable(unittest.TestCase):
     def test_default_present_in_settings_module(self):
         from webserver import settings as settings_module
 
-        # 每个登记过的模块都要有出厂默认值，否则老实例（auto.py 无该键）会落到兜底
+        # 每个登记过的模块都要有出厂默认值且与模块表一致（不能只断言 True：
+        # 将来允许默认关闭的模块时，这里不应该拦）
         for module_id, spec in MODULES.items():
             with self.subTest(module=module_id):
-                self.assertTrue(settings_module.settings[spec["key"]])
+                self.assertIn(spec["key"], settings_module.settings)
+                self.assertEqual(settings_module.settings[spec["key"]], spec["default"])
 
 
 class TestRoutesAreGated(unittest.TestCase):
@@ -270,15 +272,66 @@ class TestCommunityRoutesAreGated(unittest.TestCase):
 
 
 class TestBookListHomepageHandler(unittest.TestCase):
+    def _handler(self):
+        class _Fake:
+            def __init__(self):
+                self.request = mock.Mock(headers={})
+                self.written = None
+                self.current_user = None
+                self.sqlite_session = mock.Mock()
+
+            def set_header(self, *args, **kwargs):
+                pass
+
+            def write(self, value):
+                self.written = value
+
+            def finish(self):
+                pass
+
+        return _Fake()
+
     def test_returns_empty_when_community_off(self):
         import asyncio
 
         from webserver.handlers.booklist import BookListHomepageHandler
 
+        handler = self._handler()
+        with mock.patch.object(modules_module, "module_enabled", return_value=False):
+            asyncio.run(BookListHomepageHandler.get(handler))
+        # 首页拿的是 err=="ok" 的正常空列表，不是 module.disabled 错误体
+        self.assertEqual(handler.written, {"err": "ok", "booklists": []})
+
+    def test_returns_booklists_when_community_on(self):
+        import asyncio
+
+        from webserver.handlers import booklist
+
+        handler = self._handler()
+        handler.current_user = None
+        handler._serialize_many = lambda rows, viewer_id=None: ["x"]
+        with mock.patch.object(modules_module, "module_enabled", return_value=True), \
+                mock.patch.dict(booklist.CONF, {"ENABLE_HOMEPAGE_BOOKLISTS": True}), \
+                mock.patch.object(booklist.BookListService, "list_for_homepage", return_value=[object()]):
+            asyncio.run(booklist.BookListHomepageHandler.get(handler))
+        self.assertEqual(handler.written, {"err": "ok", "booklists": ["x"]})
+
+
+class TestImportRunSoleGate(unittest.TestCase):
+    def test_sole_rejected_when_community_off(self):
+        import asyncio
+        import json
+
+        from webserver.handlers import scan
+
         class _Fake:
             def __init__(self):
-                self.request = mock.Mock(headers={})
+                self.request = mock.Mock(
+                    headers={}, body=json.dumps({"filelist": "all", "sole": True}).encode()
+                )
                 self.written = None
+                self.current_user = object()
+                self.admin_user = object()
 
             def set_header(self, *args, **kwargs):
                 pass
@@ -290,10 +343,9 @@ class TestBookListHomepageHandler(unittest.TestCase):
                 pass
 
         handler = _Fake()
-        with mock.patch.object(modules_module, "module_enabled", return_value=False):
-            asyncio.run(BookListHomepageHandler.get(handler))
-        # 首页拿的是 err=="ok" 的正常空列表，不是 module.disabled 错误体
-        self.assertEqual(handler.written, {"err": "ok", "booklists": []})
+        with mock.patch.object(scan, "module_enabled", return_value=False):
+            asyncio.run(scan.ImportRun.post(handler))
+        self.assertEqual(handler.written["err"], "module.disabled")
 
 
 class TestHomepageCardVisibility(unittest.TestCase):
@@ -333,6 +385,40 @@ class TestHomepageCardVisibility(unittest.TestCase):
                 settings_view = homepage_module.get_homepage_config(apply_modules=False)
         self.assertIn("index.booklistRecommendation", runtime["hidden"])
         self.assertNotIn("index.booklistRecommendation", settings_view["hidden"])
+
+    def test_admin_settings_reads_unforced_config(self):
+        """守住真正的调用点：设置页必须用 apply_modules=False 取配置。"""
+        import asyncio
+
+        try:
+            from webserver.handlers import admin as admin_module
+        except ImportError as exc:
+            self.skipTest("admin 路由需要 calibre：%s" % exc)
+
+        class _Fake:
+            def __init__(self):
+                self.request = mock.Mock(headers={})
+                self.written = None
+                self.current_user = object()
+                self.admin_user = object()
+                self.site_url = "http://example.test"
+
+            def set_header(self, *args, **kwargs):
+                pass
+
+            def write(self, value):
+                self.written = value
+
+            def finish(self):
+                pass
+
+        handler = _Fake()
+        config = self._config()
+        with mock.patch.object(admin_module, "get_homepage_config", return_value=config) as get_config, \
+                mock.patch.object(admin_module.BookSearch, "all_sources", return_value=[]):
+            asyncio.run(admin_module.AdminSettings.get(handler))
+        get_config.assert_called_once_with(apply_modules=False)
+        self.assertEqual(handler.written.get("err"), "ok")
 
 
 class TestSysDowngrade(unittest.TestCase):

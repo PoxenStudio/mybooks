@@ -22,9 +22,11 @@ const ROUTE_MODULES = [
             path === "/memos" ||
             path.startsWith("/memos/") ||
             path === "/admin/user-memos" ||
+            path.startsWith("/admin/user-memos/") ||
             path === "/expected" ||
             path.startsWith("/expected/") ||
             path === "/admin/all-expected" ||
+            path.startsWith("/admin/all-expected/") ||
             path === "/soledbooks" ||
             path.startsWith("/soledbooks/") ||
             path === "/booklists" ||

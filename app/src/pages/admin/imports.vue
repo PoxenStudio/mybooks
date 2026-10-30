@@ -135,6 +135,7 @@
                 </v-col>
                 <v-col cols="12" sm="6" md="4" class="mb-2">
                     <v-checkbox
+                        v-if="communityModuleOn"
                         v-model="importSole"
                         :label="$t('imports.import_sole_option')"
                         :disabled="loading || bulkDeleting"
@@ -400,6 +401,11 @@ export default {
             const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
             return mods.audio !== false;
         },
+        // 社区互动模块开关：关闭后不显示「设为私藏」，提交时也不再携带 sole
+        communityModuleOn() {
+            const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
+            return mods.community !== false;
+        },
         pageCount: function () {
             return parseInt(this.total / 20);
         },
@@ -559,9 +565,10 @@ export default {
             }
             this.loading = true;
             // 本次导入的书籍全部设为私藏，作用于本次运行的所有导入形态（全部/勾选/状态筛选/按目录）
+            // 社区模块关闭时复选框已隐藏，这里兜底不把残留的 true 发出去
             return this.$backend("/admin/import/run", {
                 method: "POST",
-                body: JSON.stringify(Object.assign({ sole: this.importSole }, payload)),
+                body: JSON.stringify(Object.assign({ sole: this.importSole && this.communityModuleOn }, payload)),
             }).then((rsp) => {
                 if (rsp.err !== "ok") {
                     this.$alert("error", rsp.msg);

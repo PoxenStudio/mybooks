@@ -1915,6 +1915,8 @@ export default {
                 key: "ENABLE_BOOKLIST_COVER_SCROLL",
                 label: "settings.booklist_cover_scroll",
                 type: "checkbox",
+                // 只作用于书单卡的封面条，社区模块关闭后没有书单卡可滚动
+                module: "community",
               },
               {
                 icon: "mdi-book-multiple",
