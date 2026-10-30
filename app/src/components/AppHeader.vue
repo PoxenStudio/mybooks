@@ -453,91 +453,17 @@
             ></v-textarea>
         </AppDialog>
 
-        <v-dialog v-model="ai_enabled" persistent max-width="700" scrollable>
-            <v-card class="dialog-border d-flex flex-column" style="height: 600px;">
-                <v-card-title class="primary white--text py-3 ai-dialog-title">
-                    <div left color="white">
-                        <svg fill="currentColor" version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="32px" height="32px" viewBox="0 0 256 256" enable-background="new 0 0 256 256" xml:space="preserve" stroke="currentColor"><g id="bgCarrier" stroke-width="0"></g><g id="tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="iconCarrier"> <path d="M98.6,32.6c24,0,43.4,19.4,43.4,43.4s-19.4,43.6-43.4,43.6s-43.4-19.4-43.4-43.4S74.6,32.6,98.6,32.6z M221.8,215.6h-54.4 l25.4-43.8c5.2-9.2,2-20.8-7-26s-20.6-2-25.8,7l-25.4,43.8l-37.8-64.8C93.2,125,86,121.6,77,121.6c-1.2,0-3.8,0.4-5.2,0.8 c-1.2,0.2-3,0.8-4.4,1.2C31,135.6,2.2,193.8,2.2,254c1,0,87.4,0,109.4,0c-0.8-1.2-1.6-2.2-2.4-3.4L65.4,175c-1.4-2.6-0.4-6,2-7.4 c2.6-1.4,6-0.4,7.4,2l43.4,75c3.2,5.6,9.2,9.4,16.2,9.4h87.4c10.6,0,19-8.6,19-19C241,224,232.2,215.6,221.8,215.6z M203.613,29.883 v-6.156l-6.453-1.09c-0.477-2.109-1.309-4.086-2.43-5.863l3.793-5.332l-4.355-4.355l-5.332,3.793 c-1.773-1.121-3.75-1.949-5.863-2.43L181.887,2h-6.16l-1.086,6.449c-2.113,0.48-4.09,1.309-5.863,2.43l-5.332-3.793l-4.355,4.355 l3.793,5.332c-1.121,1.777-1.953,3.754-2.43,5.863L154,23.727v6.156l6.453,1.086c0.477,2.113,1.309,4.09,2.43,5.867l-3.793,5.332 l4.355,4.352l5.332-3.793c1.773,1.121,3.75,1.953,5.863,2.43l1.086,6.453h6.16l1.086-6.453c2.113-0.477,4.09-1.309,5.863-2.43 l5.332,3.793l4.355-4.352l-3.793-5.332c1.121-1.777,1.953-3.754,2.43-5.867L203.613,29.883z M178.805,36.594 c-5.402,0-9.785-4.383-9.785-9.789s4.383-9.789,9.785-9.789c5.406,0,9.789,4.383,9.789,9.789S184.211,36.594,178.805,36.594z M246.48,65.19l7.52-4.667l-3.154-7.707l-8.635,1.943c-1.629-2.327-3.659-4.397-6.043-6.096l2.017-8.616l-7.68-3.22l-4.73,7.479 c-2.883-0.509-5.782-0.505-8.584-0.035l-4.668-7.52l-7.707,3.154l1.943,8.635c-2.327,1.629-4.397,3.659-6.096,6.043l-8.616-2.017 l-3.22,7.68l7.479,4.73c-0.509,2.883-0.505,5.782-0.035,8.584l-7.52,4.668l3.154,7.707l8.635-1.943 c1.629,2.327,3.659,4.397,6.043,6.096l-2.017,8.616l7.68,3.22l4.73-7.479c2.883,0.509,5.782,0.505,8.584,0.035l4.668,7.52 l7.707-3.154l-1.943-8.635c2.327-1.629,4.397-3.659,6.096-6.043l8.616,2.017l3.22-7.68l-7.479-4.73 C246.953,70.891,246.95,67.992,246.48,65.19z M233.584,74.493c-2.827,6.743-10.584,9.918-17.327,7.091 c-6.743-2.827-9.918-10.584-7.091-17.327s10.584-9.918,17.327-7.091C233.236,59.993,236.41,67.75,233.584,74.493z"></path></g></svg>
-                    </div>
-                    <v-spacer></v-spacer>
-                    <v-btn icon :dark="navIsDark" :light="!navIsDark" @click="closeAi">
-                        <v-icon>mdi-close</v-icon>
-                    </v-btn>
-                </v-card-title>
-
-                <v-card-text class="flex-grow-1 pa-0" style="overflow-y: auto; height: 100%;">
-                    <div class="chat-messages pa-4" ref="chatMessages">
-                        <div v-if="ai_messages.length === 0" class="text-center grey--text py-8">
-                            <v-icon size="64" color="grey lighten-1">mdi-chat-outline</v-icon>
-                            <p class="mt-4">{{ $t('appHeader.aiChatWelcome') }}</p>
-                        </div>
-                        <div v-for="(message, index) in ai_messages" :key="index"
-                             :class="['message-item', 'mb-4']">
-                            <div class="d-flex" :class="message.role === 'user' ? 'justify-end' : 'justify-start'">
-                                <v-avatar v-if="message.role === 'assistant'" size="32" color="primary" class="mr-2">
-                                    <v-icon dark small>mdi-robot</v-icon>
-                                </v-avatar>
-                                <div :class="['message-bubble', 'pa-3', message.role === 'user' ? 'primary white--text' : ($vuetify.theme.dark ? 'grey darken-3 white--text' : 'grey lighten-4 black--text')]"
-                                     style="max-width: 70%; border-radius: 12px; word-break: break-word; white-space: pre-wrap;">
-                                    <div v-if="message.status" :class="['caption', 'italic', 'mb-1', $vuetify.theme.dark ? 'grey--text text--lighten-1' : 'grey--text text--darken-1']">{{ message.status }}</div>
-                                    <div>{{ message.content }}<span v-if="message.streaming" class="ai-typing">|</span></div>
-                                </div>
-                                <v-avatar v-if="message.role === 'user'" size="32" color="secondary" class="ml-2">
-                                    <v-icon dark small>mdi-account</v-icon>
-                                </v-avatar>
-                            </div>
-                        </div>
-                        <div v-if="ai_thinking && ai_messages.length > 0 && ai_messages[ai_messages.length - 1].role === 'user'" class="message-item mb-4">
-                            <div class="d-flex justify-start">
-                                <v-avatar size="32" color="primary" class="mr-2">
-                                    <v-icon dark small>mdi-robot</v-icon>
-                                </v-avatar>
-                                <div class="message-bubble grey lighten-4 pa-3" style="border-radius: 12px;">
-                                    <v-progress-circular indeterminate size="20" width="2" color="primary"></v-progress-circular>
-                                    <span class="ml-2 grey--text">{{ $t('appHeader.aiThinking') }}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </v-card-text>
-
-                <v-divider></v-divider>
-
-                <v-card-actions class="pa-4">
-                    <v-text-field
-                        v-model="ai_input"
-                        :placeholder="$t('appHeader.aiInputPlaceholder')"
-                        outlined
-                        dense
-                        hide-details
-                        :disabled="ai_thinking"
-                        @keyup.enter="sendAiMessage"
-                        class="mr-2"
-                        ref="aiInput"
-                    >
-                    </v-text-field>
-                    <v-btn
-                        icon
-                        color="primary"
-                        :loading="ai_thinking"
-                        :disabled="!ai_input.trim() || ai_thinking"
-                        @click="sendAiMessage"
-                        large
-                    >
-                        <v-icon>mdi-send</v-icon>
-                    </v-btn>
-                </v-card-actions>
-            </v-card>
-        </v-dialog>
+        <ai-chat-dialog v-model="ai_enabled" :title-dark="navIsDark" @thinking="ai_thinking = $event" />
     </div>
 </template>
 
 <script>
 import AppearanceMenu from "~/components/AppearanceMenu.vue";
+import AiChatDialog from "~/components/AiChatDialog.vue";
 import { isLightBackground, resolveBrandColor, unifiedIconColor } from "~/utils/appearance";
 
 export default {
-    components: { AppearanceMenu },
+    components: { AppearanceMenu, AiChatDialog },
     data() {
         let sidebar = false;
         let miniVariant = false;
@@ -581,9 +507,6 @@ export default {
         isMobileFocused: false,
         ai_enabled: false,
         ai_thinking: false,
-        ai_messages: [],
-        ai_ws: null,
-        ai_input: '',
         user: { is_login: false },
         sys: {
             books: 0,
@@ -950,113 +873,6 @@ export default {
                 return;
             }
             this.ai_enabled = !this.ai_enabled;
-            if (this.ai_enabled) {
-                this.connectAi();
-                this.$nextTick(() => {
-                    if (this.$refs.aiInput) {
-                        this.$refs.aiInput.focus();
-                    }
-                    this.scrollAiBottom();
-                });
-            } else {
-                this.closeAi();
-            }
-        },
-        connectAi() {
-            if (this.ai_ws) {
-                console.log('WebSocket already connected');
-                return;
-            }
-
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const host = window.location.host;
-            const wsUrl = `${protocol}//${host}/api/assistant/ws`;
-
-            console.log(`Connecting to AI WebSocket: ${wsUrl}`);
-            this.ai_ws = new WebSocket(wsUrl);
-
-            this.ai_ws.onopen = () => {
-                console.log('AI WebSocket connected successfully');
-            };
-
-            this.ai_ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                if (data.type === 'start') {
-                    this.ai_thinking = true;
-                    this.ai_messages.push({ role: 'assistant', content: '', status: '......', streaming: true });
-                    this.scrollAiBottom();
-                } else if (data.type === 'content') {
-                    const lastMsg = this.ai_messages[this.ai_messages.length - 1];
-                    if (lastMsg) {
-                        lastMsg.content += data.content;
-                        this.scrollAiBottom();
-                    }
-                } else if (data.type === 'status') {
-                    if (this.ai_messages.length > 0) {
-                        const lastMsg = this.ai_messages[this.ai_messages.length - 1];
-                        lastMsg.status = data.content;
-                    } else {
-                        console.log('AI Status:', data.content);
-                    }
-                } else if (data.type === 'end') {
-                    this.ai_thinking = false;
-                    const lastMsg = this.ai_messages[this.ai_messages.length - 1];
-                    if (lastMsg) {
-                        lastMsg.streaming = false;
-                        lastMsg.status = '';
-                    }
-                    this.scrollAiBottom();
-                } else if (data.type === 'error') {
-                    this.ai_thinking = false;
-                    this.ai_messages.push({ role: 'assistant', content: 'ERROR: ' + data.content, status: 'error' });
-                    this.scrollAiBottom();
-                }
-            };
-
-            this.ai_ws.onerror = (error) => {
-                console.error('WebSocket error:', error);
-                console.error('Failed to connect to:', wsUrl);
-                alert(this.$t('appHeader.aiConnectionError'));
-                this.ai_ws = null;
-                this.ai_enabled = false;
-                this.ai_thinking = false;
-            };
-
-            this.ai_ws.onclose = (event) => {
-                console.log('AI WebSocket closed', event.code, event.reason);
-                this.ai_ws = null;
-                this.ai_thinking = false;
-            };
-        },
-        closeAi() {
-            if (this.ai_ws) {
-                console.log('Closing AI WebSocket');
-                this.ai_ws.close();
-                this.ai_ws = null;
-            }
-            this.ai_enabled = false;
-        },
-        sendAiMessage() {
-            if (!this.ai_input.trim() || this.ai_thinking || !this.ai_ws) return;
-
-            const message = this.ai_input.trim();
-            this.ai_input = '';
-
-            this.ai_messages.push({ role: 'user', content: message });
-
-            this.$nextTick(() => {
-                this.scrollAiBottom();
-            });
-
-            this.ai_ws.send(JSON.stringify({ type: 'query', content: message }));
-        },
-        scrollAiBottom() {
-            this.$nextTick(() => {
-                const container = this.$refs.chatMessages;
-                if (container) {
-                    container.scrollTop = container.scrollHeight;
-                }
-            });
         },
         chunk: function (arr, len) {
             if (!arr || !Array.isArray(arr)) return [];
@@ -1646,13 +1462,6 @@ html[data-appearance-dark="1"] .v-application .v-navigation-drawer.app-navigatio
     filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
 }
 
-.v-application .primary.ai-dialog-title {
-    background-color: var(--app-nav-bg, #003153) !important;
-    border-color: var(--app-nav-bg, #003153) !important;
-    /* 顶栏品牌色换成浅色时，标题文字要跟着转深色，否则白字看不见 */
-    color: var(--app-nav-fg, rgba(255, 255, 255, 0.87)) !important;
-}
-
 /* 侧栏图标的「统一着色」模式：颜色由 --app-sidebar-icon 驱动
    （见 app/src/utils/appearance.js 的 applyAppearance / unifiedIconColor） */
 .app-navigation-drawer .app-icon-unified {
@@ -1738,65 +1547,5 @@ html[data-appearance-dark="1"] .v-application .v-navigation-drawer.app-navigatio
   filter: none !important;
   -webkit-appearance: none !important;
   appearance: none !important;
-}
-
-.dialog-border {
-    border: 2px solid #e0e0e0 !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-    border-radius: 8px !important;
-}
-
-.dialog-border .v-card__title {
-    border-bottom: 1px solid #e0e0e0;
-}
-
-.chat-messages {
-    overflow-y: auto;
-    scroll-behavior: smooth;
-}
-
-.chat-messages::-webkit-scrollbar {
-    width: 8px;
-}
-
-.chat-messages::-webkit-scrollbar-track {
-    background: #f1f1f1;
-}
-
-.chat-messages::-webkit-scrollbar-thumb {
-    background: #cccccc;
-    border-radius: 4px;
-}
-
-.chat-messages::-webkit-scrollbar-thumb:hover {
-    background: #999999;
-}
-
-.message-item {
-    animation: fadeIn 0.3s ease-in;
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.message-bubble {
-    line-height: 1.6;
-    font-size: 14px;
-}
-
-.ai-typing {
-    display: inline-block;
-    width: 2px;
-    background-color: orange;
-    margin-left: 2px;
-    animation: blink 1s infinite;
 }
 </style>

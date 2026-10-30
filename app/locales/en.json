@@ -1178,6 +1178,9 @@
   "common": {
     "cancel": "Cancel",
     "send": "Send",
+    "retry": "Retry",
+    "copy": "Copy",
+    "copied": "Copied",
     "close": "Close",
     "viewAll": "View all",
     "set": "Use",

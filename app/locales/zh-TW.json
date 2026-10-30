@@ -798,6 +798,9 @@
   "common": {
     "cancel": "取消",
     "send": "發送",
+    "retry": "重試",
+    "copy": "複製",
+    "copied": "已複製",
     "close": "關閉",
     "viewAll": "查看全部",
     "set": "設定",
