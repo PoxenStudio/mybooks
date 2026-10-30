@@ -21,6 +21,7 @@ from tornado import web
 
 from webserver import loader
 from webserver.base.formatter import BookFormatter
+from webserver.base.modules import MODULE_AUDIO, ModuleGateMixin
 from webserver.handlers.base import BaseHandler, auth, js, is_admin
 from webserver.models import BizKey, ReaderPaidBook, ReaderLog, Message
 from webserver.worker.epub2audio_worker import EpubToAudioWorker
@@ -235,7 +236,9 @@ class AudioUtils:
         return True, _("音频文件不存在")
 
 
-class AudioDetail(BaseHandler):
+class AudioDetail(ModuleGateMixin, BaseHandler):
+    module_id = MODULE_AUDIO
+
     def _extract_m4b_chapters(self, file_path, file_size, book_id, file):
         try:
             from mutagen.mp4 import MP4
@@ -364,7 +367,9 @@ class AudioDetail(BaseHandler):
             return {"err": "server.error", "msg": str(e)}
 
 
-class AudioBooks(BaseHandler):
+class AudioBooks(ModuleGateMixin, BaseHandler):
+    module_id = MODULE_AUDIO
+
     @js
     def get(self):
         """获取有音频的书籍列表"""
@@ -422,7 +427,9 @@ class AudioBooks(BaseHandler):
             return {"err": "server.error", "msg": str(e)}
 
 
-class AudioConversion(BaseHandler):
+class AudioConversion(ModuleGateMixin, BaseHandler):
+    module_id = MODULE_AUDIO
+
     @staticmethod
     def get_progress(bid):
         try:
@@ -725,7 +732,9 @@ class AudioConversion(BaseHandler):
             return {"err": "server.error", "msg": str(e)}
 
 
-class AudioConversionCancel(BaseHandler):
+class AudioConversionCancel(ModuleGateMixin, BaseHandler):
+    module_id = MODULE_AUDIO
+
     @js
     @is_admin
     def post(self, book_id):
@@ -761,7 +770,9 @@ class AudioConversionCancel(BaseHandler):
             return {"err": "server.error", "msg": str(e)}
 
 
-class AudioDelete(BaseHandler):
+class AudioDelete(ModuleGateMixin, BaseHandler):
+    module_id = MODULE_AUDIO
+
     @js
     @is_admin
     def post(self, book_id):
@@ -813,7 +824,11 @@ class AudioDelete(BaseHandler):
             return {"err": "server.error", "msg": str(e)}
 
 
-class AudioFile(BaseHandler):
+class AudioFile(ModuleGateMixin, BaseHandler):
+    module_id = MODULE_AUDIO
+    # 文件流：模块关闭时给 404，别把 JSON 错误体塞进 <audio> 播放器
+    module_gate_json = False
+
     def get(self, book_id, filename):
         """提供音频文件的静态文件服务"""
         logging.info(f"AudioFile requested: book_id={book_id}, filename={filename}")
@@ -927,7 +942,9 @@ class AudioFile(BaseHandler):
             raise web.HTTPError(500, "内部错误")
 
 
-class AudioCollection(BaseHandler):
+class AudioCollection(ModuleGateMixin, BaseHandler):
+    module_id = MODULE_AUDIO
+
     def create_biz_key(self):
         user = self.get_current_user()
         # 生成32位随机key
@@ -1084,7 +1101,10 @@ class AudioCollection(BaseHandler):
             return {"err": "server.error", "msg": str(e)}
 
 
-class AudioCollectionDownloadFile(BaseHandler):
+class AudioCollectionDownloadFile(ModuleGateMixin, BaseHandler):
+    module_id = MODULE_AUDIO
+    module_gate_json = False
+
     def get(self, book_id):
         """音频合集文件下载接口"""
         try:
@@ -1184,7 +1204,9 @@ class AudioCollectionDownloadFile(BaseHandler):
             raise web.HTTPError(500, "Internal server error")
 
 
-class AudioPurchase(BaseHandler):
+class AudioPurchase(ModuleGateMixin, BaseHandler):
+    module_id = MODULE_AUDIO
+
     @js
     @auth
     def post(self, book_id):

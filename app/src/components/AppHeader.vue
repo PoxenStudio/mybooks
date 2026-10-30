@@ -283,7 +283,7 @@
                             width="3"
                             class="mr-2"
                         ></v-progress-circular>
-                        <v-btn v-if="isAiFeatureEnabled" :color="isFocused ? (ai_enabled ? 'orange darken-4' : 'grey') : 'transparent'" class="black--text" rounded @click="toggleAi">AI</v-btn>
+                        <v-btn v-if="isAiFeatureEnabled && moduleOn('ai')" :color="isFocused ? (ai_enabled ? 'orange darken-4' : 'grey') : 'transparent'" class="black--text" rounded @click="toggleAi">AI</v-btn>
                     </template>
                 </v-text-field>
                 <v-spacer></v-spacer>
@@ -417,6 +417,7 @@
         </AppDialog>
 
         <AppDialog
+            v-if="moduleOn('community')"
             v-model="memoDialog"
             type="action"
             :title="$t('appHeader.memoDialogTitle')"
@@ -453,7 +454,7 @@
             ></v-textarea>
         </AppDialog>
 
-        <ai-chat-dialog v-model="ai_enabled" :title-dark="navIsDark" @thinking="ai_thinking = $event" />
+        <ai-chat-dialog v-if="moduleOn('ai')" v-model="ai_enabled" :title-dark="navIsDark" @thinking="ai_thinking = $event" />
     </div>
 </template>
 
@@ -524,6 +525,8 @@ export default {
             sidebar_items: [],
             socials: [],
             friends: [],
+            // 功能模块快照（audio / community / physical / ai / users）；加载完成前按全开处理
+            modules: { audio: true, community: true, physical: true, ai: true, users: true },
             allow: {
                 register: true,
                 download: true,
@@ -599,8 +602,10 @@ export default {
                     expand: this.isPathMatch("/user/"),
                     groups: [
                         { icon: "mdi-account-cog", href: "/user/usersettings", text: "appHeader.user_setting", color: "blue darken-1" },
-                        { icon: "mdi-shield-account", href: "/soledbooks", text: "appHeader.soledBooks", color: "deep-orange"},
-                        { icon: "mdi-notebook", href: "/expected", text: "expected.title", color: "green"},
+                        ...(this.moduleOn("community") ? [
+                            { icon: "mdi-shield-account", href: "/soledbooks", text: "appHeader.soledBooks", color: "deep-orange"},
+                            { icon: "mdi-notebook", href: "/expected", text: "expected.title", color: "green"},
+                        ] : []),
                     ],
                 }
             ];
@@ -612,12 +617,12 @@ export default {
                     color: "deep-orange",
                     groups: [
                         { icon: "mdi-cog", href: "/admin/settings", text: "appHeader.systemSettings", color: "blue darken-1"},
-                        { icon: "mdi-account", href: "/admin/users", text: "appHeader.userManagement", color: "deep-orange"},
+                        ...(this.moduleOn("users") ? [{ icon: "mdi-account", href: "/admin/users", text: "appHeader.userManagement", color: "deep-orange"}] : []),
                         { icon: "mdi-import", href: "/admin/imports", text: "appHeader.importBooks", color: "green"},
                         { icon: "mdi-library-shelves", href: "/admin/books", text: "appHeader.bookManagement", color: "blue darken-2"},
                         ...(this.sys.allow.share_link ? [{ icon: "mdi-cloud-outline", href: "/admin/shares", text: "appHeader.shareManagement", color: "teal" }] : []),
-                        { icon: "mdi-notebook", href: "/admin/all-expected", text: "expected.allPageTitle", color: "green"},
-                        ...(this.sys.allow.user_memos ? [{ icon: "mdi-message-text-outline", href: "/admin/user-memos", text: "memos.pageTitle", color: "blue" }] : []),
+                        ...(this.moduleOn("community") ? [{ icon: "mdi-notebook", href: "/admin/all-expected", text: "expected.allPageTitle", color: "green"}] : []),
+                        ...(this.moduleOn("community") && this.sys.allow.user_memos ? [{ icon: "mdi-message-text-outline", href: "/admin/user-memos", text: "memos.pageTitle", color: "blue" }] : []),
                         ...(this.sys.allow.book_review ? [{ icon: "mdi-comment-text-multiple-outline", href: "/admin/book-reviews", text: "adminBookReviews.pageTitle", color: "deep-orange"}] : []),
                         { icon: "mdi-math-log", href: "/admin/syslog", text: "appHeader.syslog", color: "green"},
                         { icon: "mdi-toolbox-outline", href: "/admin/toolbox", text: "appHeader.toolbox", color: "deep-orange"},
@@ -662,7 +667,7 @@ export default {
             const showItem = (key) => !this.sys.sidebar_items || this.sys.sidebar_items.length === 0 || this.sys.sidebar_items.includes(key);
             const navLinks = [
                 ...(showItem("folders") && this.sys.allow.folder ? [{ icon: "mdi-folder-multiple-outline", href: "/folder", text: "appHeader.folders", count: this.sys.folders, color: "amber darken-2" }] : []),
-                ...(showItem("audiobooks") ? [{ icon: "mdi-headphones", href: "/audiobooks", text: "appHeader.audioBooks", count: this.sys.audiobooks, color: "purple"}] : []),
+                ...(showItem("audiobooks") && this.moduleOn("audio") ? [{ icon: "mdi-headphones", href: "/audiobooks", text: "appHeader.audioBooks", count: this.sys.audiobooks, color: "purple"}] : []),
                 // 实体书入口不参与上面的 SIDEBAR_ITEMS（侧边栏显示项目）：它是功能而非浏览维度，
                 // 由「站点与外观 → 实体书」开关（ENABLE_PHYSICAL_BOOKS / sys.allow.physical_books）
                 // 唯一决定——打开即显示，关闭即隐藏，与侧边栏勾选项无关。
@@ -706,10 +711,10 @@ export default {
                 .concat(this.user.is_login ? userLinks : [])
                 .concat(this.user.is_admin ? adminLinks : [])
                 .concat(this.user.is_login ? readingLinks : [])
-                .concat(this.user.is_login && showItem("booklists") ? booklistLinks: [])
+                .concat(this.user.is_login && this.moduleOn("community") && showItem("booklists") ? booklistLinks: [])
                 .concat(navLinks)
-                .concat(this.sys.allow.user_memos ? memoLink : [])
-                .concat(showItem("friends") && this.sys.friends.length > 0 ? friendLinks : [])
+                .concat(this.moduleOn("community") && this.sys.allow.user_memos ? memoLink : [])
+                .concat(this.moduleOn("community") && showItem("friends") && this.sys.friends.length > 0 ? friendLinks : [])
         },
     },
     mounted() {
@@ -808,6 +813,15 @@ export default {
         },
     },
     methods: {
+        /**
+         * 功能模块是否开启（模块级开关，见 webserver/base/modules.py）。
+         * 服务端还没下发 sys.modules 时按开启处理：宁可多显示一秒，
+         * 也不要在首屏把入口闪没。
+         */
+        moduleOn(id) {
+            const mods = (this.sys && this.sys.modules) || {};
+            return mods[id] !== false;
+        },
         refreshUserInfo() {
             this.$backend("/user/info").then((rsp) => {
                 if (!rsp || !rsp.sys) return;

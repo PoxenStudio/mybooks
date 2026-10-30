@@ -9,6 +9,7 @@ book_id 为 None 表示不针对具体书籍的通用检查（如阅读器的词
 from typing import Optional
 
 from webserver import loader
+from webserver.base import modules as feature_modules
 from webserver.models import BookList, BookListBook
 from webserver.services.book_share_service import BookShareService
 
@@ -71,6 +72,11 @@ class BookAccessService:
 
     @staticmethod
     def _booklist_allows_read(book_id: Optional[int]) -> bool:
+        # 公开书单的 guest_read 是书单能力的延伸：社区互动模块关闭后书单入口与接口
+        # 都已下线，这份授权必须一并失效，否则会留下「书单页面没了、访客照样能读」
+        # 的暗门。只影响判定，不改动书单数据，重新打开模块即恢复。
+        if not feature_modules.module_enabled(feature_modules.MODULE_COMMUNITY):
+            return False
         db = BookList._session()
         ids = [row[0] for row in db.query(BookList.id).filter(BookList.is_public.is_(True), BookList.guest_read.is_(True)).all()]
         if not ids or book_id is None:

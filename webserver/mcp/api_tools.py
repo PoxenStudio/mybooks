@@ -20,6 +20,8 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
+from webserver.base import modules as feature_modules
+
 # call(method, path, params=None, json=None) -> parsed JSON dict
 ApiCall = Callable[..., Awaitable[Dict[str, Any]]]
 ToolFunc = Callable[[ApiCall, Dict[str, Any]], Awaitable[Dict[str, Any]]]
@@ -223,6 +225,12 @@ async def edit_book(call, args):
     if not book_id:
         return _err("book_id is required")
     body = {k: v for k, v in args.items() if k != "book_id"}
+    # 实体书模块关闭时 handler 会丢弃这两个字段；这里直接报错，避免助手收到
+    # 「修改成功」却实际没改的假象
+    if not feature_modules.module_enabled(feature_modules.MODULE_PHYSICAL):
+        physical_keys = [k for k in ("book_count", "book_type", "location") if k in body]
+        if physical_keys:
+            return _err("physical book fields are disabled: %s" % ", ".join(physical_keys))
     return await call("POST", f"/api/book/{book_id}/edit", json=body)
 
 

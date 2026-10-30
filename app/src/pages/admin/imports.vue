@@ -59,6 +59,7 @@
                         </v-btn>
                     </template>
                     <v-btn
+                        v-if="audioModuleOn"
                         :disabled="loading || bulkDeleting"
                         :outlined="$vuetify.breakpoint.xs"
                         color="purple darken-1"
@@ -132,7 +133,7 @@
                         hide-details
                     ></v-select>
                 </v-col>
-                <v-col cols="12" sm="6" md="4" class="mb-2">
+                <v-col v-if="communityModuleOn" cols="12" sm="6" md="4" class="mb-2">
                     <v-checkbox
                         v-model="importSole"
                         :label="$t('imports.import_sole_option')"
@@ -298,7 +299,7 @@
             @confirm="runBulkDelete"
         >
             <p>{{ $t('imports.bulk_delete_desc', { count: bulkSelectedCount, status: bulkStatusLabel }) }}</p>
-            <p>{{ $t('imports.bulk_delete_audiobook_note') }}</p>
+            <p v-if="audioModuleOn">{{ $t('imports.bulk_delete_audiobook_note') }}</p>
             <v-checkbox
                 v-model="bulkDeleteFiles"
                 :label="$t('imports.bulk_delete_files_option')"
@@ -393,6 +394,16 @@ export default {
     computed: {
         allowPhysicalBooks() {
             return !!(this.$store.state.sys && this.$store.state.sys.allow && this.$store.state.sys.allow.physical_books);
+        },
+        // 有声书模块开关：关闭后不显示「导入有声书」，也不再去查音频导入状态
+        audioModuleOn() {
+            const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
+            return mods.audio !== false;
+        },
+        // 社区互动模块开关：关闭后不显示「设为私藏」，提交时也不再携带 sole
+        communityModuleOn() {
+            const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
+            return mods.community !== false;
         },
         pageCount: function () {
             return parseInt(this.total / 20);
@@ -516,6 +527,15 @@ export default {
                     .then((rsp) => {
                         if (rsp.err != "ok") {
                             this.$alert("error", rsp.msg);
+                            // 任务运行期间模块被关闭：后端门禁返回 module.disabled，
+                            // 停止轮询并复位任务态，避免页面一直停在加载中
+                            if (rsp.err === "module.disabled") {
+                                this.loading = false;
+                                this.importing = false;
+                                this.audioImporting = false;
+                                this.batchAdding = false;
+                                this.bulkDeleting = false;
+                            }
                             return;
                         }
                         if (callback(rsp)) {
@@ -553,9 +573,10 @@ export default {
             }
             this.loading = true;
             // 本次导入的书籍全部设为私藏，作用于本次运行的所有导入形态（全部/勾选/状态筛选/按目录）
+            // 社区模块关闭时复选框已隐藏，这里兜底不把残留的 true 发出去
             return this.$backend("/admin/import/run", {
                 method: "POST",
-                body: JSON.stringify(Object.assign({ sole: this.importSole }, payload)),
+                body: JSON.stringify(Object.assign({ sole: this.importSole && this.communityModuleOn }, payload)),
             }).then((rsp) => {
                 if (rsp.err !== "ok") {
                     this.$alert("error", rsp.msg);
@@ -786,32 +807,34 @@ export default {
                     }
                 });
 
-            // Check audio import status
-            this.$backend("/admin/audio_import/status")
-                .then((rsp) => {
-                    if (rsp.err !== "ok") {
-                        return;
-                    }
-                    if (rsp.audio_importing) {
-                        this.audioImporting = true;
-                        this.loading = true;
-                        this.loopCheckStatus("/admin/audio_import/status", (rsp) => {
-                            this.count_total = rsp.status.total || 0;
-                            this.count_processed = (rsp.status.imported || 0) + (rsp.status.exist || 0);
-                            this.count_done = rsp.summary.done;
-                            this.count_todo = rsp.summary.todo;
-                            this.audioImporting = rsp.audio_importing || false;
-                            if (!rsp.audio_importing) {
-                                this.loading = false;
-                                return false;
-                            }
+            // Check audio import status（有声书模块关闭时跳过该请求）
+            if (this.audioModuleOn) {
+                this.$backend("/admin/audio_import/status")
+                    .then((rsp) => {
+                        if (rsp.err !== "ok") {
+                            return;
+                        }
+                        if (rsp.audio_importing) {
+                            this.audioImporting = true;
                             this.loading = true;
-                            return true;
-                        });
-                    } else {
-                        this.audioImporting = false;
-                    }
-                });
+                            this.loopCheckStatus("/admin/audio_import/status", (rsp) => {
+                                this.count_total = rsp.status.total || 0;
+                                this.count_processed = (rsp.status.imported || 0) + (rsp.status.exist || 0);
+                                this.count_done = rsp.summary.done;
+                                this.count_todo = rsp.summary.todo;
+                                this.audioImporting = rsp.audio_importing || false;
+                                if (!rsp.audio_importing) {
+                                    this.loading = false;
+                                    return false;
+                                }
+                                this.loading = true;
+                                return true;
+                            });
+                        } else {
+                            this.audioImporting = false;
+                        }
+                    });
+            }
 
             // Check batch add status
             this.$backend("/admin/batch_add/status")

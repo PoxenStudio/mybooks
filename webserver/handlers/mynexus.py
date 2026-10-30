@@ -8,6 +8,7 @@ import tornado.escape
 import tornado.web as web
 
 from webserver.handlers.base import BaseHandler, auth, is_admin, js
+from webserver.base import modules as feature_modules
 from webserver.models import MyNexusBookAnalysis, MyNexusChatSession
 from webserver.services.book_access_service import BookAccessService
 from webserver.services.mynexus_service import MyNexusClient, MyNexusError, safe_json
@@ -207,6 +208,9 @@ async def _poll_analysis(book_id, scoped_session):
     except MyNexusError:
         return
     for _ in range(720):
+        if not feature_modules.module_enabled(feature_modules.MODULE_AI):
+            # AI 模块关闭：停止后台轮询，避免继续外呼与写解析状态
+            return
         await asyncio.sleep(5)
         try:
             response = await utils.run_in_threadpool(client.analysis_status, book_id)
@@ -232,7 +236,9 @@ def _ensure_status_poll(book_id, scoped_session):
         _status_tasks[book_id] = asyncio.create_task(_poll_analysis(book_id, scoped_session))
 
 
-class MyNexusBookHandler(BaseHandler):
+class MyNexusBookHandler(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_AI
+
     async def _book(self, raw_id):
         try:
             book_id = int(raw_id)
@@ -357,7 +363,9 @@ class MyNexusBookHandler(BaseHandler):
         return {"err": "ok", "analysis": _analysis_dict(analysis)}
 
 
-class MyNexusSessionHandler(BaseHandler):
+class MyNexusSessionHandler(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_AI
+
     async def _ready_book(self, raw_id):
         try:
             book_id = int(raw_id)
@@ -595,7 +603,9 @@ class MyNexusAvailabilityHandler(MyNexusBookHandler):
         raise web.HTTPError(405)
 
 
-class MyNexusTestConnectionHandler(BaseHandler):
+class MyNexusTestConnectionHandler(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_AI
+
     @js
     @is_admin
     async def post(self):

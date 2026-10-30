@@ -29,6 +29,7 @@ from webserver.services import warmup
 from webserver.services.perf_monitor import PerfMonitor
 from webserver.base.setting_saver import SettingsSaver
 from webserver.base import db_diagnosis
+from webserver.base import modules as feature_modules
 from webserver.services import AsyncService
 from webserver.services.book_barn import BookBarnService
 from webserver.services.item_sync import ItemSyncService
@@ -519,7 +520,8 @@ def make_app():
         BookBarnService().sync_author_list()
 
     # Automatically start AI Assistant if configured
-    if CONF.get("AI_DEEPSEEK_API_KEY"):
+    # AI 模块关闭时不初始化：助手 WebSocket 会被门禁拒绝，提前建代理只会空跑并连外网
+    if CONF.get("AI_DEEPSEEK_API_KEY") and feature_modules.module_enabled(feature_modules.MODULE_AI):
         from webserver.handlers.assistant import AssistantWebSocketHandler
         from webserver.assistant.ai_assistant_agent import AIAssistantMCPAgent
 

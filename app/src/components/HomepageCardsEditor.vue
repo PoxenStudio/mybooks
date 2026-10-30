@@ -6,7 +6,7 @@
     </div>
     <v-list class="homepage-section-list">
       <v-list-item
-        v-for="(section, idx) in local.order"
+        v-for="(section, idx) in visibleOrder"
         :key="section"
         class="px-0"
         :class="{ 'homepage-section-drag-over': dragOverSection === section }"
@@ -54,7 +54,7 @@
           <v-btn icon x-small :disabled="idx === 0" :title="$t('settings.homepage_move_up')" @click="moveSection(section, -1)">
             <v-icon small>mdi-chevron-up</v-icon>
           </v-btn>
-          <v-btn icon x-small :disabled="idx === local.order.length - 1" :title="$t('settings.homepage_move_down')" @click="moveSection(section, 1)">
+          <v-btn icon x-small :disabled="idx === visibleOrder.length - 1" :title="$t('settings.homepage_move_down')" @click="moveSection(section, 1)">
             <v-icon small>mdi-chevron-down</v-icon>
           </v-btn>
         </div>
@@ -154,6 +154,7 @@ import {
   MAX_CUSTOM_CARDS,
   MAX_VALUE_LEN,
   SECTION_META,
+  SECTION_MODULE,
   cardSectionKey,
   defaultSortFor,
   normalizeHomepageConfig,
@@ -174,6 +175,12 @@ export default {
     value: {
       type: Object,
       default: null,
+    },
+    // 功能模块开关快照（sys.modules 或设置页的 moduleState）：模块关闭的卡片
+    // 不渲染这一行，但保留在 order 里，保存时不会丢配置
+    modules: {
+      type: Object,
+      default: () => ({}),
     },
   },
   data() {
@@ -201,6 +208,9 @@ export default {
     };
   },
   computed: {
+    visibleOrder() {
+      return this.local.order.filter((section) => this.moduleOn(SECTION_MODULE[section]));
+    },
     canAdd() {
       return this.local.custom.length < this.maxCustomCards && !!String(this.draft.value || "").trim();
     },
@@ -264,6 +274,10 @@ export default {
     Object.keys(this.searchTimers).forEach((key) => clearTimeout(this.searchTimers[key]));
   },
   methods: {
+    moduleOn(moduleId) {
+      if (!moduleId) return true;
+      return this.modules[moduleId] !== false;
+    },
     isBuiltin(section) {
       return BUILTIN_SECTIONS.includes(section);
     },
@@ -302,11 +316,20 @@ export default {
       }
     },
     moveSection(section, delta) {
-      const from = this.local.order.indexOf(section);
-      const to = from + delta;
-      if (from < 0 || to < 0 || to >= this.local.order.length) return;
+      // 按「可见行」相邻关系移动：被模块隐藏的卡片不渲染，但不能因为
+      // 找不到相邻项就动不了，也不能把它从 order 里挤掉
+      const visible = this.visibleOrder;
+      const fromVisible = visible.indexOf(section);
+      const toVisible = fromVisible + delta;
+      if (fromVisible < 0 || toVisible < 0 || toVisible >= visible.length) return;
       const order = this.local.order.slice();
+      const from = order.indexOf(section);
+      if (from < 0) return;
       order.splice(from, 1);
+      const anchor = visible[toVisible];
+      let to = order.indexOf(anchor);
+      if (to < 0) return;
+      if (delta > 0) to += 1;
       order.splice(to, 0, section);
       this.local.order = order;
     },

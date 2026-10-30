@@ -42,6 +42,7 @@ from webserver import perf
 from webserver.models import Reader, Item, Authors, Reading, BookReview, Message
 from webserver.services.book_review_service import BookReviewService
 from webserver.base.formatter import SimpleBookFormatter
+from webserver.base import modules as feature_modules
 from webserver.base.setting_saver import ADMIN_SETTING_KEYS, SettingsSaver
 from webserver.base.homepage import get_homepage_config, normalize_homepage
 from webserver.base.sidebar import SIDEBAR_DEFAULT_ITEMS, SIDEBAR_ITEMS_MIGRATED_KEY, get_sidebar_items
@@ -67,7 +68,9 @@ DEFAULT_META_SOURCES = ["douban", "baidu", "xinhua"]
 LOG_PATH = "/data/log/mybooks.log"
 
 
-class AdminUsers(BaseHandler):
+class AdminUsers(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_USERS
+
     @js
     @auth
     def get(self):
@@ -464,7 +467,9 @@ class AdminSettings(BaseHandler):
 
         # 与首页渲染共用同一套归一化：auto.py 被手改成非 dict/空值时也会回退旧开关，
         # 否则设置页显示"全部可见"，管理员保存任意设置就会被静默改写首页行为。
-        homepage_config = get_homepage_config()
+        # 这里不套模块可见性（apply_modules=False）：模块关闭造成的"强制隐藏"
+        # 只属于运行期渲染，不能因为管理员保存一次设置就被固化进 HOMEPAGE_CONFIG。
+        homepage_config = get_homepage_config(apply_modules=False)
 
         CONF["site_icon"] = "favicon_0"  # default icon, means use current favicon.ico
         CONF["META_ALL_SOURCES"] = BookSearch.all_sources()
@@ -532,6 +537,13 @@ class AdminSettings(BaseHandler):
             args[ENABLE_VIP_QUOTA_KEY] = current_vip_quota
         if ENABLE_OPDS_SERVICE not in args:
             args[ENABLE_OPDS_SERVICE] = CONF.get(ENABLE_OPDS_SERVICE, True)
+        # 模块开关：args 会被 dumpfile() 整份写回 auto.py，少一个键就等于把它抹掉、
+        # 重启后回落到默认值。这里按模块表统一补回当前值，新增模块不用再逐条 if，
+        # 也能挡住「旧版前端缓存页 / 脚本直接打接口」不带该键的情况。
+        for _module_spec in feature_modules.MODULES.values():
+            args.setdefault(
+                _module_spec["key"], CONF.get(_module_spec["key"], _module_spec["default"])
+            )
         if args.get(IMPORT_BY_INOTIFY, False):
             # 如果启用基于 inotify 的文件导入，不能默认删除文件
             args["REMOVE_IMPORTED_FILE"] = False
@@ -909,8 +921,10 @@ class AdminBookFill(BaseHandler):
         return {"err": "ok", "msg": _("任务启动成功！请耐心等待，稍后再来刷新页面")}
 
 
-class AdminBookAIFill(BaseHandler):
+class AdminBookAIFill(feature_modules.ModuleGateMixin, BaseHandler):
     """Admin API: 批量使用 AI 更新指定书籍的信息"""
+
+    module_id = feature_modules.MODULE_AI
 
     @js
     @is_admin
@@ -1845,7 +1859,9 @@ class AdminResources(BaseHandler):
         return {"err": "ok", "resources": resources}
 
 
-class AdminAITestConnection(BaseHandler):
+class AdminAITestConnection(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_AI
+
     @js
     @is_admin
     async def post(self):

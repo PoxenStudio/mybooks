@@ -2,7 +2,7 @@
   <div>
     <v-row align="start">
         <v-col cols="12">
-            <MyNexusChatDialog :open.sync="mynexusChatOpen" :book="book" @unavailable="onMyNexusUnavailable" />
+            <MyNexusChatDialog v-if="aiModuleOn" :open.sync="mynexusChatOpen" :book="book" @unavailable="onMyNexusUnavailable" />
             <v-dialog v-model="dialog_converting" persistent width="460">
                 <v-card class="dialog-border">
                     <div style="height: 16px;"></div>
@@ -17,6 +17,7 @@
             </v-dialog>
 
             <AppDialog
+                v-if="audioModuleOn"
                 v-model="dialog_epub2audio"
                 type="action"
                 :title="$t('book.convertToAudio')"
@@ -62,6 +63,7 @@
             </AppDialog>
 
             <AudioListDialog
+                v-if="audioModuleOn"
                 :open.sync="dialog_audiolist"
                 :audios="audios"
                 :audio-status="AUDIO_STATUS"
@@ -209,7 +211,7 @@
                         class="mx-2 d-flex d-sm-flex"
                         :style="tiny ? { padding: '0px', margin: '0px 1px !important' } : {}"
                         @click="switchToAudioPlayer"
-                        v-if="hasEBooks"
+                        v-if="hasEBooks && audioModuleOn"
                     >
                         <v-icon v-if="tiny">mdi-music-note</v-icon>
                         <template v-else>
@@ -329,11 +331,11 @@
                                     <v-icon>mdi-apps</v-icon>
                                     {{ $t('book.resetInfo') }}
                                 </v-list-item>
-                                <v-list-item @click="setSole">
+                                <v-list-item v-if="communityModuleOn" @click="setSole">
                                     <v-icon>{{ book.sole ? 'mdi-earth-off' : 'mdi-earth' }}</v-icon>
                                     {{ book.sole ? $t('book.setPublic') : $t('book.setSole') }}
                                 </v-list-item>
-                                <v-list-item @click="aiFillBook">
+                                <v-list-item v-if="aiModuleOn" @click="aiFillBook">
                                     <v-icon>mdi-robot</v-icon>
                                     {{ $t('book.aiUpdate') }}
                                 </v-list-item>
@@ -353,7 +355,7 @@
                                     <v-icon>mdi-card-bulleted-outline</v-icon>
                                     {{ $t('book.generateShareCard') }}
                                 </v-list-item>
-                                <v-list-item @click="exchangeBookType">
+                                <v-list-item v-if="physicalModuleOn" @click="exchangeBookType">
                                     <v-icon>mdi-swap-horizontal-bold</v-icon>
                                     {{ book.book_type==this.BOOK_TYPE.PHYSICAL ? $t('book.exchangeToEbook') : $t('book.exchangeToPhysical') }}
                                 </v-list-item>
@@ -473,7 +475,7 @@
                                         </template>
                                         <span>{{ $t('readingState.wantsHint') }}</span>
                                     </v-tooltip>
-                                    <BookListQuickAddMenu v-if="$store.state.user?.is_login" :book-id="book.id">
+                                    <BookListQuickAddMenu v-if="$store.state.user?.is_login && communityModuleOn" :book-id="book.id">
                                         <template v-slot:activator="{ on, attrs }">
                                             <v-tooltip bottom>
                                                 <template v-slot:activator="{ on: onTooltip, attrs: attrsTooltip }">
@@ -488,7 +490,7 @@
                                             </v-tooltip>
                                         </template>
                                     </BookListQuickAddMenu>
-                                    <v-tooltip bottom v-if="book.sole">
+                                    <v-tooltip bottom v-if="communityModuleOn && book.sole">
                                         <template v-slot:activator="{ on, attrs }">
                                             <v-btn icon small class="ml-1" v-bind="attrs" v-on="on">
                                                 <v-icon :color="book.sole ? 'red' : 'green'" class="mr-2">
@@ -536,13 +538,13 @@
                                     </template>
                                 </div>
                                 <br/>
-                                <span v-if="book.book_type==this.BOOK_TYPE.PHYSICAL">
+                                <span v-if="physicalModuleOn && book.book_type==this.BOOK_TYPE.PHYSICAL">
                                     <v-chip rounded small dark color="indigo">
                                         <v-icon>mdi-bookshelf</v-icon>{{ $t('book.bookPhysical') }}
                                     </v-chip>
                                 </span>
-                                <span v-if="book.book_type==this.BOOK_TYPE.PHYSICAL">{{ $t('book.bookCount') }}: {{book.book_count}}</span>
-                                <span v-if="book.book_type==this.BOOK_TYPE.PHYSICAL">
+                                <span v-if="physicalModuleOn && book.book_type==this.BOOK_TYPE.PHYSICAL">{{ $t('book.bookCount') }}: {{book.book_count}}</span>
+                                <span v-if="physicalModuleOn && book.book_type==this.BOOK_TYPE.PHYSICAL">
                                     , {{ $t('book.location') }}:
                                     <span v-if="!editing_location">
                                         {{book.location || "*" }}
@@ -594,7 +596,7 @@
                                 </v-chip>
                             </div>
                             <div class="tag-chips" style="margin-top: 5px;">
-                                <v-chip rounded smallF color="indigo" class="white--text"
+                                <v-chip v-if="aiModuleOn" rounded smallF color="indigo" class="white--text"
                                         @click="aiFillBook" :loading="ai_filling">
                                     <v-icon left>mdi-robot</v-icon>
                                     {{ $t('book.aiUpdate') }}
@@ -722,7 +724,7 @@
                                 </template>
                             </div>
                         </v-card-text>
-                        <v-card-text v-if="isAdmin && book.mynexus_error" class="pt-0 error--text">
+                        <v-card-text v-if="isAdmin && aiModuleOn && book.mynexus_error" class="pt-0 error--text">
                             {{ book.mynexus_error }}
                         </v-card-text>
                         <v-card-text v-if="isAdmin && mynexusEnabled && (mynexusIsActive || mynexusStatus === 'failed')" class="pt-0">
@@ -837,7 +839,7 @@
         <v-col cols="12" sm="6" class="book-action-col">
             <v-card outlined>
                 <v-list>
-                    <v-list-item @click="switchAudioDialog" :disabled="!hasEBooks">
+                    <v-list-item @click="switchAudioDialog" :disabled="!hasEBooks" v-if="audioModuleOn">
                         <v-list-item-avatar large :color="!hasEBooks ? 'grey' : (audios.status === AUDIO_STATUS.FAILED ? 'red' : 'primary')">
                             <v-icon dark>{{ audios.status === AUDIO_STATUS.FAILED ? 'mdi-alert-circle' : 'mdi-playlist-music' }}</v-icon>
                         </v-list-item-avatar>
@@ -1094,6 +1096,7 @@
 
     <!-- MyNexus 解析结果失效，询问是否重新解读 -->
     <AppDialog
+        v-if="aiModuleOn"
         v-model="dialog_mynexus_reanalyze"
         type="confirm"
         :title="$t('book.mynexusCompanion')"
@@ -1330,7 +1333,7 @@ export default {
             return (this.book.files || []).some((file) => ["epub", "txt"].includes(file.format.toLowerCase()));
         },
         mynexusEnabled: function () {
-            return this.$store.state.sys?.mynexus_enabled === true;
+            return this.aiModuleOn && this.$store.state.sys?.mynexus_enabled === true;
         },
         canReview: function () {
             // 评价功能总开关（管理员在"浏览与阅读"里关闭时，整个评论区都不展示）
@@ -1481,6 +1484,32 @@ export default {
                 return false;
             }
             return true;
+        },
+        /**
+         * 有声书模块是否开启（sys.modules.audio）。关闭时详情页的转写/播放按钮、
+         * 处理菜单项与两个对话框一起消失，音频进度也不轮询。
+         */
+        audioModuleOn() {
+            const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
+            return mods.audio !== false;
+        },
+        /**
+         * 社区互动模块是否开启（sys.modules.community）。关闭时详情页的
+         * 「加入书单」与私藏入口一起消失。
+         */
+        communityModuleOn() {
+            const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
+            return mods.community !== false;
+        },
+        /** 实体书模块（sys.modules.physical）：关闭后互转、册数与书架位置一起消失 */
+        physicalModuleOn() {
+            const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
+            return mods.physical !== false;
+        },
+        /** AI 模块（sys.modules.ai）：关闭后 AI 更新、MyNexus 解析与伴读一起消失 */
+        aiModuleOn() {
+            const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
+            return mods.ai !== false;
         },
 
         hasTxt() {
@@ -2755,6 +2784,10 @@ export default {
         },
         startAudioProgressPolling() {
             this.stopAudioProgressPolling(); // Clear any existing timer
+            // 模块关闭时后端已不再返回 audios，这里再兜一层：不轮询，省请求
+            if (!this.audioModuleOn) {
+                return;
+            }
             this.progressTimer = setInterval(() => {
                 this.updateAudioProgress();
             }, 10000); // Poll every 10 seconds

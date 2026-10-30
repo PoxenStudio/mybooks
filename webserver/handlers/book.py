@@ -31,6 +31,7 @@ from webserver.base.image_helper import ImageHelper
 from webserver.base.epub_helper import EpubHelper
 from webserver.base.meta_helper import guess_authors, guess_tags
 from webserver.base.homepage import get_homepage_config
+from webserver.base import modules as feature_modules
 from webserver.services.book_visit_service import BookVisitService
 from webserver.services.book_access_service import BookAccessService
 from webserver.services.autofill import AutoFillService
@@ -335,24 +336,40 @@ class BookDetail(BaseHandler):
         formated_book = BookFormatter(self, book).format(with_files=True, with_perms=True)
         formated_book["reading_stats"] = ReadingStatsService.get_book_format_stats(self.current_user.id, book_id) if self.current_user else []
         analysis = self.sqlite_session.get(MyNexusBookAnalysis, book_id)
+        ai_module_on = feature_modules.module_enabled(feature_modules.MODULE_AI)
         can_read_ai_data = bool(self.current_user or BookAccessService.guest_read_allowed(self, book_id))
-        formated_book["ai_companion_available"] = bool(self.current_user and analysis and analysis.status == "completed")
-        formated_book["ai_reading_guide"] = analysis.reading_guide if can_read_ai_data and analysis and analysis.status == "completed" else ""
+        formated_book["ai_companion_available"] = bool(
+            ai_module_on and self.current_user and analysis and analysis.status == "completed"
+        )
+        formated_book["ai_reading_guide"] = (
+            analysis.reading_guide
+            if ai_module_on and can_read_ai_data and analysis and analysis.status == "completed"
+            else ""
+        )
         if self.is_admin():
-            formated_book["mynexus_configured"] = bool(CONF.get("ENABLE_MYNEXUS") and CONF.get("MYNEXUS_URL") and CONF.get("MYNEXUS_TOKEN"))
+            mynexus_configured = False
+            if ai_module_on and CONF.get("ENABLE_MYNEXUS") and CONF.get("MYNEXUS_URL") and CONF.get("MYNEXUS_TOKEN"):
+                mynexus_configured = True
+            formated_book["mynexus_configured"] = mynexus_configured
             formated_book["mynexus_analysis"] = {
                 "status": analysis.status,
                 "progress": analysis.progress,
                 "error_msg": analysis.error_msg,
                 "can_retry": analysis.status == "failed",
-            } if analysis else {"status": "not_started", "progress": 0, "error_msg": ""}
+            } if (ai_module_on and analysis) else {"status": "not_started", "progress": 0, "error_msg": ""}
 
         return {
             "err": "ok",
             "kindle_sender": CONF["smtp_username"],
             "guest_access": None if self.current_user else BookAccessService.guest_read_source(self, book_id),
             "book": formated_book,
-            "audios": AudioUtils.get_audios(bid, self.current_user.id if self.current_user else None),
+            # 有声书模块关闭时不再扫音频目录：详情页拿不到 audios，
+            # 前端也就不会渲染播放/转写入口（关闭只隐藏，不动磁盘文件）。
+            "audios": (
+                AudioUtils.get_audios(bid, self.current_user.id if self.current_user else None)
+                if feature_modules.module_enabled(feature_modules.MODULE_AUDIO)
+                else {"status": "unavailable", "msg": _("有声书功能已关闭"), "count": 0}
+            ),
         }
 
 
@@ -398,8 +415,11 @@ class BookTags(BaseHandler):
             return {"err": "internal", "msg": _("更新标签时发生错误，请稍后再试")}
 
 
-class BookAIFill(BaseHandler):
+class BookAIFill(feature_modules.ModuleGateMixin, BaseHandler):
     """使用 AI 同步更新单本书的分类、标签、简介和作者介绍"""
+
+    module_id = feature_modules.MODULE_AI
+
     @js
     @auth
     async def post(self, id):
@@ -493,7 +513,9 @@ class BookCategory(BaseHandler):
             return {"err": "internal", "msg": _("更新分类失败")}
 
 
-class BookLocation(BaseHandler):
+class BookLocation(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_PHYSICAL
+
     @js
     @auth
     def post(self, id):
@@ -826,7 +848,9 @@ class BookToPDF(BaseHandler):
             return {"err": "params.book.converting", "msg": _("本书正在转换中，请稍后再试")}
         service.convert_and_save(self.user_id(), book, fpath, "pdf")
         return {"err": "ok", "content": "%s" % _("转换成功，请稍后刷新页面查看")}
-class BookSetSole(BaseHandler):
+class BookSetSole(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_COMMUNITY
+
     @js
     @auth
     def post(self, bid):
@@ -1570,7 +1594,9 @@ class BookReading(BaseHandler):
                 "books": reading_books}
 
 
-class PrintBooks(BaseHandler):
+class PrintBooks(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_PHYSICAL
+
     @js
     def get(self):
         title = _("实体书")
@@ -1604,7 +1630,9 @@ class PrintBooks(BaseHandler):
             return {"err": "internal", "msg": _("获取实体书失败")}
 
 
-class BookSoled(BaseHandler):
+class BookSoled(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_COMMUNITY
+
     @js
     @auth
     def get(self):
@@ -2050,6 +2078,13 @@ class BookEdit(BaseHandler):
         return bool(html_pattern.search(content))
 
     def edit_book(self, bid, data):
+        # 实体书模块关闭时忽略物理字段：老缓存页/脚本仍可能提交 book_type/book_count/
+        # location，此时登记与互转入口都已下线，写进去只会得到看不全也改不了的物理书
+        if not feature_modules.module_enabled(feature_modules.MODULE_PHYSICAL):
+            data = {
+                key: val for key, val in data.items()
+                if key not in ("book_type", "book_count", COLUMN_LOCATION)
+            }
         from calibre.utils.date import now as nowf
         mi = self.calibre_db.get_metadata(bid, index_is_id=True, get_cover=True)
         need_update_cover = False
@@ -2756,7 +2791,9 @@ class HotBook(ListHandler):
 
 
 # 通ISBN添加实体图书
-class BookAddByISBN(BaseHandler):
+class BookAddByISBN(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_PHYSICAL
+
     @js
     @auth
     async def post(self):
@@ -2838,7 +2875,9 @@ class BookAddByISBN(BaseHandler):
 
 
 # 直接录入书名/作者/ISBN添加实体图书（ISBN、作者可选），添加后强制刮削
-class BookAddManual(BaseHandler):
+class BookAddManual(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_PHYSICAL
+
     @js
     @auth
     def post(self):
@@ -4720,7 +4759,9 @@ class ClearRareTags(ListHandler):
             return {"err": "error", "msg": _("处理失败：%s") % str(e)}
 
 
-class BookExchangeType(BaseHandler):
+class BookExchangeType(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_PHYSICAL
+
     @js
     @auth
     def post(self):

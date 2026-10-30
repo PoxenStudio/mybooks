@@ -80,6 +80,13 @@ settings = {
     "BOOKBARN_COLLECTION_HOUR": 3,
     "USE_BOOKBARN_PROXY": False,
     "BOOK2AUDIO_PROXY": "",
+    # 功能模块总开关（模块级：一个模块一个勾选框，见 webserver/base/modules.py）。
+    # 关闭后入口隐藏、设置不渲染、接口拒绝；不删除任何已有数据。
+    "ENABLE_MODULE_AUDIO": True,
+    "ENABLE_MODULE_COMMUNITY": True,
+    "ENABLE_MODULE_PHYSICAL": True,
+    "ENABLE_MODULE_AI": True,
+    "ENABLE_MODULE_USERS": True,
     "ENABLE_PHYSICAL_BOOKS": True,
     "ENABLE_FOLDER_BROWSE": False,
     "ALLOW_GUEST_UPLOAD": False,

@@ -12,6 +12,13 @@ from webserver import constants
 import tornado
 
 from webserver import loader
+from webserver.base.modules import (
+    MODULE_AUDIO,
+    MODULE_COMMUNITY,
+    MODULE_PHYSICAL,
+    ModuleGateMixin,
+    module_enabled,
+)
 from webserver.handlers.base import BaseHandler, auth, js, is_admin
 from webserver.models import ScanFile
 from webserver.services.scan_service import ScanService, SCAN_EXT as SERVER_SCAN_EXT, ImportOptions
@@ -272,6 +279,10 @@ class ImportRun(BaseHandler):
             skip_last_dirs = req.get("skip_last_dirs", 0)
             force = req.get("force", False)
             sole = bool(req.get("sole", False))
+            if sole and not module_enabled(MODULE_COMMUNITY):
+                # 私藏属于社区互动模块：模块关闭时不阻断导入本身，只丢弃这个标记，
+                # 避免造出既看不了也取消不了的私藏书
+                sole = False
             if not filelist:
                 return {"err": "params.error", "msg": _("参数错误")}
             if ScanService.is_importing():
@@ -346,7 +357,9 @@ class ImportStatus(BaseHandler):
                     logging.error(f"Error closing scanner: {e}")
 
 
-class BatchAddRun(BaseHandler):
+class BatchAddRun(ModuleGateMixin, BaseHandler):
+    module_id = MODULE_PHYSICAL
+
     @js
     @is_admin
     def post(self):
@@ -423,7 +436,9 @@ class BatchAddRun(BaseHandler):
             return {"err": "server.error", "msg": str(e)}
 
 
-class BatchAddStatus(BaseHandler):
+class BatchAddStatus(ModuleGateMixin, BaseHandler):
+    module_id = MODULE_PHYSICAL
+
     @js
     @is_admin
     def get(self):
@@ -454,7 +469,9 @@ class BatchAddStatus(BaseHandler):
                     logging.error(f"Error closing scanner: {e}")
 
 
-class AudioImportRun(BaseHandler):
+class AudioImportRun(ModuleGateMixin, BaseHandler):
+    module_id = MODULE_AUDIO
+
     @js
     @is_admin
     def post(self):
@@ -467,7 +484,9 @@ class AudioImportRun(BaseHandler):
         return {"err": "ok", "msg": _("有声书导入任务已启动")}
 
 
-class AudioImportStatus(BaseHandler):
+class AudioImportStatus(ModuleGateMixin, BaseHandler):
+    module_id = MODULE_AUDIO
+
     @js
     @is_admin
     def get(self):
