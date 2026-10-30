@@ -830,7 +830,7 @@
     "enable_module_community": "社群互動",
     "enable_module_community_tips": "包含站內留言、缺書登記、書單、友情連結與私藏書籍。關閉後對應入口、書籍詳情頁按鈕與設定項一併隱藏；留言、缺書登記、書單、友鏈設定與私藏標記都保留，重新勾選即恢復。",
     "enable_module_physical": "實體書",
-    "enable_module_physical_tips": "包含實體書登記（ISBN / 手動錄入）、冊數與書架位置、電子書↔實體書互轉。關閉後入口、詳情頁欄位與設定項一併隱藏；既有實體書紀錄保留，重新勾選即恢復。",
+    "enable_module_physical_tips": "包含實體書登記（ISBN / 手動輸入）、冊數與書架位置、電子書↔實體書互轉。關閉後入口、詳情頁欄位與設定項一併隱藏；既有實體書記錄保留，重新勾選即恢復。",
     "enable_module_ai": "AI",
     "enable_module_ai_tips": "包含 AI 助手、AI 更新中繼資料、MyNexus 解析與伴讀、MCP 介面。關閉後入口、按鈕與設定區塊一併隱藏，介面拒絕；已產生的解析結果保留，重新勾選即恢復。",
     "sec_site_home": "首頁與列表",

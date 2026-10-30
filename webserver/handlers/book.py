@@ -513,7 +513,9 @@ class BookCategory(BaseHandler):
             return {"err": "internal", "msg": _("更新分类失败")}
 
 
-class BookLocation(BaseHandler):
+class BookLocation(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_PHYSICAL
+
     @js
     @auth
     def post(self, id):

@@ -567,6 +567,8 @@ class OpdsHandler(BaseHandler):
         page_url = url_for("opdscategorygroup", category=category, which=which)
 
         category = unhexlify(category)
+        if self._physical_category_hidden(category):
+            raise web.HTTPError(404, reason="Category not found")
         if category not in categories:
             raise web.HTTPError(404, reason="Category %r not found" % which)
         category_meta = self.calibre_db.field_metadata
@@ -608,6 +610,14 @@ class OpdsHandler(BaseHandler):
             )
         )
 
+    def _physical_category_hidden(self, category):
+        """实体书模块或子开关关闭时，位置分类连直接 URL 一起下线。"""
+        if category != CALIBRE_COLUMN_LOCATION:
+            return False
+        if not CONF.get("ENABLE_PHYSICAL_BOOKS", True):
+            return True
+        return not feature_modules.module_enabled(feature_modules.MODULE_PHYSICAL)
+
     def opds_navcatalog(self, which=None, offset=0):
         try:
             offset = int(offset)
@@ -622,6 +632,8 @@ class OpdsHandler(BaseHandler):
         which = unhexlify(which)
         type_ = which[0]
         which = which[1:]
+        if self._physical_category_hidden(which):
+            raise web.HTTPError(404, reason="Category not found")
         if type_ == "O":
             return self.get_opds_all_books(which, page_url, up_url, offset=offset)
         elif type_ == "N":
@@ -697,6 +709,8 @@ class OpdsHandler(BaseHandler):
         up_url = url_for("opdsnavcatalog", which=category)
 
         which, category = unhexlify(which), unhexlify(category)
+        if self._physical_category_hidden(category):
+            raise web.HTTPError(404, reason="Category not found")
         type_ = which[0]
         which = which[1:]
         if type_ == "I":
@@ -762,9 +776,7 @@ class OpdsHandler(BaseHandler):
         hidden_categories = {"formats", "identifiers", CALIBRE_COLUMN_EXT_LINK}
         if not CONF.get("ENABLE_FOLDER_BROWSE", False):
             hidden_categories.add(CALIBRE_COLUMN_FOLDER)
-        if not CONF.get("ENABLE_PHYSICAL_BOOKS", True) or not feature_modules.module_enabled(
-            feature_modules.MODULE_PHYSICAL
-        ):
+        if self._physical_category_hidden(CALIBRE_COLUMN_LOCATION):
             hidden_categories.add(CALIBRE_COLUMN_LOCATION)
 
         for category in sorted(categories, key=lambda x: sort_key(getter(x))):

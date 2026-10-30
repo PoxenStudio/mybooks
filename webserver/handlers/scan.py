@@ -15,6 +15,7 @@ from webserver import loader
 from webserver.base.modules import (
     MODULE_AUDIO,
     MODULE_COMMUNITY,
+    MODULE_PHYSICAL,
     ModuleGateMixin,
     module_enabled,
 )
@@ -356,7 +357,9 @@ class ImportStatus(BaseHandler):
                     logging.error(f"Error closing scanner: {e}")
 
 
-class BatchAddRun(BaseHandler):
+class BatchAddRun(ModuleGateMixin, BaseHandler):
+    module_id = MODULE_PHYSICAL
+
     @js
     @is_admin
     def post(self):
@@ -433,7 +436,9 @@ class BatchAddRun(BaseHandler):
             return {"err": "server.error", "msg": str(e)}
 
 
-class BatchAddStatus(BaseHandler):
+class BatchAddStatus(ModuleGateMixin, BaseHandler):
+    module_id = MODULE_PHYSICAL
+
     @js
     @is_admin
     def get(self):

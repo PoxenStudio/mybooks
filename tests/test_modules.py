@@ -305,9 +305,23 @@ class TestPhysicalRoutesAreGated(unittest.TestCase):
             "/api/book/add",
             "/api/book/add/manual",
             "/api/book/exchange_type",
+            "/api/book/([0-9]+)/location",
         }
         seen = set()
         for pattern, handler in book.routes():
+            if pattern in gated:
+                seen.add(pattern)
+                with self.subTest(route=pattern):
+                    self.assertTrue(issubclass(handler, ModuleGateMixin), pattern)
+                    self.assertEqual(handler.module_id, MODULE_PHYSICAL, pattern)
+        self.assertEqual(seen, gated)
+
+    def test_physical_batch_add_routes_are_gated(self):
+        from webserver.handlers import scan
+
+        gated = {"/api/admin/batch_add/run", "/api/admin/batch_add/status"}
+        seen = set()
+        for pattern, handler in scan.routes():
             if pattern in gated:
                 seen.add(pattern)
                 with self.subTest(route=pattern):
@@ -389,6 +403,58 @@ class TestAIRoutesAreGated(unittest.TestCase):
         with mock.patch("webserver.handlers.assistant.module_enabled", return_value=False):
             asyncio.run(AssistantWebSocketHandler.open(handler))
         self.assertEqual(handler.closed[0], 4004)
+
+    def test_assistant_rejects_message_when_module_off(self):
+        """已建立的连接也要复查，避免关闭模块后旧会话继续调用 AI。"""
+        import asyncio
+
+        from webserver.handlers.assistant import AssistantWebSocketHandler
+
+        class _Fake:
+            def __init__(self):
+                self.closed = None
+
+            def close(self, code=None, reason=None):
+                self.closed = (code, reason)
+
+        handler = _Fake()
+        with mock.patch("webserver.handlers.assistant.module_enabled", return_value=False):
+            asyncio.run(AssistantWebSocketHandler.on_message(handler, '{"content": "hi"}'))
+        self.assertEqual(handler.closed[0], 4004)
+
+
+class TestMCPPhysicalFieldGuard(unittest.TestCase):
+    def test_edit_book_rejects_physical_fields_when_module_off(self):
+        import asyncio
+
+        from webserver.mcp import api_tools
+
+        async def call(*args, **kwargs):
+            return {"err": "ok"}
+
+        with mock.patch.object(modules_module, "module_enabled", return_value=False):
+            result = asyncio.run(api_tools.edit_book(call, {"book_id": 1, "book_count": 2}))
+        self.assertEqual(result["status"], "error")
+
+        with mock.patch.object(modules_module, "module_enabled", return_value=True):
+            result = asyncio.run(api_tools.edit_book(call, {"book_id": 1, "book_count": 2}))
+        self.assertEqual(result["err"], "ok")
+
+
+class TestOpdsModuleVisibility(unittest.TestCase):
+    def test_location_category_hidden_with_module(self):
+        try:
+            from webserver.constants import CALIBRE_COLUMN_LOCATION
+            from webserver.handlers import opds
+        except ImportError as exc:
+            self.skipTest("opds 路由需要 calibre：%s" % exc)
+
+        with mock.patch.object(modules_module, "module_enabled", return_value=False):
+            self.assertTrue(opds.OpdsHandler._physical_category_hidden(None, CALIBRE_COLUMN_LOCATION))
+        with mock.patch.object(modules_module, "module_enabled", return_value=True):
+            self.assertFalse(opds.OpdsHandler._physical_category_hidden(None, CALIBRE_COLUMN_LOCATION))
+        # 其它分类不受影响
+        self.assertFalse(opds.OpdsHandler._physical_category_hidden(None, "tags"))
 
 
 class TestBookListHomepageHandler(unittest.TestCase):

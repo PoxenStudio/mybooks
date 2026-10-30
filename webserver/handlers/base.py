@@ -1966,10 +1966,16 @@ class BaseHandler(web.RequestHandler):
 
     async def get_sys_info_async(self):
         version = self.library_version()
-        stats = BaseHandler._stats_cache.get("stats", version)
+        # 缓存键带上模块开关：切换模块不改变 library version，否则关闭/重开后的
+        # 计数（audiobooks/physicals）会沿用 60 秒内的旧快照
+        stats_key = "stats:%d:%d" % (
+            feature_modules.module_enabled(feature_modules.MODULE_AUDIO),
+            feature_modules.module_enabled(feature_modules.MODULE_PHYSICAL),
+        )
+        stats = BaseHandler._stats_cache.get(stats_key, version)
         if stats is None:
             stats = await self.run_calibre_read_async(self._library_stats)
-            BaseHandler._stats_cache.put("stats", version, stats)
+            BaseHandler._stats_cache.put(stats_key, version, stats)
         return self._sys_info_with(stats)
 
 

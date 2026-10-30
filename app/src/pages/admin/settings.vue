@@ -1960,7 +1960,7 @@ export default {
                 label: "settings.enable_physical_books",
                 type: "checkbox",
                 tips: "settings.enable_physical_books_tips",
-                // 实体书模块关闭时整组（含子项「允许直接互转」）一起收起
+                // 实体书模块关闭时该字段不渲染
                 module: "physical",
                 fields: [
                   {

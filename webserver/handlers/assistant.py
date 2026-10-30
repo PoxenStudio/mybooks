@@ -62,6 +62,11 @@ class AssistantWebSocketHandler(tornado.websocket.WebSocketHandler):
             return
 
     async def on_message(self, message):
+        # 已建立的连接也要复查：模块关闭后不允许继续对话（open 时只拦新连接）
+        if not module_enabled(MODULE_AI):
+            logging.warning("WebSocket message rejected: AI module disabled.")
+            self.close(code=4004, reason="AI module disabled")
+            return
         try:
             data = json.loads(message)
             user_input = data.get("content", "")

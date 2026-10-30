@@ -52,7 +52,7 @@ class AIFillInfoService(AsyncService):
 
     def _missing_api_key_msg(self) -> str:
         # 模块关闭时直接拒绝：入口虽已隐藏，队列里的旧任务/脚本调用也不应继续跑
-        if not feature_modules.module_enabled(feature_modules.MODULE_AI):
+        if self._module_disabled():
             return _("AI 功能已关闭")
         if not CONF.get("AI_ENABLED"):
             return _("AI 助手未启用，需要到系统设置中启用")
@@ -145,6 +145,9 @@ class AIFillInfoService(AsyncService):
             }
         return {"status": "fail", "msg": _("写入元数据失败")}
 
+    def _module_disabled(self) -> bool:
+        return not feature_modules.module_enabled(feature_modules.MODULE_AI)
+
     @AsyncService.register_service
     def fill_all(self, idlist: list, force: bool = False):
         missing_msg = self._missing_api_key_msg()
@@ -209,6 +212,11 @@ class AIFillInfoService(AsyncService):
         for batch_start in range(0, len(idlist), batch_size):
             if self.cancel_requested:
                 break
+            # 运行期间管理员关闭 AI 模块：在批次边界停下，避免继续产生外部调用与元数据写入
+            if self._module_disabled():
+                logging.warning("[AIFill] AI module disabled while task running, stop")
+                self._finish_task(failed=True, error_msg=_("AI 功能已关闭"))
+                return
             batch_ids = idlist[batch_start: batch_start + batch_size]
             pending = []
             for book_id in batch_ids:
@@ -230,6 +238,10 @@ class AIFillInfoService(AsyncService):
             for book_id, mi in pending:
                 if self.cancel_requested:
                     break
+                if self._module_disabled():
+                    logging.warning("[AIFill] AI module disabled while task running, stop")
+                    self._finish_task(failed=True, error_msg=_("AI 功能已关闭"))
+                    return
                 authors = list(mi.authors) if mi.authors else []
                 try:
                     info = client.get_book_info(
