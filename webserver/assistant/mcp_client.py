@@ -127,11 +127,19 @@ class MCPStreamClient:
             result = response.get("result")
             if not isinstance(result, dict) or not isinstance(result.get("tools"), list):
                 raise RuntimeError("MCP tools/list response is missing a tools list")
-            self.tools_cache = result["tools"]
+            self.tools_cache = [self._normalize_tool(tool) for tool in result["tools"] if isinstance(tool, dict)]
             return self.tools_cache
         except Exception as e:
             logging.exception("Failed to retrieve MCP tool definitions")
             raise RuntimeError(f"Failed to retrieve MCP tool definitions: {e}") from e
+
+    @staticmethod
+    def _normalize_tool(tool: Dict) -> Dict:
+        """Accept both spec camelCase and snake_case tool schemas from MCP servers."""
+        tool = dict(tool)
+        if "inputSchema" not in tool and "input_schema" in tool:
+            tool["inputSchema"] = tool.pop("input_schema")
+        return tool
 
     async def call_tool(self, tool_name: str, arguments: Dict) -> Dict:
         """调用指定的工具"""

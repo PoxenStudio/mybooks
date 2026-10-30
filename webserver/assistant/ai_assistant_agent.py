@@ -17,6 +17,22 @@ AI_MODEL = CONF.get("AI_MODEL", "deepseek-chat")
 MCP_TOKEN = CONF.get("AI_MCP_TOKEN", "")
 MCP_SERVER_URL = "http://127.0.0.1:80/api/mcp/stream"
 
+
+def _int_setting(name: str, default: int) -> int:
+    try:
+        value = int(CONF.get(name, default))
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
+
+
+# LangGraph counts supersteps: each model/tool round trip costs about two steps.
+# The previous value of 16 only allowed ~7 tool rounds and aborted normal
+# multi-step questions with GraphRecursionError.
+AGENT_RECURSION_LIMIT = _int_setting("AI_RECURSION_LIMIT", 40)
+# Hard cap on tool invocations per user turn, so a confused model cannot loop.
+MAX_TOOL_CALLS_PER_TURN = _int_setting("AI_MAX_TOOL_CALLS", 12)
+
 SYSTEM_PROMPT = """你是 MyBooks 书库助手。优先使用提供的工具查询和操作 MyBooks；没有相关工具时再直接回答。
 根据工具结果回答，不要声称完成了工具未成功执行的操作。对于删除等需要确认的操作，必须先向用户说明影响并得到明确同意，再调用确认参数。"""
 
@@ -207,11 +223,19 @@ class AIAssistantMCPAgent:
             text_items = [item["text"] for item in content if isinstance(item, dict) and isinstance(item.get("text"), str)]
             if text_items:
                 return "\n".join(text_items)
+        error = result.get("error")
+        if error:
+            return f"工具调用失败：{error}"
         return json.dumps(result, ensure_ascii=False)
 
-    def _build_react_agent(self, tools: List[Dict]):
+    def _build_react_agent(self, tools: List[Dict], call_state: Optional[Dict[str, Any]] = None):
         from langchain_core.tools import StructuredTool
         from langchain.agents import create_agent
+
+        if call_state is None:
+            call_state = {}
+        call_state.setdefault("count", 0)
+        seen_calls: Dict[Any, str] = call_state.setdefault("seen", {})
 
         langchain_tools = []
         for tool_info in tools:
@@ -220,8 +244,25 @@ class AIAssistantMCPAgent:
                 raise ValueError("MCP tool is missing its name")
 
             async def invoke_tool(_tool_name=name, **arguments):
+                call_key = (
+                    _tool_name,
+                    json.dumps(arguments, sort_keys=True, ensure_ascii=False, default=str),
+                )
+                if call_key in seen_calls:
+                    return (
+                        "该工具已使用相同参数调用过，请勿重复调用。上一次的结果如下：\n"
+                        f"{seen_calls[call_key]}"
+                    )
+                if call_state["count"] >= MAX_TOOL_CALLS_PER_TURN:
+                    return (
+                        "本轮工具调用次数已达上限，请不要再调用工具，"
+                        "直接根据已有结果回答用户；若信息不足，请说明还需要哪些信息。"
+                    )
+                call_state["count"] += 1
                 result = await self.mcp_client.call_tool(_tool_name, arguments)
-                return self._tool_result_text(result)
+                text = self._tool_result_text(result)
+                seen_calls[call_key] = text
+                return text
 
             langchain_tools.append(
                 StructuredTool.from_function(
@@ -266,31 +307,64 @@ class AIAssistantMCPAgent:
 
     async def process_user_input(self, user_input: str):
         """Process a user turn and yield the existing WebSocket event format."""
+        response_parts: List[str] = []
+        hit_step_limit = False
         try:
+            from contextlib import aclosing
+
+            from langgraph.errors import GraphRecursionError
+
             messages = await self.format_conversation(user_input)
             available_tools = await self.mcp_client.list_tools()
             selected_tools = self.select_tools(user_input, available_tools, self._last_tool_names)
             if selected_tools:
                 self._last_tool_names = {tool["name"] for tool in selected_tools}
             logging.info("Selected %d of %d MCP tools for assistant turn", len(selected_tools), len(available_tools))
-            response_parts = []
 
             if selected_tools:
                 agent = self._build_react_agent(selected_tools)
-                async for event in agent.astream_events(
-                    {"messages": messages},
-                    config={"recursion_limit": 16},
-                    version="v2",
-                ):
-                    if event.get("event") == "on_tool_start":
-                        tool_name = event.get("name", "unknown")
-                        yield {"type": "status", "content": f"正在调用工具: {tool_name}..."}
-                    elif event.get("event") == "on_chat_model_stream":
-                        chunk = event.get("data", {}).get("chunk")
-                        content = self._content_text(getattr(chunk, "content", ""))
-                        if content:
-                            response_parts.append(content)
-                            yield {"type": "content", "content": content}
+                tool_calls_seen = 0
+                streamed_runs: set[str] = set()
+                try:
+                    async with aclosing(agent.astream_events(
+                        {"messages": messages},
+                        config={"recursion_limit": AGENT_RECURSION_LIMIT},
+                        version="v2",
+                    )) as event_stream:
+                        async for event in event_stream:
+                            if event.get("event") == "on_tool_start":
+                                tool_calls_seen += 1
+                                if tool_calls_seen > MAX_TOOL_CALLS_PER_TURN:
+                                    hit_step_limit = True
+                                    logging.warning(
+                                        "Assistant turn exceeded %d tool calls; stopping the agent early",
+                                        MAX_TOOL_CALLS_PER_TURN,
+                                    )
+                                    break
+                                tool_name = event.get("name", "unknown")
+                                yield {"type": "status", "content": f"正在调用工具: {tool_name}..."}
+                            elif event.get("event") == "on_chat_model_stream":
+                                chunk = event.get("data", {}).get("chunk")
+                                content = self._content_text(getattr(chunk, "content", ""))
+                                if content:
+                                    streamed_runs.add(str(event.get("run_id")))
+                                    response_parts.append(content)
+                                    yield {"type": "content", "content": content}
+                            elif event.get("event") == "on_chat_model_end":
+                                # Fallback for providers/models that do not stream tokens.
+                                if str(event.get("run_id")) in streamed_runs:
+                                    continue
+                                output = event.get("data", {}).get("output")
+                                content = self._content_text(getattr(output, "content", ""))
+                                if content:
+                                    response_parts.append(content)
+                                    yield {"type": "content", "content": content}
+                except GraphRecursionError:
+                    hit_step_limit = True
+                    logging.warning(
+                        "Assistant turn reached recursion limit (%d steps); returning partial answer",
+                        AGENT_RECURSION_LIMIT,
+                    )
             else:
                 from langchain_core.messages import SystemMessage
 
@@ -301,6 +375,11 @@ class AIAssistantMCPAgent:
                     if content:
                         response_parts.append(content)
                         yield {"type": "content", "content": content}
+
+            if hit_step_limit:
+                note = "（本轮推理步数已达上限，以上是目前查到的结果。可以让我继续，或把问题范围缩小一些。）"
+                response_parts.append(note)
+                yield {"type": "content", "content": note}
 
             final_text = "".join(response_parts).strip()
             self.conversation_history.extend([
