@@ -50,7 +50,7 @@
   - **颜色对比度，容易踩的坑**：Vuetify 只有 7 个"主题色"——`primary`/`secondary`/`accent`/`error`/`info`/`success`/`warning`——会在运行时生成自动对比文字色（通常是白）。除此之外的所有颜色，包括 Material 调色板里的具名色（`orange`/`deep-orange`/`green`/`teal`/`blue`……以及它们的 `darken-N`/`lighten-N` 变体）和任意十六进制色，都**只设置背景色，不设置文字色**——即使色块看起来很深，按钮文字仍是默认深色，对比度会很差。上面颜色表里除了 `primary`/`info` 之外全部属于这一类，所以都带了 `confirm-dark`（映射到 `v-btn` 的 `dark`，强制走白字配色）。新增对话框选颜色时，只要不是那 7 个主题色之一，就默认加 `confirm-dark`，除非现场肉眼确认过对比度没问题。
   - `type="progress"`：不渲染 toolbar，`title` 可选（朴素文字），footer 只有一个取消按钮，`hide-footer-button` 可关掉它（纯阻塞流程）。
   - footer 按钮随状态变化、需要多个按钮（如 `dialog_audiolist`）：用 `actions` 具名插槽整体接管 footer。
-- 例外（不套用以上规则，维持现状）：`book/_bookid.vue` 的 `dialog_audiolist`（footer 按钮随状态变化，用组件的 `actions` 插槽承接）、`AppHeader.vue` 的 `ai_enabled`（聊天式常驻界面，不是操作/确认对话框）。
+- 例外/扩展：`book/_bookid.vue` 的 `dialog_audiolist`（footer 按钮随状态变化，用组件的 `actions` 插槽承接）；聊天式对话框 `AiChatDialog.vue`（AI 助手）、`MyNexusChatDialog.vue`（伴读）不属于操作/确认/进度三类，但仍复用 `AppDialog` 骨架（`type="action"` + `hide-footer-button`），`actions` 插槽放输入区而不是执行按钮。视觉约定：消息左右对齐、不显示头像，助手回复用 `MyNexusMarkdown` 渲染 Markdown，气泡最大宽度 86%；`white-space: pre-wrap` 只能放在正文文字节点上，放在气泡容器上会把模板里的空白文本节点渲染成一整行空行（用户消息上方凭空多一行即由此而来）。网络/服务端错误一律内联成一条错误气泡（`mdi-alert-circle-outline` + 文案 + `common.retry` 重试），不用 `alert()`、不要关掉对话框把用户的问题一起丢掉。
 
 ### 按钮
 
