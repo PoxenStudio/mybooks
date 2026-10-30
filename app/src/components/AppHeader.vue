@@ -10,8 +10,6 @@
             :mini-variant="miniVariant"
             :clipped="$vuetify.breakpoint.lgAndUp"
             class="app-navigation-drawer"
-            @mouseenter="handleMouseEnter"
-            @mouseleave="handleMouseLeave"
         >
             <div class="drawer-click-area">
                 <v-list dense @click.stop>
@@ -123,7 +121,7 @@
             <template v-slot:append v-if="user.is_login">
                 <div @click.stop>
                     <v-divider></v-divider>
-                    <v-list-item dense to="/logout" :class="{ 'v-list-item--icon-only': miniVariant }">
+                    <v-list-item dense to="/logout" :class="{ 'v-list-item--icon-only': miniVariant }" :aria-label="$t('appHeader.logout')">
                         <v-list-item-action v-if="!miniVariant" class="mt-1 mb-1 mr-2" dense>
                             <v-icon>mdi-logout</v-icon>
                         </v-list-item-action>
@@ -211,9 +209,9 @@
 
             <v-tooltip bottom v-if="$store.state.nav">
                 <template v-slot:activator="{ on, attrs }">
-                    <v-btn icon @click="toggleMiniVariant" v-bind="attrs" v-on="on">
+                    <v-btn icon @click="toggleMiniVariant" :aria-label="user.is_login ? user.username : $t('appHeader.not_login')" v-bind="attrs" v-on="on">
                         <v-avatar color="primary" class="avatar-round" size="36">
-                            <img :src="user.is_login ? user.avatar : getGuestAvatar()" @error="handleAvatarError" class="avatar-img" />
+                            <img :src="user.is_login ? user.avatar : getGuestAvatar()" :alt="user.is_login ? user.username : $t('appHeader.not_login')" @error="handleAvatarError" class="avatar-img" />
                         </v-avatar>
                     </v-btn>
                 </template>
@@ -289,14 +287,14 @@
                 <v-spacer></v-spacer>
             </template>
 
-            <v-btn v-else icon class="d-flex d-sm-none" @click="btn_search = !btn_search"> <v-icon>mdi-magnify</v-icon> </v-btn>
+            <v-btn v-else icon class="d-flex d-sm-none" :aria-label="$t('appHeader.search')" @click="btn_search = !btn_search"> <v-icon>mdi-magnify</v-icon> </v-btn>
 
             <appearance-menu />
 
             <template v-if="err == 'ok' && user.is_login">
                 <v-menu offset-y right :close-on-content-click="false" v-if="runningTasks.length > 0">
                     <template v-slot:activator="{ on }">
-                        <v-btn v-on="on" icon class="mr-2" width="48px" height="48px">
+                        <v-btn v-on="on" icon class="mr-2" width="48px" height="48px" :aria-label="$t('appHeader.backgroundTasks')">
                             <v-img src="/icons/running.svg" style="margin:8px 8px;" width="32px" height="32px"></v-img>
                         </v-btn>
                     </template>
@@ -334,7 +332,7 @@
 
                 <v-menu offset-y right :close-on-content-click="false" v-if="messages.length > 0">
                     <template v-slot:activator="{ on }">
-                        <v-btn v-on="on" icon color="yellow">
+                        <v-btn v-on="on" icon color="yellow" :aria-label="$t('appHeader.message_notification')">
                             <v-badge color="red" class="blink" :content="unreadCount > 99 ? '...' : String(unreadCount)" overlap>
                                 <v-icon>mdi-bell</v-icon>
                             </v-badge>
@@ -863,13 +861,11 @@ export default {
                 localStorage.setItem('drawerMiniVariant', this.miniVariant);
             }
         },
-        handleMouseEnter() {
-        },
-        handleMouseLeave() {
-        },
         toggleAi() {
             if (!this.user.is_login) {
-                alert("请先登录以使用AI功能");
+                // 走全站自带的对话框（plugins/mybooks.js 的 $alert），并带一个直接去登录页的动作；
+                // 原来是原生 alert()：不可翻译、不可换主题、且会阻塞整个页面。
+                this.$alert('info', this.$t('appHeader.aiLoginRequired'), '/login');
                 return;
             }
             this.ai_enabled = !this.ai_enabled;

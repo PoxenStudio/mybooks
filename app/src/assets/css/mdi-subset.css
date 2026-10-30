@@ -834,6 +834,10 @@
   content: "\F0387";
 }
 
+.mdi-new-box::before {
+  content: "\F0394";
+}
+
 .mdi-note-multiple-outline::before {
   content: "\F06B9";
 }
@@ -1038,6 +1042,10 @@
   content: "\F049D";
 }
 
+.mdi-shuffle-variant::before {
+  content: "\F049F";
+}
+
 .mdi-skip-next::before {
   content: "\F04AD";
 }
@@ -1088,6 +1096,10 @@
 
 .mdi-stop::before {
   content: "\F04DB";
+}
+
+.mdi-stop-circle-outline::before {
+  content: "\F0667";
 }
 
 .mdi-storefront-outline::before {
