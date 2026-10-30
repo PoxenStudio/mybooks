@@ -20,6 +20,12 @@ export const SECTION_META = {
   "index.newRecommendation": { icon: "mdi-hexagram-outline", label: "index.newRecommendation" },
 };
 
+// 首页内置卡片 ↔ 功能模块（与后端 webserver/base/homepage.py 的 CARD_MODULES 对应）。
+// 模块关闭时编辑器里不出现这张卡，但不会从 order 中删除，配置原样保留。
+export const SECTION_MODULE = {
+  "index.booklistRecommendation": "community",
+};
+
 export const CUSTOM_TYPES = ["author", "tag", "series", "language", "rating"];
 export const CUSTOM_SORTS = ["new", "title", "rating", "series", "random"];
 export const CUSTOM_LIMITS = [6, 12, 24, 48];

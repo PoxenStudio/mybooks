@@ -13,6 +13,7 @@ import tornado.escape
 from tornado import web
 from webserver import loader, site_time
 from webserver.base import calibre_fast
+from webserver.base import modules as feature_modules
 from webserver.base.appearance import (
     APPEARANCE_KEY,
     is_appearance_too_large,
@@ -1180,7 +1181,8 @@ class UserReadingLeaderboard(BaseHandler):
         }
 
 
-class UserExpectedItems(BaseHandler):
+class UserExpectedItems(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_COMMUNITY
 
     @js
     @auth
@@ -1312,8 +1314,10 @@ class UserExpectedItems(BaseHandler):
             return {"err": "db.error", "msg": _("删除失败")}
 
 
-class UserMemo(BaseHandler):
+class UserMemo(feature_modules.ModuleGateMixin, BaseHandler):
     """用户留言"""
+
+    module_id = feature_modules.MODULE_COMMUNITY
 
     GUEST_DAILY_LIMIT = 20
     USER_DAILY_LIMIT = 10

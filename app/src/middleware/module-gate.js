@@ -16,6 +16,21 @@ const ROUTE_MODULES = [
             path === "/toolbox/mimo_tts" ||
             path.startsWith("/toolbox/mimo_tts/"),
     },
+    {
+        id: "community",
+        test: (path) =>
+            path === "/memos" ||
+            path.startsWith("/memos/") ||
+            path === "/admin/user-memos" ||
+            path === "/expected" ||
+            path.startsWith("/expected/") ||
+            path === "/admin/all-expected" ||
+            path === "/soledbooks" ||
+            path.startsWith("/soledbooks/") ||
+            path === "/booklists" ||
+            path.startsWith("/booklists/") ||
+            path.startsWith("/booklist/"),
+    },
 ];
 
 export default async function ({ app, route, redirect }) {

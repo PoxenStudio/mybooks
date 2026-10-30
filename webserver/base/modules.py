@@ -24,6 +24,7 @@ import tornado.web as web
 from webserver.i18n import _
 
 MODULE_AUDIO = "audio"
+MODULE_COMMUNITY = "community"
 
 # 模块表：id -> {key, default, name}
 # 新增模块时在这里登记，并把同名 key 加进 setting_saver.ADMIN_SETTING_KEYS
@@ -34,6 +35,11 @@ MODULES = {
         "key": "ENABLE_MODULE_AUDIO",
         "default": True,
         "name": "有声书",
+    },
+    MODULE_COMMUNITY: {
+        "key": "ENABLE_MODULE_COMMUNITY",
+        "default": True,
+        "name": "社区互动",
     },
 }
 

@@ -331,7 +331,7 @@
                                     <v-icon>mdi-apps</v-icon>
                                     {{ $t('book.resetInfo') }}
                                 </v-list-item>
-                                <v-list-item @click="setSole">
+                                <v-list-item v-if="communityModuleOn" @click="setSole">
                                     <v-icon>{{ book.sole ? 'mdi-earth-off' : 'mdi-earth' }}</v-icon>
                                     {{ book.sole ? $t('book.setPublic') : $t('book.setSole') }}
                                 </v-list-item>
@@ -475,7 +475,7 @@
                                         </template>
                                         <span>{{ $t('readingState.wantsHint') }}</span>
                                     </v-tooltip>
-                                    <BookListQuickAddMenu v-if="$store.state.user?.is_login" :book-id="book.id">
+                                    <BookListQuickAddMenu v-if="$store.state.user?.is_login && communityModuleOn" :book-id="book.id">
                                         <template v-slot:activator="{ on, attrs }">
                                             <v-tooltip bottom>
                                                 <template v-slot:activator="{ on: onTooltip, attrs: attrsTooltip }">
@@ -490,7 +490,7 @@
                                             </v-tooltip>
                                         </template>
                                     </BookListQuickAddMenu>
-                                    <v-tooltip bottom v-if="book.sole">
+                                    <v-tooltip bottom v-if="communityModuleOn && book.sole">
                                         <template v-slot:activator="{ on, attrs }">
                                             <v-btn icon small class="ml-1" v-bind="attrs" v-on="on">
                                                 <v-icon :color="book.sole ? 'red' : 'green'" class="mr-2">
@@ -1491,6 +1491,14 @@ export default {
         audioModuleOn() {
             const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
             return mods.audio !== false;
+        },
+        /**
+         * 社区互动模块是否开启（sys.modules.community）。关闭时详情页的
+         * 「加入书单」与私藏入口一起消失。
+         */
+        communityModuleOn() {
+            const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
+            return mods.community !== false;
         },
 
         hasTxt() {

@@ -16,6 +16,7 @@ from webserver.base import modules as modules_module
 from webserver.base import setting_saver
 from webserver.base.modules import (
     MODULE_AUDIO,
+    MODULE_COMMUNITY,
     MODULES,
     ModuleGateMixin,
     is_known,
@@ -55,9 +56,10 @@ class TestModuleEnabled(unittest.TestCase):
 class TestSnapshot(unittest.TestCase):
 
     def test_snapshot_shape(self):
-        self.assertEqual(snapshot({}), {MODULE_AUDIO: True})
+        self.assertEqual(snapshot({}), {MODULE_AUDIO: True, MODULE_COMMUNITY: True})
         self.assertEqual(
-            snapshot({"ENABLE_MODULE_AUDIO": False}), {MODULE_AUDIO: False}
+            snapshot({"ENABLE_MODULE_AUDIO": False, "ENABLE_MODULE_COMMUNITY": False}),
+            {MODULE_AUDIO: False, MODULE_COMMUNITY: False},
         )
 
 
@@ -137,7 +139,10 @@ class TestModuleKeysArePersistable(unittest.TestCase):
     def test_default_present_in_settings_module(self):
         from webserver import settings as settings_module
 
-        self.assertTrue(settings_module.settings["ENABLE_MODULE_AUDIO"])
+        # 每个登记过的模块都要有出厂默认值，否则老实例（auto.py 无该键）会落到兜底
+        for module_id, spec in MODULES.items():
+            with self.subTest(module=module_id):
+                self.assertTrue(settings_module.settings[spec["key"]])
 
 
 class TestRoutesAreGated(unittest.TestCase):
@@ -209,6 +214,150 @@ class TestRoutesAreGated(unittest.TestCase):
                     self.assertTrue(issubclass(handler, ModuleGateMixin), pattern)
                     self.assertEqual(handler.module_id, MODULE_AUDIO, pattern)
         self.assertEqual(seen, set(effectful))
+
+
+class TestCommunityRoutesAreGated(unittest.TestCase):
+    """社区互动模块：留言/缺书/书单/私藏五组接口逐条反射。"""
+
+    def test_user_community_routes_are_gated(self):
+        from webserver.handlers import user
+
+        gated = {"/api/user/expected", "/api/user/memo"}
+        seen = set()
+        for pattern, handler in user.routes():
+            if pattern in gated:
+                seen.add(pattern)
+                with self.subTest(route=pattern):
+                    self.assertTrue(issubclass(handler, ModuleGateMixin), pattern)
+                    self.assertEqual(handler.module_id, MODULE_COMMUNITY, pattern)
+        self.assertEqual(seen, gated)
+
+    def test_booklist_routes_are_gated(self):
+        from webserver.handlers import booklist
+
+        # /api/booklists/homepage 例外：首页按 err=="ok" 读，模块关闭时必须
+        # 返回空列表而不是 module.disabled（见下面 TestBookListHomepageHandler）
+        for pattern, handler in booklist.routes():
+            if pattern == "/api/booklists/homepage":
+                self.assertFalse(issubclass(handler, ModuleGateMixin), pattern)
+                continue
+            with self.subTest(route=pattern):
+                self.assertTrue(issubclass(handler, ModuleGateMixin), pattern)
+                self.assertEqual(handler.module_id, MODULE_COMMUNITY, pattern)
+
+    def test_booklist_homepage_routes_exist(self):
+        from webserver.handlers import booklist
+
+        patterns = [pattern for pattern, _ in booklist.routes()]
+        self.assertIn("/api/booklists/homepage", patterns)
+
+    def test_sole_routes_are_gated(self):
+        try:
+            from webserver.handlers import book
+        except ImportError as exc:
+            # book.py 依赖 calibre；没装 calibre 的环境跳过
+            self.skipTest("book 路由需要 calibre：%s" % exc)
+
+        gated = {"/api/soledbooks", "/api/book/([0-9]+)/setsole"}
+        seen = set()
+        for pattern, handler in book.routes():
+            if pattern in gated:
+                seen.add(pattern)
+                with self.subTest(route=pattern):
+                    self.assertTrue(issubclass(handler, ModuleGateMixin), pattern)
+                    self.assertEqual(handler.module_id, MODULE_COMMUNITY, pattern)
+        self.assertEqual(seen, gated)
+
+
+class TestBookListHomepageHandler(unittest.TestCase):
+    def test_returns_empty_when_community_off(self):
+        import asyncio
+
+        from webserver.handlers.booklist import BookListHomepageHandler
+
+        class _Fake:
+            def __init__(self):
+                self.request = mock.Mock(headers={})
+                self.written = None
+
+            def set_header(self, *args, **kwargs):
+                pass
+
+            def write(self, value):
+                self.written = value
+
+            def finish(self):
+                pass
+
+        handler = _Fake()
+        with mock.patch.object(modules_module, "module_enabled", return_value=False):
+            asyncio.run(BookListHomepageHandler.get(handler))
+        # 首页拿的是 err=="ok" 的正常空列表，不是 module.disabled 错误体
+        self.assertEqual(handler.written, {"err": "ok", "booklists": []})
+
+
+class TestHomepageCardVisibility(unittest.TestCase):
+    """模块关闭只强制隐藏卡片，不写回用户配置；设置页取的是原样配置。"""
+
+    def _config(self):
+        from webserver.base.homepage import default_homepage
+
+        return default_homepage()
+
+    def test_forces_booklist_card_hidden(self):
+        from webserver.base.homepage import apply_module_visibility
+
+        config = self._config()
+        with mock.patch.object(modules_module, "module_enabled", return_value=False):
+            result = apply_module_visibility(config)
+        self.assertIn("index.booklistRecommendation", result["hidden"])
+        # 不改原对象：调用方拿到的可能是同一份 CONF 数据
+        self.assertNotIn("index.booklistRecommendation", config["hidden"])
+
+    def test_noop_when_module_on(self):
+        from webserver.base.homepage import apply_module_visibility
+
+        config = self._config()
+        with mock.patch.object(modules_module, "module_enabled", return_value=True):
+            result = apply_module_visibility(config)
+        self.assertIs(result, config)
+
+    def test_settings_page_uses_unforced_config(self):
+        from webserver.base import homepage as homepage_module
+
+        config = self._config()
+        with mock.patch.object(modules_module, "module_enabled", return_value=False):
+            with mock.patch("webserver.loader.get_settings",
+                            return_value={"HOMEPAGE_CONFIG": config}):
+                runtime = homepage_module.get_homepage_config()
+                settings_view = homepage_module.get_homepage_config(apply_modules=False)
+        self.assertIn("index.booklistRecommendation", runtime["hidden"])
+        self.assertNotIn("index.booklistRecommendation", settings_view["hidden"])
+
+
+class TestSysDowngrade(unittest.TestCase):
+    """模块关闭时 sys 下发要降级：友情链接为空、留言开关为假。"""
+
+    def test_friends_empty_when_community_off(self):
+        from webserver.handlers.base import BaseHandler
+
+        with mock.patch.object(modules_module, "module_enabled", return_value=False):
+            self.assertEqual(BaseHandler._build_friends_with_favicon(mock.Mock()), [])
+
+    def test_user_memos_flag_follows_module(self):
+        from webserver.handlers.base import BaseHandler
+
+        class _Fake:
+            def require_login_enabled(self):
+                return False
+
+        with mock.patch.object(modules_module, "module_enabled", return_value=False):
+            flags = BaseHandler.allow_flags(_Fake())
+        self.assertFalse(flags["user_memos"])
+
+        with mock.patch.object(modules_module, "module_enabled", return_value=True):
+            flags = BaseHandler.allow_flags(_Fake())
+        self.assertTrue(flags["user_memos"])
 
 
 if __name__ == "__main__":

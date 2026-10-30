@@ -417,6 +417,7 @@
         </AppDialog>
 
         <AppDialog
+            v-if="moduleOn('community')"
             v-model="memoDialog"
             type="action"
             :title="$t('appHeader.memoDialogTitle')"
@@ -678,8 +679,10 @@ export default {
                     expand: this.isPathMatch("/user/"),
                     groups: [
                         { icon: "mdi-account-cog", href: "/user/usersettings", text: "appHeader.user_setting", color: "blue darken-1" },
-                        { icon: "mdi-shield-account", href: "/soledbooks", text: "appHeader.soledBooks", color: "deep-orange"},
-                        { icon: "mdi-notebook", href: "/expected", text: "expected.title", color: "green"},
+                        ...(this.moduleOn("community") ? [
+                            { icon: "mdi-shield-account", href: "/soledbooks", text: "appHeader.soledBooks", color: "deep-orange"},
+                            { icon: "mdi-notebook", href: "/expected", text: "expected.title", color: "green"},
+                        ] : []),
                     ],
                 }
             ];
@@ -695,8 +698,8 @@ export default {
                         { icon: "mdi-import", href: "/admin/imports", text: "appHeader.importBooks", color: "green"},
                         { icon: "mdi-library-shelves", href: "/admin/books", text: "appHeader.bookManagement", color: "blue darken-2"},
                         ...(this.sys.allow.share_link ? [{ icon: "mdi-cloud-outline", href: "/admin/shares", text: "appHeader.shareManagement", color: "teal" }] : []),
-                        { icon: "mdi-notebook", href: "/admin/all-expected", text: "expected.allPageTitle", color: "green"},
-                        ...(this.sys.allow.user_memos ? [{ icon: "mdi-message-text-outline", href: "/admin/user-memos", text: "memos.pageTitle", color: "blue" }] : []),
+                        ...(this.moduleOn("community") ? [{ icon: "mdi-notebook", href: "/admin/all-expected", text: "expected.allPageTitle", color: "green"}] : []),
+                        ...(this.moduleOn("community") && this.sys.allow.user_memos ? [{ icon: "mdi-message-text-outline", href: "/admin/user-memos", text: "memos.pageTitle", color: "blue" }] : []),
                         ...(this.sys.allow.book_review ? [{ icon: "mdi-comment-text-multiple-outline", href: "/admin/book-reviews", text: "adminBookReviews.pageTitle", color: "deep-orange"}] : []),
                         { icon: "mdi-math-log", href: "/admin/syslog", text: "appHeader.syslog", color: "green"},
                         { icon: "mdi-toolbox-outline", href: "/admin/toolbox", text: "appHeader.toolbox", color: "deep-orange"},
@@ -785,10 +788,10 @@ export default {
                 .concat(this.user.is_login ? userLinks : [])
                 .concat(this.user.is_admin ? adminLinks : [])
                 .concat(this.user.is_login ? readingLinks : [])
-                .concat(this.user.is_login && showItem("booklists") ? booklistLinks: [])
+                .concat(this.user.is_login && this.moduleOn("community") && showItem("booklists") ? booklistLinks: [])
                 .concat(navLinks)
-                .concat(this.sys.allow.user_memos ? memoLink : [])
-                .concat(showItem("friends") && this.sys.friends.length > 0 ? friendLinks : [])
+                .concat(this.moduleOn("community") && this.sys.allow.user_memos ? memoLink : [])
+                .concat(this.moduleOn("community") && showItem("friends") && this.sys.friends.length > 0 ? friendLinks : [])
         },
     },
     mounted() {

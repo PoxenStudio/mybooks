@@ -140,7 +140,7 @@ def homepage_from_legacy(settings):
     return normalize_homepage({"hidden": hidden})
 
 
-def get_homepage_config():
+def get_homepage_config(apply_modules=True):
     from webserver import loader
 
     settings = loader.get_settings()
@@ -148,5 +148,33 @@ def get_homepage_config():
     # 没配过、或 auto.py 里被手改成非 dict：都回退到旧开关推导，
     # 否则 normalize_homepage 会返回"全部可见"，让默认关闭的卡片突然出现
     if not isinstance(raw, dict) or not raw:
-        return homepage_from_legacy(settings)
-    return normalize_homepage(raw)
+        config = homepage_from_legacy(settings)
+    else:
+        config = normalize_homepage(raw)
+    return apply_module_visibility(config) if apply_modules else config
+
+
+# 首页卡片 ↔ 功能模块。模块关闭时卡片强制视为隐藏，只影响运行期下发；
+# 设置页必须用 apply_modules=False 取原样配置——否则管理员关闭模块期间保存一次，
+# 这份「强制隐藏」就会被写进用户存的 HOMEPAGE_CONFIG，重新打开模块后卡片也回不来。
+CARD_MODULES = {
+    "index.booklistRecommendation": "community",
+}
+
+
+def apply_module_visibility(config):
+    from webserver.base import modules as feature_modules
+
+    hidden = list(config.get("hidden") or [])
+    changed = False
+    for section, module_id in CARD_MODULES.items():
+        if section in hidden:
+            continue
+        if not feature_modules.module_enabled(module_id):
+            hidden.append(section)
+            changed = True
+    if not changed:
+        return config
+    result = dict(config)
+    result["hidden"] = hidden
+    return result

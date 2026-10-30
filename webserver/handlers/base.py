@@ -441,6 +441,10 @@ class BaseHandler(web.RequestHandler):
         留在"访客还能读"的错误状态。分享链接例外：它优先于必须登录，只看自身开关。
         """
         require_login = self.require_login_enabled()
+        # 站内留言属于社区互动模块：模块关闭时即使旧开关还开着也按关闭下发
+        user_memos = CONF.get("ENABLE_USER_MEMOS", True)
+        if not feature_modules.module_enabled(feature_modules.MODULE_COMMUNITY):
+            user_memos = False
         return {
             "register": CONF["ALLOW_REGISTER"],
             "require_login": require_login,
@@ -455,7 +459,7 @@ class BaseHandler(web.RequestHandler):
             "server_import": CONF.get("ENABLE_SERVER_FILE_IMPORT", False),
             "sync": CONF.get("ENABLE_DATA_SYNC", False),
             "book_review": CONF.get("ENABLE_BOOK_REVIEW", True),
-            "user_memos": CONF.get("ENABLE_USER_MEMOS", True),
+            "user_memos": user_memos,
             "book_recommend": CONF.get("ENABLE_BOOK_RECOMMEND_TO_OTHERS", True),
             "shared_notes": CONF.get("ENABLE_SHARED_NOTES", True),
         }
@@ -1827,6 +1831,10 @@ class BaseHandler(web.RequestHandler):
 
     def _build_friends_with_favicon(self):
         """构建带有 favicon 图标信息的友情链接列表"""
+        # 友情链接属于社区互动模块：关闭时不下发（入口由 sys.friends 是否为空决定），
+        # 也省掉一轮 favicon 抓取
+        if not feature_modules.module_enabled(feature_modules.MODULE_COMMUNITY):
+            return []
         friends = CONF.get("FRIENDS", [])
         result = []
         need_loading_urls = []

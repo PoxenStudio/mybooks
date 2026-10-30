@@ -433,7 +433,7 @@
 
             <template v-if="s.special === 'homepage_cards'">
               <div id="f-HOMEPAGE_CONFIG">
-                <homepage-cards-editor v-if="settingsLoaded" v-model="settings.HOMEPAGE_CONFIG"></homepage-cards-editor>
+                <homepage-cards-editor v-if="settingsLoaded" v-model="settings.HOMEPAGE_CONFIG" :modules="moduleState"></homepage-cards-editor>
               </div>
             </template>
 
@@ -1184,7 +1184,7 @@ const LITE_GROUPS = [
 // 特殊块（动态列表/子组件）不在 groups.fields 里，搜索索引需在此手动注册
 const SPECIAL_BLOCKS = [
   { key: "HOMEPAGE_CONFIG", label: "settings.sec_site_home_cards", icon: "mdi-view-grid-plus-outline", gid: "site", sid: "site-home-cards", al: ["首页卡片", "自定义卡片", "homepage cards", "首頁卡片"] },
-  { key: "FRIENDS", label: "settings.friend_links", icon: "mdi-link-variant", gid: "site", sid: "site-friends" },
+  { key: "FRIENDS", label: "settings.friend_links", icon: "mdi-link-variant", gid: "site", sid: "site-friends", module: "community" },
   { key: "READER_DICT_MYBOOKS_ENABLED", label: "settings.reader_dict_mybooks", icon: "mdi-book-alphabet", gid: "reading", sid: "reader-dict" },
   { key: "READER_DICT_BAIKE_ENABLED", label: "settings.reader_dict_baike", icon: "mdi-book-alphabet", gid: "reading", sid: "reader-dict" },
   { key: "READER_MYDICTS", label: "settings.sec_reader_dict", icon: "mdi-book-alphabet", gid: "reading", sid: "reader-dict", al: ["翻译"] },
@@ -1222,6 +1222,7 @@ const SETTING_TEXT_TYPES = ["text", "textarea", "select", "number"];
 // 的 MODULES 表保持一致。
 const MODULE_SETTING_KEYS = {
   audio: "ENABLE_MODULE_AUDIO",
+  community: "ENABLE_MODULE_COMMUNITY",
 };
 
 // READER_MYDICTS 元素上的 showToken 只是显隐 token 的视图状态，
@@ -1873,6 +1874,13 @@ export default {
                 type: "checkbox",
                 tips: "settings.enable_module_audio_tips",
               },
+              {
+                icon: "mdi-account-group-outline",
+                key: "ENABLE_MODULE_COMMUNITY",
+                label: "settings.enable_module_community",
+                type: "checkbox",
+                tips: "settings.enable_module_community_tips",
+              },
             ],
           },
           {
@@ -1924,6 +1932,9 @@ export default {
                 label: "settings.enable_user_memos",
                 type: "checkbox",
                 tips: "settings.enable_user_memos_tips",
+                // 站内留言属于社区互动模块：模块关闭时只收起这一项，
+                // 同区块的首页/实体书字段保持可见
+                module: "community",
               },
               {
                 icon: "mdi-bookshelf",
@@ -1960,8 +1971,8 @@ export default {
                   { value: "series", text: "appHeader.series" },
                   { value: "languages", text: "appHeader.languages" },
                   { value: "rating", text: "appHeader.rating" },
-                  { value: "booklists", text: "appHeader.booklists" },
-                  { value: "friends", text: "appHeader.friendLinks" },
+                  { value: "booklists", text: "appHeader.booklists", module: "community" },
+                  { value: "friends", text: "appHeader.friendLinks", module: "community" },
                 ],
               },
             ],
@@ -1978,6 +1989,8 @@ export default {
             icon: "mdi-link-variant",
             title: "settings.friend_links",
             special: "friends",
+            // 友情链接属于社区互动模块：模块关闭时整块不渲染
+            module: "community",
           },
         ],
       },

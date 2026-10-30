@@ -833,7 +833,9 @@ class BookToPDF(BaseHandler):
             return {"err": "params.book.converting", "msg": _("本书正在转换中，请稍后再试")}
         service.convert_and_save(self.user_id(), book, fpath, "pdf")
         return {"err": "ok", "content": "%s" % _("转换成功，请稍后刷新页面查看")}
-class BookSetSole(BaseHandler):
+class BookSetSole(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_COMMUNITY
+
     @js
     @auth
     def post(self, bid):
@@ -1611,7 +1613,9 @@ class PrintBooks(BaseHandler):
             return {"err": "internal", "msg": _("获取实体书失败")}
 
 
-class BookSoled(BaseHandler):
+class BookSoled(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_COMMUNITY
+
     @js
     @auth
     def get(self):

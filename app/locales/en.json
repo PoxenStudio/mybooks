@@ -542,6 +542,8 @@
     "sec_site_modules_desc": "Turn whole features on or off. When a module is off, its nav entries, the related buttons on the book page and its settings disappear together. Existing data is kept and comes back when you re-enable it.",
     "enable_module_audio": "Audio Books",
     "enable_module_audio_tips": "Covers the audiobook list, audio playback, text-to-audio conversion, subtitles, podcast feeds and speech synthesis. When off, the book page no longer shows the convert or play entries.",
+    "enable_module_community": "Community",
+    "enable_module_community_tips": "Covers on-site memos, missing-book requests, book lists, friend links and private books. When off, the related entries, book page buttons and settings disappear; existing memos, lists and private flags are kept.",
     "sec_site_home": "Home & Listing",
     "sec_site_home_cards": "Homepage cards",
     "sec_site_home_cards_desc": "Choose which cards appear on the homepage, their order, and add custom cards for an author, tag, series, language or rating.",

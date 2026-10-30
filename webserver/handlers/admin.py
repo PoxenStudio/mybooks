@@ -465,7 +465,9 @@ class AdminSettings(BaseHandler):
 
         # 与首页渲染共用同一套归一化：auto.py 被手改成非 dict/空值时也会回退旧开关，
         # 否则设置页显示"全部可见"，管理员保存任意设置就会被静默改写首页行为。
-        homepage_config = get_homepage_config()
+        # 这里不套模块可见性（apply_modules=False）：模块关闭造成的"强制隐藏"
+        # 只属于运行期渲染，不能因为管理员保存一次设置就被固化进 HOMEPAGE_CONFIG。
+        homepage_config = get_homepage_config(apply_modules=False)
 
         CONF["site_icon"] = "favicon_0"  # default icon, means use current favicon.ico
         CONF["META_ALL_SOURCES"] = BookSearch.all_sources()
