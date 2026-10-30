@@ -95,6 +95,8 @@ settings = {
     "AI_DEEPSEEK_API_KEY": "",
     "AI_API_URL": "https://api.deepseek.com",
     "AI_ALLOW_SET_CATEGORY": True,
+    "AI_RECURSION_LIMIT": 40,
+    "AI_MAX_TOOL_CALLS": 12,
     "ENABLE_MYNEXUS": False,
     "MYNEXUS_URL": "",
     "MYNEXUS_TOKEN": "",

@@ -1355,12 +1355,14 @@ class MCPService:
                   for t in API_TOOLS.values()]
         if self.need_login:
             for tool in tools:
-                if "token" not in tool.inputSchema.get("required", []):
-                    tool.inputSchema.setdefault("required", []).append("token")
-                    tool.inputSchema["properties"]["token"] = {
-                        "type": "string",
-                        "description": "Authentication token obtained t login"
-                    }
+                schema = self._tool_input_schema(tool)
+                required = schema.setdefault("required", [])
+                if "token" not in required:
+                    required.append("token")
+                schema.setdefault("properties", {})["token"] = {
+                    "type": "string",
+                    "description": "Authentication token obtained t login"
+                }
 
             tools.append(
                 Tool(
@@ -1399,6 +1401,25 @@ class MCPService:
                 )
             )
         return tools
+
+    @staticmethod
+    def _tool_input_schema(tool: Tool) -> Dict[str, Any]:
+        """Return a tool's mutable argument schema.
+
+        mcp 1.x exposes the field as ``inputSchema``; mcp 2.x renamed the model
+        field to ``input_schema`` (the camelCase name is only an alias). Reading
+        both keeps the token injection working on either SDK version.
+        """
+        schema = getattr(tool, "inputSchema", None)
+        if schema is None:
+            schema = getattr(tool, "input_schema", None)
+        if not isinstance(schema, dict):
+            schema = {"type": "object", "properties": {}}
+            if hasattr(tool, "input_schema"):
+                tool.input_schema = schema
+            else:
+                tool.inputSchema = schema
+        return schema
 
     def _create_jsonrpc_response(self, request_id: Any, result: Any = None, error: Dict[str, Any] = None) -> Dict[str, Any]:
         """
@@ -1484,7 +1505,11 @@ class MCPService:
                 tools = await self.list_tools()
                 return self._create_jsonrpc_response(
                     request_id,
-                    result={"tools": [tool.model_dump(exclude_none=True) for tool in tools]}
+                    # by_alias is required: mcp>=2 names the model fields in snake_case
+                    # (input_schema) and only exposes the spec's camelCase (inputSchema)
+                    # through the alias. Dumping without it makes every client see an
+                    # empty argument schema, so tool arguments are silently dropped.
+                    result={"tools": [tool.model_dump(exclude_none=True, by_alias=True) for tool in tools]}
                 )
 
             # 处理工具调用请求（支持新旧两种方法名）

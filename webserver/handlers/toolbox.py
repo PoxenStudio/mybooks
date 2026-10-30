@@ -588,7 +588,7 @@ class AdminEpubFixerRepair(BaseHandler):
         if write_mode not in ("overwrite", "new_book"):
             return {"err": "params.invalid", "msg": _("未知写回方式：%s") % write_mode}
         backup = bool(data.get("backup", False))
-        suffix = (data.get("suffix") or u"（精修）").strip()[:30]
+        suffix = (data.get("suffix") or _(u"（精修）")).strip()[:30]
 
         tool = EpubFixerTool()
         if tool.is_running():

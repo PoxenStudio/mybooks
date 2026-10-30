@@ -294,10 +294,6 @@
   content: "\F012A";
 }
 
-.mdi-chat-outline::before {
-  content: "\F0EDE";
-}
-
 .mdi-check::before {
   content: "\F012C";
 }
@@ -988,6 +984,10 @@
 
 .mdi-robot::before {
   content: "\F06A9";
+}
+
+.mdi-robot-outline::before {
+  content: "\F167A";
 }
 
 .mdi-rotate-orbit::before {
