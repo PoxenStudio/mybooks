@@ -6,6 +6,8 @@
 //
 // 模块状态随站点信息下发（sys.modules），与导航、详情页按钮、设置区块读的是
 // 同一份快照，避免「入口没了但页面还能打开」这种错位。
+import { isLoginPublicPath } from "~/utils/loginPublicPaths";
+
 const ROUTE_MODULES = [
     {
         id: "audio",
@@ -72,12 +74,13 @@ export default async function ({ app, route, redirect }) {
     if (modules[hit.id] !== false) {
         return;
     }
-    // 未登录且站点开了「必须登录」时不在这里跳：require_login 会把用户送去
-    // /login?next=…，我们再跳一次 "/" 会把 next 丢掉，登录后回不到原页面。
-    // 其它情况（游客可访问的站点）仍按模块关闭处理。
+    // 未登录且站点开了「必须登录」时，非公开页交给 require_login 处理：
+    // 它会送去 /login?next=…，我们再跳一次 "/" 会把 next 丢掉。
+    // 公开页（如 /signup）在 require_login 里被直接放行，必须由这里兜住，
+    // 否则「必须登录 + 关闭用户模块」时注册页仍会渲染。
     const user = (info && info.user) || app.store.state.user || {};
     const allow = (info && info.sys && info.sys.allow) || {};
-    if (!user.is_login && allow.require_login === true) {
+    if (!user.is_login && allow.require_login === true && !isLoginPublicPath(route.path)) {
         return;
     }
     redirect("/");

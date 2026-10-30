@@ -464,11 +464,8 @@ class TestOpdsModuleVisibility(unittest.TestCase):
 class TestUsersModuleRoutes(unittest.TestCase):
     """用户与账号：用户管理、注册/激活、社交登录门禁；登录等核心能力保持开放。"""
 
-    def test_signup_and_admin_user_routes_are_gated(self):
-        try:
-            from webserver.handlers import admin, user
-        except ImportError as exc:
-            self.skipTest("admin 路由需要 calibre：%s" % exc)
+    def test_signup_routes_are_gated(self):
+        from webserver.handlers import user
 
         user_gated = {
             "/api/user/sign_up",
@@ -485,6 +482,12 @@ class TestUsersModuleRoutes(unittest.TestCase):
                     self.assertEqual(handler.module_id, MODULE_USERS, pattern)
         self.assertEqual(seen, user_gated)
 
+    def test_admin_user_routes_are_gated(self):
+        try:
+            from webserver.handlers import admin
+        except ImportError as exc:
+            self.skipTest("admin 路由需要 calibre：%s" % exc)
+
         admin_gated = {"/api/admin/users"}
         seen = set()
         for pattern, handler in admin.routes():
@@ -499,6 +502,9 @@ class TestUsersModuleRoutes(unittest.TestCase):
         from webserver.handlers import user
 
         core = {
+            "/api/user/info",
+            "/api/user/whoami",
+            "/api/user/appearance",
             "/api/user/sign_in",
             "/api/user/sign_out",
             "/api/user/reset",
@@ -537,7 +543,9 @@ class TestUsersModuleRoutes(unittest.TestCase):
             pass
 
         handler = _Gated()
-        with mock.patch.object(social_routes, "module_enabled", return_value=False):
+        with mock.patch.object(
+            social_routes, "module_enabled", side_effect=lambda mid: mid != MODULE_USERS
+        ):
             with self.assertRaises(Exception) as ctx:
                 handler.prepare()
         self.assertEqual(getattr(ctx.exception, "status_code", None), 404)
@@ -778,10 +786,20 @@ class TestSysDowngrade(unittest.TestCase):
             "SOCIALS": [{"value": "github", "text": "Github"}],
         }
         with mock.patch.dict(base_module.CONF, conf):
-            with mock.patch.object(modules_module, "module_enabled", return_value=False):
+            with mock.patch.object(
+                modules_module, "module_enabled", side_effect=lambda mid: mid != MODULE_AI
+            ):
                 info = base_module.BaseHandler._sys_info_with(fake, {})
             self.assertFalse(info["aiEnabled"])
             self.assertFalse(info["mynexus_enabled"])
+            self.assertEqual(info["socials"], conf["SOCIALS"])
+
+            with mock.patch.object(
+                modules_module, "module_enabled", side_effect=lambda mid: mid != MODULE_USERS
+            ):
+                info = base_module.BaseHandler._sys_info_with(fake, {})
+            self.assertTrue(info["aiEnabled"])
+            self.assertTrue(info["mynexus_enabled"])
             self.assertEqual(info["socials"], [])
 
             with mock.patch.object(modules_module, "module_enabled", return_value=True):
@@ -798,7 +816,9 @@ class TestSysDowngrade(unittest.TestCase):
                 return False
 
         with mock.patch.dict(base_module.CONF, {"ALLOW_REGISTER": True}):
-            with mock.patch.object(modules_module, "module_enabled", return_value=False):
+            with mock.patch.object(
+                modules_module, "module_enabled", side_effect=lambda mid: mid != MODULE_USERS
+            ):
                 flags = base_module.BaseHandler.allow_flags(_Fake())
             self.assertFalse(flags["register"])
 
