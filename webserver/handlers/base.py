@@ -449,8 +449,12 @@ class BaseHandler(web.RequestHandler):
         physical_books = CONF.get("ENABLE_PHYSICAL_BOOKS", True)
         if not feature_modules.module_enabled(feature_modules.MODULE_PHYSICAL):
             physical_books = False
+        # 用户与账号模块关闭时不再提供注册入口；登录/个人资料/密码重置仍是核心能力
+        allow_register = CONF["ALLOW_REGISTER"]
+        if not feature_modules.module_enabled(feature_modules.MODULE_USERS):
+            allow_register = False
         return {
-            "register": CONF["ALLOW_REGISTER"],
+            "register": allow_register,
             "require_login": require_login,
             "download": False if require_login else CONF["ALLOW_GUEST_DOWNLOAD"],
             "push": False if require_login else CONF["ALLOW_GUEST_PUSH"],
@@ -1907,6 +1911,10 @@ class BaseHandler(web.RequestHandler):
             # AI 模块关闭：助手、AI 补全、MyNexus、MCP 一律视为未启用
             ai_enabled = False
             mynexus_enabled = False
+        # 用户与账号模块关闭：登录页的社交登录按钮一并收起
+        socials = CONF["SOCIALS"]
+        if not feature_modules.module_enabled(feature_modules.MODULE_USERS):
+            socials = []
         info = dict(stats, users=count_all_users, version=VERSION, active=count_hot_users, performanceMode=perf.CONF.get("PERFORMANCE_MODE", "normal"), lite={"homeCollapse": perf.lite_on("LITE_HOME_COLLAPSE")})
         info.update(
             {
@@ -1931,7 +1939,7 @@ class BaseHandler(web.RequestHandler):
                     CONF["CHUNK_UPLOAD_SIZE"] if "CHUNK_UPLOAD_SIZE" in CONF else "0MB"
                 ),
                 "icon": CONF["site_icon"] if "site_icon" in CONF else "favicon_1",
-                "socials": CONF["SOCIALS"],
+                "socials": socials,
                 "friends": self._build_friends_with_favicon(),
                 "footer": CONF["FOOTER"] if "FOOTER" in CONF else "",
                 "footer_watermark": CONF.get("FOOTER_WATERMARK", ""),

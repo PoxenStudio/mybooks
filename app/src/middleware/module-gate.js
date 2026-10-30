@@ -37,6 +37,14 @@ const ROUTE_MODULES = [
         id: "physical",
         test: (path) => path === "/printbooks" || path.startsWith("/printbooks/"),
     },
+    {
+        id: "users",
+        test: (path) =>
+            path === "/signup" ||
+            path.startsWith("/signup/") ||
+            path === "/admin/users" ||
+            path.startsWith("/admin/users/"),
+    },
 ];
 
 export default async function ({ app, route, redirect }) {

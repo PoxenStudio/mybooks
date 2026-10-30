@@ -1189,7 +1189,7 @@ const SPECIAL_BLOCKS = [
   { key: "READER_DICT_BAIKE_ENABLED", label: "settings.reader_dict_baike", icon: "mdi-book-alphabet", gid: "reading", sid: "reader-dict" },
   { key: "READER_MYDICTS", label: "settings.sec_reader_dict", icon: "mdi-book-alphabet", gid: "reading", sid: "reader-dict", al: ["翻译"] },
   { key: "ENABLE_STAMP_FEATURE", label: "settings.enable_stamp_feature", icon: "mdi-picture-in-picture-bottom-right-outline", gid: "reading", sid: "reader-extended" },
-  { key: "SOCIALS", label: "settings.select_socials", icon: "mdi-at", gid: "users", sid: "users-social", al: ["qq", "微信", "微博", "github", "oauth"] },
+  { key: "SOCIALS", label: "settings.select_socials", icon: "mdi-at", gid: "users", sid: "users-social", al: ["qq", "微信", "微博", "github", "oauth"], module: "users" },
   { key: "DEVICES", label: "settings.device_mgt", icon: "mdi-tablet-cellphone", gid: "push", sid: "push-devices", al: ["kindle", "文石", "掌阅", "汉王", "当当", "koreader", "duokan", "ireader", "boox", "ftp"] },
   { key: "ENABLE_BOOKBARN", label: "settings.bookbarn_enable", icon: "mdi-key", gid: "services", sid: "svc-bookbarn" },
   { key: "BOOKBARN_TOKEN", label: "settings.bookbarn_token", icon: "mdi-key", gid: "services", sid: "svc-bookbarn" },
@@ -1225,6 +1225,7 @@ const MODULE_SETTING_KEYS = {
   community: "ENABLE_MODULE_COMMUNITY",
   physical: "ENABLE_MODULE_PHYSICAL",
   ai: "ENABLE_MODULE_AI",
+  users: "ENABLE_MODULE_USERS",
 };
 
 // READER_MYDICTS 元素上的 showToken 只是显隐 token 的视图状态，
@@ -1897,6 +1898,13 @@ export default {
                 type: "checkbox",
                 tips: "settings.enable_module_ai_tips",
               },
+              {
+                icon: "mdi-account-multiple-outline",
+                key: "ENABLE_MODULE_USERS",
+                label: "settings.enable_module_users",
+                type: "checkbox",
+                tips: "settings.enable_module_users_tips",
+              },
             ],
           },
           {
@@ -2093,11 +2101,12 @@ export default {
             title: "settings.sec_users_guest",
             fields: [
               // 私人图书馆标准模式：开启后所有页面与接口都要求登录，下面各项访问权限随之失效
-              { icon: "mdi-login-variant", key: "REQUIRE_LOGIN", label: "settings.require_login", type: "checkbox", al: ["必须登录", "私人图书馆", "需登录", "login required"] },
-              { icon: "mdi-read", key: "ALLOW_GUEST_READ", label: "settings.allow_guest_read", type: "checkbox", lockOn: "REQUIRE_LOGIN" },
-              { icon: "mdi-download", key: "ALLOW_GUEST_DOWNLOAD", label: "settings.allow_guest_download", type: "checkbox", lockOn: "REQUIRE_LOGIN" },
-              { icon: "mdi-upload", key: "ALLOW_GUEST_UPLOAD", label: "settings.allow_guest_upload", type: "checkbox", lockOn: "REQUIRE_LOGIN" },
-              { icon: "mdi-send", key: "ALLOW_GUEST_PUSH", label: "settings.allow_guest_push", type: "checkbox", lockOn: "REQUIRE_LOGIN" },
+              { icon: "mdi-login-variant", key: "REQUIRE_LOGIN", label: "settings.require_login", type: "checkbox", al: ["必须登录", "私人图书馆", "需登录", "login required"], module: "users" },
+              { icon: "mdi-read", key: "ALLOW_GUEST_READ", label: "settings.allow_guest_read", type: "checkbox", lockOn: "REQUIRE_LOGIN", module: "users" },
+              { icon: "mdi-download", key: "ALLOW_GUEST_DOWNLOAD", label: "settings.allow_guest_download", type: "checkbox", lockOn: "REQUIRE_LOGIN", module: "users" },
+              { icon: "mdi-upload", key: "ALLOW_GUEST_UPLOAD", label: "settings.allow_guest_upload", type: "checkbox", lockOn: "REQUIRE_LOGIN", module: "users" },
+              { icon: "mdi-send", key: "ALLOW_GUEST_PUSH", label: "settings.allow_guest_push", type: "checkbox", lockOn: "REQUIRE_LOGIN", module: "users" },
+              // 分享链接属于「分享与推送」模块，不随用户与账号隐藏
               { icon: "mdi-link-variant", key: "ENABLE_SHARE_LINK", label: "settings.allow_share_link", type: "checkbox" },
             ],
           },
@@ -2105,6 +2114,8 @@ export default {
             id: "users-reg",
             icon: "mdi-at",
             title: "settings.sec_users_reg",
+            // 注册、邀请与重置邮件属于用户与账号模块
+            module: "users",
             fields: [
               { icon: "mdi-subtitles-outline", key: "reset-mail-heading", label: "settings.sec_reset_mail", type: "subtitle" },
               {
@@ -2170,6 +2181,8 @@ export default {
             id: "users-default",
             icon: "mdi-download-lock-outline",
             title: "settings.sec_users_default",
+            // 新用户默认权限与下载配额属于用户与账号模块
+            module: "users",
             fields: [
               { icon: "mdi-book-multiple", key: "ALLOW_NEW_USER_MANAGE_BOOK", label: "settings.allow_new_user_manage_book", type: "checkbox" },
               { icon: "mdi-tablet-cellphone", key: "ALLOW_NEW_USER_PUSH_BOOK", label: "settings.allow_new_user_push_book", type: "checkbox" },
@@ -2210,6 +2223,8 @@ export default {
             title: "settings.social_network_login",
             desc: "settings.socials_description",
             special: "socials",
+            // 社交登录属于用户与账号模块
+            module: "users",
           },
         ],
       },

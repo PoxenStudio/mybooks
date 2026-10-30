@@ -241,7 +241,9 @@ class UserAppearance(BaseHandler):
         return {"err": "ok", "appearance": {}}
 
 
-class SignUp(BaseHandler):
+class SignUp(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_USERS
+
     def check_active_code(self, username, code):
         user = (
             self.sqlite_session.query(Reader)
@@ -332,7 +334,9 @@ class SignUp(BaseHandler):
         return {"err": "ok"}
 
 
-class UserNew(BaseHandler):
+class UserNew(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_USERS
+
     @js
     @auth
     def post(self):

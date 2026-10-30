@@ -548,6 +548,8 @@
     "enable_module_physical_tips": "Covers physical-book registration (ISBN or manual entry), copy count and shelf location, and ebook↔physical conversion. When off, the entries, book page fields and settings disappear; existing records are kept and come back when re-enabled.",
     "enable_module_ai": "AI",
     "enable_module_ai_tips": "Covers the AI assistant, AI metadata updates, MyNexus analysis and reading companion, and the MCP endpoint. When off, the entries, buttons and settings block disappear and the APIs refuse requests; existing analysis results are kept and come back when re-enabled.",
+    "enable_module_users": "Users & Accounts",
+    "enable_module_users_tips": "Covers user management, self sign-up, approval, invitations/access codes, new-user defaults, social login, and the guest-permission / download-quota / require-login settings. When off, the user management page, sign-up entries and social login disappear and the related APIs refuse requests; sign-in, sign-out, profile and password reset remain available, and guest policies keep their stored values.",
     "sec_site_home": "Home & Listing",
     "sec_site_home_cards": "Homepage cards",
     "sec_site_home_cards_desc": "Choose which cards appear on the homepage, their order, and add custom cards for an author, tag, series, language or rating.",

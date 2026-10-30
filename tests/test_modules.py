@@ -19,6 +19,7 @@ from webserver.base.modules import (
     MODULE_AUDIO,
     MODULE_COMMUNITY,
     MODULE_PHYSICAL,
+    MODULE_USERS,
     MODULES,
     ModuleGateMixin,
     is_known,
@@ -65,6 +66,7 @@ class TestSnapshot(unittest.TestCase):
                 MODULE_COMMUNITY: True,
                 MODULE_PHYSICAL: True,
                 MODULE_AI: True,
+                MODULE_USERS: True,
             },
         )
         self.assertEqual(
@@ -73,12 +75,14 @@ class TestSnapshot(unittest.TestCase):
                 "ENABLE_MODULE_COMMUNITY": False,
                 "ENABLE_MODULE_PHYSICAL": False,
                 "ENABLE_MODULE_AI": False,
+                "ENABLE_MODULE_USERS": False,
             }),
             {
                 MODULE_AUDIO: False,
                 MODULE_COMMUNITY: False,
                 MODULE_PHYSICAL: False,
                 MODULE_AI: False,
+                MODULE_USERS: False,
             },
         )
 
@@ -457,6 +461,93 @@ class TestOpdsModuleVisibility(unittest.TestCase):
         self.assertFalse(opds.OpdsHandler._physical_category_hidden(None, "tags"))
 
 
+class TestUsersModuleRoutes(unittest.TestCase):
+    """用户与账号：用户管理、注册/激活、社交登录门禁；登录等核心能力保持开放。"""
+
+    def test_signup_and_admin_user_routes_are_gated(self):
+        try:
+            from webserver.handlers import admin, user
+        except ImportError as exc:
+            self.skipTest("admin 路由需要 calibre：%s" % exc)
+
+        user_gated = {
+            "/api/user/sign_up",
+            "/api/user/new",
+            "/api/user/active/send",
+            "/api/active/(.*)/(.*)",
+        }
+        seen = set()
+        for pattern, handler in user.routes():
+            if pattern in user_gated:
+                seen.add(pattern)
+                with self.subTest(route=pattern):
+                    self.assertTrue(issubclass(handler, ModuleGateMixin), pattern)
+                    self.assertEqual(handler.module_id, MODULE_USERS, pattern)
+        self.assertEqual(seen, user_gated)
+
+        admin_gated = {"/api/admin/users"}
+        seen = set()
+        for pattern, handler in admin.routes():
+            if pattern in admin_gated:
+                seen.add(pattern)
+                with self.subTest(route=pattern):
+                    self.assertTrue(issubclass(handler, ModuleGateMixin), pattern)
+                    self.assertEqual(handler.module_id, MODULE_USERS, pattern)
+        self.assertEqual(seen, admin_gated)
+
+    def test_core_account_routes_stay_open(self):
+        from webserver.handlers import user
+
+        core = {
+            "/api/user/sign_in",
+            "/api/user/sign_out",
+            "/api/user/reset",
+            "/api/user/update",
+            "/api/user/avatar",
+            "/api/access",
+        }
+        seen = set()
+        for pattern, handler in user.routes():
+            if pattern in core:
+                seen.add(pattern)
+                with self.subTest(route=pattern):
+                    self.assertFalse(issubclass(handler, ModuleGateMixin), pattern)
+        self.assertEqual(seen, core)
+
+    def test_social_routes_are_gated(self):
+        from webserver import social_routes
+
+        for rule in social_routes.SOCIAL_AUTH_ROUTES:
+            with self.subTest(route=rule.regex.pattern):
+                self.assertTrue(
+                    issubclass(rule.handler_class, social_routes.SocialLoginGateMixin)
+                )
+
+    def test_social_gate_blocks_when_users_off(self):
+        from webserver import social_routes
+
+        class _Base:
+            def __init__(self):
+                self.prepared = False
+
+            def prepare(self):
+                self.prepared = True
+
+        class _Gated(social_routes.SocialLoginGateMixin, _Base):
+            pass
+
+        handler = _Gated()
+        with mock.patch.object(social_routes, "module_enabled", return_value=False):
+            with self.assertRaises(Exception) as ctx:
+                handler.prepare()
+        self.assertEqual(getattr(ctx.exception, "status_code", None), 404)
+        self.assertFalse(handler.prepared)
+
+        with mock.patch.object(social_routes, "module_enabled", return_value=True):
+            handler.prepare()
+        self.assertTrue(handler.prepared)
+
+
 class TestBookListHomepageHandler(unittest.TestCase):
     def _handler(self):
         class _Fake:
@@ -681,17 +772,39 @@ class TestSysDowngrade(unittest.TestCase):
                 return False
 
         fake = _Fake()
-        conf = {"AI_ENABLED": True, "ENABLE_MYNEXUS": True}
+        conf = {
+            "AI_ENABLED": True,
+            "ENABLE_MYNEXUS": True,
+            "SOCIALS": [{"value": "github", "text": "Github"}],
+        }
         with mock.patch.dict(base_module.CONF, conf):
             with mock.patch.object(modules_module, "module_enabled", return_value=False):
                 info = base_module.BaseHandler._sys_info_with(fake, {})
             self.assertFalse(info["aiEnabled"])
             self.assertFalse(info["mynexus_enabled"])
+            self.assertEqual(info["socials"], [])
 
             with mock.patch.object(modules_module, "module_enabled", return_value=True):
                 info = base_module.BaseHandler._sys_info_with(fake, {})
             self.assertTrue(info["aiEnabled"])
             self.assertTrue(info["mynexus_enabled"])
+            self.assertEqual(info["socials"], conf["SOCIALS"])
+
+    def test_register_flag_follows_users_module(self):
+        from webserver.handlers import base as base_module
+
+        class _Fake:
+            def require_login_enabled(self):
+                return False
+
+        with mock.patch.dict(base_module.CONF, {"ALLOW_REGISTER": True}):
+            with mock.patch.object(modules_module, "module_enabled", return_value=False):
+                flags = base_module.BaseHandler.allow_flags(_Fake())
+            self.assertFalse(flags["register"])
+
+            with mock.patch.object(modules_module, "module_enabled", return_value=True):
+                flags = base_module.BaseHandler.allow_flags(_Fake())
+            self.assertTrue(flags["register"])
 
 
 if __name__ == "__main__":

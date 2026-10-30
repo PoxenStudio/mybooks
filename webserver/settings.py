@@ -86,6 +86,7 @@ settings = {
     "ENABLE_MODULE_COMMUNITY": True,
     "ENABLE_MODULE_PHYSICAL": True,
     "ENABLE_MODULE_AI": True,
+    "ENABLE_MODULE_USERS": True,
     "ENABLE_PHYSICAL_BOOKS": True,
     "ENABLE_FOLDER_BROWSE": False,
     "ALLOW_GUEST_UPLOAD": False,

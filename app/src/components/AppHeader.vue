@@ -525,8 +525,8 @@ export default {
             sidebar_items: [],
             socials: [],
             friends: [],
-            // 功能模块快照（audio / community / physical / ai）；加载完成前按全开处理
-            modules: { audio: true, community: true, physical: true, ai: true },
+            // 功能模块快照（audio / community / physical / ai / users）；加载完成前按全开处理
+            modules: { audio: true, community: true, physical: true, ai: true, users: true },
             allow: {
                 register: true,
                 download: true,
@@ -617,7 +617,7 @@ export default {
                     color: "deep-orange",
                     groups: [
                         { icon: "mdi-cog", href: "/admin/settings", text: "appHeader.systemSettings", color: "blue darken-1"},
-                        { icon: "mdi-account", href: "/admin/users", text: "appHeader.userManagement", color: "deep-orange"},
+                        ...(this.moduleOn("users") ? [{ icon: "mdi-account", href: "/admin/users", text: "appHeader.userManagement", color: "deep-orange"}] : []),
                         { icon: "mdi-import", href: "/admin/imports", text: "appHeader.importBooks", color: "green"},
                         { icon: "mdi-library-shelves", href: "/admin/books", text: "appHeader.bookManagement", color: "blue darken-2"},
                         ...(this.sys.allow.share_link ? [{ icon: "mdi-cloud-outline", href: "/admin/shares", text: "appHeader.shareManagement", color: "teal" }] : []),

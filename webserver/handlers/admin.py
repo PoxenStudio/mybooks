@@ -68,7 +68,9 @@ DEFAULT_META_SOURCES = ["douban", "baidu", "xinhua"]
 LOG_PATH = "/data/log/mybooks.log"
 
 
-class AdminUsers(BaseHandler):
+class AdminUsers(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_USERS
+
     @js
     @auth
     def get(self):
