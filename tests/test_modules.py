@@ -15,8 +15,10 @@ from unittest import mock
 from webserver.base import modules as modules_module
 from webserver.base import setting_saver
 from webserver.base.modules import (
+    MODULE_AI,
     MODULE_AUDIO,
     MODULE_COMMUNITY,
+    MODULE_PHYSICAL,
     MODULES,
     ModuleGateMixin,
     is_known,
@@ -56,10 +58,28 @@ class TestModuleEnabled(unittest.TestCase):
 class TestSnapshot(unittest.TestCase):
 
     def test_snapshot_shape(self):
-        self.assertEqual(snapshot({}), {MODULE_AUDIO: True, MODULE_COMMUNITY: True})
         self.assertEqual(
-            snapshot({"ENABLE_MODULE_AUDIO": False, "ENABLE_MODULE_COMMUNITY": False}),
-            {MODULE_AUDIO: False, MODULE_COMMUNITY: False},
+            snapshot({}),
+            {
+                MODULE_AUDIO: True,
+                MODULE_COMMUNITY: True,
+                MODULE_PHYSICAL: True,
+                MODULE_AI: True,
+            },
+        )
+        self.assertEqual(
+            snapshot({
+                "ENABLE_MODULE_AUDIO": False,
+                "ENABLE_MODULE_COMMUNITY": False,
+                "ENABLE_MODULE_PHYSICAL": False,
+                "ENABLE_MODULE_AI": False,
+            }),
+            {
+                MODULE_AUDIO: False,
+                MODULE_COMMUNITY: False,
+                MODULE_PHYSICAL: False,
+                MODULE_AI: False,
+            },
         )
 
 
@@ -271,6 +291,106 @@ class TestCommunityRoutesAreGated(unittest.TestCase):
         self.assertEqual(seen, gated)
 
 
+class TestPhysicalRoutesAreGated(unittest.TestCase):
+    """实体书模块：登记、互转、实体书列表逐条反射。"""
+
+    def test_physical_routes_are_gated(self):
+        try:
+            from webserver.handlers import book
+        except ImportError as exc:
+            self.skipTest("book 路由需要 calibre：%s" % exc)
+
+        gated = {
+            "/api/printbooks",
+            "/api/book/add",
+            "/api/book/add/manual",
+            "/api/book/exchange_type",
+        }
+        seen = set()
+        for pattern, handler in book.routes():
+            if pattern in gated:
+                seen.add(pattern)
+                with self.subTest(route=pattern):
+                    self.assertTrue(issubclass(handler, ModuleGateMixin), pattern)
+                    self.assertEqual(handler.module_id, MODULE_PHYSICAL, pattern)
+        self.assertEqual(seen, gated)
+
+    def test_stamp_stays_independent(self):
+        try:
+            from webserver.handlers import book
+        except ImportError as exc:
+            self.skipTest("book 路由需要 calibre：%s" % exc)
+
+        # 封面图章作用于电子书封面（2026-10-19 设计），不属于实体书模块
+        self.assertFalse(issubclass(book.BookAddStamp, ModuleGateMixin))
+
+
+class TestAIRoutesAreGated(unittest.TestCase):
+    """AI 模块：单书/批量 AI 更新、MyNexus、MCP、助手 WebSocket。"""
+
+    def test_book_and_admin_ai_routes_are_gated(self):
+        try:
+            from webserver.handlers import admin, book
+        except ImportError as exc:
+            self.skipTest("book/admin 路由需要 calibre：%s" % exc)
+
+        book_gated = {"/api/book/([0-9]+)/aifill"}
+        seen = set()
+        for pattern, handler in book.routes():
+            if pattern in book_gated:
+                seen.add(pattern)
+                with self.subTest(route=pattern):
+                    self.assertTrue(issubclass(handler, ModuleGateMixin), pattern)
+                    self.assertEqual(handler.module_id, MODULE_AI, pattern)
+        self.assertEqual(seen, book_gated)
+
+        admin_gated = {"/api/admin/book/aifill", "/api/admin/ai/test"}
+        seen = set()
+        for pattern, handler in admin.routes():
+            if pattern in admin_gated:
+                seen.add(pattern)
+                with self.subTest(route=pattern):
+                    self.assertTrue(issubclass(handler, ModuleGateMixin), pattern)
+                    self.assertEqual(handler.module_id, MODULE_AI, pattern)
+        self.assertEqual(seen, admin_gated)
+
+    def test_mynexus_routes_are_gated(self):
+        from webserver.handlers import mynexus
+
+        for pattern, handler in mynexus.routes():
+            with self.subTest(route=pattern):
+                self.assertTrue(issubclass(handler, ModuleGateMixin), pattern)
+                self.assertEqual(handler.module_id, MODULE_AI, pattern)
+
+    def test_mcp_routes_are_gated(self):
+        from webserver.handlers import mcp
+
+        for pattern, handler in mcp.routes():
+            with self.subTest(route=pattern):
+                self.assertTrue(issubclass(handler, ModuleGateMixin), pattern)
+                self.assertEqual(handler.module_id, MODULE_AI, pattern)
+
+    def test_assistant_websocket_closes_when_module_off(self):
+        import asyncio
+
+        from webserver.handlers.assistant import AssistantWebSocketHandler
+
+        class _Fake:
+            def __init__(self):
+                self.closed = None
+
+            def get_current_user(self):
+                return b"1"
+
+            def close(self, code=None, reason=None):
+                self.closed = (code, reason)
+
+        handler = _Fake()
+        with mock.patch("webserver.handlers.assistant.module_enabled", return_value=False):
+            asyncio.run(AssistantWebSocketHandler.open(handler))
+        self.assertEqual(handler.closed[0], 4004)
+
+
 class TestBookListHomepageHandler(unittest.TestCase):
     def _handler(self):
         class _Fake:
@@ -471,10 +591,41 @@ class TestSysDowngrade(unittest.TestCase):
         with mock.patch.object(modules_module, "module_enabled", return_value=False):
             flags = BaseHandler.allow_flags(_Fake())
         self.assertFalse(flags["user_memos"])
+        self.assertFalse(flags["physical_books"])
 
         with mock.patch.object(modules_module, "module_enabled", return_value=True):
             flags = BaseHandler.allow_flags(_Fake())
         self.assertTrue(flags["user_memos"])
+        self.assertTrue(flags["physical_books"])
+
+    def test_sys_info_ai_flags_follow_module(self):
+        from webserver.handlers import base as base_module
+
+        class _Fake:
+            def __init__(self):
+                self.sqlite_session = mock.MagicMock()
+
+            def _build_friends_with_favicon(self):
+                return []
+
+            def allow_flags(self):
+                return {}
+
+            def need_invited(self):
+                return False
+
+        fake = _Fake()
+        conf = {"AI_ENABLED": True, "ENABLE_MYNEXUS": True}
+        with mock.patch.dict(base_module.CONF, conf):
+            with mock.patch.object(modules_module, "module_enabled", return_value=False):
+                info = base_module.BaseHandler._sys_info_with(fake, {})
+            self.assertFalse(info["aiEnabled"])
+            self.assertFalse(info["mynexus_enabled"])
+
+            with mock.patch.object(modules_module, "module_enabled", return_value=True):
+                info = base_module.BaseHandler._sys_info_with(fake, {})
+            self.assertTrue(info["aiEnabled"])
+            self.assertTrue(info["mynexus_enabled"])
 
 
 if __name__ == "__main__":

@@ -1223,6 +1223,8 @@ const SETTING_TEXT_TYPES = ["text", "textarea", "select", "number"];
 const MODULE_SETTING_KEYS = {
   audio: "ENABLE_MODULE_AUDIO",
   community: "ENABLE_MODULE_COMMUNITY",
+  physical: "ENABLE_MODULE_PHYSICAL",
+  ai: "ENABLE_MODULE_AI",
 };
 
 // READER_MYDICTS 元素上的 showToken 只是显隐 token 的视图状态，
@@ -1881,6 +1883,20 @@ export default {
                 type: "checkbox",
                 tips: "settings.enable_module_community_tips",
               },
+              {
+                icon: "mdi-bookshelf",
+                key: "ENABLE_MODULE_PHYSICAL",
+                label: "settings.enable_module_physical",
+                type: "checkbox",
+                tips: "settings.enable_module_physical_tips",
+              },
+              {
+                icon: "mdi-robot-outline",
+                key: "ENABLE_MODULE_AI",
+                label: "settings.enable_module_ai",
+                type: "checkbox",
+                tips: "settings.enable_module_ai_tips",
+              },
             ],
           },
           {
@@ -1944,6 +1960,8 @@ export default {
                 label: "settings.enable_physical_books",
                 type: "checkbox",
                 tips: "settings.enable_physical_books_tips",
+                // 实体书模块关闭时整组（含子项「允许直接互转」）一起收起
+                module: "physical",
                 fields: [
                   {
                     icon: "mdi-swap-horizontal",
@@ -2399,6 +2417,8 @@ export default {
             icon: "mdi-scatter-plot-outline",
             title: "settings.ai_capability",
             special: "ai_capabilities",
+            // AI 模块关闭时整个 AI 能力区块（含 MyNexus / MCP）不渲染
+            module: "ai",
           },
           {
             id: "svc-bookbarn",

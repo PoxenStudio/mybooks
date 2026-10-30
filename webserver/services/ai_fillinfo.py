@@ -5,6 +5,7 @@ import time
 from webserver.i18n import _
 
 from webserver import loader, utils
+from webserver.base import modules as feature_modules
 from webserver.assistant.book_ai_client import AIBookInfo, BookAIClient
 from webserver.constants import CALIBRE_COLUMN_CATEGORY
 from webserver.services import AsyncService
@@ -50,6 +51,9 @@ class AIFillInfoService(AsyncService):
         return BookAIClient()
 
     def _missing_api_key_msg(self) -> str:
+        # 模块关闭时直接拒绝：入口虽已隐藏，队列里的旧任务/脚本调用也不应继续跑
+        if not feature_modules.module_enabled(feature_modules.MODULE_AI):
+            return _("AI 功能已关闭")
         if not CONF.get("AI_ENABLED"):
             return _("AI 助手未启用，需要到系统设置中启用")
         if not CONF.get("AI_DEEPSEEK_API_KEY"):

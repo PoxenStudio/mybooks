@@ -128,7 +128,7 @@
                                     :src="book.thumb"
                                     class="cover-fill-img book-img-hover"
                                 ></v-img>
-                                <div v-if="book.book_type === 1" class="physical-book-badge">
+                                <div v-if="physicalModuleOn && book.book_type === 1" class="physical-book-badge">
                                     <v-icon small color="white">mdi-bookshelf</v-icon>
                                 </div>
                                 <div
@@ -193,8 +193,8 @@
                                     :src="book.thumb"
                                     class="cover-fill-img book-img-hover"
                                 ></v-img>
-                                <!-- 实体书角标 -->
-                                <div v-if="book.book_type === 1" class="physical-book-badge">
+                                <!-- 实体书角标（模块关闭时隐藏） -->
+                                <div v-if="physicalModuleOn && book.book_type === 1" class="physical-book-badge">
                                     <v-icon small color="white">mdi-bookshelf</v-icon>
                                 </div>
                                 <div v-if="reasonText(book)" class="reason-badge">{{ reasonText(book) }}</div>
@@ -394,6 +394,11 @@ export default {
         },
         allowPhysicalBooks() {
             return !!(this.$store.state.sys && this.$store.state.sys.allow && this.$store.state.sys.allow.physical_books);
+        },
+        // 实体书模块开关：关闭时封面角标一并消失（书本身仍在书库）
+        physicalModuleOn() {
+            const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
+            return mods.physical !== false;
         },
     },
     watch: {

@@ -16,8 +16,8 @@
                             <div v-if="book.shared" class="shared-book-badge">
                                 <v-icon small color="white">mdi-cloud-outline</v-icon>
                             </div>
-                            <!-- 实体书角标 -->
-                            <div v-if="book.book_type === 1" class="physical-book-badge" :class="{ 'badge-shifted': book.shared }">
+                            <!-- 实体书角标（模块关闭时隐藏，书本身仍在书库里） -->
+                            <div v-if="physicalModuleOn && book.book_type === 1" class="physical-book-badge" :class="{ 'badge-shifted': book.shared }">
                                 <v-icon small color="white">mdi-bookshelf</v-icon>
                             </div>
                             <!-- 音频书角标 -->
@@ -33,7 +33,7 @@
                                 <v-chip rounded x-small color="green" class="white--text ma-1" v-if="book.category">
                                     {{ book.category }}
                                 </v-chip>
-                                <v-chip rounded x-small color="dark" class="white--text ma-1" v-if="book.location">
+                                <v-chip rounded x-small color="dark" class="white--text ma-1" v-if="physicalModuleOn && book.location">
                                     {{ book.location }}
                                 </v-chip>
                                 <template v-for="(file, index) in book.files?.slice(0, 3)">
@@ -85,6 +85,10 @@ export default {
     components: {
     },
     computed: {
+        physicalModuleOn() {
+            const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
+            return mods.physical !== false;
+        },
         render_books: function() {
             return (this.books || []).map( b => {
                 // 确保b是一个对象

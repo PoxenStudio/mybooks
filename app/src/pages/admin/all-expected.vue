@@ -55,7 +55,7 @@
     >
       <v-radio-group v-model="uploadBookType" row class="mt-0">
         <v-radio :label="$t('expected.ebook')" value="ebook"></v-radio>
-        <v-radio :label="$t('expected.physicalBook')" value="physical"></v-radio>
+        <v-radio v-if="physicalModuleOn" :label="$t('expected.physicalBook')" value="physical"></v-radio>
       </v-radio-group>
       <v-file-input v-if="uploadBookType === 'ebook'" v-model="uploadFile" :label="$t('expected.selectFile')" prepend-icon="mdi-book-open-variant"></v-file-input>
       <v-text-field v-else ref="isbnField" v-model="uploadIsbn" :label="$t('expected.isbnNumber')" :rules="debouncedIsbnRules" prepend-icon="mdi-barcode" clearable @input="clearValidationCache"></v-text-field>
@@ -113,6 +113,11 @@ export default {
     return { title: this.$t('expected.pageTitle') };
   },
   computed: {
+    // 实体书模块关闭时缺书登记的「实体书」上传方式一并隐藏
+    physicalModuleOn() {
+      const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
+      return mods.physical !== false;
+    },
     userFilterOptions() {
       const opts = [{ text: this.$t('expected.allUsers'), value: 0 }];
       for (const [name, uid] of Object.entries(this.usersMap)) {

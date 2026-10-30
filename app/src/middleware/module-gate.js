@@ -33,6 +33,10 @@ const ROUTE_MODULES = [
             path.startsWith("/booklists/") ||
             path.startsWith("/booklist/"),
     },
+    {
+        id: "physical",
+        test: (path) => path === "/printbooks" || path.startsWith("/printbooks/"),
+    },
 ];
 
 export default async function ({ app, route, redirect }) {

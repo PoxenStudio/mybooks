@@ -5,6 +5,8 @@ import json
 import logging
 import tornado.websocket
 
+from webserver.base.modules import MODULE_AI, module_enabled
+
 
 class AssistantWebSocketHandler(tornado.websocket.WebSocketHandler):
     # 保存连接的实例，以便后台服务管理
@@ -28,6 +30,12 @@ class AssistantWebSocketHandler(tornado.websocket.WebSocketHandler):
         if not self.get_current_user():
             logging.warning("WebSocket connection attempt without login.")
             self.close(code=4003, reason="Authentication required")
+            return
+
+        # AI 模块关闭时助手整体下线：页面按钮已隐藏，这里拦住直连/旧页面
+        if not module_enabled(MODULE_AI):
+            logging.warning("WebSocket connection rejected: AI module disabled.")
+            self.close(code=4004, reason="AI module disabled")
             return
 
         try:

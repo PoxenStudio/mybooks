@@ -36,6 +36,7 @@ from webserver.constants import (
 )
 from webserver.handlers.base import BaseHandler
 from webserver.models import Item
+from webserver.base import modules as feature_modules
 
 CONF = loader.get_settings()
 
@@ -761,7 +762,9 @@ class OpdsHandler(BaseHandler):
         hidden_categories = {"formats", "identifiers", CALIBRE_COLUMN_EXT_LINK}
         if not CONF.get("ENABLE_FOLDER_BROWSE", False):
             hidden_categories.add(CALIBRE_COLUMN_FOLDER)
-        if not CONF.get("ENABLE_PHYSICAL_BOOKS", True):
+        if not CONF.get("ENABLE_PHYSICAL_BOOKS", True) or not feature_modules.module_enabled(
+            feature_modules.MODULE_PHYSICAL
+        ):
             hidden_categories.add(CALIBRE_COLUMN_LOCATION)
 
         for category in sorted(categories, key=lambda x: sort_key(getter(x))):

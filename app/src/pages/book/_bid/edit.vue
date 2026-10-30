@@ -113,10 +113,10 @@
                                 <v-col class='py-0' cols=12 sm=6>
                                     <v-text-field :label="$t('book.edit.fields.isbn')" v-model="book.isbn">{{ book.isbn }}</v-text-field>
                                 </v-col>
-                                <v-col class='py-0' cols=12 sm=4 v-if="book.book_type === 1">
+                                <v-col class='py-0' cols=12 sm=4 v-if="physicalModuleOn && book.book_type === 1">
                                     <v-text-field :label="$t('book.edit.fields.location')" v-model="book.location">{{ book.location }}</v-text-field>
                                 </v-col>
-                                <v-col class='py-0' cols=12 sm=2 v-if="book.book_type === 1">
+                                <v-col class='py-0' cols=12 sm=2 v-if="physicalModuleOn && book.book_type === 1">
                                     <v-text-field
                                         :label="$t('book.edit.fields.book_count')"
                                         :disabled="book.book_type != 1"
@@ -230,6 +230,11 @@ export default {
             set(stars) {
                 this.book.rating = fromStars(stars);
             },
+        },
+        // 实体书模块关闭时不显示书架位置/册数（后端也会丢弃这几个字段）
+        physicalModuleOn() {
+            const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
+            return mods.physical !== false;
         },
     },
     watch: {

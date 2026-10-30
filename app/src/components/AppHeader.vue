@@ -283,7 +283,7 @@
                             width="3"
                             class="mr-2"
                         ></v-progress-circular>
-                        <v-btn v-if="isAiFeatureEnabled" :color="isFocused ? (ai_enabled ? 'orange darken-4' : 'grey') : 'transparent'" class="black--text" rounded @click="toggleAi">AI</v-btn>
+                        <v-btn v-if="isAiFeatureEnabled && moduleOn('ai')" :color="isFocused ? (ai_enabled ? 'orange darken-4' : 'grey') : 'transparent'" class="black--text" rounded @click="toggleAi">AI</v-btn>
                     </template>
                 </v-text-field>
                 <v-spacer></v-spacer>
@@ -454,7 +454,7 @@
             ></v-textarea>
         </AppDialog>
 
-        <v-dialog v-model="ai_enabled" persistent max-width="700" scrollable>
+        <v-dialog v-if="moduleOn('ai')" v-model="ai_enabled" persistent max-width="700" scrollable>
             <v-card class="dialog-border d-flex flex-column" style="height: 600px;">
                 <v-card-title class="primary white--text py-3 ai-dialog-title">
                     <div left color="white">
@@ -602,8 +602,8 @@ export default {
             sidebar_items: [],
             socials: [],
             friends: [],
-            // 功能模块快照（audio / community 等）；加载完成前按全开处理
-            modules: { audio: true, community: true },
+            // 功能模块快照（audio / community / physical / ai）；加载完成前按全开处理
+            modules: { audio: true, community: true, physical: true, ai: true },
             allow: {
                 register: true,
                 download: true,

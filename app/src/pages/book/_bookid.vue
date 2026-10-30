@@ -2,7 +2,7 @@
   <div>
     <v-row align="start">
         <v-col cols="12">
-            <MyNexusChatDialog :open.sync="mynexusChatOpen" :book="book" @unavailable="onMyNexusUnavailable" />
+            <MyNexusChatDialog v-if="aiModuleOn" :open.sync="mynexusChatOpen" :book="book" @unavailable="onMyNexusUnavailable" />
             <v-dialog v-model="dialog_converting" persistent width="460">
                 <v-card class="dialog-border">
                     <div style="height: 16px;"></div>
@@ -335,7 +335,7 @@
                                     <v-icon>{{ book.sole ? 'mdi-earth-off' : 'mdi-earth' }}</v-icon>
                                     {{ book.sole ? $t('book.setPublic') : $t('book.setSole') }}
                                 </v-list-item>
-                                <v-list-item @click="aiFillBook">
+                                <v-list-item v-if="aiModuleOn" @click="aiFillBook">
                                     <v-icon>mdi-robot</v-icon>
                                     {{ $t('book.aiUpdate') }}
                                 </v-list-item>
@@ -355,7 +355,7 @@
                                     <v-icon>mdi-card-bulleted-outline</v-icon>
                                     {{ $t('book.generateShareCard') }}
                                 </v-list-item>
-                                <v-list-item @click="exchangeBookType">
+                                <v-list-item v-if="physicalModuleOn" @click="exchangeBookType">
                                     <v-icon>mdi-swap-horizontal-bold</v-icon>
                                     {{ book.book_type==this.BOOK_TYPE.PHYSICAL ? $t('book.exchangeToEbook') : $t('book.exchangeToPhysical') }}
                                 </v-list-item>
@@ -538,13 +538,13 @@
                                     </template>
                                 </div>
                                 <br/>
-                                <span v-if="book.book_type==this.BOOK_TYPE.PHYSICAL">
+                                <span v-if="physicalModuleOn && book.book_type==this.BOOK_TYPE.PHYSICAL">
                                     <v-chip rounded small dark color="indigo">
                                         <v-icon>mdi-bookshelf</v-icon>{{ $t('book.bookPhysical') }}
                                     </v-chip>
                                 </span>
-                                <span v-if="book.book_type==this.BOOK_TYPE.PHYSICAL">{{ $t('book.bookCount') }}: {{book.book_count}}</span>
-                                <span v-if="book.book_type==this.BOOK_TYPE.PHYSICAL">
+                                <span v-if="physicalModuleOn && book.book_type==this.BOOK_TYPE.PHYSICAL">{{ $t('book.bookCount') }}: {{book.book_count}}</span>
+                                <span v-if="physicalModuleOn && book.book_type==this.BOOK_TYPE.PHYSICAL">
                                     , {{ $t('book.location') }}:
                                     <span v-if="!editing_location">
                                         {{book.location || "*" }}
@@ -596,7 +596,7 @@
                                 </v-chip>
                             </div>
                             <div class="tag-chips" style="margin-top: 5px;">
-                                <v-chip rounded smallF color="indigo" class="white--text"
+                                <v-chip v-if="aiModuleOn" rounded smallF color="indigo" class="white--text"
                                         @click="aiFillBook" :loading="ai_filling">
                                     <v-icon left>mdi-robot</v-icon>
                                     {{ $t('book.aiUpdate') }}
@@ -724,7 +724,7 @@
                                 </template>
                             </div>
                         </v-card-text>
-                        <v-card-text v-if="isAdmin && book.mynexus_error" class="pt-0 error--text">
+                        <v-card-text v-if="isAdmin && aiModuleOn && book.mynexus_error" class="pt-0 error--text">
                             {{ book.mynexus_error }}
                         </v-card-text>
                         <v-card-text v-if="isAdmin && mynexusEnabled && (mynexusIsActive || mynexusStatus === 'failed')" class="pt-0">
@@ -1096,6 +1096,7 @@
 
     <!-- MyNexus 解析结果失效，询问是否重新解读 -->
     <AppDialog
+        v-if="aiModuleOn"
         v-model="dialog_mynexus_reanalyze"
         type="confirm"
         :title="$t('book.mynexusCompanion')"
@@ -1332,7 +1333,7 @@ export default {
             return (this.book.files || []).some((file) => ["epub", "txt"].includes(file.format.toLowerCase()));
         },
         mynexusEnabled: function () {
-            return this.$store.state.sys?.mynexus_enabled === true;
+            return this.aiModuleOn && this.$store.state.sys?.mynexus_enabled === true;
         },
         canReview: function () {
             // 评价功能总开关（管理员在"浏览与阅读"里关闭时，整个评论区都不展示）
@@ -1499,6 +1500,16 @@ export default {
         communityModuleOn() {
             const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
             return mods.community !== false;
+        },
+        /** 实体书模块（sys.modules.physical）：关闭后互转、册数与书架位置一起消失 */
+        physicalModuleOn() {
+            const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
+            return mods.physical !== false;
+        },
+        /** AI 模块（sys.modules.ai）：关闭后 AI 更新、MyNexus 解析与伴读一起消失 */
+        aiModuleOn() {
+            const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
+            return mods.ai !== false;
         },
 
         hasTxt() {

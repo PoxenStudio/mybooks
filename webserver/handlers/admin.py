@@ -919,8 +919,10 @@ class AdminBookFill(BaseHandler):
         return {"err": "ok", "msg": _("任务启动成功！请耐心等待，稍后再来刷新页面")}
 
 
-class AdminBookAIFill(BaseHandler):
+class AdminBookAIFill(feature_modules.ModuleGateMixin, BaseHandler):
     """Admin API: 批量使用 AI 更新指定书籍的信息"""
+
+    module_id = feature_modules.MODULE_AI
 
     @js
     @is_admin
@@ -1855,7 +1857,9 @@ class AdminResources(BaseHandler):
         return {"err": "ok", "resources": resources}
 
 
-class AdminAITestConnection(BaseHandler):
+class AdminAITestConnection(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_AI
+
     @js
     @is_admin
     async def post(self):

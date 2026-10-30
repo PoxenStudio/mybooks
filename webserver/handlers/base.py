@@ -445,6 +445,10 @@ class BaseHandler(web.RequestHandler):
         user_memos = CONF.get("ENABLE_USER_MEMOS", True)
         if not feature_modules.module_enabled(feature_modules.MODULE_COMMUNITY):
             user_memos = False
+        # 实体书模块关闭时导航/OPDS/筛选等入口一并失效
+        physical_books = CONF.get("ENABLE_PHYSICAL_BOOKS", True)
+        if not feature_modules.module_enabled(feature_modules.MODULE_PHYSICAL):
+            physical_books = False
         return {
             "register": CONF["ALLOW_REGISTER"],
             "require_login": require_login,
@@ -453,7 +457,7 @@ class BaseHandler(web.RequestHandler):
             "read": False if require_login else CONF["ALLOW_GUEST_READ"],
             "upload": False if require_login else CONF.get("ALLOW_GUEST_UPLOAD", False),
             "share_link": CONF.get("ENABLE_SHARE_LINK", True),
-            "physical_books": CONF.get("ENABLE_PHYSICAL_BOOKS", True),
+            "physical_books": physical_books,
             "folder": CONF.get("ENABLE_FOLDER_BROWSE", False),
             "download_quota": CONF.get("ENABLE_DOWNLOAD_QUOTA", False),
             "server_import": CONF.get("ENABLE_SERVER_FILE_IMPORT", False),
@@ -1878,7 +1882,12 @@ class BaseHandler(web.RequestHandler):
             "series": len(db.all_series()),
             "categories": self.get_custom_category_count(),
             "folders": self.get_folder_count(),
-            "physicals": self.get_physical_books_count(),
+            # 同上：模块关闭时导航不出实体书，也不必算这个数
+            "physicals": (
+                self.get_physical_books_count()
+                if feature_modules.module_enabled(feature_modules.MODULE_PHYSICAL)
+                else 0
+            ),
             "mtime": db.last_modified().strftime("%Y-%m-%d"),
         }
 
@@ -1892,6 +1901,12 @@ class BaseHandler(web.RequestHandler):
             .filter(Reader.access_time > last_week)
             .scalar()
         )
+        ai_enabled = CONF.get("AI_ENABLED", False)
+        mynexus_enabled = CONF.get("ENABLE_MYNEXUS", False)
+        if not feature_modules.module_enabled(feature_modules.MODULE_AI):
+            # AI 模块关闭：助手、AI 补全、MyNexus、MCP 一律视为未启用
+            ai_enabled = False
+            mynexus_enabled = False
         info = dict(stats, users=count_all_users, version=VERSION, active=count_hot_users, performanceMode=perf.CONF.get("PERFORMANCE_MODE", "normal"), lite={"homeCollapse": perf.lite_on("LITE_HOME_COLLAPSE")})
         info.update(
             {
@@ -1928,7 +1943,7 @@ class BaseHandler(web.RequestHandler):
                 "indexPage": CONF.get("INDEX_PAGE_TYPE", "index"),
                 "epub_viewer": CONF.get("EPUB_VIEWER", "MyReader"),
                 "defaultPageSize": CONF.get("DEFAULT_PAGE_SIZE", 60),
-                "aiEnabled": CONF.get("AI_ENABLED", False),
+                "aiEnabled": ai_enabled,
                 "standalone": CONF.get("STANDALONE", False),
                 "hide_project_links": CONF.get("HIDE_PROJECT_LINKS", False),
                 "enable_podcast_service": CONF.get("ENABLE_PODCAST_SERVICE", False),
@@ -1941,7 +1956,7 @@ class BaseHandler(web.RequestHandler):
                 "sidebar_items": get_sidebar_items(CONF),
                 "invited_enabled": self.need_invited(),
                 "showUserInfo": CONF.get("ENABLE_AUTHOR_INFO", False),
-                "mynexus_enabled": CONF.get("ENABLE_MYNEXUS", False),
+                "mynexus_enabled": mynexus_enabled,
             }
         )
         return info

@@ -25,6 +25,8 @@ from webserver.i18n import _
 
 MODULE_AUDIO = "audio"
 MODULE_COMMUNITY = "community"
+MODULE_PHYSICAL = "physical"
+MODULE_AI = "ai"
 
 # 模块表：id -> {key, default, name}
 # 新增模块时在这里登记，并把同名 key 加进 setting_saver.ADMIN_SETTING_KEYS
@@ -40,6 +42,16 @@ MODULES = {
         "key": "ENABLE_MODULE_COMMUNITY",
         "default": True,
         "name": "社区互动",
+    },
+    MODULE_PHYSICAL: {
+        "key": "ENABLE_MODULE_PHYSICAL",
+        "default": True,
+        "name": "实体书",
+    },
+    MODULE_AI: {
+        "key": "ENABLE_MODULE_AI",
+        "default": True,
+        "name": "AI",
     },
 }
 
