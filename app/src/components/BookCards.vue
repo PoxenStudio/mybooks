@@ -3,18 +3,15 @@
         <v-col cols=12 xs=12 sm=6 md=4 lg=3 xl=2 v-for="(book,idx) in render_books" :key="idx+'-books-'+book.id" class="book-list-card d-flex" :style="{ '--i': idx }">
             <v-card :to="selectable ? undefined : book.href" class="flex-grow-1"
                     @click="selectable ? $emit('toggle-select', book.id) : undefined">
-                <div v-if="selectable" class="book-select-badge" @click.stop.prevent="$emit('toggle-select', book.id)">
-                    <v-icon :color="isSelected(book.id) ? 'primary' : 'grey lighten-1'">
-                        {{ isSelected(book.id) ? 'mdi-radiobox-marked' : 'mdi-radiobox-blank' }}
-                    </v-icon>
-                </div>
                 <v-row>
                     <v-col cols=4 xs=4 sm=4 md=4 lg=4 class='col-book-img'>
                         <div class="book-img-container">
-                            <v-img :src="book.thumb || book.img" :aspect-ratio="11/15" style="border-radius: 12px;" class="book-img-hover"></v-img>
-                            <!-- 管理员可见：该书存在有效分享链接 -->
-                            <div v-if="book.shared" class="shared-book-badge">
-                                <v-icon small color="white">mdi-cloud-outline</v-icon>
+                            <v-img :src="book.thumb || book.img" :alt="book.title" class="book-img-hover"></v-img>
+                            <!-- 角标只保留一个，按「有声书 > 实体书 > 分享」取最高优先级。
+                                 原来是三个角标分别压在封面左右两个角上，其中「多选」单选框与
+                                 「有声书」角标同坐标且 z-index 更高，音频页开多选时有声书标记直接被吃掉。 -->
+                            <div v-if="coverBadge(book)" class="cover-badge" :style="{ backgroundColor: coverBadge(book).color }">
+                                <v-icon small color="white">{{ coverBadge(book).icon }}</v-icon>
                             </div>
                             <!-- 实体书角标（模块关闭时隐藏，书本身仍在书库里） -->
                             <div v-if="physicalModuleOn && book.book_type === 1" class="physical-book-badge" :class="{ 'badge-shifted': book.shared }">
@@ -50,8 +47,11 @@
                                 <p v-if="book.comments && shouldShowCommentTooltip(book.comments)"
                                     v-html="book.comments"
                                     class="comment-tooltip-activator"
+                                    tabindex="0"
                                     @mouseenter="showTooltip($event, book.comments)"
                                     @mouseleave="hideTooltip"
+                                    @focus="showTooltip($event, book.comments)"
+                                    @blur="hideTooltip"
                                 ></p>
                                 <p v-else-if="book.comments" v-html="book.comments"></p>
                                 <p v-else>{{ $t('bookCards.browseDetails') }}</p>
@@ -106,6 +106,32 @@ export default {
         },
     },
     methods: {
+        /**
+         * 封面上只留一个角标：有声书 > 实体书 > 分享。
+         * 三个角标同时出现时（音频页 + 实体书 + 有分享链接）叠在同一个角上，看起来像渲染错误；
+         * 而这三个标记的信息量并不对等 —— 有没有音频最影响「能不能听」，分享链接只有管理员关心。
+         */
+        coverBadge(book) {
+            if (!book) return null;
+            if (this.isAudioPage || book.has_audio) return { icon: 'mdi-headphones', color: '#9C27B0' };
+            if (book.book_type === 1) return { icon: 'mdi-bookshelf', color: '#2196F3' };
+            if (book.shared) return { icon: 'mdi-cloud-outline', color: '#009688' };
+            return null;
+        },
+        /** 一行元信息：作者 · 分类 · 位置 · 格式。缺哪个就跳过哪个，不留空分隔符。 */
+        metaLine(book) {
+            if (!book) return '';
+            const parts = [];
+            if (book.author) parts.push(book.author);
+            if (book.category) parts.push(book.category);
+            if (book.location) parts.push(book.location);
+            const formats = (book.files || [])
+                .slice(0, 3)
+                .map((file) => (file && file.format ? String(file.format).toUpperCase() : ''))
+                .filter(Boolean);
+            if (formats.length) parts.push(formats.join(' / '));
+            return parts.join(' · ');
+        },
         isSelected(bookId) {
             return (this.selectedIds || []).includes(bookId);
         },
@@ -216,15 +242,28 @@ export default {
 <style scoped>
 .book-title {
     display: block;
-    /*height: 1em;*/
     overflow: hidden;
     display: -webkit-box;
-    -webkit-line-clamp: 1;
-    line-clamp: 1;
+    /* 原来只有 1 行：1920px 六列布局下几乎每个书名都被截断。两行能容纳绝大多数书名 */
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     text-overflow: clip;
     text-align: left;
     font-weight: bold;
+    line-height: 1.35;
+}
+
+/* 元信息行：替代原来最多 5 个彩色 chip，单行省略，不参与换行计算 */
+.book-meta {
+    margin-top: 2px;
+    font-size: 11px;
+    line-height: 1.5;
+    text-align: left;
+    opacity: 0.62;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .book-list-card .v-card {
     position: relative;
@@ -234,18 +273,18 @@ export default {
     width: 100%;
     height: 100%;
     overflow: hidden;
-    border-radius: 12px;
+    border-radius: var(--app-radius, 4px);
     transition: transform 200ms cubic-bezier(0.22, 0.61, 0.36, 1), box-shadow 200ms ease;
 }
 .book-select-badge {
     position: absolute;
-    top: 6px;
-    right: 6px;
+    top: 4px;
+    right: 4px;
     z-index: 4;
-    background: rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.9);
     border-radius: 50%;
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -279,8 +318,8 @@ export default {
 }
 .book-comments {
     display: -webkit-box;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     text-overflow: clip;
     margin-top: 3px;
@@ -323,50 +362,21 @@ export default {
 .book-img-container .v-image {
     width: 100%;
     height: 100%;
+    border-radius: var(--app-radius, 4px);
+    overflow: hidden;
 }
-.physical-book-badge {
+/* 封面角标：全卡只有这一个，颜色由 coverBadge() 决定（有声书紫 / 实体书蓝 / 分享青） */
+.cover-badge {
     position: absolute;
-    top: 6px;
-    left: 6px;
-    background-color: #2196F3;
+    top: 4px;
+    left: 4px;
     border-radius: 50%;
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 2px 8px rgba(33, 150, 243, 0.4);
-    z-index: 3;
-}
-.shared-book-badge {
-    position: absolute;
-    top: 6px;
-    left: 6px;
-    background-color: #009688;
-    border-radius: 50%;
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 2px 8px rgba(0, 150, 136, 0.4);
-    z-index: 3;
-}
-.physical-book-badge.badge-shifted {
-    top: 34px;
-}
-.audio-book-badge {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    background-color: #9C27B0;
-    border-radius: 50%;
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 2px 8px rgba(156, 39, 176, 0.4);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
     z-index: 3;
 }
 .col-book-info {

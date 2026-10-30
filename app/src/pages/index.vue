@@ -11,27 +11,39 @@
                         <div class="stats-content">
                             <div class="stat-group">
                                 <span class="stat-label">{{ $t('index.totalBooks') }}:</span>
+<<<<<<< HEAD
                                 <span class="stat-value">{{ statValue('total_books') }}</span>
+=======
+                                <span class="stat-value">{{ formatNum(stats.total_books) }}</span>
+>>>>>>> 08098172 (微调一些样式上不一样的问题)
                             </div>
                             <div class="stat-separator">|</div>
                             <div class="stat-group">
                                 <span class="stat-label">{{ $t('index.ebookCount') }}:</span>
+<<<<<<< HEAD
                                 <span class="stat-value">{{ statValue('ebook_count') }}</span>
+=======
+                                <span class="stat-value">{{ formatNum(stats.ebook_count) }}</span>
+>>>>>>> 08098172 (微调一些样式上不一样的问题)
                             </div>
                             <template v-if="allowPhysicalBooks">
                                 <div class="stat-separator">|</div>
                                 <div class="stat-group">
                                     <span class="stat-label">{{ $t('index.physicalCount') }}:</span>
+<<<<<<< HEAD
                                     <span class="stat-value">{{ statValue('physical_count') }}</span>
+=======
+                                    <span class="stat-value">{{ formatNum(stats.physical_count) }}</span>
+>>>>>>> 08098172 (微调一些样式上不一样的问题)
                                 </div>
                             </template>
                             <div class="stat-separator">|</div>
                             <div class="stat-group">
                                 <span class="stat-label">{{ $t('index.monthNewBooks') }}:</span>
-                                <span class="stat-value month-new">
-                                    {{ $t('index.ebookCount') }} {{ stats.month_ebook_count }}
-                                    <template v-if="allowPhysicalBooks">+ {{ $t('index.physicalCount') }} {{ stats.month_physical_count }}</template>
-                                </span>
+                                <!-- 原来这里把「电子书」当标签塞进数值里：
+                                     「本月新增: 电子书 60 + 实体书 0」读起来像一条算式。
+                                     现在只给合计，细分在下面的详情面板里。 -->
+                                <span class="stat-value month-new">{{ formatNum(monthNewTotal) }}</span>
                             </div>
                         </div>
                     </div>
@@ -179,12 +191,18 @@
         >
             <home-section-card
                 v-if="random_books.length > 0"
-                icon="mdi-apple-keyboard-command"
+                icon="mdi-shuffle-variant"
                 :title="$t('index.randomRecommendation')"
                 storage-key="index.randomRecommendation"
             >
                 <template #header-extra>
+<<<<<<< HEAD
                     <v-icon color="primary" class="ml-1 refresh-icon" :class="{ 'refresh-icon--spinning': refreshing.random }" @click="refreshBooks('random')">mdi-refresh</v-icon>
+=======
+                    <v-icon color="primary" class="ml-1 refresh-icon" role="button" tabindex="0"
+                            :aria-label="$t('index.refresh')"
+                            @click="refreshBooks('random')" @keyup.enter="refreshBooks('random')">mdi-refresh</v-icon>
+>>>>>>> 08098172 (微调一些样式上不一样的问题)
                 </template>
                 <v-row>
                     <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="(book,idx) in get_random_books" :key="'rec'+idx+book.id" class="book-card" :style="{ '--i': idx }">
@@ -214,12 +232,18 @@
         >
             <home-section-card
                 v-if="get_recent_books.length > 0"
-                icon="mdi-hexagram-outline"
+                icon="mdi-new-box"
                 :title="$t('index.newRecommendation')"
                 storage-key="index.newRecommendation"
             >
                 <template #header-extra>
+<<<<<<< HEAD
                     <v-icon color="primary" class="ml-1 refresh-icon" :class="{ 'refresh-icon--spinning': refreshing.new }" @click="refreshBooks('new')">mdi-refresh</v-icon>
+=======
+                    <v-icon color="primary" class="ml-1 refresh-icon" role="button" tabindex="0"
+                            :aria-label="$t('index.refresh')"
+                            @click="refreshBooks('new')" @keyup.enter="refreshBooks('new')">mdi-refresh</v-icon>
+>>>>>>> 08098172 (微调一些样式上不一样的问题)
                 </template>
                 <v-row>
                     <v-col cols="12">
@@ -403,10 +427,20 @@ export default {
         allowPhysicalBooks() {
             return !!(this.$store.state.sys && this.$store.state.sys.allow && this.$store.state.sys.allow.physical_books);
         },
+<<<<<<< HEAD
         // 实体书模块开关：关闭时封面角标一并消失（书本身仍在书库）
         physicalModuleOn() {
             const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
             return mods.physical !== false;
+=======
+        /** 「本月新增」只展示合计：细分（电子书/实体书）在详情面板里 */
+        monthNewTotal() {
+            const ebooks = Number(this.stats && this.stats.month_ebook_count) || 0;
+            const physicals = this.allowPhysicalBooks
+                ? (Number(this.stats && this.stats.month_physical_count) || 0)
+                : 0;
+            return ebooks + physicals;
+>>>>>>> 08098172 (微调一些样式上不一样的问题)
         },
     },
     watch: {
@@ -450,6 +484,12 @@ export default {
         },
     },
     methods: {
+        /** 统计数字加千分位：33274 → 33,274 */
+        formatNum(value) {
+            const n = Number(value);
+            if (!Number.isFinite(n)) return value;
+            return n.toLocaleString();
+        },
         isSectionEnabled(section) {
             return !this.hiddenSections.has(section);
         },
@@ -822,8 +862,9 @@ export default {
 }
 
 .stat-value.month-new {
-    background: rgba(76, 175, 80, 0.3);
-    border: 1px solid rgba(76, 175, 80, 0.5);
+    /* 原来是绿色底：绿色在这套界面里代表「成功/已完成」，用在一个中性计数上会误读 */
+    background: rgba(255, 255, 255, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.35);
 }
 
 .stat-separator {
@@ -996,6 +1037,7 @@ export default {
 
 .refresh-icon {
     cursor: pointer;
+    border-radius: 50%;
     transition: transform 0.28s ease, color 0.28s ease;
 }
 
@@ -1004,6 +1046,7 @@ export default {
     color: #1976d2 !important;
 }
 
+<<<<<<< HEAD
 /* #140-2 「换一批」请求在途时的自旋反馈。这是功能性加载指示（与
    v-progress-circular 同类），站长关闭首页动效 / 系统减少动效时也保留 */
 @keyframes refresh-icon-spin {
@@ -1017,6 +1060,21 @@ export default {
     opacity: 0.75;
 }
 
+=======
+.refresh-icon:focus-visible {
+    outline: 2px solid var(--primary-color, #1976D2);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .refresh-icon,
+    .refresh-icon:hover {
+        transition: none;
+        transform: none;
+    }
+}
+
+>>>>>>> 08098172 (微调一些样式上不一样的问题)
 .book-img-container {
     position: relative;
     display: block;
