@@ -318,7 +318,9 @@ class TestBookListHomepageHandler(unittest.TestCase):
 
 
 class TestImportRunSoleGate(unittest.TestCase):
-    def test_sole_rejected_when_community_off(self):
+    """导入本身是核心能力，模块关闭只丢弃 sole 标记，不阻断导入。"""
+
+    def _run(self, sole, community_on):
         import asyncio
         import json
 
@@ -327,7 +329,8 @@ class TestImportRunSoleGate(unittest.TestCase):
         class _Fake:
             def __init__(self):
                 self.request = mock.Mock(
-                    headers={}, body=json.dumps({"filelist": "all", "sole": True}).encode()
+                    headers={},
+                    body=json.dumps({"filelist": "all", "sole": sole}).encode(),
                 )
                 self.written = None
                 self.current_user = object()
@@ -342,10 +345,36 @@ class TestImportRunSoleGate(unittest.TestCase):
             def finish(self):
                 pass
 
+            def user_id(self):
+                return 1
+
         handler = _Fake()
-        with mock.patch.object(scan, "module_enabled", return_value=False):
+        captured = {}
+
+        def fake_do_import(_svc, paths, user_id, options=None):
+            captured["options"] = options
+
+        with mock.patch.object(scan, "module_enabled", return_value=community_on), \
+                mock.patch.object(scan.ScanService, "is_importing", return_value=False), \
+                mock.patch.object(scan.ScanService, "is_bulk_deleting", return_value=False), \
+                mock.patch.object(scan.ScanService, "do_import", new=fake_do_import):
             asyncio.run(scan.ImportRun.post(handler))
-        self.assertEqual(handler.written["err"], "module.disabled")
+        return handler.written, captured.get("options")
+
+    def test_sole_dropped_when_community_off(self):
+        written, options = self._run(sole=True, community_on=False)
+        self.assertEqual(written["err"], "ok")
+        self.assertFalse(options.sole)
+
+    def test_import_still_runs_without_sole_when_community_off(self):
+        written, options = self._run(sole=False, community_on=False)
+        self.assertEqual(written["err"], "ok")
+        self.assertFalse(options.sole)
+
+    def test_sole_passes_through_when_community_on(self):
+        written, options = self._run(sole=True, community_on=True)
+        self.assertEqual(written["err"], "ok")
+        self.assertTrue(options.sole)
 
 
 class TestHomepageCardVisibility(unittest.TestCase):
@@ -414,8 +443,10 @@ class TestHomepageCardVisibility(unittest.TestCase):
 
         handler = _Fake()
         config = self._config()
+        # AdminSettings.get 会原地补写一些键，patch.dict 在退出时整份恢复，避免污染后续用例
         with mock.patch.object(admin_module, "get_homepage_config", return_value=config) as get_config, \
-                mock.patch.object(admin_module.BookSearch, "all_sources", return_value=[]):
+                mock.patch.object(admin_module.BookSearch, "all_sources", return_value=[]), \
+                mock.patch.dict(admin_module.CONF, {}):
             asyncio.run(admin_module.AdminSettings.get(handler))
         get_config.assert_called_once_with(apply_modules=False)
         self.assertEqual(handler.written.get("err"), "ok")

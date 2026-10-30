@@ -182,6 +182,15 @@ class TestBookListGuestRead(unittest.TestCase):
             self.assertFalse(self.allowed(10))
             self.assertFalse(self.allowed())
             self.assertIsNone(BookAccessService.guest_read_source(NoCookieHandler(), 10))
+            # 早期返回只拦书单来源：分享链接与全局「访客可读」优先级不变
+            with mock.patch.object(BookAccessService, "_share_allows", return_value=True):
+                self.assertEqual(
+                    BookAccessService.guest_read_source(NoCookieHandler(), 10), "share"
+                )
+            with mock.patch.dict(book_access_service.CONF, {"ALLOW_GUEST_READ": True}):
+                self.assertEqual(
+                    BookAccessService.guest_read_source(NoCookieHandler(), 10), "global"
+                )
         self.assertTrue(self.allowed(10))
         self.assertIsNone(BookAccessService.guest_read_source(NoCookieHandler(), 11))
         with mock.patch.dict(book_access_service.CONF, {"ALLOW_GUEST_READ": True}):

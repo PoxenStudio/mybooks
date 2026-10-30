@@ -133,9 +133,8 @@
                         hide-details
                     ></v-select>
                 </v-col>
-                <v-col cols="12" sm="6" md="4" class="mb-2">
+                <v-col v-if="communityModuleOn" cols="12" sm="6" md="4" class="mb-2">
                     <v-checkbox
-                        v-if="communityModuleOn"
                         v-model="importSole"
                         :label="$t('imports.import_sole_option')"
                         :disabled="loading || bulkDeleting"
