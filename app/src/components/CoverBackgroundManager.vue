@@ -53,7 +53,7 @@
         @keyup.enter="refreshPreview"
       ></v-text-field>
       <v-btn small text color="primary" @click="refreshPreview">
-        <v-icon small left>mdi-image-refresh</v-icon>
+        <v-icon small left>mdi-image-sync-outline</v-icon>
         {{ $t("settings.cover_background_preview") }}
       </v-btn>
     </div>
