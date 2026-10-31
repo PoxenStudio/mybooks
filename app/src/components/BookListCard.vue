@@ -97,6 +97,7 @@
             :class="{
                 'booklist-covers--marquee': marqueeActive,
                 'booklist-covers--offscreen': marqueeActive && !inView,
+                'booklist-covers--masked': coversOverflow,
             }"
         >
             <template v-if="covers.length">
@@ -143,6 +144,8 @@ export default {
             marqueeActive: false,
             inView: true,
             reducedMotion: false,
+            // 封面条内容是否横向溢出（两端淡出遮罩的开关），同样只在客户端实测后改写
+            coversOverflow: false,
             // 一份封面内容的实测宽度（px），只在 updateMarquee 里量到真实几何后改写，
             // 0 表示尚未测量，marqueeDuration 会退回按 CSS 固定宽度估算
             measuredCopyWidth: 0,
@@ -162,11 +165,11 @@ export default {
         covers() {
             return (this.booklist.cover_books || []).slice(0, 15);
         },
-        // 站长级总开关（设置 › 首页 › 书单封面自动滚动）。sys 尚未加载时是空对象，
-        // 此时按开启处理，避免首屏误判成关闭
+        // 首页动效总开关（设置 › 站点与外观 › 首页与列表 › 首页动效，2026-10 起含原
+        // 「书单封面自动滚动」）。sys 尚未加载时是空对象，此时按开启处理，避免首屏误判成关闭
         coverScrollEnabled() {
             const sys = this.$store && this.$store.state && this.$store.state.sys;
-            return !sys || sys.booklist_cover_scroll !== false;
+            return !sys || sys.home_motion !== false;
         },
         // 需要滚动时把封面复制一份接在后面，形成无缝循环
         renderedCovers() {
@@ -284,11 +287,6 @@ export default {
             if (!viewport) {
                 return;
             }
-            // 站长关掉了滚动，或用户要求减少动效，或没有封面：保持原生横向滚动，不动
-            if (this.reducedMotion || !this.coverScrollEnabled || !this.covers.length) {
-                this.marqueeActive = false;
-                return;
-            }
             // 卡片被折叠（display:none）时量不到宽度，保留上一次判断，等 ResizeObserver 再算
             if (!viewport.clientWidth) {
                 return;
@@ -300,16 +298,28 @@ export default {
             const item = viewport.querySelector('.booklist-cover-item');
             if (!item) {
                 this.marqueeActive = false;
+                this.coversOverflow = false;
                 return;
             }
             const itemWidth = item.getBoundingClientRect().width + COVER_GAP;
+            const contentWidth = itemWidth * this.covers.length;
             // 记住一份内容的实测宽度，marqueeDuration 用它换算时长（itemWidth 已含间距）
-            this.measuredCopyWidth = itemWidth * this.covers.length;
+            this.measuredCopyWidth = contentWidth;
+            // #140-5 两端淡出遮罩：内容超出一行就启用（轮播与静止手动横滑模式都生效，
+            // 遮罩是静态视觉处理，不受动效开关影响）；内容不满一行时不启用，
+            // 避免把完整可见的封面边缘也「裁」淡。阈值取 > available（marquee 判定的
+            // 超集），保证「轮播开着 ⇒ 遮罩一定开着」
+            this.coversOverflow = contentWidth > available;
+            // 站长关掉了动效，或用户要求减少动效，或没有封面：保持原生横向滚动，不动
+            if (this.reducedMotion || !this.coverScrollEnabled || !this.covers.length) {
+                this.marqueeActive = false;
+                return;
+            }
             // 必须"一份封面就铺满可视区"才滚：动画会把封面复制一份并把 track 平移一份宽，
             // 若一份比视口窄，平移到终点后视口右边界会越过第二份的末尾，露出空白条。
             // 铺不满（书单只有几本）时保持静止，靠手动横滑查看。恰好铺满（相等）时接缝
             // 不露空白，也应滚动，故用 >=；+2 是浮点取整的安全余量。
-            this.marqueeActive = itemWidth * this.covers.length >= available + 2;
+            this.marqueeActive = contentWidth >= available + 2;
         },
     },
 };
@@ -368,6 +378,13 @@ export default {
 /* 封面复制一份接在后面循环平移。-50% 正好是一份内容的宽度（间距用 margin-right 保证精确无缝） */
 .booklist-covers--marquee {
     overflow-x: hidden;
+}
+/* #140-5 封面条两端淡出遮罩：封面滚动/轮播时从边缘渐隐渐现，而不是被硬切。
+   mask 固定作用在滚动容器自身（不随内容滚），标准属性给 Firefox，
+   -webkit- 前缀给 Safari / 旧 Chromium */
+.booklist-covers--masked {
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%);
+    mask-image: linear-gradient(to right, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%);
 }
 .booklist-covers--marquee .booklist-covers-track {
     animation-name: booklist-covers-scroll;
