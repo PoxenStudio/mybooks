@@ -1691,21 +1691,32 @@ class BookReadDone(BaseHandler):
                 "books": read_done_books}
 
 
+def _read_state_month_filter(today: datetime.date, server_tz=None):
+    """「本月」在 ``ReadingState.read_date``（服务器本地 naive）坐标系下的半开区间。
+
+    抽成模块级函数只为可测：``read_date`` 存的是 ``datetime.now()`` 写下的服务器本地
+    时间，区间端点必须换算到同一坐标系（见 webserver/site_time.py）。返回两个
+    SQLAlchemy 条件，调用方 ``filter(...)`` 时展开。
+    """
+    month_start, next_month_start = site_time.site_month_bounds_server_local(today, server_tz)
+    return (ReadingState.read_date >= month_start, ReadingState.read_date < next_month_start)
+
+
 class BookReadingStats(BaseHandler):
     @js
     @auth
     def get(self):
         """获取当前用户的阅读统计信息"""
-        import datetime
-        from sqlalchemy import extract
-
         user_id = self.user_id()
         logging.info("User %d is fetching reading statistics." % user_id)
 
-        # 获取当前月份和年份
-        now = datetime.datetime.now()
-        current_year = now.year
-        current_month = now.month
+        # 「本月」按站点时区切（见 webserver/site_time.py）。read_date 存的是服务器本地
+        # naive 时间（models.py 用 datetime.now() 写入），不是 UTC；所以把站点侧的月界
+        # 换算到同一坐标系再比较。直接对 read_date 做 extract(year/month) 等于按容器时区
+        # 切月，容器时区与 site_timezone 不一致时，月初那几小时会被算进上个月。
+        today = site_time.site_today()
+        current_year, current_month = today.year, today.month
+        in_current_month = _read_state_month_filter(today)
 
         # 总体统计
         total_reading = self.sqlite_session.query(ReadingState).filter(
@@ -1722,24 +1733,21 @@ class BookReadingStats(BaseHandler):
         month_reading = self.sqlite_session.query(ReadingState).filter(
             ReadingState.reader_id == user_id,
             ReadingState.read_state == 1,
-            extract('year', ReadingState.read_date) == current_year,
-            extract('month', ReadingState.read_date) == current_month
+            *in_current_month
         ).count()
 
         # 本月统计 - 已读完（本月读完的书籍）
         month_read_done = self.sqlite_session.query(ReadingState).filter(
             ReadingState.reader_id == user_id,
             ReadingState.read_state == 2,
-            extract('year', ReadingState.read_date) == current_year,
-            extract('month', ReadingState.read_date) == current_month
+            *in_current_month
         ).count()
 
         # 本月读完的书籍列表
         month_read_done_states = self.sqlite_session.query(ReadingState).filter(
             ReadingState.reader_id == user_id,
             ReadingState.read_state == 2,
-            extract('year', ReadingState.read_date) == current_year,
-            extract('month', ReadingState.read_date) == current_month
+            *in_current_month
         ).order_by(ReadingState.read_date.desc()).limit(12).all()
 
         month_read_done_books = []
