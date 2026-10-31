@@ -6,10 +6,13 @@ import random
 import time
 import traceback
 import math
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
+
+from webserver.base.cover_background import CoverBackgroundService
 
 
 DEFAULT_FONT_PATH = "/var/www/mybooks/app/dist/static/epubreader/assets/font/HuiwenZhengKai.ttf"
+_RESAMPLING = getattr(Image, "Resampling", Image)
 
 
 class ImageGenerator:
@@ -54,14 +57,24 @@ class ImageGenerator:
         return base
 
     @classmethod
+    def _create_background(cls, title, width, height, bk_img_path, no_graident):
+        """返回 (底图, 是否照片背景)；照片背景用描边保证文字可读。"""
+        background_path = bk_img_path or CoverBackgroundService.pick_for(title)
+        if background_path and os.path.exists(background_path):
+            try:
+                with Image.open(background_path) as image:
+                    fitted = ImageOps.fit(image.convert("RGB"), (width, height), method=_RESAMPLING.LANCZOS)
+                return fitted, True
+            except Exception as err:
+                logging.warning(f"[Cover] 背景图加载失败，回退渐变: {background_path} {err}")
+        if cls.ENABLE_GRADIENT and not no_graident:
+            return cls._create_rotated_gradient(width, height), False
+        return Image.new("RGB", (width, height), random.choice(cls.COLORS)), False
+
+    @classmethod
     def generate_cover(cls, title, author, width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT, font_path=DEFAULT_FONT_PATH, bk_img_path=None, no_graident=False, debug=False):
         try:
-            if bk_img_path and os.path.exists(bk_img_path):
-                img = Image.open(bk_img_path).convert("RGB")
-            elif cls.ENABLE_GRADIENT and not no_graident:
-                img = cls._create_rotated_gradient(width, height)
-            else:
-                img = Image.new("RGB", (width, height), random.choice(cls.COLORS))
+            img, has_background = cls._create_background(title, width, height, bk_img_path, no_graident)
             draw = ImageDraw.Draw(img)
 
             if width < 120 and height < 120:
@@ -106,13 +119,17 @@ class ImageGenerator:
                 title_lines[-2] += title_lines[-1]
                 title_lines.pop()
 
+            stroke_width = max(1, title_size // 24) if has_background else 0
             current_y = height // 5
             for i, line in enumerate(title_lines):
                 bbox = draw.textbbox((0, 0), line, font=t_font)
                 w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
                 x = (width - w) // 2
-                draw.text((x, current_y), line, font=t_font, fill=(255, 255, 255))
-                current_y += h + (title_size // 10)
+                if stroke_width:
+                    draw.text((x, current_y), line, font=t_font, fill=(255, 255, 255), stroke_width=stroke_width, stroke_fill=(0, 0, 0))
+                else:
+                    draw.text((x, current_y), line, font=t_font, fill=(255, 255, 255))
+                current_y += h + (title_size // 10) + stroke_width * 2
 
             if cls.ENABLE_AUTHOR_OUTPUT and author and height > 300:
                 current_y += (title_size // 4)  # 标题与作者间距

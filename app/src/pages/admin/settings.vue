@@ -1064,6 +1064,12 @@
               <ssl-manager />
               </div>
             </template>
+
+            <template v-if="s.special === 'cover_backgrounds'">
+              <div class="pl-6">
+                <cover-background-manager />
+              </div>
+            </template>
           </v-card-text>
         </v-card>
       </div>
@@ -1188,6 +1194,7 @@
 
 <script>
 import SSLManager from "~/components/SSLManager.vue";
+import CoverBackgroundManager from "~/components/CoverBackgroundManager.vue";
 import ReadingRangeDialog from "~/components/ReadingRangeDialog.vue";
 import BookNavEditor, { createCategory } from "~/components/BookNavEditor.vue";
 import ReaderDictEditor from "~/components/ReaderDictEditor.vue";
@@ -1777,6 +1784,7 @@ function aliasScoresFor(token) {
 export default {
   components: {
     "ssl-manager": SSLManager,
+    "cover-background-manager": CoverBackgroundManager,
     "reading-range-dialog": ReadingRangeDialog,
     "book-nav-editor": BookNavEditor,
     "reader-dict-editor": ReaderDictEditor,
@@ -2052,6 +2060,24 @@ export default {
               { icon: "mdi-chart-line", key: "ALLOW_USER_DISABLE_STATISTIC", label: "settings.allow_user_disable_statistic", type: "checkbox" },
               { icon: "mdi-note-multiple-outline", key: "ENABLE_SHARED_NOTES", label: "settings.enable_shared_notes", type: "checkbox", module: "shared_reading" },
             ],
+          },
+          {
+            id: "cover-background",
+            icon: "mdi-image-multiple-outline",
+            title: "settings.sec_cover_background",
+            desc: "settings.sec_cover_background_desc",
+            fields: [
+              {
+                icon: "mdi-image-sync-outline",
+                key: "USE_COVER_BACKGROUND",
+                label: "settings.use_cover_background",
+                type: "checkbox",
+                lockOn: "USE_DYNAMIC_COVER",
+                tips: "settings.use_cover_background_tips",
+                al: ["封面背景", "背景图", "cover background"],
+              },
+            ],
+            special: "cover_backgrounds",
           },
           {
             id: "site-cats",
