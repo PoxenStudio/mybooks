@@ -880,10 +880,13 @@ export default {
    纯 CSS keyframes：SSR 首帧 HTML 与 hydration 前一致，动画由浏览器在首绘时
    自行启动。
 
-   区块用「景深进场」：46px 上浮 + 缩到 0.972 + 从 blur(11px) 清晰化，而不是
-   单纯位移。人眼对 <10px 的位移几乎无感（旧版就是 10px，观感接近「直接出现」），
-   而模糊→清晰（模拟对焦）的感知强度远高于同幅度位移。缓动用 expo-out
+   区块用「上浮 + 微缩」：46px 上浮 + 缩到 0.972，而不是单纯位移。人眼对 <10px
+   的位移几乎无感（旧版就是 10px，观感接近「直接出现」）。缓动用 expo-out
    cubic-bezier(0.16, 1, 0.3, 1)：起步极快、末段拖长，才有「甩到位」的速度感。
+
+   这里**不用** blur：filter: blur() 是唯一必须按面积重算像素的滤镜，挂在区块上
+   会把整棵子树并进一个滤镜表面；首页 8 个区块 × 740ms 连续重算，是低端机与老
+   WebView 上最直接的掉帧来源，而 blur→0 与 opacity+位移叠起来的观感差距很小。
 
    封面用「从书脊立起」：绕左边缘 rotateY(-76deg) 转到正面，78% 处过冲 5deg 再
    回正，配一层 brightness 由暗到亮——读起来像从书架上抽出一本再摊平。
@@ -907,16 +910,13 @@ export default {
     0% {
         opacity: 0;
         transform: translateY(46px) scale(0.972);
-        filter: blur(11px);
     }
     62% {
         opacity: 1;
-        filter: blur(0);
     }
     100% {
         opacity: 1;
         transform: none;
-        filter: none;
     }
 }
 
