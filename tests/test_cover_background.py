@@ -14,6 +14,7 @@ from tornado import web
 from webserver.base import cover_background as cover_background_module
 from webserver.base.cover_background import CoverBackgroundError, CoverBackgroundService
 from webserver.base.image_generator import ImageGenerator
+from webserver.handlers import cover_background as cover_background_handler
 from webserver.handlers.cover_background import CoverBackgroundFile, CoverBackgroundPreview
 
 FONT_PATH = os.path.join(
@@ -193,6 +194,13 @@ class CoverBackgroundHandlerPermissionTest(unittest.TestCase):
     后者只在 get_current_user() 里赋值，若 prepare 没有触发过登录态解析就是 None，
     表现为管理员也恒 403。
     """
+
+    def test_payload_reports_gallery_limits(self):
+        with mock.patch.object(CoverBackgroundService, "list_backgrounds", return_value=("bg_a.jpg",)):
+            payload = cover_background_handler._payload()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["items"][0]["id"], "bg_a.jpg")
+        self.assertEqual(payload["max"], cover_background_module.MAX_BACKGROUNDS)
 
     def test_file_handler_checks_is_admin(self):
         handler = CoverBackgroundFile.__new__(CoverBackgroundFile)

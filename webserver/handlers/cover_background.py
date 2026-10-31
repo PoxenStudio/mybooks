@@ -6,6 +6,7 @@ import asyncio
 
 from tornado import web
 
+from webserver.base import cover_background as cover_background_module
 from webserver.base.cover_background import CoverBackgroundError, CoverBackgroundService
 from webserver.base.image_generator import ImageGenerator
 from webserver.handlers.base import BaseHandler, is_admin, js
@@ -20,7 +21,7 @@ def _payload():
     return {
         "items": [_item(name) for name in CoverBackgroundService.list_backgrounds()],
         "count": CoverBackgroundService.count(),
-        "max": CoverBackgroundService.MAX_BACKGROUNDS,
+        "max": cover_background_module.MAX_BACKGROUNDS,
     }
 
 
