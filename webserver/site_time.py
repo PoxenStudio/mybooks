@@ -53,9 +53,9 @@ TIMEZONE_BY_LANGUAGE = {
 }
 FALLBACK_TIMEZONE = TIMEZONE_BY_LANGUAGE["zh"]
 
-# zoneinfo 取不到 tzdata 时的兜底（Windows 未装 tzdata / 精简镜像）：只覆盖设置页可选的
-# 常用时区，夏令时地区按标准时偏移折算，误差最多 1 小时，不会因为查不到库而退回 UTC
-# 把整个站点的日期算错 8 小时。
+# zoneinfo 取不到 tzdata 时的兜底（Windows 未装 tzdata / 精简镜像）：只覆盖常用时区
+# （含设置页已归并的旧选项，历史配置仍可能存着），夏令时地区按标准时偏移折算，误差最多
+# 1 小时，不会因为查不到库而退回 UTC 把整个站点的日期算错 8 小时。
 FALLBACK_UTC_OFFSETS = {
     "UTC": 0,
     "Asia/Shanghai": 8,

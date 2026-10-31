@@ -1173,6 +1173,15 @@ import { normalizeHomepageConfig } from "~/utils/homepage";
 import { languageOptions } from "~/utils/languageCodes";
 import { isHexColor, DEFAULT_ACCENT } from "~/utils/appearance";
 
+// 已从设置页去掉的旧选项 → 等价选项：+8 的港/台/新加坡合并到北京，+9 的首尔合并到东京，
+// 偏移与夏令时规则完全一致。旧配置在加载时归一化，避免 select 匹配不到选项而显示空白。
+const LEGACY_TIMEZONE_VALUES = {
+  "Asia/Hong_Kong": "Asia/Shanghai",
+  "Asia/Taipei": "Asia/Shanghai",
+  "Asia/Singapore": "Asia/Shanghai",
+  "Asia/Seoul": "Asia/Tokyo",
+};
+
 const LITE_GROUPS = [
   "LITE_GROUP_LISTING",
   "LITE_GROUP_RECOMMEND",
@@ -1810,18 +1819,15 @@ export default {
                 items: [
                   { text: this.$t("settings.tz_auto"), value: "auto" },
                   { text: this.$t("settings.tz_utc"), value: "UTC" },
-                  { text: this.$t("settings.tz_shanghai"), value: "Asia/Shanghai" },
-                  { text: this.$t("settings.tz_hongkong"), value: "Asia/Hong_Kong" },
-                  { text: this.$t("settings.tz_taipei"), value: "Asia/Taipei" },
-                  { text: this.$t("settings.tz_tokyo"), value: "Asia/Tokyo" },
-                  { text: this.$t("settings.tz_seoul"), value: "Asia/Seoul" },
-                  { text: this.$t("settings.tz_bangkok"), value: "Asia/Bangkok" },
-                  { text: this.$t("settings.tz_kolkata"), value: "Asia/Kolkata" },
-                  { text: this.$t("settings.tz_berlin"), value: "Europe/Berlin" },
-                  { text: this.$t("settings.tz_london"), value: "Europe/London" },
-                  { text: this.$t("settings.tz_saopaulo"), value: "America/Sao_Paulo" },
-                  { text: this.$t("settings.tz_newyork"), value: "America/New_York" },
                   { text: this.$t("settings.tz_losangeles"), value: "America/Los_Angeles" },
+                  { text: this.$t("settings.tz_newyork"), value: "America/New_York" },
+                  { text: this.$t("settings.tz_saopaulo"), value: "America/Sao_Paulo" },
+                  { text: this.$t("settings.tz_london"), value: "Europe/London" },
+                  { text: this.$t("settings.tz_berlin"), value: "Europe/Berlin" },
+                  { text: this.$t("settings.tz_kolkata"), value: "Asia/Kolkata" },
+                  { text: this.$t("settings.tz_bangkok"), value: "Asia/Bangkok" },
+                  { text: this.$t("settings.tz_shanghai"), value: "Asia/Shanghai" },
+                  { text: this.$t("settings.tz_tokyo"), value: "Asia/Tokyo" },
                   { text: this.$t("settings.tz_sydney"), value: "Australia/Sydney" },
                 ],
               },
@@ -2615,6 +2621,12 @@ export default {
         // 老 auto.py 里没有这一项：空值等于「跟随站点语言」，落到 select 上会显示空白
         if (!this.settings["site_timezone"]) {
           this.$set(this.settings, "site_timezone", "auto");
+        } else if (LEGACY_TIMEZONE_VALUES[this.settings["site_timezone"]]) {
+          this.$set(
+            this.settings,
+            "site_timezone",
+            LEGACY_TIMEZONE_VALUES[this.settings["site_timezone"]]
+          );
         }
         if (
           !("site_icon" in this.settings) ||
