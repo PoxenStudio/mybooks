@@ -1191,7 +1191,7 @@
     "sec_cover_background": "封面背景图",
     "sec_cover_background_desc": "上传背景图后，自动生成的封面会以其中一张为底再绘制书名。同一本书始终使用同一张（按书名分配）；图库为空时沿用原来的渐变/纯色封面。",
     "use_cover_background": "启用封面背景图",
-    "use_cover_background_tips": "关闭后已有封面不受影响，只有后续新生成的封面回退到渐变/纯色。",
+    "use_cover_background_tips": "仅在「动态封面」开启时生效；关闭本项不会改动已有封面，只有后续新生成的封面回退到渐变/纯色。",
     "cover_background_hint": "支持 JPEG、PNG、WEBP，单张不超过 10MB；上传后自动居中裁剪为 3:4（1200×1600）。图库改动即时生效，无需点页面底部的保存。",
     "cover_background_upload": "上传背景图",
     "cover_background_empty": "图库还是空的，当前生成的封面仍使用渐变/纯色。",

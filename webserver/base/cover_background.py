@@ -20,9 +20,10 @@ COVER_BACKGROUND_DIR = "/data/books/resources/cover_backgrounds"
 TARGET_WIDTH = 1200
 TARGET_HEIGHT = 1600
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_PIXELS = 50 * 1000 * 1000
 MAX_BACKGROUNDS = 50
 JPEG_QUALITY = 90
-ALLOWED_FORMATS = ("JPEG", "PNG", "WEBP", "GIF", "BMP")
+ALLOWED_FORMATS = ("JPEG", "PNG", "WEBP")
 _NAME_PREFIX = "bg_"
 _NAME_DIGEST_LEN = 16
 _LIST_CACHE_TTL = 1.0
@@ -96,6 +97,7 @@ class CoverBackgroundService:
     @classmethod
     def _normalize(cls, image):
         """统一裁成 3:4 竖图，透明通道垫白，避免输出尺寸跟着原图走。"""
+        image = ImageOps.exif_transpose(image)
         if image.mode in ("RGBA", "LA") or (image.mode == "P" and "transparency" in image.info):
             image = image.convert("RGBA")
             canvas = Image.new("RGB", image.size, (255, 255, 255))
@@ -123,6 +125,8 @@ class CoverBackgroundService:
             with Image.open(BytesIO(body)) as image:
                 if (image.format or "").upper() not in ALLOWED_FORMATS:
                     raise CoverBackgroundError(_("只支持 JPEG、PNG、WEBP 格式的图片"))
+                if image.width * image.height > MAX_PIXELS:
+                    raise CoverBackgroundError(_("图片尺寸过大，请控制在 5000 万像素以内"))
                 data = cls._normalize(image)
         except CoverBackgroundError:
             raise

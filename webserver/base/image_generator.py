@@ -63,6 +63,7 @@ class ImageGenerator:
         if background_path and os.path.exists(background_path):
             try:
                 with Image.open(background_path) as image:
+                    image.draft("RGB", (width, height))
                     fitted = ImageOps.fit(image.convert("RGB"), (width, height), method=_RESAMPLING.LANCZOS)
                 return fitted, True
             except Exception as err:
@@ -136,7 +137,10 @@ class ImageGenerator:
                 bbox = draw.textbbox((0, 0), author, font=a_font)
                 w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
                 x = (width - w) // 2
-                draw.text((x, current_y), author, font=a_font, fill=(255, 255, 255))
+                if stroke_width:
+                    draw.text((x, current_y), author, font=a_font, fill=(255, 255, 255), stroke_width=max(1, author_size // 24), stroke_fill=(0, 0, 0))
+                else:
+                    draw.text((x, current_y), author, font=a_font, fill=(255, 255, 255))
 
             output = io.BytesIO()
             img.save(output, format='JPEG', quality=95)

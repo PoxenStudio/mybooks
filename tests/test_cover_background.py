@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import asyncio
 import io
 import os
 import shutil
@@ -8,10 +9,12 @@ import unittest
 from unittest import mock
 
 from PIL import Image
+from tornado import web
 
 from webserver.base import cover_background as cover_background_module
 from webserver.base.cover_background import CoverBackgroundError, CoverBackgroundService
 from webserver.base.image_generator import ImageGenerator
+from webserver.handlers.cover_background import CoverBackgroundFile, CoverBackgroundPreview
 
 FONT_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -85,8 +88,31 @@ class CoverBackgroundServiceTest(unittest.TestCase):
             self.save(body)
 
     def test_reject_unsupported_format(self):
-        with self.assertRaises(CoverBackgroundError):
-            self.save(make_image(200, 200, fmt="TIFF"))
+        for image_format in ("TIFF", "GIF", "BMP"):
+            with self.assertRaises(CoverBackgroundError):
+                self.save(make_image(200, 200, fmt=image_format))
+
+    def test_reject_huge_dimensions(self):
+        with mock.patch.object(cover_background_module, "MAX_PIXELS", 100):
+            with self.assertRaises(CoverBackgroundError):
+                self.save(make_image(200, 200))
+
+    def test_exif_orientation_is_applied(self):
+        source = Image.new("RGB", (2000, 1000), (255, 0, 0))
+        source.paste((0, 0, 255), (1000, 0, 2000, 1000))
+        exif = source.getexif()
+        exif[274] = 6
+        buffer = io.BytesIO()
+        source.save(buffer, "JPEG", exif=exif)
+
+        name = self.save(buffer.getvalue())
+        with Image.open(os.path.join(self.tmpdir, name)) as image:
+            top = image.getpixel((600, 100))
+            bottom = image.getpixel((600, 1500))
+        self.assertGreater(top[0], 150)
+        self.assertLess(top[2], 100)
+        self.assertGreater(bottom[2], 150)
+        self.assertLess(bottom[0], 100)
 
     def test_reject_when_gallery_is_full(self):
         with mock.patch.object(cover_background_module, "MAX_BACKGROUNDS", 1):
@@ -159,6 +185,44 @@ class GenerateCoverWithBackgroundTest(unittest.TestCase):
             pixel = image.getpixel((5, 295))
         self.assertGreater(pixel[0], 150)
         self.assertLess(pixel[1], 100)
+
+
+class CoverBackgroundHandlerPermissionTest(unittest.TestCase):
+    """二进制接口不走 @is_admin，必须确认它们调用 is_admin() 而不是直接读 admin_user。
+
+    后者只在 get_current_user() 里赋值，若 prepare 没有触发过登录态解析就是 None，
+    表现为管理员也恒 403。
+    """
+
+    def test_file_handler_checks_is_admin(self):
+        handler = CoverBackgroundFile.__new__(CoverBackgroundFile)
+        handler.admin_user = None
+        calls = []
+
+        def deny():
+            calls.append(True)
+            return False
+
+        handler.is_admin = deny
+        with self.assertRaises(web.HTTPError) as ctx:
+            handler.get("bg_0123456789abcdef.jpg")
+        self.assertEqual(ctx.exception.status_code, 403)
+        self.assertEqual(calls, [True])
+
+    def test_preview_handler_checks_is_admin(self):
+        handler = CoverBackgroundPreview.__new__(CoverBackgroundPreview)
+        handler.admin_user = None
+        calls = []
+
+        def deny():
+            calls.append(True)
+            return False
+
+        handler.is_admin = deny
+        with self.assertRaises(web.HTTPError) as ctx:
+            asyncio.run(handler.get())
+        self.assertEqual(ctx.exception.status_code, 403)
+        self.assertEqual(calls, [True])
 
 
 if __name__ == "__main__":

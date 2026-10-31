@@ -2,6 +2,8 @@
 # -*- coding: UTF-8 -*-
 """封面背景图库管理接口，仅管理员可写。"""
 
+import asyncio
+
 from tornado import web
 
 from webserver.base.cover_background import CoverBackgroundError, CoverBackgroundService
@@ -56,11 +58,13 @@ class CoverBackgroundDelete(BaseHandler):
 
 
 class CoverBackgroundPreview(BaseHandler):
-    def get(self):
-        if not self.admin_user:
+    async def get(self):
+        if not self.is_admin():
             raise web.HTTPError(403, "admin only")
         title = self.get_argument("title", "")
-        data = ImageGenerator.generate_cover(title or _("示例书名"), "")
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(
+            None, ImageGenerator.generate_cover, title or _("示例书名"), "")
         if not data:
             raise web.HTTPError(500, "generate failed")
         self.set_header("Content-Type", "image/jpeg")
@@ -70,13 +74,13 @@ class CoverBackgroundPreview(BaseHandler):
 
 class CoverBackgroundFile(BaseHandler):
     def get(self, name):
-        if not self.admin_user:
+        if not self.is_admin():
             raise web.HTTPError(403, "admin only")
         data = CoverBackgroundService.read(name)
         if data is None:
             raise web.HTTPError(404, "background not found")
         self.set_header("Content-Type", "image/jpeg")
-        self.set_header("Cache-Control", "public, max-age=86400")
+        self.set_header("Cache-Control", "private, max-age=86400")
         self.write(data)
 
 

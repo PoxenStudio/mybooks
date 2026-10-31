@@ -898,7 +898,7 @@
     "sec_cover_background": "Cover backgrounds",
     "sec_cover_background_desc": "Generated covers use one of the uploaded images as the base and draw the title on top. Each book always gets the same image (assigned by title); when the gallery is empty the original gradient/solid cover is used.",
     "use_cover_background": "Enable cover backgrounds",
-    "use_cover_background_tips": "Existing covers are unaffected; when disabled only newly generated covers fall back to gradient/solid.",
+    "use_cover_background_tips": "Only applies while dynamic covers are enabled. Turning this off leaves existing covers untouched; only newly generated covers fall back to gradient/solid.",
     "cover_background_hint": "JPEG, PNG or WEBP up to 10MB each. Images are center-cropped to 3:4 (1200x1600). Gallery changes take effect immediately, no need to press Save at the bottom.",
     "cover_background_upload": "Upload background",
     "cover_background_empty": "The gallery is empty. Generated covers keep using gradient/solid.",
