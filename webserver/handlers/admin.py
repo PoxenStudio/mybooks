@@ -581,13 +581,27 @@ class AdminSettings(BaseHandler):
             args["META_SELECTED_SOURCES"] = DEFAULT_META_SOURCES
 
         if args["site_icon"] != "favicon_0" and args["site_icon"] != current_icon:
-            new_icon_path = CONF["static_path"] + "/logo/" + args["site_icon"] + ".ico"
-            logging.info(_("Set new favicon: %s") % new_icon_path)
-            if os.path.exists(new_icon_path):
+            icon_base = CONF["static_path"] + "/logo/" + args["site_icon"]
+            # 随附图标有 .ico（旧版）和 .png（64x64）两种扩展名
+            new_icon_path = next(
+                (p for p in (icon_base + ".ico", icon_base + ".png") if os.path.exists(p)),
+                None,
+            )
+            logging.info(_("Set new favicon: %s") % (new_icon_path or icon_base))
+            if new_icon_path:
                 # Copy the new icon to the static directory
                 static_icon_path = CONF["static_path"] + "/logo/" + "/favicon.ico"
                 try:
-                    shutil.copy(new_icon_path, static_icon_path)
+                    if new_icon_path.endswith(".png"):
+                        # 站点各处统一引用 /logo/favicon.ico，PNG 图标要转成真正的 ICO，
+                        # 直接拷贝 PNG 字节部分浏览器识别不了
+                        from PIL import Image
+
+                        Image.open(new_icon_path).save(
+                            static_icon_path, format="ICO", sizes=[(64, 64)]
+                        )
+                    else:
+                        shutil.copy(new_icon_path, static_icon_path)
                 except Exception as e:
                     logging.info("Error: %s", str(e))
         # 网站默认访问链接：留空表示按当前访问地址生成分享链接/二维码；
