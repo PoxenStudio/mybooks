@@ -1207,7 +1207,7 @@ html[data-appearance-dark="1"] .v-application .v-navigation-drawer.app-navigatio
 
 .login-button {
     background-color: #01847f !important;
-    border-radius: 8px !important;
+    border-radius: 0 12px 12px 0 !important;
     margin: 3px 0 !important;
     padding: 3px !important;
     color: white !important;
