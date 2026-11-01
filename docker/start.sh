@@ -145,6 +145,15 @@ run_as_mybooks() {
 
 echo
 echo "[MyBooks] Checking the nginx config..."
+# IPv6 监听：仅当当前 network namespace 真能创建 IPv6 socket 并 bind 到 :: 时才生成片段。
+IPV6_LISTEN_CONF=/etc/nginx/ipv6-listen.conf
+if "$PYTHON_BIN" -c 'import socket; s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM); s.bind(("::", 0))' >/dev/null 2>&1; then
+  printf 'listen [::]:80;\nlisten [::]:443 ssl;\n' > "$IPV6_LISTEN_CONF"
+  echo "[MyBooks] IPv6 listen enabled"
+else
+  : > "$IPV6_LISTEN_CONF"
+  echo "[MyBooks] IPv6 unavailable, IPv6 listen disabled"
+fi
 nginx -t || exit 1
 
 echo
