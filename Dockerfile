@@ -88,6 +88,8 @@ RUN pip install --no-cache-dir --no-compile -e /var/www/mybooks/third-party/edge
 RUN cd /var/www/mybooks/webserver/services/cfi_gen && npm ci --omit=dev
 COPY conf/nginx/ssl.* /data/books/ssl/
 COPY conf/nginx/mybooks.conf /etc/nginx/conf.d/
+# IPv6 监听片段；docker/start.sh 启动时会按当前环境的 IPv6 可用性重写该文件
+COPY conf/nginx/ipv6-listen.conf /etc/nginx/ipv6-listen.conf
 COPY conf/logrotate/mybooks-nginx /etc/logrotate.d/
 COPY conf/supervisor/mybooks.conf /etc/supervisor/conf.d/
 COPY --from=builder /app-static/ /var/www/mybooks/app/

@@ -201,6 +201,7 @@ touch /data/books/settings/auto.py
 ```
 cd /var/www/mybooks/
 copy conf/nginx/mybooks.conf /etc/nginx/conf.d/
+copy conf/nginx/ipv6-listen.conf /etc/nginx/
 copy conf/supervisor/mybooks.conf /etc/supervisor/conf.d/
 ```
 
