@@ -50,14 +50,41 @@ class CoverBackgroundService:
         return bool(CONF.get("USE_COVER_BACKGROUND", True))
 
     @classmethod
-    def is_valid_name(cls, name):
-        stem, ext = os.path.splitext(os.path.basename(name or ""))
+    def _safe_name(cls, name):
+        """校验并返回图库目录内的文件名，不合规一律返回 None。
+
+        带任何路径成分的输入直接拒绝：只剥 basename 再拼路径的话，
+        `../x/bg_<16hex>.jpg` 这类输入仍会命中库外的同名文件。
+        read/delete 必须用这里返回的名字拼路径。
+        """
+        if not name or name != os.path.basename(name):
+            return None
+        stem, ext = os.path.splitext(name)
         if ext.lower() != ".jpg" or not stem.startswith(_NAME_PREFIX):
-            return False
+            return None
         digest = stem[len(_NAME_PREFIX):]
         if len(digest) != _NAME_DIGEST_LEN:
-            return False
-        return all(ch in "0123456789abcdef" for ch in digest)
+            return None
+        if not all(ch in "0123456789abcdef" for ch in digest):
+            return None
+        return name
+
+    @classmethod
+    def is_valid_name(cls, name):
+        return cls._safe_name(name) is not None
+
+    @classmethod
+    def _scan(cls):
+        """真实扫描目录（绕过缓存），供锁内计数与缓存重建使用。"""
+        try:
+            entries = os.listdir(cls.directory())
+        except FileNotFoundError:
+            return ()
+        except OSError as err:
+            # 目录存在但读不了（权限/挂载异常）要留痕，否则会被当成空图库静默回退渐变
+            logging.warning("[CoverBackground] 无法读取图库目录 %s: %s", cls.directory(), err)
+            return ()
+        return tuple(sorted(name for name in entries if cls.is_valid_name(name)))
 
     @classmethod
     def list_backgrounds(cls):
@@ -66,12 +93,7 @@ class CoverBackgroundService:
         expire, names = cls._list_cache
         if expire > now:
             return names
-        try:
-            names = tuple(sorted(
-                name for name in os.listdir(cls.directory()) if cls.is_valid_name(name)
-            ))
-        except OSError:
-            names = ()
+        names = cls._scan()
         cls._list_cache = (now + _LIST_CACHE_TTL, names)
         return names
 
@@ -118,9 +140,6 @@ class CoverBackgroundService:
             raise CoverBackgroundError(_("请选择要上传的图片"))
         if len(body) > MAX_UPLOAD_BYTES:
             raise CoverBackgroundError(_("图片不能超过 10MB"))
-        with cls._write_lock:
-            if cls.count() >= MAX_BACKGROUNDS:
-                raise CoverBackgroundError(_("背景图库最多 %d 张，请先删除再上传") % MAX_BACKGROUNDS)
         try:
             with Image.open(BytesIO(body)) as image:
                 if (image.format or "").upper() not in ALLOWED_FORMATS:
@@ -135,21 +154,27 @@ class CoverBackgroundService:
             raise CoverBackgroundError(_("图片文件无法解析，请换一张试试"))
 
         name = _NAME_PREFIX + hashlib.md5(data).hexdigest()[:_NAME_DIGEST_LEN] + ".jpg"
-        os.makedirs(cls.directory(), exist_ok=True)
-        path = os.path.join(cls.directory(), name)
-        if not os.path.exists(path):
-            temp_path = path + ".tmp"
-            with open(temp_path, "wb") as stream:
-                stream.write(data)
-            os.replace(temp_path, path)
+        # 计数检查必须和写入在同一把锁里：放在解码之前会留出窗口，并发上传同时通过检查后超限
+        with cls._write_lock:
+            existing = cls._scan()
+            if name not in existing and len(existing) >= MAX_BACKGROUNDS:
+                raise CoverBackgroundError(_("背景图库最多 %d 张，请先删除再上传") % MAX_BACKGROUNDS)
+            os.makedirs(cls.directory(), exist_ok=True)
+            path = os.path.join(cls.directory(), name)
+            if not os.path.exists(path):
+                temp_path = path + ".tmp"
+                with open(temp_path, "wb") as stream:
+                    stream.write(data)
+                os.replace(temp_path, path)
         cls.invalidate_cache()
         return name
 
     @classmethod
     def delete(cls, name):
-        if not cls.is_valid_name(name):
+        safe = cls._safe_name(name)
+        if not safe:
             raise CoverBackgroundError(_("背景图不存在"))
-        path = os.path.join(cls.directory(), name)
+        path = os.path.join(cls.directory(), safe)
         if not os.path.exists(path):
             return False
         os.remove(path)
@@ -158,10 +183,11 @@ class CoverBackgroundService:
 
     @classmethod
     def read(cls, name):
-        if not cls.is_valid_name(name):
+        safe = cls._safe_name(name)
+        if not safe:
             return None
         try:
-            with open(os.path.join(cls.directory(), name), "rb") as stream:
+            with open(os.path.join(cls.directory(), safe), "rb") as stream:
                 return stream.read()
         except OSError:
             return None

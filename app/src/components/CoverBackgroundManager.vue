@@ -69,17 +69,21 @@
       <v-img v-if="dialogItem" :src="dialogItem.url" contain></v-img>
     </v-dialog>
 
-    <v-dialog v-model="deleteDialog" max-width="360">
-      <v-card>
-        <v-card-title class="text-body-1">{{ $t("settings.cover_background_delete") }}</v-card-title>
-        <v-card-text>{{ $t("settings.cover_background_delete_confirm") }}</v-card-text>
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn text @click="deleteDialog = false">{{ $t("common.cancel") }}</v-btn>
-          <v-btn text color="error" :loading="deleting" @click="confirmDelete">{{ $t("common.ok") }}</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <AppDialog
+      v-model="deleteDialog"
+      type="confirm"
+      :title="$t('settings.cover_background_delete')"
+      icon="mdi-delete"
+      color="error"
+      confirm-color="error"
+      :max-width="380"
+      :dismiss-label="$t('common.cancel')"
+      :confirm-text="$t('common.ok')"
+      :confirm-loading="deleting"
+      @confirm="confirmDelete"
+    >
+      <p>{{ $t("settings.cover_background_delete_confirm") }}</p>
+    </AppDialog>
   </div>
 </template>
 
@@ -109,8 +113,15 @@ export default {
     this.load();
   },
   methods: {
+    // 增删都返回整份列表，并发请求乱序到达时旧响应会把新状态盖回去；只认最新一次
+    _nextSeq() {
+      this._reqSeq = (this._reqSeq || 0) + 1;
+      return this._reqSeq;
+    },
     async load() {
+      const seq = this._nextSeq();
       const rsp = await this.$backend("/cover_backgrounds");
+      if (seq !== this._reqSeq) return;
       if (rsp.err !== "ok") {
         this.error = rsp.msg || this.$t("message.operationFailed");
         return;
@@ -136,12 +147,14 @@ export default {
       }
       const form = new FormData();
       form.append("file", file);
+      const seq = this._nextSeq();
       this.uploading = true;
       try {
         const rsp = await this.$backend("/cover_backgrounds", {
           method: "POST",
           body: form,
         });
+        if (seq !== this._reqSeq) return;
         if (rsp.err !== "ok") {
           this.error = rsp.msg || this.$t("message.operationFailed");
           return;
@@ -159,12 +172,14 @@ export default {
     },
     async confirmDelete() {
       if (!this.deleteTarget) return;
+      const seq = this._nextSeq();
       this.deleting = true;
       try {
         const rsp = await this.$backend("/cover_backgrounds/delete", {
           method: "POST",
           body: new URLSearchParams({ id: this.deleteTarget.id }),
         });
+        if (seq !== this._reqSeq) return;
         if (rsp.err !== "ok") {
           this.error = rsp.msg || this.$t("message.operationFailed");
           return;

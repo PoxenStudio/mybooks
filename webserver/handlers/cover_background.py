@@ -33,12 +33,14 @@ class CoverBackgrounds(BaseHandler):
 
     @js
     @is_admin
-    def post(self):
+    async def post(self):
         files = self.request.files.get("file") or []
         if not files:
             return {"err": "params.invalid", "msg": _("请选择要上传的图片")}
+        loop = asyncio.get_running_loop()
         try:
-            CoverBackgroundService.save(files[0])
+            # 解码 + 重采样 + JPEG 编码都是 CPU 活，留在 IOLoop 上会卡住其它请求
+            await loop.run_in_executor(None, CoverBackgroundService.save, files[0])
         except CoverBackgroundError as err:
             return {"err": "cover_background.invalid", "msg": str(err)}
         return {"err": "ok", "msg": _("背景图已添加"), "data": _payload()}

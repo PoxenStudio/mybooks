@@ -5,6 +5,7 @@ import io
 import os
 import shutil
 import tempfile
+import threading
 import unittest
 from unittest import mock
 
@@ -127,6 +128,44 @@ class CoverBackgroundServiceTest(unittest.TestCase):
             self.assertEqual(image.mode, "RGB")
             corner = image.getpixel((0, 0))
         self.assertGreater(min(corner), 240)
+
+    def test_rejects_names_with_path_components(self):
+        """带路径前缀的输入必须整条拒绝，而不是剥成 basename 再去命中同名文件。"""
+        name = self.save(make_image(1200, 1600))
+        parent = os.path.dirname(self.tmpdir)
+        outside = os.path.join(parent, name)
+        shutil.copyfile(os.path.join(self.tmpdir, name), outside)
+        try:
+            for bad in ("../" + name, "./" + name, "sub/" + name, "..\\" + name):
+                self.assertIsNone(CoverBackgroundService.read(bad))
+                with self.assertRaises(CoverBackgroundError):
+                    CoverBackgroundService.delete(bad)
+            self.assertTrue(os.path.exists(outside))
+            self.assertTrue(os.path.exists(os.path.join(self.tmpdir, name)))
+        finally:
+            os.remove(outside)
+
+    def test_pick_varies_with_seed(self):
+        """只看"多次调用结果相同"无法证明 seed 起作用，固定返回第一张也能过。"""
+        self.save(make_image(1200, 1600, color=(200, 20, 20)))
+        self.save(make_image(1200, 1600, color=(20, 200, 20)))
+        picks = {CoverBackgroundService.pick_for("书名%d" % index) for index in range(24)}
+        self.assertEqual(len(picks), 2)
+
+    def test_concurrent_saves_do_not_exceed_limit(self):
+        with mock.patch.object(cover_background_module, "MAX_BACKGROUNDS", 2):
+            def worker(index):
+                try:
+                    self.save(make_image(1200, 1600, color=(index, index, index)))
+                except CoverBackgroundError:
+                    pass
+
+            threads = [threading.Thread(target=worker, args=(index,)) for index in range(6)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+        self.assertLessEqual(CoverBackgroundService.count(), 2)
 
     def test_delete_and_invalid_names(self):
         name = self.save(make_image(1200, 1600))
