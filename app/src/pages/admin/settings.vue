@@ -1788,13 +1788,22 @@ export default {
                 key: "site_icon",
                 label: "settings.site_icon",
                 type: "select_image",
-                items: Array.from({ length: 9 }, (_, i) => ({
-                  image_file: "favicon_" + i.toString(),
-                  value: "favicon_" + i.toString(),
-                  // favicon_0 表示「沿用当前图标」：预览读取站点当前的 favicon.ico，
-                  // 而不是自带的默认 favicon_0.ico（后者不会随选择更新）
-                  is_current: i === 0,
-                })),
+                items: [
+                  ...Array.from({ length: 9 }, (_, i) => ({
+                    image_file: "favicon_" + i.toString(),
+                    value: "favicon_" + i.toString(),
+                    ext: "ico",
+                    // favicon_0 表示「沿用当前图标」：预览读取站点当前的 favicon.ico，
+                    // 而不是自带的默认 favicon_0.ico（后者不会随选择更新）
+                    is_current: i === 0,
+                  })),
+                  // favicon_9 起是 svg_source 转换出的 64x64 PNG 图标
+                  ...Array.from({ length: 17 }, (_, i) => ({
+                    image_file: "favicon_" + (i + 9).toString(),
+                    value: "favicon_" + (i + 9).toString(),
+                    ext: "png",
+                  })),
+                ],
               },
               { icon: "mdi-copyright", key: "HEADER", label: "settings.site_header", type: "textarea" },
               { icon: "mdi-copyright", key: "FOOTER", label: "settings.site_footer", type: "textarea" },
@@ -3135,12 +3144,12 @@ export default {
   methods: {
     // 网站图标下拉的预览地址。favicon_0 表示「沿用当前图标」，要展示站点此刻真正
     // 生效的 /logo/favicon.ico（保存其它图标时它会被覆盖），因此带时间戳绕过缓存；
-    // 其余选项展示随附的 favicon_N.ico。
+    // 其余选项展示随附的 favicon_N.ico / favicon_N.png。
     siteIconSrc(item) {
       if (item && item.is_current) {
         return `${this.site_url}/logo/favicon.ico?t=${this.siteIconStamp}`;
       }
-      return `${this.site_url}/logo/${item.image_file}.ico`;
+      return `${this.site_url}/logo/${item.image_file}.${item.ext || "ico"}`;
     },
     // lockOn 指定的总开关开启后，该字段失去意义：置灰显示为未勾选且不可点选
     // （与后端一致——REQUIRE_LOGIN 下各项访客权限恒按 False 处理），
