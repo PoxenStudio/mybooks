@@ -42,6 +42,7 @@ class CoverBackgroundService:
     _write_lock = threading.Lock()
     _list_cache = (0.0, ())
     _selection_cache = (0.0, None)
+    _selection_generation = 0
 
     @classmethod
     def directory(cls):
@@ -103,6 +104,7 @@ class CoverBackgroundService:
     def invalidate_cache(cls):
         cls._list_cache = (0.0, ())
         cls._selection_cache = (0.0, None)
+        cls._selection_generation += 1
 
     @classmethod
     def _state_path(cls):
@@ -132,16 +134,21 @@ class CoverBackgroundService:
 
     @classmethod
     def _write_state_locked(cls, state):
-        os.makedirs(cls.directory(), exist_ok=True)
-        temp_path = cls._state_path() + ".tmp"
         payload = {
             "version": 1,
             "default": bool(state["default"]),
             "images": list(state["images"]),
         }
-        with open(temp_path, "w", encoding="utf-8") as stream:
-            json.dump(payload, stream, ensure_ascii=False)
-        os.replace(temp_path, cls._state_path())
+        try:
+            os.makedirs(cls.directory(), exist_ok=True)
+            temp_path = cls._state_path() + ".tmp"
+            with open(temp_path, "w", encoding="utf-8") as stream:
+                json.dump(payload, stream, ensure_ascii=False)
+            os.replace(temp_path, cls._state_path())
+        except OSError as err:
+            # 裸 OSError 会被 @js 包成整段 traceback 回给前端
+            logging.warning("[CoverBackground] 无法写入选择状态: %s", err)
+            raise CoverBackgroundError(_("保存勾选状态失败"))
 
     @classmethod
     def _fresh_state(cls):
@@ -160,8 +167,11 @@ class CoverBackgroundService:
         expire, state = cls._selection_cache
         if expire > now:
             return state
+        generation = cls._selection_generation
         state = cls._fresh_state()
-        cls._selection_cache = (now + _LIST_CACHE_TTL, state)
+        # 读取期间若有写操作 invalidate，不能把旧状态写回缓存（否则最长 1 秒脏读）
+        if generation == cls._selection_generation:
+            cls._selection_cache = (now + _LIST_CACHE_TTL, state)
         return state
 
     @classmethod
@@ -258,10 +268,14 @@ class CoverBackgroundService:
                     stream.write(data)
                 os.replace(temp_path, path)
             # 已有勾选状态时，新上传的图自动加入候选；没有状态文件时默认全选本就会包含它
-            state = cls._read_state()
-            if state is not None and name not in state["images"]:
-                state["images"].append(name)
-                cls._write_state_locked(state)
+            try:
+                state = cls._read_state()
+                if state is not None and name not in state["images"]:
+                    state["images"].append(name)
+                    cls._write_state_locked(state)
+            except CoverBackgroundError:
+                # 图片已落盘，勾选状态写失败不应让上传整体失败；后续默认全选仍会包含它
+                logging.warning("[CoverBackground] 图片已保存，但勾选状态未更新: %s", name)
         cls.invalidate_cache()
         return name
 
@@ -275,10 +289,14 @@ class CoverBackgroundService:
             if not os.path.exists(path):
                 return False
             os.remove(path)
-            state = cls._read_state()
-            if state is not None and safe in state["images"]:
-                state["images"].remove(safe)
-                cls._write_state_locked(state)
+            try:
+                state = cls._read_state()
+                if state is not None and safe in state["images"]:
+                    state["images"].remove(safe)
+                    cls._write_state_locked(state)
+            except CoverBackgroundError:
+                # 图已删除；残留的选择名在读取时会被 _fresh_state 过滤掉
+                logging.warning("[CoverBackground] 图片已删除，但勾选状态未更新: %s", safe)
         cls.invalidate_cache()
         return True
 
