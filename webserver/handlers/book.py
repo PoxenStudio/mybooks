@@ -187,105 +187,135 @@ class Index(BaseHandler):
     def _all_book_ids(self):
         return list(self.calibre_db_cache.all_book_ids())
 
-    async def _home_books(self, random_ids, new_ids):
-        books = {b["id"]: b for b in await self.get_books_for_list_async(ids=list(set(random_ids) | set(new_ids)), convert_to_local_tz=False)}
-        return [books[i] for i in random_ids if i in books], [books[i] for i in new_ids if i in books]
+    @js
+    async def get(self):
+        """首页基础数据：只返回布局配置。
+
+        随机/新书/社交推荐的计算很重（读 calibre、构建推荐池），原来放在这里会阻塞
+        SSR 的 asyncData，推迟首屏 HTML（FCP）。现在书籍列表拆到 /api/index/<section>，
+        由页面 mounted 后按需加载，/api/index 只做一次内存里的配置读取。
+        """
+        return {"err": "ok", "homepage": get_homepage_config()}
+
+
+class IndexSection(Index):
+    """按需加载的首页图书区块：/api/index/random、/api/index/new、/api/index/social。
+
+    推荐池按键（读者、n_random、n_new、特征版本）缓存，所以 random/new 两个接口
+    用同一组 canonical 数量调用时只会构建一次池，第二个接口直接复用。
+    """
+
+    SECTION = ""
+    SECTION_KEYS = {
+        "random": "index.randomRecommendation",
+        "new": "index.newRecommendation",
+        "social": "index.socialRecommendation",
+    }
+
+    def _hidden(self, hidden):
+        key = self.SECTION_KEYS.get(self.SECTION, "")
+        return key in hidden
+
+    def _canonical_counts(self, hidden):
+        random_count = int(CONF.get("MAIN_PAGE_RANDOM_COUNT", 12))
+        recent_count = int(CONF.get("MAIN_PAGE_RECENT_COUNT", 12))
+        if perf.lite_on("LITE_PAGE_SIZE"):
+            random_count = min(random_count, 12)
+            recent_count = min(recent_count, 12)
+        if "index.randomRecommendation" in hidden:
+            random_count = 0
+        if "index.newRecommendation" in hidden:
+            recent_count = 0
+        return max(random_count, 0), max(recent_count, 0)
+
+    def _empty_result(self):
+        result = {"err": "ok", "%s_books" % self.SECTION: []}
+        if self.SECTION in ("random", "new"):
+            result["%s_books_count" % self.SECTION] = 0
+            result["seed"] = ""
+        return result
+
+    async def _section_books(self, ids, reasons, cover_only):
+        if not ids:
+            return []
+        books = {b["id"]: b for b in await self.get_books_for_list_async(ids=list(ids), convert_to_local_tz=False)}
+        return [self._fmt_with_reason(books[i], reasons, cover_only=cover_only) for i in ids if i in books]
 
     @js
     @throttle()
     async def get(self):
-        """首页显示随机书籍和最近添加的书籍"""
+        section = self.SECTION
         homepage_config = get_homepage_config()
         hidden = set(homepage_config.get("hidden") or [])
-        need_random = "index.randomRecommendation" not in hidden
-        need_new = "index.newRecommendation" not in hidden
-        need_social = "index.socialRecommendation" not in hidden
+        if self._hidden(hidden):
+            return self._empty_result()
 
-        setting_random_count = CONF.get("MAIN_PAGE_RANDOM_COUNT", 12)
-        setting_recent_count = CONF.get("MAIN_PAGE_RECENT_COUNT", 12)
-        if perf.lite_on("LITE_PAGE_SIZE"):
-            setting_random_count = min(setting_random_count, 12)
-            setting_recent_count = min(setting_recent_count, 12)
-        if need_random:
-            cnt_random = min(int(self.get_argument("random", setting_random_count)), setting_random_count)
+        if section == "social":
+            return {"err": "ok", "social_recommend_books": await self._social_recommend_books()}
+
+        cnt_random, cnt_recent = self._canonical_counts(hidden)
+        if section == "random":
+            if cnt_random <= 0:
+                return self._empty_result()
+            requested = max(0, min(int(self.get_argument("random", cnt_random)), cnt_random))
         else:
-            cnt_random = 0
-        if need_new:
-            cnt_recent = min(int(self.get_argument("recent", setting_recent_count)), 200)
-        else:
-            cnt_recent = 0
+            if cnt_recent <= 0:
+                return self._empty_result()
+            requested = max(0, min(int(self.get_argument("recent", cnt_recent)), min(cnt_recent, 200)))
 
         home_key = None
         if perf.lite_on("LITE_HOME_CACHE") and self.get_argument("refresh", "0") != "1":
             home_key = (
-                self.user_id(), cnt_random, cnt_recent, self.get_argument("exclude", ""), self.get_argument("personalized", "1"),
-                self.get_argument("seed", ""), need_random, need_new, need_social, tuple(sorted(hidden)),
+                section, self.user_id(), requested, cnt_random, cnt_recent, self.get_argument("exclude", ""),
+                self.get_argument("personalized", "1"), self.get_argument("seed", ""),
             )
             cached = BaseHandler._home_cache.get(home_key, self.library_version())
             if cached is not None:
-                cached = dict(cached)
-                cached["homepage"] = homepage_config
                 return cached
-
-        if not need_random and not need_new and not need_social:
-            return {
-                "err": "ok",
-                "random_books_count": 0,
-                "new_books_count": 0,
-                "random_books": [],
-                "new_books": [],
-                "social_recommend_books": [],
-                "seed": "",
-                "homepage": homepage_config,
-            }
 
         t0 = time.perf_counter()
         ids = await self.run_calibre_read_async(self._all_book_ids)
         t_ids = time.perf_counter()
         if not ids:
-            return {
-                "err": "nobooks",
-                "random_books_count": 0,
-                "new_books_count": 0,
-                "random_books": [],
-                "new_books": [],
-                "social_recommend_books": [],
-                "homepage": homepage_config,
-            }
+            result = self._empty_result()
+            result["err"] = "nobooks"
+            return result
 
         cnt_recent = min(cnt_recent, len(ids))
         cnt_random = min(cnt_random, len(ids))
-        social_books = await self._social_recommend_books() if need_social else []
-        t_social = time.perf_counter()
         reader_id = self.user_id() or None
         seed = self._home_seed(reader_id)
-        home_ids = self._recommend_home_ids(cnt_random, cnt_recent, [b["id"] for b in social_books], seed, reader_id)
+        home_ids = self._recommend_home_ids(cnt_random, cnt_recent, [], seed, reader_id)
         random_ids, new_ids, reasons = home_ids or (*self._legacy_home_ids(ids, cnt_random, cnt_recent), {})
         t_home = time.perf_counter()
-        random_books, new_books = await self._home_books(random_ids, new_ids)
-        t_books = time.perf_counter()
 
-        result = {
-            "err": "ok",
-            "random_books_count": len(random_books),
-            "new_books_count": len(new_books),
-            "random_books": [self._fmt_with_reason(b, reasons, cover_only=True) for b in random_books],
-            "new_books": [self._fmt_with_reason(b, reasons) for b in new_books],
-            "social_recommend_books": social_books,
-            "seed": seed if home_ids else "",
-            "homepage": homepage_config,
-        }
-        t_fmt = time.perf_counter()
+        if section == "random":
+            books = await self._section_books(random_ids[:requested], reasons, cover_only=True)
+            result = {"err": "ok", "random_books_count": len(books), "random_books": books, "seed": seed if home_ids else ""}
+        else:
+            books = await self._section_books(new_ids[:requested], reasons, cover_only=False)
+            result = {"err": "ok", "new_books_count": len(books), "new_books": books, "seed": seed if home_ids else ""}
+        t_books = time.perf_counter()
         logging.info(
-            "[index timing] ids=%.0fms social=%.0fms home(%s)=%.0fms get_books=%.0fms fmt=%.0fms total=%.0fms",
-            (t_ids - t0) * 1000, (t_social - t_ids) * 1000, "recommend" if home_ids else "legacy",
-            (t_home - t_social) * 1000, (t_books - t_home) * 1000, (t_fmt - t_books) * 1000, (t_fmt - t0) * 1000,
+            "[index/%s timing] ids=%.0fms home(%s)=%.0fms fmt=%.0fms total=%.0fms",
+            section, (t_ids - t0) * 1000, "recommend" if home_ids else "legacy",
+            (t_home - t_ids) * 1000, (t_books - t_home) * 1000, (t_books - t0) * 1000,
         )
         if home_key is not None:
-            cache_payload = dict(result)
-            cache_payload.pop("homepage", None)
-            BaseHandler._home_cache.put(home_key, self.library_version(), cache_payload)
+            BaseHandler._home_cache.put(home_key, self.library_version(), result)
         return result
+
+
+class IndexRandom(IndexSection):
+    SECTION = "random"
+
+
+class IndexNew(IndexSection):
+    SECTION = "new"
+
+
+class IndexSocial(IndexSection):
+    SECTION = "social"
 
 
 class HomepageConfig(BaseHandler):
@@ -4902,6 +4932,9 @@ class BookExchangeType(feature_modules.ModuleGateMixin, BaseHandler):
 def routes():
     return [
         (r"/api/index", Index),
+        (r"/api/index/random", IndexRandom),
+        (r"/api/index/new", IndexNew),
+        (r"/api/index/social", IndexSocial),
         (r"/api/homepage", HomepageConfig),
         (r"/api/search", SearchBook),
         (r"/api/recent", RecentBook),

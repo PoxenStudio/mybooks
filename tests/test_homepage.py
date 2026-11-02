@@ -162,6 +162,9 @@ class TestGetHomepageConfig(unittest.TestCase):
         paths = [rule[0] for rule in book_module.routes()]
         self.assertIn(r"/api/homepage", paths)
         self.assertIn(r"/api/index", paths)
+        self.assertIn(r"/api/index/random", paths)
+        self.assertIn(r"/api/index/new", paths)
+        self.assertIn(r"/api/index/social", paths)
 
 
 if __name__ == "__main__":

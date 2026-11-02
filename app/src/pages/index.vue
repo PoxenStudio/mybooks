@@ -11,30 +11,18 @@
                         <div class="stats-content">
                             <div class="stat-group">
                                 <span class="stat-label">{{ $t('index.totalBooks') }}:</span>
-<<<<<<< HEAD
                                 <span class="stat-value">{{ statValue('total_books') }}</span>
-=======
-                                <span class="stat-value">{{ formatNum(stats.total_books) }}</span>
->>>>>>> 08098172 (微调一些样式上不一样的问题)
                             </div>
                             <div class="stat-separator">|</div>
                             <div class="stat-group">
                                 <span class="stat-label">{{ $t('index.ebookCount') }}:</span>
-<<<<<<< HEAD
                                 <span class="stat-value">{{ statValue('ebook_count') }}</span>
-=======
-                                <span class="stat-value">{{ formatNum(stats.ebook_count) }}</span>
->>>>>>> 08098172 (微调一些样式上不一样的问题)
                             </div>
                             <template v-if="allowPhysicalBooks">
                                 <div class="stat-separator">|</div>
                                 <div class="stat-group">
                                     <span class="stat-label">{{ $t('index.physicalCount') }}:</span>
-<<<<<<< HEAD
                                     <span class="stat-value">{{ statValue('physical_count') }}</span>
-=======
-                                    <span class="stat-value">{{ formatNum(stats.physical_count) }}</span>
->>>>>>> 08098172 (微调一些样式上不一样的问题)
                                 </div>
                             </template>
                             <div class="stat-separator">|</div>
@@ -190,19 +178,13 @@
             :style="{ order: sectionOrder.indexOf('index.randomRecommendation') }"
         >
             <home-section-card
-                v-if="random_books.length > 0"
+                v-if="random_books.length > 0 || homeBooksLoading"
                 icon="mdi-shuffle-variant"
                 :title="$t('index.randomRecommendation')"
                 storage-key="index.randomRecommendation"
             >
                 <template #header-extra>
-<<<<<<< HEAD
                     <v-icon color="primary" class="ml-1 refresh-icon" :class="{ 'refresh-icon--spinning': refreshing.random }" @click="refreshBooks('random')">mdi-refresh</v-icon>
-=======
-                    <v-icon color="primary" class="ml-1 refresh-icon" role="button" tabindex="0"
-                            :aria-label="$t('index.refresh')"
-                            @click="refreshBooks('random')" @keyup.enter="refreshBooks('random')">mdi-refresh</v-icon>
->>>>>>> 08098172 (微调一些样式上不一样的问题)
                 </template>
                 <v-row>
                     <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="(book,idx) in get_random_books" :key="'rec'+idx+book.id" class="book-card" :style="{ '--i': idx }">
@@ -231,27 +213,37 @@
             :style="{ order: sectionOrder.indexOf('index.newRecommendation') }"
         >
             <home-section-card
-                v-if="get_recent_books.length > 0"
+                v-if="get_recent_books.length > 0 || homeBooksLoading"
                 icon="mdi-new-box"
                 :title="$t('index.newRecommendation')"
                 storage-key="index.newRecommendation"
             >
                 <template #header-extra>
-<<<<<<< HEAD
                     <v-icon color="primary" class="ml-1 refresh-icon" :class="{ 'refresh-icon--spinning': refreshing.new }" @click="refreshBooks('new')">mdi-refresh</v-icon>
-=======
-                    <v-icon color="primary" class="ml-1 refresh-icon" role="button" tabindex="0"
-                            :aria-label="$t('index.refresh')"
-                            @click="refreshBooks('new')" @keyup.enter="refreshBooks('new')">mdi-refresh</v-icon>
->>>>>>> 08098172 (微调一些样式上不一样的问题)
                 </template>
-                <v-row>
+                <v-row v-if="get_recent_books.length > 0">
                     <v-col cols="12">
                         <book-cards :books="get_recent_books">
                             <template #introduce="{ book }">
                                 <div v-if="reasonText(book)" class="reason-line text-caption primary--text">{{ reasonText(book) }}</div>
                             </template>
                         </book-cards>
+                    </v-col>
+                </v-row>
+                <v-row v-else>
+                    <v-col cols="12" xs="12" sm="6" md="4" lg="3" xl="2" v-for="n in 8" :key="'new-ph'+n" class="book-list-card d-flex">
+                        <v-card class="flex-grow-1">
+                            <v-row>
+                                <v-col cols="4" class="col-book-img">
+                                    <div class="book-img-container">
+                                        <v-skeleton-loader type="image" class="cover-fill-img"></v-skeleton-loader>
+                                    </div>
+                                </v-col>
+                                <v-col cols="8" class="col-book-info">
+                                    <v-skeleton-loader type="text" />
+                                </v-col>
+                            </v-row>
+                        </v-card>
                     </v-col>
                 </v-row>
             </home-section-card>
@@ -384,6 +376,7 @@ export default {
             );
         },
         homeLoading() {
+            if (this.homeBooksLoading) return true;
             if (this.isSectionEnabled('libraryStats') && this.statsLoading) return true;
             if (this.isSectionEnabled('index.myReading') && this.readingLoading) return true;
             if (this.isSectionEnabled('readingStats') && this.readingStatsPending) return true;
@@ -427,12 +420,11 @@ export default {
         allowPhysicalBooks() {
             return !!(this.$store.state.sys && this.$store.state.sys.allow && this.$store.state.sys.allow.physical_books);
         },
-<<<<<<< HEAD
         // 实体书模块开关：关闭时封面角标一并消失（书本身仍在书库）
         physicalModuleOn() {
             const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
             return mods.physical !== false;
-=======
+        },
         /** 「本月新增」只展示合计：细分（电子书/实体书）在详情面板里 */
         monthNewTotal() {
             const ebooks = Number(this.stats && this.stats.month_ebook_count) || 0;
@@ -440,7 +432,6 @@ export default {
                 ? (Number(this.stats && this.stats.month_physical_count) || 0)
                 : 0;
             return ebooks + physicals;
->>>>>>> 08098172 (微调一些样式上不一样的问题)
         },
     },
     watch: {
@@ -551,6 +542,58 @@ export default {
                 return '';
             }
             return this.$t('index.reason.' + reason.type, { value: reason.value });
+        },
+        homeSectionEnabled(section) {
+            const keys = {
+                social: 'index.socialRecommendation',
+                random: 'index.randomRecommendation',
+                new: 'index.newRecommendation',
+            };
+            return this.isSectionEnabled(keys[section]);
+        },
+        async loadHomeSection(section, exclude) {
+            try {
+                const query = exclude ? `?exclude=${encodeURIComponent(exclude)}` : '';
+                const rsp = await this.$backend(`/index/${section}${query}`);
+                if (rsp.err !== 'ok') {
+                    return;
+                }
+                if (section === 'social') {
+                    this.social_recommend_books = rsp.social_recommend_books || [];
+                } else if (section === 'random') {
+                    this.random_books = rsp.random_books || [];
+                } else if (section === 'new') {
+                    this.new_books = rsp.new_books || [];
+                }
+            } catch (error) {
+                console.warn(`Failed to load home section ${section}:`, error);
+            }
+        },
+        async loadHomeBooks() {
+            const sections = ['social', 'new', 'random'];
+            if (!sections.some((s) => this.homeSectionEnabled(s))) {
+                return;
+            }
+            this.homeBooksLoading = true;
+            try {
+                // 社交推荐最轻，先取到；再把它的书 id 作为 exclude 传给后面两个区块。
+                // 新书先于随机推荐加载：随机推荐会把新书 id 一并排除，避免同一本书
+                // 同时出现在“新书”和“随便看看”里（推荐引擎构建的候选池会被第二个
+                // 请求复用，所以串行加载并不会多花一次全库打分的时间）。
+                if (this.homeSectionEnabled('social')) {
+                    await this.loadHomeSection('social');
+                }
+                let exclude = this.social_recommend_books.map((b) => b.id);
+                if (this.homeSectionEnabled('new')) {
+                    await this.loadHomeSection('new', exclude.join(','));
+                    exclude = exclude.concat(this.new_books.map((b) => b.id));
+                }
+                if (this.homeSectionEnabled('random')) {
+                    await this.loadHomeSection('random', exclude.join(','));
+                }
+            } finally {
+                this.homeBooksLoading = false;
+            }
         },
         refreshBooks(section) {
             // 请求在途时忽略重复点击，图标以自旋反馈加载状态
@@ -708,6 +751,8 @@ export default {
     },
     mounted() {
         setTimeout(() => this.checkReleaseNotes(), 1500);
+        // 书籍区块不参与 SSR/asyncData：首屏 HTML 先出来，挂载后再按配置并行拉取。
+        this.loadHomeBooks();
         if (this.isSectionEnabled('index.myReading')) {
             this.loadReadingBooks();
         }
@@ -745,24 +790,26 @@ export default {
     created() {
         this.$store.commit('navbar', true);
         this.readingLoading = this.isLoggedIn;
+        // 初始就把加载态打开：SSR 首屏只渲染骨架，避免书籍区块加载完成前闪出"首页为空"。
+        this.homeBooksLoading = ['social', 'random', 'new'].some((s) => this.homeSectionEnabled(s));
     },
     async asyncData({ app, res }) {
         if ( res !== undefined ) {
             res.setHeader('Cache-Control', 'no-cache');
         }
-        // /api/index 的每个返回分支都带归一化后的 homepage 配置，无需再请求 /homepage。
-        // 旧后端没有该字段时 homepageConfig 为 null，computed 里回退到老站点默认可见性；
-        // 额外请求 /homepage 在旧后端会 404 并弹出全局错误框，所以不做探测。
-        const { homepage, ...indexRsp } = (await app.$backend("/index")) || {};
+        // /api/index 现在只返回首页布局配置（书籍列表已拆到 /api/index/<section> 按需加载），
+        // 配置读取是内存操作，不会阻塞首屏 HTML 的生成。旧后端没有 homepage 字段时
+        // homepageConfig 为 null，computed 里回退到老站点默认可见性。
+        const rsp = (await app.$backend("/index")) || {};
         return {
-            ...indexRsp,
-            homepageConfig: homepage || null,
+            homepageConfig: rsp.homepage || null,
         };
     },
     data: () => ({
         random_books: [],
         new_books: [],
         social_recommend_books: [],
+        homeBooksLoading: false,
         homepage_booklists: [],
         reading_books: [],
         refreshing: { random: false, new: false },
@@ -1046,7 +1093,6 @@ export default {
     color: #1976d2 !important;
 }
 
-<<<<<<< HEAD
 /* #140-2 「换一批」请求在途时的自旋反馈。这是功能性加载指示（与
    v-progress-circular 同类），站长关闭首页动效 / 系统减少动效时也保留 */
 @keyframes refresh-icon-spin {
@@ -1060,7 +1106,6 @@ export default {
     opacity: 0.75;
 }
 
-=======
 .refresh-icon:focus-visible {
     outline: 2px solid var(--primary-color, #1976D2);
     outline-offset: 2px;
@@ -1074,7 +1119,6 @@ export default {
     }
 }
 
->>>>>>> 08098172 (微调一些样式上不一样的问题)
 .book-img-container {
     position: relative;
     display: block;
