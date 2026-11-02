@@ -138,6 +138,31 @@ class CoverBackgroundServiceTest(unittest.TestCase):
         self.assertTrue(state["default"])
         self.assertEqual(state["images"], [kept])
 
+    def test_selection_file_is_not_listed_or_readable(self):
+        self.save(make_image(1200, 1600))
+        self.select(cover_background_module.DEFAULT_OPTION, False)
+        self.assertTrue(os.path.exists(os.path.join(self.tmpdir, "selection.json")))
+        self.assertNotIn("selection.json", CoverBackgroundService.list_backgrounds())
+        self.assertEqual(CoverBackgroundService.count(), 1)
+        self.assertIsNone(CoverBackgroundService.read("selection.json"))
+        with self.assertRaises(CoverBackgroundError):
+            CoverBackgroundService.delete("selection.json")
+
+    def test_state_write_oserror_is_wrapped(self):
+        self.save(make_image(1200, 1600))
+        with mock.patch.object(cover_background_module.os, "replace", side_effect=OSError("readonly")):
+            with self.assertRaises(CoverBackgroundError):
+                CoverBackgroundService.set_selected(cover_background_module.DEFAULT_OPTION, False)
+
+    def test_state_write_failure_does_not_break_upload(self):
+        self.save(make_image(1200, 1600, color=(200, 20, 20)))
+        self.select(cover_background_module.DEFAULT_OPTION, False)
+        with mock.patch.object(
+                CoverBackgroundService, "_write_state_locked",
+                side_effect=CoverBackgroundError("state failed")):
+            name = self.save(make_image(1200, 1600, color=(20, 200, 20)))
+        self.assertTrue(os.path.exists(os.path.join(self.tmpdir, name)))
+
     def test_select_rejects_unknown_names(self):
         for bad in ("bg_deadbeefdeadbeef.jpg", "../x.jpg", "default.jpg", ""):
             with self.assertRaises(CoverBackgroundError):

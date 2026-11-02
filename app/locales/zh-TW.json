@@ -1155,7 +1155,7 @@
     "auto_checking_new_version": "自動檢測更新（預設開啟，關閉後將不再檢查新版本）",
     "enable_audio_subtitle": "轉換有聲書時生成同名字幕檔案（預設開啟，僅對EdgeTTS引擎生效）",
     "use_dynamic_cover": "啟用動態封面（根據書籍資訊自動生成封面圖片）",
-    "cover_background_hint": "支援 JPEG、PNG、WEBP，單張不超過 10MB；上傳後自動置中裁切為 3:4（1200×1600）。只有勾選的圖片會參與生成，同一本書始終使用同一張（按書名分配）；圖庫變更即時生效，無需點頁面底部的儲存。",
+    "cover_background_hint": "支援 JPEG、PNG、WEBP，單張不超過 10MB；上傳後自動置中裁切為 3:4（1200×1600）。勾選的圖片會參與生成，上傳圖按書名分配（同一本書始終同一張）；「預設彩色封面」沿用原本的漸層/純色生成。圖庫變更即時生效，無需點頁面底部的儲存。",
     "cover_background_default": "預設彩色封面",
     "cover_background_select": "參與生成",
     "cover_background_upload": "上傳背景圖",

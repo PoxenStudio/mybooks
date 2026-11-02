@@ -38,6 +38,7 @@
               hide-details
               class="mt-0"
               :input-value="defaultSelected"
+              :disabled="selecting"
               :label="$t('settings.cover_background_select')"
               @change="toggleDefault"
             ></v-checkbox>
@@ -59,10 +60,17 @@
               hide-details
               class="mt-0"
               :input-value="item.selected"
+              :disabled="selecting"
               :label="$t('settings.cover_background_select')"
               @change="toggleItem(item, $event)"
             ></v-checkbox>
-            <v-btn icon x-small color="error" @click.stop="askDelete(item)">
+            <v-btn
+              icon
+              x-small
+              color="error"
+              :disabled="selecting"
+              @click.stop="askDelete(item)"
+            >
               <v-icon small>mdi-delete</v-icon>
             </v-btn>
           </div>
@@ -133,6 +141,7 @@ export default {
     defaultSelected: true,
     uploading: false,
     deleting: false,
+    selecting: false,
     error: "",
     previewTitle: "",
     previewSrc: "",
@@ -143,7 +152,7 @@ export default {
   }),
   computed: {
     canUpload() {
-      return !this.uploading && this.count < this.max;
+      return !this.selecting && !this.uploading && this.count < this.max;
     },
     defaultPreviewSrc() {
       const title = encodeURIComponent(this.$t("settings.cover_background_default"));
@@ -177,20 +186,36 @@ export default {
       this.error = "";
     },
     async setSelected(id, selected) {
-      const seq = this._nextSeq();
-      const rsp = await this.$backend("/cover_backgrounds/select", {
-        method: "POST",
-        body: new URLSearchParams({ id, selected: selected ? "1" : "0" }),
-      });
-      if (seq !== this._reqSeq) return;
-      if (rsp.err !== "ok") {
-        const message = rsp.msg || this.$t("message.operationFailed");
-        await this.load();
-        this.error = message;
-        return;
+      if (this.selecting) return;
+      this.selecting = true;
+      const item = this.items.find((entry) => entry.id === id);
+      const previous = item ? item.selected : this.defaultSelected;
+      // Vuetify 2 的 inputValue watcher 只在 prop 变化时回写；先乐观写本地，
+      // 失败时 prop 变回旧值才能把勾选框一起拉回去
+      if (item) item.selected = selected;
+      else this.defaultSelected = selected;
+      try {
+        const seq = this._nextSeq();
+        const rsp = await this.$backend("/cover_backgrounds/select", {
+          method: "POST",
+          body: new URLSearchParams({ id, selected: selected ? "1" : "0" }),
+        });
+        if (seq !== this._reqSeq) return;
+        if (rsp.err !== "ok") {
+          this.error = rsp.msg || this.$t("message.operationFailed");
+          if (item) item.selected = previous;
+          else this.defaultSelected = previous;
+          return;
+        }
+        this.apply(rsp.data);
+        if (this.previewSrc) this.refreshPreview();
+      } catch (err) {
+        if (item) item.selected = previous;
+        else this.defaultSelected = previous;
+        this.error = this.$t("message.operationFailed");
+      } finally {
+        this.selecting = false;
       }
-      this.apply(rsp.data);
-      if (this.previewSrc) this.refreshPreview();
     },
     toggleDefault(value) {
       this.setSelected(DEFAULT_OPTION, value);

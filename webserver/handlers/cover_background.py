@@ -74,7 +74,7 @@ class CoverBackgroundSelect(BaseHandler):
     @is_admin
     def post(self):
         name = self.get_argument("id", "")
-        selected = self.get_argument("selected", "1") == "1"
+        selected = self.get_argument("selected", "1").lower() not in ("0", "false")
         try:
             CoverBackgroundService.set_selected(name, selected)
         except CoverBackgroundError as err:
