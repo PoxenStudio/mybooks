@@ -57,9 +57,11 @@ class ImageGenerator:
         return base
 
     @classmethod
-    def _create_background(cls, title, width, height, bk_img_path, no_graident):
+    def _create_background(cls, title, width, height, bk_img_path, no_graident, use_library=True):
         """返回 (底图, 是否照片背景)；照片背景用描边保证文字可读。"""
-        background_path = bk_img_path or CoverBackgroundService.pick_for(title)
+        background_path = bk_img_path
+        if background_path is None and use_library:
+            background_path = CoverBackgroundService.pick_for(title)
         if background_path and os.path.exists(background_path):
             try:
                 with Image.open(background_path) as image:
@@ -73,9 +75,9 @@ class ImageGenerator:
         return Image.new("RGB", (width, height), random.choice(cls.COLORS)), False
 
     @classmethod
-    def generate_cover(cls, title, author, width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT, font_path=DEFAULT_FONT_PATH, bk_img_path=None, no_graident=False, debug=False):
+    def generate_cover(cls, title, author, width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT, font_path=DEFAULT_FONT_PATH, bk_img_path=None, no_graident=False, debug=False, use_library=True):
         try:
-            img, has_background = cls._create_background(title, width, height, bk_img_path, no_graident)
+            img, has_background = cls._create_background(title, width, height, bk_img_path, no_graident, use_library)
             draw = ImageDraw.Draw(img)
 
             if width < 120 and height < 120:

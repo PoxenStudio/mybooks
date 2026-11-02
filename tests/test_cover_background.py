@@ -36,7 +36,6 @@ class CoverBackgroundServiceTest(unittest.TestCase):
         self.tmpdir = tempfile.mkdtemp(prefix="coverbg-")
         self.patches = [
             mock.patch.object(cover_background_module, "COVER_BACKGROUND_DIR", self.tmpdir),
-            mock.patch.dict(cover_background_module.CONF, {"USE_COVER_BACKGROUND": True}),
         ]
         for patch in self.patches:
             patch.start()
@@ -50,6 +49,9 @@ class CoverBackgroundServiceTest(unittest.TestCase):
 
     def save(self, body):
         return CoverBackgroundService.save({"body": body})
+
+    def select(self, name, selected=True):
+        CoverBackgroundService.set_selected(name, selected)
 
     def test_empty_library_returns_none(self):
         self.assertIsNone(CoverBackgroundService.pick_for("测试书名"))
@@ -70,15 +72,83 @@ class CoverBackgroundServiceTest(unittest.TestCase):
     def test_pick_is_stable_per_seed(self):
         self.save(make_image(1200, 1600, color=(200, 20, 20)))
         self.save(make_image(1200, 1600, color=(20, 200, 20)))
+        self.select(cover_background_module.DEFAULT_OPTION, False)
         first = CoverBackgroundService.pick_for("同名书")
         for _ in range(5):
             self.assertEqual(first, CoverBackgroundService.pick_for("同名书"))
         self.assertTrue(os.path.exists(first))
 
-    def test_pick_respects_switch(self):
+    def test_selection_defaults_to_all_images_and_default_option(self):
+        first = self.save(make_image(1200, 1600, color=(200, 20, 20)))
+        second = self.save(make_image(1200, 1600, color=(20, 200, 20)))
+        state = CoverBackgroundService.selection()
+        self.assertTrue(state["default"])
+        self.assertEqual(set(state["images"]), {first, second})
+
+    def test_only_selected_images_join_the_pool(self):
+        kept = self.save(make_image(1200, 1600, color=(200, 20, 20)))
+        dropped = self.save(make_image(1200, 1600, color=(20, 200, 20)))
+        self.select(cover_background_module.DEFAULT_OPTION, False)
+        self.select(dropped, False)
+        expected = os.path.join(self.tmpdir, kept)
+        for index in range(24):
+            self.assertEqual(CoverBackgroundService.pick_for("书名%d" % index), expected)
+
+    def test_default_option_is_a_candidate(self):
         self.save(make_image(1200, 1600))
-        with mock.patch.dict(cover_background_module.CONF, {"USE_COVER_BACKGROUND": False}):
-            self.assertIsNone(CoverBackgroundService.pick_for("任意书名"))
+        picks = {CoverBackgroundService.pick_for("书名%d" % index) for index in range(40)}
+        self.assertIn(None, picks)
+        self.assertTrue(any(path and os.path.exists(path) for path in picks))
+
+    def test_selection_persists_across_cache_invalidation(self):
+        kept = self.save(make_image(1200, 1600, color=(200, 20, 20)))
+        dropped = self.save(make_image(1200, 1600, color=(20, 200, 20)))
+        self.select(dropped, False)
+        CoverBackgroundService.invalidate_cache()
+        self.assertEqual(CoverBackgroundService.selected_backgrounds(), (kept,))
+
+    def test_upload_is_auto_selected_when_state_exists(self):
+        first = self.save(make_image(1200, 1600, color=(200, 20, 20)))
+        self.select(cover_background_module.DEFAULT_OPTION, False)
+        second = self.save(make_image(1200, 1600, color=(20, 200, 20)))
+        self.assertEqual(set(CoverBackgroundService.selected_backgrounds()), {first, second})
+
+    def test_delete_removes_selection(self):
+        kept = self.save(make_image(1200, 1600, color=(200, 20, 20)))
+        removed = self.save(make_image(1200, 1600, color=(20, 200, 20)))
+        CoverBackgroundService.delete(removed)
+        self.assertNotIn(removed, CoverBackgroundService.selection()["images"])
+        self.assertIn(kept, CoverBackgroundService.selection()["images"])
+
+    def test_selection_ignores_unknown_names(self):
+        kept = self.save(make_image(1200, 1600))
+        state_path = os.path.join(self.tmpdir, "selection.json")
+        with open(state_path, "w", encoding="utf-8") as stream:
+            stream.write('{"default": false, "images": ["%s", "bg_deadbeefdeadbeef.jpg", "../x.jpg"]}' % kept)
+        CoverBackgroundService.invalidate_cache()
+        self.assertEqual(CoverBackgroundService.selected_backgrounds(), (kept,))
+        self.assertFalse(CoverBackgroundService.selection()["default"])
+
+    def test_malformed_selection_falls_back_to_defaults(self):
+        kept = self.save(make_image(1200, 1600))
+        with open(os.path.join(self.tmpdir, "selection.json"), "w", encoding="utf-8") as stream:
+            stream.write("{not json")
+        CoverBackgroundService.invalidate_cache()
+        state = CoverBackgroundService.selection()
+        self.assertTrue(state["default"])
+        self.assertEqual(state["images"], [kept])
+
+    def test_select_rejects_unknown_names(self):
+        for bad in ("bg_deadbeefdeadbeef.jpg", "../x.jpg", "default.jpg", ""):
+            with self.assertRaises(CoverBackgroundError):
+                CoverBackgroundService.set_selected(bad, True)
+
+    def test_unselected_default_and_images_returns_none(self):
+        self.save(make_image(1200, 1600))
+        self.select(cover_background_module.DEFAULT_OPTION, False)
+        for name in CoverBackgroundService.list_backgrounds():
+            self.select(name, False)
+        self.assertIsNone(CoverBackgroundService.pick_for("任意书名"))
 
     def test_reject_non_image_payload(self):
         with self.assertRaises(CoverBackgroundError):
@@ -149,6 +219,7 @@ class CoverBackgroundServiceTest(unittest.TestCase):
         """只看"多次调用结果相同"无法证明 seed 起作用，固定返回第一张也能过。"""
         self.save(make_image(1200, 1600, color=(200, 20, 20)))
         self.save(make_image(1200, 1600, color=(20, 200, 20)))
+        self.select(cover_background_module.DEFAULT_OPTION, False)
         picks = {CoverBackgroundService.pick_for("书名%d" % index) for index in range(24)}
         self.assertEqual(len(picks), 2)
 
@@ -183,7 +254,6 @@ class GenerateCoverWithBackgroundTest(unittest.TestCase):
         self.tmpdir = tempfile.mkdtemp(prefix="coverbg-")
         self.patches = [
             mock.patch.object(cover_background_module, "COVER_BACKGROUND_DIR", self.tmpdir),
-            mock.patch.dict(cover_background_module.CONF, {"USE_COVER_BACKGROUND": True}),
         ]
         for patch in self.patches:
             patch.start()
@@ -195,19 +265,34 @@ class GenerateCoverWithBackgroundTest(unittest.TestCase):
         CoverBackgroundService.invalidate_cache()
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
+    def save(self, body):
+        return CoverBackgroundService.save({"body": body})
+
     def test_output_uses_requested_size_not_source_size(self):
-        CoverBackgroundService.save({"body": make_image(3000, 1000, color=(40, 40, 40))})
+        self.save(make_image(3000, 1000, color=(40, 40, 40)))
+        CoverBackgroundService.set_selected(cover_background_module.DEFAULT_OPTION, False)
         data = ImageGenerator.generate_cover("测试书名", "作者", 300, 400, font_path=FONT_PATH)
         with Image.open(io.BytesIO(data)) as image:
             self.assertEqual(image.size, (300, 400))
 
     def test_stroke_keeps_title_visible_on_white_background(self):
-        CoverBackgroundService.save({"body": make_image(1200, 1600, color=(255, 255, 255))})
+        self.save(make_image(1200, 1600, color=(255, 255, 255)))
+        CoverBackgroundService.set_selected(cover_background_module.DEFAULT_OPTION, False)
         data = ImageGenerator.generate_cover("测试书名", "", 300, 400, font_path=FONT_PATH)
         with Image.open(io.BytesIO(data)).convert("L") as image:
             darkest = min(image.tobytes())
         # 白底白字若无描边，全图最暗也只到 JPEG 噪声量级；出现深色像素说明描边已绘制
         self.assertLess(darkest, 80)
+
+    def test_use_library_false_skips_gallery(self):
+        self.save(make_image(1200, 1600))
+        with mock.patch.object(CoverBackgroundService, "pick_for") as picker:
+            picker.return_value = None
+            data = ImageGenerator.generate_cover(
+                "测试书名", "", 300, 400, font_path=FONT_PATH, use_library=False)
+            picker.assert_not_called()
+        with Image.open(io.BytesIO(data)) as image:
+            self.assertEqual(image.size, (300, 400))
 
     def test_empty_library_still_generates(self):
         data = ImageGenerator.generate_cover("测试书名", "", 300, 400, font_path=FONT_PATH, no_graident=True)
@@ -235,10 +320,14 @@ class CoverBackgroundHandlerPermissionTest(unittest.TestCase):
     """
 
     def test_payload_reports_gallery_limits(self):
-        with mock.patch.object(CoverBackgroundService, "list_backgrounds", return_value=("bg_a.jpg",)):
+        with mock.patch.object(CoverBackgroundService, "list_backgrounds", return_value=("bg_a.jpg",)), \
+                mock.patch.object(CoverBackgroundService, "selection",
+                                  return_value={"default": False, "images": ["bg_a.jpg"]}):
             payload = cover_background_handler._payload()
         self.assertEqual(payload["count"], 1)
         self.assertEqual(payload["items"][0]["id"], "bg_a.jpg")
+        self.assertTrue(payload["items"][0]["selected"])
+        self.assertFalse(payload["default_selected"])
         self.assertEqual(payload["max"], cover_background_module.MAX_BACKGROUNDS)
 
     def test_file_handler_checks_is_admin(self):

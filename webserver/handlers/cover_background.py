@@ -3,6 +3,7 @@
 """封面背景图库管理接口，仅管理员可写。"""
 
 import asyncio
+import functools
 
 from tornado import web
 
@@ -13,15 +14,23 @@ from webserver.handlers.base import BaseHandler, is_admin, js
 from webserver.i18n import _
 
 
-def _item(name):
-    return {"id": name, "url": "/api/cover_backgrounds/file/" + name}
+def _item(name, selected):
+    return {
+        "id": name,
+        "url": "/api/cover_backgrounds/file/" + name,
+        "selected": name in selected,
+    }
 
 
 def _payload():
+    state = CoverBackgroundService.selection()
+    selected = set(state["images"])
+    names = CoverBackgroundService.list_backgrounds()
     return {
-        "items": [_item(name) for name in CoverBackgroundService.list_backgrounds()],
-        "count": CoverBackgroundService.count(),
+        "items": [_item(name, selected) for name in names],
+        "count": len(names),
         "max": cover_background_module.MAX_BACKGROUNDS,
+        "default_selected": state["default"],
     }
 
 
@@ -60,14 +69,36 @@ class CoverBackgroundDelete(BaseHandler):
         return {"err": "ok", "msg": _("背景图已删除"), "data": _payload()}
 
 
+class CoverBackgroundSelect(BaseHandler):
+    @js
+    @is_admin
+    def post(self):
+        name = self.get_argument("id", "")
+        selected = self.get_argument("selected", "1") == "1"
+        try:
+            CoverBackgroundService.set_selected(name, selected)
+        except CoverBackgroundError as err:
+            return {"err": "cover_background.invalid", "msg": str(err)}
+        return {"err": "ok", "data": _payload()}
+
+
 class CoverBackgroundPreview(BaseHandler):
     async def get(self):
         if not self.is_admin():
             raise web.HTTPError(403, "admin only")
         title = self.get_argument("title", "")
+        # 内置「默认彩色封面」选项要预览没有背景图的原生成效果
+        use_library = self.get_argument("library", "1") != "0"
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(
-            None, ImageGenerator.generate_cover, title or _("示例书名"), "")
+            None,
+            functools.partial(
+                ImageGenerator.generate_cover,
+                title or _("示例书名"),
+                "",
+                use_library=use_library,
+            ),
+        )
         if not data:
             raise web.HTTPError(500, "generate failed")
         self.set_header("Content-Type", "image/jpeg")
@@ -91,6 +122,7 @@ def routes():
     return [
         (r"/api/cover_backgrounds", CoverBackgrounds),
         (r"/api/cover_backgrounds/delete", CoverBackgroundDelete),
+        (r"/api/cover_backgrounds/select", CoverBackgroundSelect),
         (r"/api/cover_backgrounds/preview", CoverBackgroundPreview),
         (r"/api/cover_backgrounds/file/([^/]+)", CoverBackgroundFile),
     ]
