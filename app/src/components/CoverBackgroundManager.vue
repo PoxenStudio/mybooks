@@ -19,7 +19,31 @@
 
     <v-alert v-if="error" type="error" dense text class="mb-3">{{ error }}</v-alert>
 
-    <v-row v-if="items.length" dense>
+    <v-row dense>
+      <v-col cols="6" sm="4" md="3" lg="2">
+        <v-card outlined>
+          <v-img :src="defaultPreviewSrc" aspect-ratio="0.75" @click="openDefaultPreview">
+            <template v-slot:placeholder>
+              <v-row class="fill-height ma-0" align="center" justify="center">
+                <v-progress-circular indeterminate size="20"></v-progress-circular>
+              </v-row>
+            </template>
+          </v-img>
+          <div class="text-caption grey--text text-center pt-1">
+            {{ $t("settings.cover_background_default") }}
+          </div>
+          <div class="d-flex align-center justify-space-between">
+            <v-checkbox
+              dense
+              hide-details
+              class="mt-0"
+              :input-value="defaultSelected"
+              :label="$t('settings.cover_background_select')"
+              @change="toggleDefault"
+            ></v-checkbox>
+          </div>
+        </v-card>
+      </v-col>
       <v-col v-for="item in items" :key="item.id" cols="6" sm="4" md="3" lg="2">
         <v-card outlined>
           <v-img :src="item.url" aspect-ratio="0.75" @click="openPreview(item)">
@@ -29,7 +53,15 @@
               </v-row>
             </template>
           </v-img>
-          <div class="d-flex justify-end">
+          <div class="d-flex align-center justify-space-between">
+            <v-checkbox
+              dense
+              hide-details
+              class="mt-0"
+              :input-value="item.selected"
+              :label="$t('settings.cover_background_select')"
+              @change="toggleItem(item, $event)"
+            ></v-checkbox>
             <v-btn icon x-small color="error" @click.stop="askDelete(item)">
               <v-icon small>mdi-delete</v-icon>
             </v-btn>
@@ -37,7 +69,9 @@
         </v-card>
       </v-col>
     </v-row>
-    <p v-else class="text-caption grey--text">{{ $t("settings.cover_background_empty") }}</p>
+    <p v-if="!items.length" class="text-caption grey--text mt-2">
+      {{ $t("settings.cover_background_empty") }}
+    </p>
 
     <v-divider class="my-4"></v-divider>
 
@@ -88,12 +122,15 @@
 </template>
 
 <script>
+const DEFAULT_OPTION = "__default__";
+
 export default {
   name: "cover-background-manager",
   data: () => ({
     items: [],
     count: 0,
     max: 50,
+    defaultSelected: true,
     uploading: false,
     deleting: false,
     error: "",
@@ -107,6 +144,10 @@ export default {
   computed: {
     canUpload() {
       return !this.uploading && this.count < this.max;
+    },
+    defaultPreviewSrc() {
+      const title = encodeURIComponent(this.$t("settings.cover_background_default"));
+      return "/api/cover_backgrounds/preview?library=0&title=" + title;
     },
   },
   mounted() {
@@ -132,7 +173,30 @@ export default {
       this.items = (data && data.items) || [];
       this.count = (data && data.count) || 0;
       this.max = (data && data.max) || 50;
+      this.defaultSelected = !!(data && data.default_selected);
       this.error = "";
+    },
+    async setSelected(id, selected) {
+      const seq = this._nextSeq();
+      const rsp = await this.$backend("/cover_backgrounds/select", {
+        method: "POST",
+        body: new URLSearchParams({ id, selected: selected ? "1" : "0" }),
+      });
+      if (seq !== this._reqSeq) return;
+      if (rsp.err !== "ok") {
+        const message = rsp.msg || this.$t("message.operationFailed");
+        await this.load();
+        this.error = message;
+        return;
+      }
+      this.apply(rsp.data);
+      if (this.previewSrc) this.refreshPreview();
+    },
+    toggleDefault(value) {
+      this.setSelected(DEFAULT_OPTION, value);
+    },
+    toggleItem(item, value) {
+      this.setSelected(item.id, value);
     },
     pickFile() {
       this.$refs.fileInput.click();
@@ -194,6 +258,10 @@ export default {
     },
     openPreview(item) {
       this.dialogItem = item;
+      this.dialog = true;
+    },
+    openDefaultPreview() {
+      this.dialogItem = { url: this.defaultPreviewSrc };
       this.dialog = true;
     },
     refreshPreview() {

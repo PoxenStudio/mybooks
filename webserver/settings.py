@@ -176,7 +176,6 @@ settings = {
     "ENABLE_AUDIO_SUBTITLE": True,
     "LOG_LEVEL_DEBUG": False,
     "USE_DYNAMIC_COVER": True,
-    "USE_COVER_BACKGROUND": True,
     "DEFAULT_LANGUAGE": "zho",
 
     "CALIBRE_CACHE_CLEAN_ENABLED": False,

@@ -3,6 +3,7 @@
 """封面背景图库：管理员上传的底图，生成动态封面时按书名稳定选一张铺底。"""
 
 import hashlib
+import json
 import logging
 import os
 import threading
@@ -11,10 +12,7 @@ from io import BytesIO
 
 from PIL import Image, ImageOps
 
-from webserver import loader
 from webserver.i18n import _
-
-CONF = loader.get_settings()
 
 COVER_BACKGROUND_DIR = "/data/books/resources/cover_backgrounds"
 TARGET_WIDTH = 1200
@@ -27,6 +25,9 @@ ALLOWED_FORMATS = ("JPEG", "PNG", "WEBP")
 _NAME_PREFIX = "bg_"
 _NAME_DIGEST_LEN = 16
 _LIST_CACHE_TTL = 1.0
+_STATE_FILE = "selection.json"
+# 候选池里的内置项：命中它时生成原来的渐变/纯色封面。文件名永远以 bg_ 开头，不会冲突
+DEFAULT_OPTION = "__default__"
 
 _RESAMPLING = getattr(Image, "Resampling", Image)
 
@@ -36,18 +37,15 @@ class CoverBackgroundError(Exception):
 
 
 class CoverBackgroundService:
-    """目录按内容哈希命名，选图只依赖 seed，因此无需保存「哪本书用了哪张」。"""
+    """目录按内容哈希命名；选图只依赖书名与勾选状态，无需保存「哪本书用了哪张」。"""
 
     _write_lock = threading.Lock()
     _list_cache = (0.0, ())
+    _selection_cache = (0.0, None)
 
     @classmethod
     def directory(cls):
         return COVER_BACKGROUND_DIR
-
-    @classmethod
-    def enabled(cls):
-        return bool(CONF.get("USE_COVER_BACKGROUND", True))
 
     @classmethod
     def _safe_name(cls, name):
@@ -104,17 +102,110 @@ class CoverBackgroundService:
     @classmethod
     def invalidate_cache(cls):
         cls._list_cache = (0.0, ())
+        cls._selection_cache = (0.0, None)
+
+    @classmethod
+    def _state_path(cls):
+        return os.path.join(cls.directory(), _STATE_FILE)
+
+    @classmethod
+    def _read_state(cls):
+        """读取勾选状态；文件不存在或损坏时返回 None，由调用方按默认全选处理。"""
+        try:
+            with open(cls._state_path(), "r", encoding="utf-8") as stream:
+                raw = json.load(stream)
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError) as err:
+            logging.warning("[CoverBackground] 无法读取选择状态，按默认全选处理: %s", err)
+            return None
+        if not isinstance(raw, dict):
+            logging.warning("[CoverBackground] 选择状态格式不正确，按默认全选处理")
+            return None
+        images = raw.get("images")
+        if not isinstance(images, list):
+            images = []
+        return {
+            "default": bool(raw.get("default", True)),
+            "images": [name for name in images if isinstance(name, str) and cls.is_valid_name(name)],
+        }
+
+    @classmethod
+    def _write_state_locked(cls, state):
+        os.makedirs(cls.directory(), exist_ok=True)
+        temp_path = cls._state_path() + ".tmp"
+        payload = {
+            "version": 1,
+            "default": bool(state["default"]),
+            "images": list(state["images"]),
+        }
+        with open(temp_path, "w", encoding="utf-8") as stream:
+            json.dump(payload, stream, ensure_ascii=False)
+        os.replace(temp_path, cls._state_path())
+
+    @classmethod
+    def _fresh_state(cls):
+        """绕过缓存读取状态，并剔除已从目录消失的文件名；写路径必须用它。"""
+        state = cls._read_state()
+        if state is None:
+            return {"default": True, "images": list(cls._scan())}
+        existing = set(cls._scan())
+        state["images"] = [name for name in state["images"] if name in existing]
+        return state
+
+    @classmethod
+    def selection(cls):
+        """返回 {"default": bool, "images": [文件名]}；没有状态文件时默认全选。"""
+        now = time.time()
+        expire, state = cls._selection_cache
+        if expire > now:
+            return state
+        state = cls._fresh_state()
+        cls._selection_cache = (now + _LIST_CACHE_TTL, state)
+        return state
+
+    @classmethod
+    def selected_backgrounds(cls):
+        selected = set(cls.selection()["images"])
+        return tuple(name for name in cls.list_backgrounds() if name in selected)
+
+    @classmethod
+    def candidate_pool(cls):
+        """候选池：勾选的图片 + 勾选的内置默认项；空池表示沿用原有渐变/纯色封面。"""
+        pool = list(cls.selected_backgrounds())
+        if cls.selection()["default"]:
+            pool.insert(0, DEFAULT_OPTION)
+        return tuple(pool)
+
+    @classmethod
+    def set_selected(cls, name, selected):
+        if name != DEFAULT_OPTION and not cls.is_valid_name(name):
+            raise CoverBackgroundError(_("背景图不存在"))
+        with cls._write_lock:
+            state = cls._fresh_state()
+            if name == DEFAULT_OPTION:
+                state["default"] = bool(selected)
+            elif selected:
+                if name not in cls._scan():
+                    raise CoverBackgroundError(_("背景图不存在"))
+                if name not in state["images"]:
+                    state["images"].append(name)
+            elif name in state["images"]:
+                state["images"].remove(name)
+            cls._write_state_locked(state)
+        cls.invalidate_cache()
+        return state
 
     @classmethod
     def pick_for(cls, seed):
-        if not cls.enabled():
-            return None
-        names = cls.list_backgrounds()
-        if not names:
+        pool = cls.candidate_pool()
+        if not pool:
             return None
         digest = hashlib.md5(str(seed).encode("utf-8")).hexdigest()
-        index = int(digest, 16) % len(names)
-        return os.path.join(cls.directory(), names[index])
+        index = int(digest, 16) % len(pool)
+        if pool[index] == DEFAULT_OPTION:
+            return None
+        return os.path.join(cls.directory(), pool[index])
 
     @classmethod
     def _normalize(cls, image):
@@ -166,6 +257,11 @@ class CoverBackgroundService:
                 with open(temp_path, "wb") as stream:
                     stream.write(data)
                 os.replace(temp_path, path)
+            # 已有勾选状态时，新上传的图自动加入候选；没有状态文件时默认全选本就会包含它
+            state = cls._read_state()
+            if state is not None and name not in state["images"]:
+                state["images"].append(name)
+                cls._write_state_locked(state)
         cls.invalidate_cache()
         return name
 
@@ -175,9 +271,14 @@ class CoverBackgroundService:
         if not safe:
             raise CoverBackgroundError(_("背景图不存在"))
         path = os.path.join(cls.directory(), safe)
-        if not os.path.exists(path):
-            return False
-        os.remove(path)
+        with cls._write_lock:
+            if not os.path.exists(path):
+                return False
+            os.remove(path)
+            state = cls._read_state()
+            if state is not None and safe in state["images"]:
+                state["images"].remove(safe)
+                cls._write_state_locked(state)
         cls.invalidate_cache()
         return True
 

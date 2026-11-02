@@ -203,6 +203,12 @@
                   </template>
                 </v-checkbox>
                 <div v-if="f.tips" class="text-caption grey--text ml-8">{{ $t(f.tips) }}</div>
+                <div
+                  v-if="f.expand === 'cover_backgrounds' && settings[f.key]"
+                  class="mt-4 ml-8"
+                >
+                  <cover-background-manager />
+                </div>
               </template>
               <div
                 v-else-if="f.type === 'checkbox_list'"
@@ -1062,12 +1068,6 @@
             <template v-if="s.special === 'ssl'">
               <div class="pl-6">
               <ssl-manager />
-              </div>
-            </template>
-
-            <template v-if="s.special === 'cover_backgrounds'">
-              <div class="pl-6">
-                <cover-background-manager />
               </div>
             </template>
           </v-card-text>
@@ -2055,28 +2055,11 @@ export default {
                 ],
               },
               { icon: "mdi-sync", key: "ENABLE_DATA_SYNC", label: "settings.enable_data_sync", type: "checkbox" },
-              { icon: "mdi-image-sync-outline", key: "USE_DYNAMIC_COVER", label: "settings.use_dynamic_cover", type: "checkbox" },
+              { icon: "mdi-image-sync-outline", key: "USE_DYNAMIC_COVER", label: "settings.use_dynamic_cover", type: "checkbox", expand: "cover_backgrounds", al: ["封面背景", "背景图", "cover background"] },
               { icon: "mdi-face-man-outline", key: "ENABLE_AUTHOR_INFO", label: "settings.enable_author_info", type: "checkbox" },
               { icon: "mdi-chart-line", key: "ALLOW_USER_DISABLE_STATISTIC", label: "settings.allow_user_disable_statistic", type: "checkbox" },
               { icon: "mdi-note-multiple-outline", key: "ENABLE_SHARED_NOTES", label: "settings.enable_shared_notes", type: "checkbox", module: "shared_reading" },
             ],
-          },
-          {
-            id: "cover-background",
-            icon: "mdi-image-multiple-outline",
-            title: "settings.sec_cover_background",
-            desc: "settings.sec_cover_background_desc",
-            fields: [
-              {
-                icon: "mdi-image-sync-outline",
-                key: "USE_COVER_BACKGROUND",
-                label: "settings.use_cover_background",
-                type: "checkbox",
-                tips: "settings.use_cover_background_tips",
-                al: ["封面背景", "背景图", "cover background"],
-              },
-            ],
-            special: "cover_backgrounds",
           },
           {
             id: "site-cats",
