@@ -3086,7 +3086,7 @@ export default {
     searchQuery() {
       this.$nextTick(() => this.positionSegIndicator());
     },
-    searchOpen(val) {
+    searchOpen() {
       const run = () => this.positionSegIndicator();
       this.$nextTick(() => { run(); setTimeout(run, 260); });
     },
