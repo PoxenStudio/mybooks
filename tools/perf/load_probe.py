@@ -96,12 +96,12 @@ def candidate_book_ids(base, token, term="书", limit=60):
     except ValueError:
         pass
     if not ids:
-        status, _, body = fetch(base, "/api/index", token)
+        status, _, body = fetch(base, "/api/index/new", token)
         try:
             data = json.loads(body) if status == 200 else {}
         except ValueError:
             data = {}
-        ids = [b["id"] for key in ("new_books", "random_books") for b in data.get(key, []) if "id" in b]
+        ids = [b["id"] for b in data.get("new_books", []) if "id" in b]
     return ids
 
 
