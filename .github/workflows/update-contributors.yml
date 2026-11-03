@@ -1,0 +1,40 @@
+name: Update contributors image
+
+on:
+  push:
+    branches: [develop]
+  schedule:
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate contributors image
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python .github/scripts/generate_contributors.py
+
+      - name: Commit updated image
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add document/images/contributors.svg
+          if git diff --cached --quiet; then
+            echo "Contributors image is already up to date."
+            exit 0
+          fi
+          git commit -m "docs: update contributors image"
+          git push

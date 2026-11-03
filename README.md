@@ -46,6 +46,9 @@ MyBooks特性包括:
 ![architecture](document/architecture.png)
 
 
+## 贡献者
+[![MyBooks contributors](document/images/contributors.svg)](https://github.com/PoxenStudio/mybooks/graphs/contributors?from=2025-06-01)
+
 ### 致谢
 我们自2025年6月开始基于[talebook v25.06.26](https://github.com/talebook/talebook)开发，感谢Rex等几位朋友贡献的优秀项目和前后端框架，也要感谢Calibre项目提供了强大的电子书管理的核心功能。本项目仍然会坚持开源免费, 遵循项目的开源协议，期望能持续成为书友们的好帮手。
 
@@ -135,10 +138,6 @@ WebDAV URL地址: `http://<ip or domain>:<port>/books`
 手动安装请参考[开发者指南](document/Development.zh_CN.md)
 
 **再次声明！本项目没有维护任何公开的书库站点。**
-
-
-## 贡献者
-[![](https://contrib.rocks/image?repo=PoxenStudio/mybooks)](https://github.com/PoxenStudio/mybooks/graphs/contributors)
 
 
 ## 项目首页

@@ -273,6 +273,29 @@ class TestShouldBeLoggedIn(unittest.TestCase):
         self.assertEqual(handler.status, 401)
         self.assertTrue(handler.headers.get("WWW-Authenticate", "").startswith("Basic "))
 
+    def test_opds_acquisition_link_returns_401_not_json(self):
+        # OPDS 的下载直链挂在 /api/book/ 下，消费者是阅读器下载器：200 JSON 会被当成
+        # 下载成功，阅读器存下一个几十字节的假 epub，且因状态码是 200 不会重试凭据。
+        CONF["REQUIRE_LOGIN"] = True
+        handler = _bare_handler("/api/book/12.epub", uri="/api/book/12.epub?from=opds")
+        handler.get_argument = lambda name, default=None: "opds" if name == "from" else default
+        with self.assertRaises(web.Finish):
+            handler.should_be_logged_in()
+        self.assertEqual(handler.written, [])
+        self.assertEqual(handler.status, 401)
+        self.assertTrue(handler.headers.get("WWW-Authenticate", "").startswith("Basic "))
+
+    def test_plain_book_api_path_still_gets_need_login_json(self):
+        # 不带 from=opds 的 /api/book/*（前端 XHR）仍走 JSON 拦截，不改成 401 弹认证框
+        CONF["REQUIRE_LOGIN"] = True
+        handler = _bare_handler("/api/book/12.epub")
+        handler.parse_download_sign = lambda sign, bid, fmt: None
+        with self.assertRaises(web.Finish):
+            handler.should_be_logged_in()
+        self.assertEqual(handler.written[0]["err"], "user.need_login")
+        self.assertEqual(handler.status, 200)
+        self.assertEqual(handler.headers.get("WWW-Authenticate"), None)
+
     def test_valid_download_sign_passes(self):
         # formatter 给登录用户生成的 ?dl= 直链（10 秒、绑定用户+书+格式）：下载器没 cookie 也能用
         CONF["REQUIRE_LOGIN"] = True

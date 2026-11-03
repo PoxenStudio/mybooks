@@ -23,10 +23,16 @@ import os
 import threading
 from typing import Dict, Optional
 
-from sqlalchemy import func, text
+from sqlalchemy import exists, func, text
 
 from webserver import loader, site_time
-from webserver.models import BookReadingStats, Reader, Reading, ReadingState
+from webserver.models import (
+    READ_STATE_FINISHED,
+    BookReadingStats,
+    Reader,
+    Reading,
+    ReadingState,
+)
 
 CONF = loader.get_settings()
 
@@ -412,7 +418,22 @@ def _near_finish_rows(db, reader_id: int) -> list:
     必须先 GROUP BY 再 LIMIT：按格式行排序去重会让多格式的书以格式行数占坑、
     挤掉后面的书（实测 4 本×4 格式占满预取行，第 5 本被切）。total_seconds 取该
     本最高进度那一行，与旧实现的去重口径一致。
+
+    用户手动「标记读完」只写 reading_state.read_state，不碰分格式统计的 state
+    （后者要到进度 ≥99.5% 才自动完结），所以这里显式排除已标记读完的书；排除
+    必须发生在 LIMIT 之前，否则读完的书仍会占掉名额。用相关 NOT EXISTS 而不是
+    NOT IN 子查询：reading_state 只有 (book_id, reader_id) 主键、没有 reader_id
+    索引，NOT IN 会在每次请求里全表扫一遍已读集合。
+
+    两次查询不在同一事务快照里（SQLite 的 SELECT 不开事务），top 选出后到明细
+    查询之间可能有别的请求把书标记读完，所以明细查询要带同样的排除条件，最终
+    只保留仍有在读统计行的书。
     """
+    marked_finished = exists().where(
+        ReadingState.reader_id == reader_id,
+        ReadingState.book_id == BookReadingStats.book_id,
+        ReadingState.read_state == READ_STATE_FINISHED,
+    )
     top = (
         db.query(
             BookReadingStats.book_id,
@@ -422,6 +443,7 @@ def _near_finish_rows(db, reader_id: int) -> list:
             BookReadingStats.reader_id == reader_id,
             BookReadingStats.state == BookReadingStats.STATE_READING,
             BookReadingStats.progress_percent >= NEAR_FINISH_MIN_PERCENT,
+            ~marked_finished,
         )
         .group_by(BookReadingStats.book_id)
         .order_by(func.max(BookReadingStats.progress_percent).desc())
@@ -441,9 +463,11 @@ def _near_finish_rows(db, reader_id: int) -> list:
             BookReadingStats.reader_id == reader_id,
             BookReadingStats.state == BookReadingStats.STATE_READING,
             BookReadingStats.book_id.in_(list(max_by_book)),
+            ~marked_finished,
         )
         .all()
     )
+    still_reading = {row.book_id for row in detail}
     seconds_by_book: Dict[int, int] = {}
     for book_id, percent, total_seconds in detail:
         if book_id in seconds_by_book:
@@ -457,6 +481,7 @@ def _near_finish_rows(db, reader_id: int) -> list:
             "total_seconds": seconds_by_book.get(row.book_id, 0),
         }
         for row in top
+        if row.book_id in still_reading
     ]
 
 

@@ -625,13 +625,21 @@ class BaseHandler(web.RequestHandler):
             return False
         return BookAccessService.share_read_granted(self, book_id)
 
+    def is_opds_acquisition(self, path):
+        """OPDS 目录里的下载直链：形如 /api/book/<id>.<fmt>?from=opds（见 opds.py ACQUISITION_ENTRY）。"""
+        if not _SHARE_DOWNLOAD_PATH_RE.match(path):
+            return False
+        return self.get_argument("from", "") == "opds"
+
     def should_be_logged_in(self):
         """REQUIRE_LOGIN 开启时的登录门禁：未登录且路径不在放行名单 → 一律拦下。
 
         - /api/* 回 200 {"err": "user.need_login"}：前端 $backend 有该错误的统一跳转；
         - /get/* 回 401：消费者是 <img>、EPUB 解包器、下载器，200 JSON 会被当成资源解析；
-        - OPDS 回 401 + WWW-Authenticate：客户端靠这个头弹 Basic 认证，配了账号即可通过
-          （process_auth_header 已把 Basic 凭据换成 current_user），否则必须登录；
+        - OPDS 目录与 OPDS 下载直链回 401 + WWW-Authenticate：客户端靠这个头弹 Basic 认证，
+          配了账号即可通过（process_auth_header 已把 Basic 凭据换成 current_user），否则必须
+          登录。下载直链挂在 /api/book/ 下，必须排在 /api/ 那条之前判定，否则阅读器会收到
+          200 + JSON 并当成下载成功；
         - 其它页面（WAP 等）跳登录页，带上 next 便于回跳。
         放行时返回 False；拦下时不返回（写响应后 raise web.Finish）。
         """
@@ -660,7 +668,7 @@ class BaseHandler(web.RequestHandler):
                 bid, fmt = filename.split(".", 1)
                 if self.parse_download_sign(self.get_argument("dl", ""), bid, fmt):
                     return False
-        if path.startswith("/opds"):
+        if path.startswith("/opds") or self.is_opds_acquisition(path):
             self.set_header("WWW-Authenticate", 'Basic realm="MyBooks"')
             self.set_status(401)
             raise web.Finish()

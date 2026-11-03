@@ -1,11 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
-"""站点时区：把 UTC 时刻换算成「站点的一天」。
+"""站点时区：把时刻换算成「站点的一天」。
 
 阅读统计按天分桶（``readings.date``；书级 ``book_reading_stats`` 只有时刻列，判天时同样
-按站点时区现算），而库里所有时刻存的都是 UTC naive datetime。分桶用的日期必须落在站点时区上：UTC+8 的读者在北京时间 00:00~08:00
-的阅读，UTC 日期还停在前一天，会被记到前一天（跨天连击、热力图、今日时长全部跟着错），
-补录当天的阅读还会被判成「未来时间」。
+按站点时区现算）。库里涉及"天"的时刻有**三种坐标系**，换算前必须先认清是哪一种：
+
+- **UTC naive**：``readings.start_time/update_time``、``book_reading_stats.*_time``
+  （``utcnow()`` 写入）。用 ``site_date()`` / ``site_today()`` 换算成站点日。
+- **服务器本地 naive**：``reading_state.read_date/favorite_date/wants_date``
+  （``datetime.now()`` 写入）。要按站点时区切天/切月，用
+  ``site_day_start_server_local()`` / ``site_month_bounds_server_local()`` 把站点侧
+  的日界换算到这个坐标系再比较。
+- **站点时区的日期**：``readings.date`` 整列，写入时已按站点时区切好，读的时候不需要
+  再换算。
+
+分桶用的日期必须落在站点时区上：UTC+8 的读者在北京时间 00:00~07:59 的阅读，UTC 日期
+还停在前一天，会被记到前一天（跨天连击、热力图、今日时长全部跟着错），补录当天的阅读
+还会被判成「未来时间」。
 
 容器时区设成 Asia/Shanghai 也解决不了这个问题——分桶点是硬编码的 ``utcnow().date()``，
 跟 OS 时区无关。所以这里显式给出一份「站点的一天」的定义：
@@ -20,7 +31,7 @@
 
 import datetime
 import logging
-from typing import Optional
+from typing import Optional, Tuple
 
 from webserver import loader
 from webserver.i18n import detect_system_language, normalize_language
@@ -42,25 +53,42 @@ TIMEZONE_BY_LANGUAGE = {
 }
 FALLBACK_TIMEZONE = TIMEZONE_BY_LANGUAGE["zh"]
 
-# zoneinfo 取不到 tzdata 时的兜底（Windows 未装 tzdata / 精简镜像）：只覆盖设置页可选的
-# 常用时区，夏令时地区按标准时偏移折算，误差最多 1 小时，不会因为查不到库而退回 UTC
-# 把整个站点的日期算错 8 小时。
+# zoneinfo 取不到 tzdata 时的兜底（Windows 未装 tzdata / 精简镜像）：覆盖设置页可选的
+# 每个时区（含设置页已归并的旧选项，历史配置仍可能存着）。夏令时地区按标准时偏移折算，
+# 误差最多 1 小时，不会因为查不到库而退回 UTC 把整个站点的日期算错 8 小时。
 FALLBACK_UTC_OFFSETS = {
     "UTC": 0,
+    "Etc/GMT+12": -12,
+    "Pacific/Pago_Pago": -11,
+    "Pacific/Honolulu": -10,
+    "America/Anchorage": -9,
+    "America/Los_Angeles": -8,
+    "America/Denver": -7,
+    "America/Chicago": -6,
+    "America/New_York": -5,
+    "America/Santiago": -4,
+    "America/Sao_Paulo": -3,
+    "America/Noronha": -2,
+    "Atlantic/Azores": -1,
+    "Europe/London": 0,
+    "Europe/Berlin": 1,
+    "Europe/Athens": 2,
+    "Europe/Moscow": 3,
+    "Asia/Dubai": 4,
+    "Asia/Karachi": 5,
+    "Asia/Kolkata": 5.5,
+    "Asia/Dhaka": 6,
+    "Asia/Bangkok": 7,
     "Asia/Shanghai": 8,
+    "Asia/Tokyo": 9,
+    "Australia/Sydney": 10,
+    "Pacific/Noumea": 11,
+    "Pacific/Auckland": 12,
+    # 历史设置页选项（已归并到相邻城市，旧配置仍可能存着）
     "Asia/Hong_Kong": 8,
     "Asia/Taipei": 8,
     "Asia/Singapore": 8,
-    "Asia/Tokyo": 9,
     "Asia/Seoul": 9,
-    "Asia/Bangkok": 7,
-    "Asia/Kolkata": 5.5,
-    "Europe/Berlin": 1,
-    "Europe/London": 0,
-    "America/Sao_Paulo": -3,
-    "America/New_York": -5,
-    "America/Los_Angeles": -8,
-    "Australia/Sydney": 10,
 }
 
 # 名字在 FALLBACK_UTC_OFFSETS 之外、本机又取不到 tzdata 时的粗粒度兜底：按 IANA 名的
@@ -202,6 +230,38 @@ def site_today() -> datetime.date:
 def site_now() -> datetime.datetime:
     """站点时区下带 tzinfo 的当前时刻。"""
     return datetime.datetime.now(datetime.timezone.utc).astimezone(get_tzinfo())
+
+
+def site_day_start_server_local(
+    d: datetime.date, server_tz: Optional[datetime.tzinfo] = None
+) -> datetime.datetime:
+    """站点时区下某日 00:00，换算成「服务器本地 naive 时间」。
+
+    对应 ``reading_state.read_date`` 这类由 ``datetime.now()`` 写入的时刻列。要按站点
+    时区切天/切月，必须把站点侧的日界换算到这个坐标系再比较，否则容器时区与
+    ``site_timezone`` 不一致时，周期起点那一段会算到上一个周期。
+
+    ``server_tz`` 仅供测试注入固定的"服务器时区"；生产不传，按进程本地时区换算
+    （与 ``datetime.now()`` 同源）。
+    """
+    start = datetime.datetime.combine(d, datetime.time.min, tzinfo=get_tzinfo())
+    if server_tz is not None:
+        return start.astimezone(server_tz).replace(tzinfo=None)
+    return start.astimezone().replace(tzinfo=None)
+
+
+def site_month_bounds_server_local(
+    today: Optional[datetime.date] = None, server_tz: Optional[datetime.tzinfo] = None
+) -> Tuple[datetime.datetime, datetime.datetime]:
+    """站点时区下 ``today`` 所在自然月的 ``[月初, 下月初)``，换算成服务器本地 naive 时间。
+
+    与 ``site_day_start_server_local`` 同一坐标系，供按 ``read_date`` 这类"服务器本地
+    时刻列"做月份统计的查询使用（见 handlers/book.py 的阅读统计）。
+    """
+    today = today or site_today()
+    first = today.replace(day=1)
+    next_first = (first + datetime.timedelta(days=32)).replace(day=1)
+    return site_day_start_server_local(first, server_tz), site_day_start_server_local(next_first, server_tz)
 
 
 def timezone_label() -> str:

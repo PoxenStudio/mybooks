@@ -6,6 +6,8 @@
 """
 
 import datetime
+import os
+import time
 import unittest
 from unittest import mock
 
@@ -159,16 +161,82 @@ class TestSiteTime(unittest.TestCase):
 
     def test_missing_tzdata_uses_region_offset_for_names_outside_the_table(self):
         # 模拟精简镜像 / Windows 未装 tzdata：表外的 IANA 名按大区近似偏移（America/ → -5），
-        # 而不是退回站点语言默认（中文站 +8，与芝加哥差 14 小时）
-        self._set(timezone="America/Chicago", language="zh")
+        # 而不是退回站点语言默认（中文站 +8，与哈瓦那差 13 小时）
+        self._set(timezone="America/Havana", language="zh")
         with mock.patch.object(site_time, "ZoneInfo", None):
             self.assertEqual(site_time.site_now().utcoffset(), datetime.timedelta(hours=-5))
-            self.assertEqual(site_time.resolve_timezone_name(), "America/Chicago")
+            self.assertEqual(site_time.resolve_timezone_name(), "America/Havana")
 
     def test_misspelled_name_still_falls_back_to_the_language_default(self):
         # 本机有 tzdata 时，拼错的名字仍走语言默认，别被大区兜底吃掉（原名不能说成有效）
         self._set(timezone="Europe/Berlinn", language="zh")
         self.assertEqual(site_time.resolve_timezone_name(), "Asia/Shanghai")
+
+
+    # ---------- 站点日界 → 服务器本地时间（read_date 这类"服务器本地时刻列"的切月） ----------
+
+    def test_site_day_start_converts_to_server_local_time(self):
+        self._set(timezone="Asia/Shanghai", language="zh")
+        # 站点 2026-11-01 00:00 (+08) = UTC 2026-10-31 16:00；服务器时区按 UTC 注入
+        self.assertEqual(
+            site_time.site_day_start_server_local(datetime.date(2026, 11, 1), datetime.timezone.utc),
+            datetime.datetime(2026, 10, 31, 16, 0),
+        )
+        # 服务器本身也在东八区时，naive 值就是站点本地零点
+        self.assertEqual(
+            site_time.site_day_start_server_local(
+                datetime.date(2026, 11, 1), datetime.timezone(datetime.timedelta(hours=8))
+            ),
+            datetime.datetime(2026, 11, 1, 0, 0),
+        )
+
+    def test_site_day_start_handles_negative_offsets(self):
+        self._set(timezone="America/Sao_Paulo", language="en")
+        # 站点 2026-11-01 00:00 (-03) = UTC 2026-11-01 03:00
+        self.assertEqual(
+            site_time.site_day_start_server_local(datetime.date(2026, 11, 1), datetime.timezone.utc),
+            datetime.datetime(2026, 11, 1, 3, 0),
+        )
+
+    @unittest.skipUnless(hasattr(time, "tzset"), "tzset 仅 POSIX")
+    def test_site_day_start_uses_process_timezone_by_default(self):
+        """不注入 server_tz 时走 astimezone()——这是生产唯一实际执行的路径。
+
+        CI 默认跑在 UTC，光靠注入 server_tz 测不到它；这里用 TZ 环境变量把进程时区
+        改成东八区，让无参分支真正被执行一次。
+        """
+        self._set(timezone="Asia/Shanghai", language="zh")
+        orig_tz = os.environ.get("TZ")
+        os.environ["TZ"] = "Asia/Shanghai"
+        time.tzset()
+        try:
+            self.assertEqual(
+                site_time.site_day_start_server_local(datetime.date(2026, 11, 1)),
+                datetime.datetime(2026, 11, 1, 0, 0),
+            )
+        finally:
+            if orig_tz is None:
+                os.environ.pop("TZ", None)
+            else:
+                os.environ["TZ"] = orig_tz
+            time.tzset()
+
+    def test_site_month_bounds_cover_the_whole_site_month(self):
+        self._set(timezone="Asia/Shanghai", language="zh")
+        start, end = site_time.site_month_bounds_server_local(datetime.date(2026, 11, 15), datetime.timezone.utc)
+        self.assertEqual(start, datetime.datetime(2026, 10, 31, 16, 0))
+        self.assertEqual(end, datetime.datetime(2026, 11, 30, 16, 0))
+        # 东八区 11-01 00:30 标记"读完"，read_date 记作服务器本地时间 10-31 16:30
+        # （这里服务器时区=UTC；若服务器在东八区则是 11-01 00:30）。必须算在 11 月区间内；
+        # 旧实现 extract('month', read_date) 会把它判成 10 月。
+        read_date = datetime.datetime(2026, 10, 31, 16, 30)
+        self.assertTrue(start <= read_date < end)
+
+    def test_site_month_bounds_roll_over_the_year(self):
+        self._set(timezone="Asia/Shanghai", language="zh")
+        start, end = site_time.site_month_bounds_server_local(datetime.date(2026, 12, 20), datetime.timezone.utc)
+        self.assertEqual(start, datetime.datetime(2026, 11, 30, 16, 0))
+        self.assertEqual(end, datetime.datetime(2026, 12, 31, 16, 0))
 
 
 if __name__ == "__main__":

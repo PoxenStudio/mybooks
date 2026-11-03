@@ -1173,6 +1173,15 @@ import { normalizeHomepageConfig } from "~/utils/homepage";
 import { languageOptions } from "~/utils/languageCodes";
 import { isHexColor, DEFAULT_ACCENT } from "~/utils/appearance";
 
+// 已从设置页去掉的旧选项 → 等价选项：+8 的港/台/新加坡合并到北京，+9 的首尔合并到东京，
+// 偏移与夏令时规则完全一致。旧配置在加载时归一化，避免 select 匹配不到选项而显示空白。
+const LEGACY_TIMEZONE_VALUES = {
+  "Asia/Hong_Kong": "Asia/Shanghai",
+  "Asia/Taipei": "Asia/Shanghai",
+  "Asia/Singapore": "Asia/Shanghai",
+  "Asia/Seoul": "Asia/Tokyo",
+};
+
 const LITE_GROUPS = [
   "LITE_GROUP_LISTING",
   "LITE_GROUP_RECOMMEND",
@@ -1818,22 +1827,37 @@ export default {
                 key: "site_timezone",
                 label: "settings.site_timezone",
                 type: "select",
+                // 选项按 UTC 标准偏移排序；DST 地区仍存 IANA 城市时区，夏令时自动跟随，
+                // 数字表示该地区的标准偏移（如 +1 柏林，夏季实际 UTC+2）。
+                // Etc/GMT+12 是 IANA 的 UTC-12（Etc 区符号与偏移相反）。
                 items: [
                   { text: this.$t("settings.tz_auto"), value: "auto" },
-                  { text: this.$t("settings.tz_utc"), value: "UTC" },
-                  { text: this.$t("settings.tz_shanghai"), value: "Asia/Shanghai" },
-                  { text: this.$t("settings.tz_hongkong"), value: "Asia/Hong_Kong" },
-                  { text: this.$t("settings.tz_taipei"), value: "Asia/Taipei" },
-                  { text: this.$t("settings.tz_tokyo"), value: "Asia/Tokyo" },
-                  { text: this.$t("settings.tz_seoul"), value: "Asia/Seoul" },
-                  { text: this.$t("settings.tz_bangkok"), value: "Asia/Bangkok" },
-                  { text: this.$t("settings.tz_kolkata"), value: "Asia/Kolkata" },
-                  { text: this.$t("settings.tz_berlin"), value: "Europe/Berlin" },
-                  { text: this.$t("settings.tz_london"), value: "Europe/London" },
-                  { text: this.$t("settings.tz_saopaulo"), value: "America/Sao_Paulo" },
-                  { text: this.$t("settings.tz_newyork"), value: "America/New_York" },
-                  { text: this.$t("settings.tz_losangeles"), value: "America/Los_Angeles" },
-                  { text: this.$t("settings.tz_sydney"), value: "Australia/Sydney" },
+                  { text: this.$t("settings.tz_m12"), value: "Etc/GMT+12" },
+                  { text: this.$t("settings.tz_m11"), value: "Pacific/Pago_Pago" },
+                  { text: this.$t("settings.tz_m10"), value: "Pacific/Honolulu" },
+                  { text: this.$t("settings.tz_m9"), value: "America/Anchorage" },
+                  { text: this.$t("settings.tz_m8"), value: "America/Los_Angeles" },
+                  { text: this.$t("settings.tz_m7"), value: "America/Denver" },
+                  { text: this.$t("settings.tz_m6"), value: "America/Chicago" },
+                  { text: this.$t("settings.tz_m5"), value: "America/New_York" },
+                  { text: this.$t("settings.tz_m4"), value: "America/Santiago" },
+                  { text: this.$t("settings.tz_m3"), value: "America/Sao_Paulo" },
+                  { text: this.$t("settings.tz_m2"), value: "America/Noronha" },
+                  { text: this.$t("settings.tz_m1"), value: "Atlantic/Azores" },
+                  { text: this.$t("settings.tz_p0"), value: "Europe/London" },
+                  { text: this.$t("settings.tz_p1"), value: "Europe/Berlin" },
+                  { text: this.$t("settings.tz_p2"), value: "Europe/Athens" },
+                  { text: this.$t("settings.tz_p3"), value: "Europe/Moscow" },
+                  { text: this.$t("settings.tz_p4"), value: "Asia/Dubai" },
+                  { text: this.$t("settings.tz_p5"), value: "Asia/Karachi" },
+                  { text: this.$t("settings.tz_p0530"), value: "Asia/Kolkata" },
+                  { text: this.$t("settings.tz_p6"), value: "Asia/Dhaka" },
+                  { text: this.$t("settings.tz_p7"), value: "Asia/Bangkok" },
+                  { text: this.$t("settings.tz_p8"), value: "Asia/Shanghai" },
+                  { text: this.$t("settings.tz_p9"), value: "Asia/Tokyo" },
+                  { text: this.$t("settings.tz_p10"), value: "Australia/Sydney" },
+                  { text: this.$t("settings.tz_p11"), value: "Pacific/Noumea" },
+                  { text: this.$t("settings.tz_p12"), value: "Pacific/Auckland" },
                 ],
               },
               {
@@ -2697,7 +2721,14 @@ export default {
         // 老 auto.py 里没有这一项：空值等于「跟随站点语言」，落到 select 上会显示空白
         if (!this.settings["site_timezone"]) {
           this.$set(this.settings, "site_timezone", "auto");
+        } else if (LEGACY_TIMEZONE_VALUES[this.settings["site_timezone"]]) {
+          this.$set(
+            this.settings,
+            "site_timezone",
+            LEGACY_TIMEZONE_VALUES[this.settings["site_timezone"]]
+          );
         }
+        this.ensureTimezoneOptionVisible();
         if (
           !("site_icon" in this.settings) ||
           this.settings["site_icon"] === ""
@@ -3308,6 +3339,23 @@ export default {
         seed("SOCIAL_AUTH_" + v + "_KEY", "text");
         seed("SOCIAL_AUTH_" + v + "_SECRET", "text");
       });
+    },
+    // 旧配置里的 UTC 或手工填写的 IANA 名不在新选项表里：补一条同样的选项，
+    // 否则 select 匹配不到值会显示空白，用户会以为设置丢了
+    ensureTimezoneOptionVisible() {
+      const value = this.settings && this.settings["site_timezone"];
+      if (!value) return;
+      let field = null;
+      this.groups.forEach((g) => {
+        g.sections.forEach((s) => {
+          (s.fields || []).forEach((f) => {
+            if (f.key === "site_timezone") field = f;
+          });
+        });
+      });
+      if (field && !field.items.some((item) => item.value === value)) {
+        this.$set(field, "items", field.items.concat([{ text: value, value }]));
+      }
     },
     // 全局 AppHeader 由 store.nav 的 v-if 控制渲染，可能晚于本页 mounted；出现后按其真实高度校准吸顶偏移
     watchAppBar() {

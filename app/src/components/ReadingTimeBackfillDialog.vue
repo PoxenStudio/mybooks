@@ -53,6 +53,8 @@
 </template>
 
 <script>
+import { siteTodayStr } from "~/utils/siteTime";
+
 const MAX_MINUTES = 18 * 60;
 
 function toMinutes(hhmm) {
@@ -89,7 +91,12 @@ export default {
     },
     computed: {
         today() {
-            return new Date().toISOString().slice(0, 10);
+            // 站点时区的今天：补录日期上限由服务端按站点时区判定
+            // （webserver/handlers/book.py 的 site_time.site_today()），前端默认值必须
+            // 同一口径。toISOString() 取的是 UTC 日——东八区凌晨会默认成昨天，西半球
+            // 晚上会默认成明天并被服务端「不能补录未来」拒收。
+            const sys = this.$store.state.sys;
+            return siteTodayStr((sys && sys.timezone) || "");
         },
         dateRecordedMinutes() {
             return Math.round(this.dateRecordedSeconds / 60);
