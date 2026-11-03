@@ -433,7 +433,9 @@ def make_app():
     })
 
     is_upgrade = CONF.get("installed_version", "") != VERSION
-    logging.info(f"The installed version is {CONF.get("installed_version", "NONE")}, {"" if is_upgrade else "no"} need to check or upgrade table structure.")
+    installed_version = CONF.get("installed_version", "NONE")
+    upgrade_status = "" if is_upgrade else "no"
+    logging.info(f"The installed version is {installed_version}, {upgrade_status} need to check or upgrade table structure.")
     need_sync_item_time = AsyncService().setup(book_db, ScopedSession, need_check_db=is_upgrade)
     if is_upgrade and CONF.get("installed", False):
         logging.info("Need to save the setting for initialized version")
