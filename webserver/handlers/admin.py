@@ -884,7 +884,8 @@ class AdminBookList(BaseHandler):
             % (num, page, sort, desc, book_type)
         )
         if book_type >= 0 and book_type <= BOOK_TYPE_PHYSICAL:
-            book_type_query = f"{"not" if book_type == BOOK_TYPE_EBOOK else ""} {CALIBRE_COLUMN_BOOK_TYPE}:={BOOK_TYPE_PHYSICAL}"
+            book_type_prefix = "not" if book_type == BOOK_TYPE_EBOOK else ""
+            book_type_query = f"{book_type_prefix} {CALIBRE_COLUMN_BOOK_TYPE}:={BOOK_TYPE_PHYSICAL}"
             if search:
                 search = f"({search}) AND {book_type_query}"
             else:
