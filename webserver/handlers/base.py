@@ -459,11 +459,11 @@ class BaseHandler(web.RequestHandler):
         if not feature_modules.module_enabled(feature_modules.MODULE_MULTIUSER):
             allow_register = False
         share_link = CONF.get("ENABLE_SHARE_LINK", True)
-        if not community:
+        if not shared_reading:
             share_link = False
         book_review = CONF.get("ENABLE_BOOK_REVIEW", True) and shared_reading
         book_recommend = CONF.get("ENABLE_BOOK_RECOMMEND_TO_OTHERS", True) and shared_reading
-        shared_notes = CONF.get("ENABLE_SHARED_NOTES", True) and community
+        shared_notes = CONF.get("ENABLE_SHARED_NOTES", True) and shared_reading
         return {
             "register": allow_register,
             "require_login": require_login,
@@ -1868,9 +1868,9 @@ class BaseHandler(web.RequestHandler):
 
     def _build_friends_with_favicon(self):
         """构建带有 favicon 图标信息的友情链接列表"""
-        # 友情链接属于社区互动模块：关闭时不下发（入口由 sys.friends 是否为空决定），
+        # 友情链接属于共享阅读模块：关闭时不下发（入口由 sys.friends 是否为空决定），
         # 也省掉一轮 favicon 抓取
-        if not feature_modules.module_enabled(feature_modules.MODULE_COMMUNITY):
+        if not feature_modules.module_enabled(feature_modules.MODULE_SHARED_READING):
             return []
         friends = CONF.get("FRIENDS", [])
         result = []

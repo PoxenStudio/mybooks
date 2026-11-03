@@ -39,9 +39,9 @@ class BookAccessService:
 
     @staticmethod
     def share_link_enabled() -> bool:
-        """分享链接功能总开关；社区互动关闭时一并失效。"""
+        """分享链接功能总开关；共享阅读关闭时一并失效。"""
         return bool(CONF.get("ENABLE_SHARE_LINK", True)) and (
-            feature_modules.module_enabled(feature_modules.MODULE_COMMUNITY)
+            feature_modules.module_enabled(feature_modules.MODULE_SHARED_READING)
         )
 
     @staticmethod

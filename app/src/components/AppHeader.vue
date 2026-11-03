@@ -714,7 +714,7 @@ export default {
                 .concat(this.user.is_login && this.moduleOn("shared_reading") && showItem("booklists") ? booklistLinks: [])
                 .concat(navLinks)
                 .concat(this.moduleOn("community") && this.sys.allow.user_memos ? memoLink : [])
-                .concat(this.moduleOn("community") && showItem("friends") && this.sys.friends.length > 0 ? friendLinks : [])
+                .concat(this.moduleOn("shared_reading") && showItem("friends") && this.sys.friends.length > 0 ? friendLinks : [])
         },
     },
     mounted() {

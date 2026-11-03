@@ -214,7 +214,7 @@ class MyReaderSyncService:
         accepted tradeoff (see plan §4.3).
         """
         if not CONF.get("ENABLE_SHARED_NOTES", True) or not feature_modules.module_enabled(
-            feature_modules.MODULE_COMMUNITY
+            feature_modules.MODULE_SHARED_READING
         ):
             return []
         book_id = parse_book_id_from_reading_record_hash(book_hash)

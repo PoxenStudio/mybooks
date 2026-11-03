@@ -10,7 +10,7 @@ import logging
 import tornado.escape
 
 from webserver import loader
-from webserver.base.modules import MODULE_COMMUNITY, ModuleGateMixin
+from webserver.base.modules import MODULE_SHARED_READING, ModuleGateMixin
 from webserver.base.formatter import BookFormatter
 from webserver.handlers.base import BaseHandler, is_admin, js
 from webserver.i18n import _
@@ -60,7 +60,7 @@ class ShareHandlerMixin:
 
 
 class AdminBookShareHandler(ModuleGateMixin, BaseHandler, ShareHandlerMixin):
-    module_id = MODULE_COMMUNITY
+    module_id = MODULE_SHARED_READING
 
     @js
     @is_admin
@@ -97,7 +97,7 @@ class AdminBookShareHandler(ModuleGateMixin, BaseHandler, ShareHandlerMixin):
 
 
 class AdminShareCancelHandler(ModuleGateMixin, BaseHandler, ShareHandlerMixin):
-    module_id = MODULE_COMMUNITY
+    module_id = MODULE_SHARED_READING
 
     @js
     @is_admin
@@ -108,7 +108,7 @@ class AdminShareCancelHandler(ModuleGateMixin, BaseHandler, ShareHandlerMixin):
 
 
 class AdminShareDeleteHandler(ModuleGateMixin, BaseHandler, ShareHandlerMixin):
-    module_id = MODULE_COMMUNITY
+    module_id = MODULE_SHARED_READING
 
     @js
     @is_admin
@@ -119,7 +119,7 @@ class AdminShareDeleteHandler(ModuleGateMixin, BaseHandler, ShareHandlerMixin):
 
 
 class AdminShareListHandler(ModuleGateMixin, BaseHandler, ShareHandlerMixin):
-    module_id = MODULE_COMMUNITY
+    module_id = MODULE_SHARED_READING
 
     @js
     @is_admin
@@ -137,7 +137,7 @@ class AdminShareListHandler(ModuleGateMixin, BaseHandler, ShareHandlerMixin):
 
 
 class ShareInfoHandler(ModuleGateMixin, BaseHandler, ShareHandlerMixin):
-    module_id = MODULE_COMMUNITY
+    module_id = MODULE_SHARED_READING
     # 公开分享接口：模块关闭时回 404，避免前端把 JSON 错误当成分享信息。
     module_gate_json = False
 

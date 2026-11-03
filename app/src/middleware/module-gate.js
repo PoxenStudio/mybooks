@@ -27,11 +27,7 @@ const ROUTE_MODULES = [
             path === "/expected" ||
             path.startsWith("/expected/") ||
             path === "/admin/all-expected" ||
-            path.startsWith("/admin/all-expected/") ||
-            path === "/admin/shares" ||
-            path.startsWith("/admin/shares/") ||
-            path === "/s" ||
-            path.startsWith("/s/"),
+            path.startsWith("/admin/all-expected/"),
     },
     {
         id: "shared_reading",
@@ -41,7 +37,11 @@ const ROUTE_MODULES = [
             path === "/booklist" ||
             path.startsWith("/booklist/") ||
             path === "/admin/book-reviews" ||
-            path.startsWith("/admin/book-reviews/"),
+            path.startsWith("/admin/book-reviews/") ||
+            path === "/admin/shares" ||
+            path.startsWith("/admin/shares/") ||
+            path === "/s" ||
+            path.startsWith("/s/"),
     },
     {
         id: "audio",

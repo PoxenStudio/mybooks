@@ -208,13 +208,10 @@ class TestApplyModuleSwitchEffects(unittest.TestCase):
         apply_module_switch_effects(
             args, {"ENABLE_MODULE_COMMUNITY": True}
         )
-        for key in (
-            "ENABLE_USER_MEMOS",
-            "ENABLE_SHARE_LINK",
-            "ENABLE_SHARED_NOTES",
-        ):
-            self.assertFalse(args[key], key)
-        # 推荐/书评归共享阅读，不随社区关闭
+        self.assertFalse(args["ENABLE_USER_MEMOS"])
+        # 分享链接/共享笔记/推荐/书评归共享阅读，不随社区关闭
+        self.assertTrue(args["ENABLE_SHARE_LINK"])
+        self.assertTrue(args["ENABLE_SHARED_NOTES"])
         self.assertTrue(args["RECOMMEND_ENABLE"])
         self.assertTrue(args["ENABLE_BOOK_REVIEW"])
         self.assertEqual(args["HOMEPAGE_CONFIG"], {"order": []})
@@ -226,6 +223,7 @@ class TestApplyModuleSwitchEffects(unittest.TestCase):
             "RECOMMEND_ENABLE": True,
             "ENABLE_BOOK_REVIEW": True,
             "ENABLE_SHARE_LINK": True,
+            "ENABLE_SHARED_NOTES": True,
             "ENABLE_USER_MEMOS": True,
             "HOMEPAGE_CONFIG": {"order": []},
         }
@@ -234,8 +232,9 @@ class TestApplyModuleSwitchEffects(unittest.TestCase):
         )
         self.assertFalse(args["RECOMMEND_ENABLE"])
         self.assertFalse(args["ENABLE_BOOK_REVIEW"])
-        # 社区开关不随共享阅读关闭
-        self.assertTrue(args["ENABLE_SHARE_LINK"])
+        self.assertFalse(args["ENABLE_SHARE_LINK"])
+        self.assertFalse(args["ENABLE_SHARED_NOTES"])
+        # 留言归社区互动，不随共享阅读关闭
         self.assertTrue(args["ENABLE_USER_MEMOS"])
         self.assertEqual(args["HOMEPAGE_CONFIG"], {"order": []})
 
@@ -250,21 +249,26 @@ class TestApplyModuleSwitchEffects(unittest.TestCase):
             args, {"ENABLE_MODULE_COMMUNITY": False}
         )
         self.assertTrue(args["ENABLE_USER_MEMOS"])
-        self.assertTrue(args["ENABLE_SHARED_NOTES"])
-        # 分享链接是访问控制，不自动恢复
+        # 分享链接/共享笔记归共享阅读，社区重开不碰
         self.assertFalse(args["ENABLE_SHARE_LINK"])
+        self.assertFalse(args["ENABLE_SHARED_NOTES"])
 
     def test_shared_reading_on_restores_review_and_recommend(self):
         args = {
             "ENABLE_MODULE_SHARED_READING": True,
             "RECOMMEND_ENABLE": False,
             "ENABLE_BOOK_REVIEW": False,
+            "ENABLE_SHARED_NOTES": False,
+            "ENABLE_SHARE_LINK": False,
         }
         apply_module_switch_effects(
             args, {"ENABLE_MODULE_SHARED_READING": False}
         )
         self.assertTrue(args["RECOMMEND_ENABLE"])
         self.assertTrue(args["ENABLE_BOOK_REVIEW"])
+        self.assertTrue(args["ENABLE_SHARED_NOTES"])
+        # 分享链接归共享阅读，随模块重开一起恢复
+        self.assertTrue(args["ENABLE_SHARE_LINK"])
 
     def test_audio_off_has_no_safe_defaults(self):
         args = {"ENABLE_MODULE_AUDIO": False, "ENABLE_PODCAST_SERVICE": True}
@@ -461,13 +465,13 @@ class TestRoutesAreGated(unittest.TestCase):
                 self.assertTrue(issubclass(handler, ModuleGateMixin), pattern)
                 self.assertEqual(handler.module_id, MODULE_SHARED_READING, pattern)
 
-    def test_share_routes_use_community(self):
+    def test_share_routes_use_shared_reading(self):
         from webserver.handlers import share
 
         for pattern, handler in share.routes():
             with self.subTest(route=pattern):
                 self.assertTrue(issubclass(handler, ModuleGateMixin), pattern)
-                self.assertEqual(handler.module_id, MODULE_COMMUNITY, pattern)
+                self.assertEqual(handler.module_id, MODULE_SHARED_READING, pattern)
         self.assertFalse(share.ShareInfoHandler.module_gate_json)
 
     def test_user_module_routes(self):

@@ -8,8 +8,9 @@
 2. 入口隐藏、接口拒绝；
 3. 设置区块/字段不渲染。
 
-模块从关到开时只恢复主功能开关（``MODULE_ON_SWITCHES``），不恢复访问控制类
-（必须登录、访客权限、注册、分享链接），避免重开模块把私人站点重新暴露。
+模块从关到开时只恢复主功能开关（``MODULE_ON_SWITCHES``），不恢复多用户的访问控制类
+（必须登录、访客权限、注册），避免重开模块把私人站点重新暴露；分享链接归共享阅读，
+随共享阅读重开一起恢复。
 
 设计取舍：
 
@@ -88,12 +89,12 @@ MODULE_OFF_SWITCHES = {
     },
     MODULE_COMMUNITY: {
         "ENABLE_USER_MEMOS": False,
-        "ENABLE_SHARE_LINK": False,
-        "ENABLE_SHARED_NOTES": False,
     },
     MODULE_SHARED_READING: {
         "RECOMMEND_ENABLE": False,
         "ENABLE_BOOK_REVIEW": False,
+        "ENABLE_SHARE_LINK": False,
+        "ENABLE_SHARED_NOTES": False,
     },
     # 有声书没有单一主开关：模块闸门负责入口与接口，播客/字幕等子开关保持原值。
     MODULE_AUDIO: {},
@@ -106,20 +107,22 @@ MODULE_OFF_SWITCHES = {
     },
 }
 
-# 模块从关到开时恢复的主功能开关。访问控制类（访客权限/注册/分享链接）有意不在此表：
+# 模块从关到开时恢复的主功能开关。多用户的访问控制类（访客权限/注册）有意不在此表：
 # 重开模块不能把私人站点重新变成访客可读。唯一例外是 REQUIRE_LOGIN——开启多用户时把它
-# 钉回 True（更安全的一侧），管理员想开访客阅读再手动取消勾选。
+# 钉回 True（更安全的一侧），管理员想开访客阅读再手动取消勾选。分享链接归共享阅读，
+# 重开共享阅读时一并恢复。
 MODULE_ON_SWITCHES = {
     MODULE_MULTIUSER: {
         "REQUIRE_LOGIN": True,
     },
     MODULE_COMMUNITY: {
         "ENABLE_USER_MEMOS": True,
-        "ENABLE_SHARED_NOTES": True,
     },
     MODULE_SHARED_READING: {
         "RECOMMEND_ENABLE": True,
         "ENABLE_BOOK_REVIEW": True,
+        "ENABLE_SHARE_LINK": True,
+        "ENABLE_SHARED_NOTES": True,
     },
     MODULE_AUDIO: {},
     MODULE_PHYSICAL: {

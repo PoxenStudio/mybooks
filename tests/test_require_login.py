@@ -694,7 +694,7 @@ class TestAllowFlags(unittest.TestCase):
         self.assertTrue(flags["require_login"])
         for key in ("read", "download", "push", "upload"):
             self.assertFalse(flags[key], key)
-        # 分享链接归社区互动，不随多用户关闭
+        # 分享链接归共享阅读，不随多用户关闭
         self.assertTrue(flags["share_link"])
 
     def test_community_off_degrades_interaction_flags(self):
@@ -705,20 +705,25 @@ class TestAllowFlags(unittest.TestCase):
         CONF["ENABLE_SHARED_NOTES"] = True
         CONF["ENABLE_SHARE_LINK"] = True
         flags = _bare_handler("/").allow_flags()
-        # 书评/推荐归共享阅读，不随社区关闭
+        # 书评/推荐/分享链接/共享笔记归共享阅读，不随社区关闭
         self.assertTrue(flags["book_review"])
         self.assertTrue(flags["book_recommend"])
-        self.assertFalse(flags["shared_notes"])
-        self.assertFalse(flags["share_link"])
+        self.assertTrue(flags["shared_notes"])
+        self.assertTrue(flags["share_link"])
+        self.assertFalse(flags["user_memos"])
 
     def test_shared_reading_off_degrades_review_flags(self):
         CONF["ENABLE_MODULE_MULTIUSER"] = True
         CONF["ENABLE_MODULE_SHARED_READING"] = False
         CONF["ENABLE_BOOK_REVIEW"] = True
         CONF["ENABLE_BOOK_RECOMMEND_TO_OTHERS"] = True
+        CONF["ENABLE_SHARED_NOTES"] = True
+        CONF["ENABLE_SHARE_LINK"] = True
         flags = _bare_handler("/").allow_flags()
         self.assertFalse(flags["book_review"])
         self.assertFalse(flags["book_recommend"])
+        self.assertFalse(flags["shared_notes"])
+        self.assertFalse(flags["share_link"])
 
 
 if __name__ == "__main__":

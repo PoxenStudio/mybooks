@@ -107,17 +107,17 @@ class TestBookAccessService(unittest.TestCase):
             self.assertFalse(BookAccessService.guest_download_allowed(NoCookieHandler(), 1))
             self.assertFalse(BookAccessService.guest_upload_allowed())
             self.assertFalse(BookAccessService.guest_push_allowed())
-            # 分享链接归社区互动，不随多用户关闭
+            # 分享链接归共享阅读，不随多用户关闭
             self.assertTrue(BookAccessService.share_link_enabled())
         with mock.patch.dict(book_access_service.CONF, conf, clear=False), \
                 mock.patch.object(BookShareService, "granted_share", return_value=share):
             self.assertTrue(BookAccessService.share_read_granted(NoCookieHandler(), 1))
             self.assertTrue(BookAccessService.share_download_granted(NoCookieHandler(), 1))
 
-    def test_community_off_closes_share(self):
+    def test_shared_reading_off_closes_share(self):
         share = mock.Mock(allow_read=True, allow_download=True)
         conf = {
-            "ENABLE_MODULE_COMMUNITY": False,
+            "ENABLE_MODULE_SHARED_READING": False,
             "ENABLE_SHARE_LINK": True,
         }
         with mock.patch.dict(book_access_service.CONF, conf, clear=False), \
@@ -125,6 +125,14 @@ class TestBookAccessService(unittest.TestCase):
             self.assertFalse(BookAccessService.share_link_enabled())
             self.assertFalse(BookAccessService.share_read_granted(NoCookieHandler(), 1))
             self.assertFalse(BookAccessService.share_download_granted(NoCookieHandler(), 1))
+
+    def test_community_off_keeps_share(self):
+        conf = {
+            "ENABLE_MODULE_COMMUNITY": False,
+            "ENABLE_SHARE_LINK": True,
+        }
+        with mock.patch.dict(book_access_service.CONF, conf, clear=False):
+            self.assertTrue(BookAccessService.share_link_enabled())
 
     def test_share_link_flag_disables_existing_grants(self):
         share = mock.Mock(allow_read=True, allow_download=True)
