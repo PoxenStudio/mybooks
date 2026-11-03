@@ -679,9 +679,10 @@ class BaseHandler(web.RequestHandler):
                 bid, fmt = filename.split(".", 1)
                 if self.parse_download_sign(self.get_argument("dl", ""), bid, fmt):
                     return False
-        # OPDS 匿名模式：feed 里的封面/缩略图带 from=opds，允许匿名取图；
-        # 只放行 /get/，书籍正文/下载仍走各自的授权检查。
-        if path.startswith("/get/") and self.get_argument("from", "") == "opds":
+        # OPDS 匿名模式：feed 里的封面/缩略图带 from=opds，允许匿名取图。
+        # 只放行封面/缩略图本身；/get/extract（正文）、/get/progress（转换日志）、
+        # /get/tool 等仍按各自授权或登录闸处理，不能靠一个参数整段放行。
+        if self.get_argument("from", "") == "opds" and _SHARE_COVER_PATH_RE.match(path):
             if feature_modules.opds_anonymous_allowed(CONF):
                 return False
         if path.startswith("/opds") or self.is_opds_acquisition(path):

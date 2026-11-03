@@ -630,6 +630,8 @@ class TestOpdsAnonymousDownload(unittest.TestCase):
         handler.login_by_download_sign = mock.Mock()
         handler.send_error_of_not_invited = mock.Mock()
         handler.redirect = mock.Mock()
+        handler.sqlite_session = mock.Mock()
+        handler.sqlite_session.query.return_value.filter.return_value.first.return_value = None
         with mock.patch("webserver.handlers.book.BaseHandler.prepare", return_value=None):
             with mock.patch.object(
                 BookAccessService, "guest_download_allowed", return_value=False
@@ -640,3 +642,40 @@ class TestOpdsAnonymousDownload(unittest.TestCase):
                     BookDownload.prepare(handler)
         handler.login_by_download_sign.assert_not_called()
         handler.send_error_of_not_invited.assert_not_called()
+
+    def test_prepare_rejects_sole_book_for_anonymous_opds(self):
+        from tornado import web
+
+        try:
+            from webserver.handlers.book import BookDownload
+        except ImportError as exc:
+            self.skipTest("book 路由需要 calibre：%s" % exc)
+
+        handler = object.__new__(BookDownload)
+        handler.current_user = None
+        handler.is_opds = True
+        handler.requested_book_id = lambda: 12
+        handler.login_by_download_sign = mock.Mock()
+        handler.sqlite_session = mock.Mock()
+        handler.sqlite_session.query.return_value.filter.return_value.first.return_value = object()
+        with mock.patch("webserver.handlers.book.BaseHandler.prepare", return_value=None), \
+                mock.patch.object(modules_module, "opds_anonymous_allowed", return_value=True):
+            with self.assertRaises(web.HTTPError) as ctx:
+                BookDownload.prepare(handler)
+        self.assertEqual(ctx.exception.status_code, 404)
+
+    def test_prepare_rejects_when_opds_service_off(self):
+        from tornado import web
+
+        try:
+            from webserver.handlers.book import BookDownload
+        except ImportError as exc:
+            self.skipTest("book 路由需要 calibre：%s" % exc)
+
+        handler = object.__new__(BookDownload)
+        handler.is_opds = True
+        with mock.patch("webserver.handlers.book.BaseHandler.prepare", return_value=None), \
+                mock.patch.dict("webserver.handlers.book.CONF", {"ENABLE_OPDS_SERVICE": False}):
+            with self.assertRaises(web.HTTPError) as ctx:
+                BookDownload.prepare(handler)
+        self.assertEqual(ctx.exception.status_code, 404)

@@ -2378,11 +2378,17 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
 
     def prepare(self):
         BaseHandler.prepare(self)
+        # OPDS 服务关闭后，带 from=opds 的旧直链也一并失效，避免绕过开关继续下载。
+        if self.is_opds and not CONF.get("ENABLE_OPDS_SERVICE", True):
+            raise web.HTTPError(404, reason="OPDS service is not enabled")
         bid = self.requested_book_id()
         if not self.current_user and not BookAccessService.guest_download_allowed(self, bid):
             # OPDS 匿名模式：目录和 acquisition 链接都绕过了站点级必须登录，
             # 下载不能再用 guest_download_allowed 把人挡回去；匿名开关优先于 OPDS 认证项。
+            # 私藏（sole）书籍不在 OPDS 目录里，也不允许匿名按 id 直接下载。
             if self.is_opds and feature_modules.opds_anonymous_allowed(CONF):
+                if self._is_sole_book(bid):
+                    raise web.HTTPError(404, reason=_("书籍不存在"))
                 return
             self.login_by_download_sign()
         if not self.current_user and not BookAccessService.guest_download_allowed(self, bid):
@@ -2397,6 +2403,12 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
                     raise web.HTTPError(403, reason=_("无权操作，请先登录注册邮箱激活账号。"))
             else:
                 raise web.HTTPError(403, reason=_("无权操作"))
+
+    def _is_sole_book(self, bid):
+        if not bid:
+            return False
+        row = self.sqlite_session.query(Item).filter(Item.book_id == bid, Item.sole == 1).first()
+        return row is not None
 
     def requested_book_id(self):
         try:

@@ -1609,7 +1609,7 @@ const SEARCH_ALIASES = {
     // Site & Appearance · home & listing
     random: ["MAIN_PAGE_RANDOM_COUNT"], shuffle: ["MAIN_PAGE_RANDOM_COUNT"],
     recommend: ["RECOMMEND_ENABLE", "RECOMMEND_USE_CROWD", "ENABLE_BOOK_RECOMMEND_TO_OTHERS", "MAIN_PAGE_RANDOM_COUNT", "HOMEPAGE_CONFIG"], recommendation: ["RECOMMEND_ENABLE"], recommendations: ["RECOMMEND_ENABLE"], smart: ["RECOMMEND_ENABLE"], recommender: ["RECOMMEND_ENABLE"],
-    crowd: ["RECOMMEND_USE_CROWD"], collaborative: ["RECOMMEND_USE_CROWD"], "other users": ["RECOMMEND_USE_CROWD"], community: ["RECOMMEND_USE_CROWD"],
+    crowd: ["RECOMMEND_USE_CROWD"], collaborative: ["RECOMMEND_USE_CROWD"], "other users": ["RECOMMEND_USE_CROWD"], community: ["ENABLE_USER_MEMOS", "FRIENDS", "ENABLE_SHARE_LINK", "ENABLE_SHARED_NOTES"],
     recent: ["MAIN_PAGE_RECENT_COUNT"], latest: ["MAIN_PAGE_RECENT_COUNT"], newest: ["MAIN_PAGE_RECENT_COUNT"], "new books": ["MAIN_PAGE_RECENT_COUNT", "SEND_MAIL_FOR_NEW_BOOKS"],
     pagination: ["DEFAULT_PAGE_SIZE"], "page size": ["DEFAULT_PAGE_SIZE"], "per page": ["DEFAULT_PAGE_SIZE"], "items per page": ["DEFAULT_PAGE_SIZE"],
     sidebar: ["SIDEBAR_ITEMS"], menu: ["SIDEBAR_ITEMS"], navigation: ["SIDEBAR_ITEMS"], nav: ["SIDEBAR_ITEMS", "BOOK_NAV"],

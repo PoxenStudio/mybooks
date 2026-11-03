@@ -568,7 +568,6 @@ export default {
             }
             this.loading = true;
             // 本次导入的书籍全部设为私藏，作用于本次运行的所有导入形态（全部/勾选/状态筛选/按目录）
-            // 社区模块关闭时复选框已隐藏，这里兜底不把残留的 true 发出去
             return this.$backend("/admin/import/run", {
                 method: "POST",
                 body: JSON.stringify(Object.assign({ sole: this.importSole }, payload)),

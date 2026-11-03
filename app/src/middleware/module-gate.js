@@ -29,7 +29,9 @@ const ROUTE_MODULES = [
             path === "/admin/all-expected" ||
             path.startsWith("/admin/all-expected/") ||
             path === "/admin/shares" ||
-            path.startsWith("/admin/shares/"),
+            path.startsWith("/admin/shares/") ||
+            path === "/s" ||
+            path.startsWith("/s/"),
     },
     {
         id: "shared_reading",

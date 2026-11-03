@@ -247,6 +247,25 @@ class TestShouldBeLoggedIn(unittest.TestCase):
             handler.should_be_logged_in()
         self.assertEqual(handler.status, 401)
 
+    def test_opds_anonymous_only_bypasses_covers(self):
+        # 匿名 OPDS 只放行 feed 里的封面/缩略图；正文、转换日志、工具资源不能靠同一参数绕过登录
+        CONF["REQUIRE_LOGIN"] = True
+        CONF["ENABLE_MODULE_MULTIUSER"] = True
+        CONF["OPDS_ALLOW_ANONYMOUS"] = True
+        CONF["ENABLE_OPDS_AUTH"] = False
+
+        for allow_path in ("/get/cover/12.jpg", "/get/thumb_240_320/12.jpg"):
+            handler = _bare_handler(allow_path, uri=allow_path + "?from=opds")
+            handler.get_argument = lambda name, default=None: "opds" if name == "from" else default
+            self.assertFalse(handler.should_be_logged_in(), allow_path)
+
+        for blocked_path in ("/get/extract/12/foo.html", "/get/progress/12", "/get/tool/x/index.html"):
+            handler = _bare_handler(blocked_path, uri=blocked_path + "?from=opds")
+            handler.get_argument = lambda name, default=None: "opds" if name == "from" else default
+            with self.assertRaises(web.Finish):
+                handler.should_be_logged_in()
+            self.assertEqual(handler.status, 401, blocked_path)
+
     def test_logged_in_user_passes(self):
         CONF["REQUIRE_LOGIN"] = True
         handler = _bare_handler("/api/index")
