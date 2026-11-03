@@ -10,6 +10,7 @@ import logging
 import tornado.escape
 
 from webserver import loader
+from webserver.base.modules import MODULE_COMMUNITY, ModuleGateMixin
 from webserver.base.formatter import BookFormatter
 from webserver.handlers.base import BaseHandler, is_admin, js
 from webserver.i18n import _
@@ -58,7 +59,8 @@ class ShareHandlerMixin:
         return data if isinstance(data, dict) else None
 
 
-class AdminBookShareHandler(BaseHandler, ShareHandlerMixin):
+class AdminBookShareHandler(ModuleGateMixin, BaseHandler, ShareHandlerMixin):
+    module_id = MODULE_COMMUNITY
 
     @js
     @is_admin
@@ -94,7 +96,8 @@ class AdminBookShareHandler(BaseHandler, ShareHandlerMixin):
         return {"err": "ok", "share": self._share_dict(share), "msg": _("分享已保存")}
 
 
-class AdminShareCancelHandler(BaseHandler, ShareHandlerMixin):
+class AdminShareCancelHandler(ModuleGateMixin, BaseHandler, ShareHandlerMixin):
+    module_id = MODULE_COMMUNITY
 
     @js
     @is_admin
@@ -104,7 +107,8 @@ class AdminShareCancelHandler(BaseHandler, ShareHandlerMixin):
         return {"err": "ok", "msg": _("分享已取消")}
 
 
-class AdminShareDeleteHandler(BaseHandler, ShareHandlerMixin):
+class AdminShareDeleteHandler(ModuleGateMixin, BaseHandler, ShareHandlerMixin):
+    module_id = MODULE_COMMUNITY
 
     @js
     @is_admin
@@ -114,7 +118,8 @@ class AdminShareDeleteHandler(BaseHandler, ShareHandlerMixin):
         return {"err": "ok", "msg": _("分享已删除")}
 
 
-class AdminShareListHandler(BaseHandler, ShareHandlerMixin):
+class AdminShareListHandler(ModuleGateMixin, BaseHandler, ShareHandlerMixin):
+    module_id = MODULE_COMMUNITY
 
     @js
     @is_admin
@@ -131,7 +136,10 @@ class AdminShareListHandler(BaseHandler, ShareHandlerMixin):
         return {"err": "ok", "total": total, "shares": [self._share_dict(row, titles.get(row.book_id, "")) for row in rows]}
 
 
-class ShareInfoHandler(BaseHandler, ShareHandlerMixin):
+class ShareInfoHandler(ModuleGateMixin, BaseHandler, ShareHandlerMixin):
+    module_id = MODULE_COMMUNITY
+    # 公开分享接口：模块关闭时回 404，避免前端把 JSON 错误当成分享信息。
+    module_gate_json = False
 
     def _payload(self, share, granted):
         book = self.get_book(share.book_id, raise_exception=False)

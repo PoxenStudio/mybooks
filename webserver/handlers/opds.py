@@ -321,14 +321,14 @@ def ACQUISITION_ENTRY(item, db, updated, CFM, CKEYS, prefix):
     ans.append(
         E.link(
             type="image/jpeg",
-            href=prefix + "/get/thumb_240_320/%s.jpg?size=240x320" % item[FM["id"]],
+            href=prefix + "/get/thumb_240_320/%s.jpg?size=240x320&from=opds" % item[FM["id"]],
             rel="http://opds-spec.org/cover",
         )
     )
     ans.append(
         E.link(
             type="image/jpeg",
-            href=prefix + "/get/thumb_120_200/%s.jpg?size=120x200" % item[FM["id"]],
+            href=prefix + "/get/thumb_120_200/%s.jpg?size=120x200&from=opds" % item[FM["id"]],
             rel="http://opds-spec.org/thumbnail",
         )
     )
@@ -461,7 +461,9 @@ class OpdsHandler(BaseHandler):
         raise web.Finish()
 
     def check_opds_enabled(self):
-        if CONF.get("ENABLE_OPDS_AUTH", False) and self.current_user is None:
+        # OPDS 认证：显式勾选「OPDS 不需登录」时让路，阅读设备多半只能填订阅地址。
+        auth_required = CONF.get("ENABLE_OPDS_AUTH", False) and not feature_modules.opds_anonymous_allowed(CONF)
+        if auth_required and self.current_user is None:
             self.set_header("WWW-Authenticate", "Basic")
             self.set_status(401)
             raise web.Finish()

@@ -331,7 +331,7 @@
                                     <v-icon>mdi-apps</v-icon>
                                     {{ $t('book.resetInfo') }}
                                 </v-list-item>
-                                <v-list-item v-if="communityModuleOn" @click="setSole">
+                                <v-list-item @click="setSole">
                                     <v-icon>{{ book.sole ? 'mdi-earth-off' : 'mdi-earth' }}</v-icon>
                                     {{ book.sole ? $t('book.setPublic') : $t('book.setSole') }}
                                 </v-list-item>
@@ -351,7 +351,7 @@
                                     <v-icon>mdi-cloud-outline</v-icon>
                                     {{ book.shared ? $t('share.manageShare') : $t('share.createShare') }}
                                 </v-list-item>
-                                <v-list-item @click="generateShareCard" :disabled="!hasEBooks">
+                                <v-list-item v-if="communityModuleOn" @click="generateShareCard" :disabled="!hasEBooks">
                                     <v-icon>mdi-card-bulleted-outline</v-icon>
                                     {{ $t('book.generateShareCard') }}
                                 </v-list-item>
@@ -475,7 +475,7 @@
                                         </template>
                                         <span>{{ $t('readingState.wantsHint') }}</span>
                                     </v-tooltip>
-                                    <BookListQuickAddMenu v-if="$store.state.user?.is_login && communityModuleOn" :book-id="book.id">
+                                    <BookListQuickAddMenu v-if="$store.state.user?.is_login" :book-id="book.id">
                                         <template v-slot:activator="{ on, attrs }">
                                             <v-tooltip bottom>
                                                 <template v-slot:activator="{ on: onTooltip, attrs: attrsTooltip }">
@@ -490,7 +490,7 @@
                                             </v-tooltip>
                                         </template>
                                     </BookListQuickAddMenu>
-                                    <v-tooltip bottom v-if="communityModuleOn && book.sole">
+                                    <v-tooltip bottom v-if="book.sole">
                                         <template v-slot:activator="{ on, attrs }">
                                             <v-btn icon small class="ml-1" v-bind="attrs" v-on="on">
                                                 <v-icon :color="book.sole ? 'red' : 'green'" class="mr-2">
@@ -1485,18 +1485,12 @@ export default {
             }
             return true;
         },
-        /**
-         * 有声书模块是否开启（sys.modules.audio）。关闭时详情页的转写/播放按钮、
-         * 处理菜单项与两个对话框一起消失，音频进度也不轮询。
-         */
+        /** 有声书模块（sys.modules.audio）：关闭时转写/播放/音频列表一起消失 */
         audioModuleOn() {
             const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
             return mods.audio !== false;
         },
-        /**
-         * 社区互动模块是否开启（sys.modules.community）。关闭时详情页的
-         * 「加入书单」与私藏入口一起消失。
-         */
+        /** 社区互动模块（sys.modules.community）：书单、书评、推荐、读书卡片 */
         communityModuleOn() {
             const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
             return mods.community !== false;

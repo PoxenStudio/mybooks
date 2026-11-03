@@ -297,8 +297,7 @@ export default {
     pinnedIds: [],
   }),
   computed: {
-    // 有声书模块关掉时，Mimo-TTS 这个「生成有声书」的工具也一并收起：
-    // 它写的就是 audios 目录，留着会变成「能生成、点开播放被弹回首页」的死链。
+    // 有声书模块关掉时，Mimo-TTS 这个「生成有声书」的工具也一并收起
     audioModuleOn() {
       const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
       return mods.audio !== false;

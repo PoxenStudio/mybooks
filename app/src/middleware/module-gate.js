@@ -10,13 +10,12 @@ import { isLoginPublicPath } from "~/utils/loginPublicPaths";
 
 const ROUTE_MODULES = [
     {
-        id: "audio",
+        id: "multiuser",
         test: (path) =>
-            path === "/audiobooks" ||
-            path.startsWith("/audiobooks/") ||
-            path.startsWith("/audio/") ||
-            path === "/toolbox/mimo_tts" ||
-            path.startsWith("/toolbox/mimo_tts/"),
+            path === "/admin/users" ||
+            path.startsWith("/admin/users/") ||
+            path === "/signup" ||
+            path.startsWith("/signup/"),
     },
     {
         id: "community",
@@ -29,23 +28,23 @@ const ROUTE_MODULES = [
             path.startsWith("/expected/") ||
             path === "/admin/all-expected" ||
             path.startsWith("/admin/all-expected/") ||
-            path === "/soledbooks" ||
-            path.startsWith("/soledbooks/") ||
-            path === "/booklists" ||
-            path.startsWith("/booklists/") ||
-            path.startsWith("/booklist/"),
+            path === "/admin/shares" ||
+            path.startsWith("/admin/shares/") ||
+            path === "/admin/book-reviews" ||
+            path.startsWith("/admin/book-reviews/"),
+    },
+    {
+        id: "audio",
+        test: (path) =>
+            path === "/audiobooks" ||
+            path.startsWith("/audiobooks/") ||
+            path.startsWith("/audio/") ||
+            path === "/toolbox/mimo_tts" ||
+            path.startsWith("/toolbox/mimo_tts/"),
     },
     {
         id: "physical",
         test: (path) => path === "/printbooks" || path.startsWith("/printbooks/"),
-    },
-    {
-        id: "users",
-        test: (path) =>
-            path === "/signup" ||
-            path.startsWith("/signup/") ||
-            path === "/admin/users" ||
-            path.startsWith("/admin/users/"),
     },
 ];
 
@@ -77,7 +76,7 @@ export default async function ({ app, route, redirect }) {
     // 未登录且站点开了「必须登录」时，非公开页交给 require_login 处理：
     // 它会送去 /login?next=…，我们再跳一次 "/" 会把 next 丢掉。
     // 公开页（如 /signup）在 require_login 里被直接放行，必须由这里兜住，
-    // 否则「必须登录 + 关闭用户模块」时注册页仍会渲染。
+    // 否则「必须登录 + 关闭多用户支持」时注册页仍会渲染。
     const user = (info && info.user) || app.store.state.user || {};
     const allow = (info && info.sys && info.sys.allow) || {};
     if (!user.is_login && allow.require_login === true && !isLoginPublicPath(route.path)) {

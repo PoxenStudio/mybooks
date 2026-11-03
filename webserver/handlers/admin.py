@@ -69,7 +69,7 @@ LOG_PATH = "/data/log/mybooks.log"
 
 
 class AdminUsers(feature_modules.ModuleGateMixin, BaseHandler):
-    module_id = feature_modules.MODULE_USERS
+    module_id = feature_modules.MODULE_MULTIUSER
 
     @js
     @auth
@@ -311,9 +311,11 @@ class AdminUsers(feature_modules.ModuleGateMixin, BaseHandler):
         return {"err": "ok"}
 
 
-class AdminBookReviews(BaseHandler):
+class AdminBookReviews(feature_modules.ModuleGateMixin, BaseHandler):
     """管理员"用户评论"管理页：分页列出所有评论，支持按状态过滤，以及通过/屏蔽/恢复操作。
     见 plan/Social_Reading_Plan.md §2.6。"""
+
+    module_id = feature_modules.MODULE_COMMUNITY
 
     @js
     @is_admin
@@ -502,7 +504,17 @@ class AdminSettings(BaseHandler):
         # 陈旧缺项固化下来；标记已置位（管理员保存过设置页）则 stored 列表即权威，原样返回。
         # 只改返回给前端的副本，不回写 CONF，也不改写用户存的配置。
         settings["SIDEBAR_ITEMS"] = get_sidebar_items(CONF)
-        return {"err": "ok", "settings": settings, "sns": sns, "site_url": self.site_url}
+        return {
+            "err": "ok",
+            "settings": settings,
+            "sns": sns,
+            "site_url": self.site_url,
+            # 模块弹窗的「将写入/将恢复」预览清单，与后端归一化共用同一份真值。
+            "module_switches": {
+                "off": feature_modules.MODULE_OFF_SWITCHES,
+                "on": feature_modules.MODULE_ON_SWITCHES,
+            },
+        }
 
     @js
     @auth
@@ -544,6 +556,13 @@ class AdminSettings(BaseHandler):
             args.setdefault(
                 _module_spec["key"], CONF.get(_module_spec["key"], _module_spec["default"])
             )
+        # 新键同样要补回：旧版前端缓存页/脚本不带它时，dumpfile() 不能把它抹掉。
+        args.setdefault(
+            "OPDS_ALLOW_ANONYMOUS", CONF.get("OPDS_ALLOW_ANONYMOUS", False)
+        )
+        # 模块开关变化时同步主开关：关闭写安全默认值，开启恢复主功能开关；
+        # 只动 MODULE_OFF_SWITCHES / MODULE_ON_SWITCHES 里的键，不碰数据与密钥。
+        feature_modules.apply_module_switch_effects(args, CONF)
         if args.get(IMPORT_BY_INOTIFY, False):
             # 如果启用基于 inotify 的文件导入，不能默认删除文件
             args["REMOVE_IMPORTED_FILE"] = False
@@ -722,6 +741,13 @@ class AdminInstall(BaseHandler):
             args["INVITE_MODE"] = False
 
         apply_localized_default_settings(args, args["site_language"])
+
+        # 安装页模块勾选：缺省按全开处理（旧脚本直接调接口时保持兼容），
+        # 未勾选模块写入安全默认值，例如关闭多用户会同时写入必须登录、访客权限关闭。
+        for _module_spec in feature_modules.MODULES.values():
+            raw = self.get_argument(_module_spec["key"], "true").strip().lower()
+            args[_module_spec["key"]] = raw not in ("false", "0", "off", "no")
+        feature_modules.apply_module_switch_effects(args, None)
 
         return SettingsSaver().save_extra_settings(args)
 

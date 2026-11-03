@@ -14,10 +14,8 @@ import tornado
 from webserver import loader
 from webserver.base.modules import (
     MODULE_AUDIO,
-    MODULE_COMMUNITY,
     MODULE_PHYSICAL,
     ModuleGateMixin,
-    module_enabled,
 )
 from webserver.handlers.base import BaseHandler, auth, js, is_admin
 from webserver.models import ScanFile
@@ -279,10 +277,6 @@ class ImportRun(BaseHandler):
             skip_last_dirs = req.get("skip_last_dirs", 0)
             force = req.get("force", False)
             sole = bool(req.get("sole", False))
-            if sole and not module_enabled(MODULE_COMMUNITY):
-                # 私藏属于社区互动模块：模块关闭时不阻断导入本身，只丢弃这个标记，
-                # 避免造出既看不了也取消不了的私藏书
-                sole = False
             if not filelist:
                 return {"err": "params.error", "msg": _("参数错误")}
             if ScanService.is_importing():

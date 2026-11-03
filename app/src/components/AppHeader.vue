@@ -525,8 +525,8 @@ export default {
             sidebar_items: [],
             socials: [],
             friends: [],
-            // 功能模块快照（audio / community / physical / ai / users）；加载完成前按全开处理
-            modules: { audio: true, community: true, physical: true, ai: true, users: true },
+            // 功能模块快照（multiuser / community / audio / physical / ai）；加载完成前按全开处理
+            modules: { multiuser: true, community: true, audio: true, physical: true, ai: true },
             allow: {
                 register: true,
                 download: true,
@@ -602,8 +602,8 @@ export default {
                     expand: this.isPathMatch("/user/"),
                     groups: [
                         { icon: "mdi-account-cog", href: "/user/usersettings", text: "appHeader.user_setting", color: "blue darken-1" },
+                        { icon: "mdi-shield-account", href: "/soledbooks", text: "appHeader.soledBooks", color: "deep-orange"},
                         ...(this.moduleOn("community") ? [
-                            { icon: "mdi-shield-account", href: "/soledbooks", text: "appHeader.soledBooks", color: "deep-orange"},
                             { icon: "mdi-notebook", href: "/expected", text: "expected.title", color: "green"},
                         ] : []),
                     ],
@@ -617,7 +617,7 @@ export default {
                     color: "deep-orange",
                     groups: [
                         { icon: "mdi-cog", href: "/admin/settings", text: "appHeader.systemSettings", color: "blue darken-1"},
-                        ...(this.moduleOn("users") ? [{ icon: "mdi-account", href: "/admin/users", text: "appHeader.userManagement", color: "deep-orange"}] : []),
+                        ...(this.moduleOn("multiuser") ? [{ icon: "mdi-account", href: "/admin/users", text: "appHeader.userManagement", color: "deep-orange"}] : []),
                         { icon: "mdi-import", href: "/admin/imports", text: "appHeader.importBooks", color: "green"},
                         { icon: "mdi-library-shelves", href: "/admin/books", text: "appHeader.bookManagement", color: "blue darken-2"},
                         ...(this.sys.allow.share_link ? [{ icon: "mdi-cloud-outline", href: "/admin/shares", text: "appHeader.shareManagement", color: "teal" }] : []),
@@ -711,7 +711,7 @@ export default {
                 .concat(this.user.is_login ? userLinks : [])
                 .concat(this.user.is_admin ? adminLinks : [])
                 .concat(this.user.is_login ? readingLinks : [])
-                .concat(this.user.is_login && this.moduleOn("community") && showItem("booklists") ? booklistLinks: [])
+                .concat(this.user.is_login && showItem("booklists") ? booklistLinks: [])
                 .concat(navLinks)
                 .concat(this.moduleOn("community") && this.sys.allow.user_memos ? memoLink : [])
                 .concat(this.moduleOn("community") && showItem("friends") && this.sys.friends.length > 0 ? friendLinks : [])

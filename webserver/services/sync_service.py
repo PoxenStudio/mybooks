@@ -28,6 +28,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import tornado.ioloop
 
 from webserver import loader, perf
+from webserver.base import modules as feature_modules
 from webserver.models import ReadingRecord, Reading, Reader, parse_book_id_from_reading_record_hash
 from webserver.services.reading_stats_service import ReadingStatsService, parse_book_id_from_hash, parse_format_from_hash
 
@@ -212,7 +213,9 @@ class MyReaderSyncService:
         latest edits may lag by up to SYNC_DB_FLUSH_INTERVAL_SEC, which is an
         accepted tradeoff (see plan §4.3).
         """
-        if not CONF.get("ENABLE_SHARED_NOTES", True):
+        if not CONF.get("ENABLE_SHARED_NOTES", True) or not feature_modules.module_enabled(
+            feature_modules.MODULE_COMMUNITY
+        ):
             return []
         book_id = parse_book_id_from_reading_record_hash(book_hash)
         if book_id is None or book_id <= 0:

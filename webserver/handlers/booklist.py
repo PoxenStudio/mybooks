@@ -13,10 +13,9 @@ import logging
 import tornado.escape
 
 from webserver import loader
-from webserver.base import modules as feature_modules
 from webserver.handlers.base import BaseHandler, auth, is_admin, js
 from webserver.i18n import _
-from webserver.models import BookList, Reader
+from webserver.models import BookList
 from webserver.services.booklist_service import BookListLimitExceeded, BookListService
 
 CONF = loader.get_settings()
@@ -116,8 +115,7 @@ class BookListHandlerMixin:
         return row, None
 
 
-class BookListMineHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
-    module_id = feature_modules.MODULE_COMMUNITY
+class BookListMineHandler(BaseHandler, BookListHandlerMixin):
 
     @js
     @auth
@@ -126,8 +124,7 @@ class BookListMineHandler(feature_modules.ModuleGateMixin, BaseHandler, BookList
         return {"err": "ok", "booklists": self._serialize_many(rows, viewer_id=self.user_id())}
 
 
-class BookListPublicHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
-    module_id = feature_modules.MODULE_COMMUNITY
+class BookListPublicHandler(BaseHandler, BookListHandlerMixin):
 
     @js
     def get(self):
@@ -138,8 +135,7 @@ class BookListPublicHandler(feature_modules.ModuleGateMixin, BaseHandler, BookLi
         return {"err": "ok", "total": total, "page": page, "page_size": page_size, "booklists": self._serialize_many(rows, viewer_id=viewer_id)}
 
 
-class BookListLikedHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
-    module_id = feature_modules.MODULE_COMMUNITY
+class BookListLikedHandler(BaseHandler, BookListHandlerMixin):
 
     @js
     @auth
@@ -151,10 +147,6 @@ class BookListLikedHandler(feature_modules.ModuleGateMixin, BaseHandler, BookLis
 class BookListHomepageHandler(BaseHandler, BookListHandlerMixin):
     @js
     def get(self):
-        # 首页按 err=="ok" 读这份数据：模块关闭时返回空列表而不是 module.disabled，
-        # 否则首页会拿到错误体、书单卡区块还占着位置
-        if not feature_modules.module_enabled(feature_modules.MODULE_COMMUNITY):
-            return {"err": "ok", "booklists": []}
         if not CONF.get("ENABLE_HOMEPAGE_BOOKLISTS", True):
             return {"err": "ok", "booklists": []}
         viewer_id = self.current_user.id if self.current_user else None
@@ -162,8 +154,7 @@ class BookListHomepageHandler(BaseHandler, BookListHandlerMixin):
         return {"err": "ok", "booklists": self._serialize_many(rows, viewer_id=viewer_id)}
 
 
-class BookListCreateHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
-    module_id = feature_modules.MODULE_COMMUNITY
+class BookListCreateHandler(BaseHandler, BookListHandlerMixin):
 
     @js
     @auth
@@ -191,8 +182,7 @@ class BookListCreateHandler(feature_modules.ModuleGateMixin, BaseHandler, BookLi
         return {"err": "ok", "booklist": self._serialize(row, viewer_id=self.user_id()), "msg": _("创建成功")}
 
 
-class BookListDetailHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
-    module_id = feature_modules.MODULE_COMMUNITY
+class BookListDetailHandler(BaseHandler, BookListHandlerMixin):
 
     @js
     def get(self, id):
@@ -245,8 +235,7 @@ class BookListDetailHandler(feature_modules.ModuleGateMixin, BaseHandler, BookLi
         return {"err": "ok", "booklist": self._serialize(row, viewer_id=self.user_id()), "msg": _("已更新")}
 
 
-class BookListDeleteHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
-    module_id = feature_modules.MODULE_COMMUNITY
+class BookListDeleteHandler(BaseHandler, BookListHandlerMixin):
 
     @js
     @auth
@@ -259,8 +248,7 @@ class BookListDeleteHandler(feature_modules.ModuleGateMixin, BaseHandler, BookLi
         return {"err": "ok", "msg": _("已删除")}
 
 
-class BookListStickyHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
-    module_id = feature_modules.MODULE_COMMUNITY
+class BookListStickyHandler(BaseHandler, BookListHandlerMixin):
 
     @js
     @is_admin
@@ -278,8 +266,7 @@ class BookListStickyHandler(feature_modules.ModuleGateMixin, BaseHandler, BookLi
         return {"err": "ok", "booklist": self._serialize(row, viewer_id=self.user_id()), "msg": _("已更新")}
 
 
-class BookListLikeHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
-    module_id = feature_modules.MODULE_COMMUNITY
+class BookListLikeHandler(BaseHandler, BookListHandlerMixin):
 
     @js
     @auth
@@ -293,8 +280,7 @@ class BookListLikeHandler(feature_modules.ModuleGateMixin, BaseHandler, BookList
         return {"err": "ok", "liked": liked}
 
 
-class BookListViewHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
-    module_id = feature_modules.MODULE_COMMUNITY
+class BookListViewHandler(BaseHandler, BookListHandlerMixin):
 
     @js
     def post(self, id):
@@ -308,8 +294,7 @@ class BookListViewHandler(feature_modules.ModuleGateMixin, BaseHandler, BookList
         return {"err": "ok"}
 
 
-class BookListBooksAddHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
-    module_id = feature_modules.MODULE_COMMUNITY
+class BookListBooksAddHandler(BaseHandler, BookListHandlerMixin):
 
     @js
     @auth
@@ -341,8 +326,7 @@ class BookListBooksAddHandler(feature_modules.ModuleGateMixin, BaseHandler, Book
         return {"err": "ok", "added": added, "book_count": row.book_count, "msg": _("已加入书单")}
 
 
-class BookListBooksRemoveHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
-    module_id = feature_modules.MODULE_COMMUNITY
+class BookListBooksRemoveHandler(BaseHandler, BookListHandlerMixin):
 
     @js
     @auth
@@ -363,10 +347,8 @@ class BookListBooksRemoveHandler(feature_modules.ModuleGateMixin, BaseHandler, B
         return {"err": "ok", "book_count": row.book_count, "msg": _("已从书单移出")}
 
 
-class BookBookListsHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
+class BookBookListsHandler(BaseHandler, BookListHandlerMixin):
     """供书籍详情页"快速加入书单"面板用：当前用户的书单列表 + 该书已在哪些书单中。"""
-
-    module_id = feature_modules.MODULE_COMMUNITY
 
     @js
     @auth

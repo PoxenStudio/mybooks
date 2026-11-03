@@ -430,8 +430,11 @@ class BaseHandler(web.RequestHandler):
         self.set_secure_cookie("invited", str(int(time.time())))
 
     def require_login_enabled(self):
-        """站点是否开启了「必须登录才能访问」（私人图书馆标准模式）。"""
-        return bool(CONF.get("REQUIRE_LOGIN", False))
+        """站点是否开启了「必须登录才能访问」（私人图书馆标准模式）。
+
+        多用户支持关闭时按有效登录门禁处理，避免手工改 auto.py 绕过。
+        """
+        return feature_modules.require_login_effective(CONF)
 
     def allow_flags(self):
         """下发给前端的站点开关（sys.allow）。
@@ -441,18 +444,25 @@ class BaseHandler(web.RequestHandler):
         留在"访客还能读"的错误状态。分享链接例外：它优先于必须登录，只看自身开关。
         """
         require_login = self.require_login_enabled()
+        community = feature_modules.module_enabled(feature_modules.MODULE_COMMUNITY)
         # 站内留言属于社区互动模块：模块关闭时即使旧开关还开着也按关闭下发
         user_memos = CONF.get("ENABLE_USER_MEMOS", True)
-        if not feature_modules.module_enabled(feature_modules.MODULE_COMMUNITY):
+        if not community:
             user_memos = False
         # 实体书模块关闭时导航/OPDS/筛选等入口一并失效
         physical_books = CONF.get("ENABLE_PHYSICAL_BOOKS", True)
         if not feature_modules.module_enabled(feature_modules.MODULE_PHYSICAL):
             physical_books = False
-        # 用户与账号模块关闭时不再提供注册入口；登录/个人资料/密码重置仍是核心能力
+        # 多用户支持关闭时不再提供注册入口；登录/个人资料/密码重置仍是核心能力
         allow_register = CONF["ALLOW_REGISTER"]
-        if not feature_modules.module_enabled(feature_modules.MODULE_USERS):
+        if not feature_modules.module_enabled(feature_modules.MODULE_MULTIUSER):
             allow_register = False
+        share_link = CONF.get("ENABLE_SHARE_LINK", True)
+        if not community:
+            share_link = False
+        book_review = CONF.get("ENABLE_BOOK_REVIEW", True) and community
+        book_recommend = CONF.get("ENABLE_BOOK_RECOMMEND_TO_OTHERS", True) and community
+        shared_notes = CONF.get("ENABLE_SHARED_NOTES", True) and community
         return {
             "register": allow_register,
             "require_login": require_login,
@@ -460,16 +470,16 @@ class BaseHandler(web.RequestHandler):
             "push": False if require_login else CONF["ALLOW_GUEST_PUSH"],
             "read": False if require_login else CONF["ALLOW_GUEST_READ"],
             "upload": False if require_login else CONF.get("ALLOW_GUEST_UPLOAD", False),
-            "share_link": CONF.get("ENABLE_SHARE_LINK", True),
+            "share_link": share_link,
             "physical_books": physical_books,
             "folder": CONF.get("ENABLE_FOLDER_BROWSE", False),
             "download_quota": CONF.get("ENABLE_DOWNLOAD_QUOTA", False),
             "server_import": CONF.get("ENABLE_SERVER_FILE_IMPORT", False),
             "sync": CONF.get("ENABLE_DATA_SYNC", False),
-            "book_review": CONF.get("ENABLE_BOOK_REVIEW", True),
+            "book_review": book_review,
             "user_memos": user_memos,
-            "book_recommend": CONF.get("ENABLE_BOOK_RECOMMEND_TO_OTHERS", True),
-            "shared_notes": CONF.get("ENABLE_SHARED_NOTES", True),
+            "book_recommend": book_recommend,
+            "shared_notes": shared_notes,
         }
 
     def need_invited(self):
@@ -668,7 +678,16 @@ class BaseHandler(web.RequestHandler):
                 bid, fmt = filename.split(".", 1)
                 if self.parse_download_sign(self.get_argument("dl", ""), bid, fmt):
                     return False
+        # OPDS 匿名模式：feed 里的封面/缩略图带 from=opds，允许匿名取图；
+        # 只放行 /get/，书籍正文/下载仍走各自的授权检查。
+        if path.startswith("/get/") and self.get_argument("from", "") == "opds":
+            if feature_modules.opds_anonymous_allowed(CONF):
+                return False
         if path.startswith("/opds") or self.is_opds_acquisition(path):
+            # 个人模式：允许 OPDS 绕过站点级必须登录，给无法输入账号的阅读设备用。
+            # 匿名开关优先于 OPDS 认证项，两边（这里与 opds.OpdsHandler）口径一致。
+            if feature_modules.opds_anonymous_allowed(CONF):
+                return False
             self.set_header("WWW-Authenticate", 'Basic realm="MyBooks"')
             self.set_status(401)
             raise web.Finish()
@@ -1884,7 +1903,7 @@ class BaseHandler(web.RequestHandler):
             "books": db.count(),
             "tags": len(db.all_tags()),
             "authors": len(db.all_authors()),
-            # 模块关闭时不再扫音频目录，也不把数量下发（导航那一项本来也不出现）
+            # 有声书模块关闭时不再扫音频目录，也不把数量下发（导航那一项本来也不出现）
             "audiobooks": (
                 self.get_audio_books_count()
                 if feature_modules.module_enabled(feature_modules.MODULE_AUDIO)
@@ -1919,9 +1938,9 @@ class BaseHandler(web.RequestHandler):
             # AI 模块关闭：助手、AI 补全、MyNexus、MCP 一律视为未启用
             ai_enabled = False
             mynexus_enabled = False
-        # 用户与账号模块关闭：登录页的社交登录按钮一并收起
+        # 多用户支持模块关闭：登录页的社交登录按钮一并收起
         socials = CONF["SOCIALS"]
-        if not feature_modules.module_enabled(feature_modules.MODULE_USERS):
+        if not feature_modules.module_enabled(feature_modules.MODULE_MULTIUSER):
             socials = []
         info = dict(stats, users=count_all_users, version=VERSION, active=count_hot_users, performanceMode=perf.CONF.get("PERFORMANCE_MODE", "normal"), lite={"homeCollapse": perf.lite_on("LITE_HOME_COLLAPSE")})
         info.update(

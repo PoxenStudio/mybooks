@@ -101,6 +101,8 @@ class Index(BaseHandler):
         是否展示这张卡由 HOMEPAGE_CONFIG 决定（见 homepage_from_legacy：老站点的
         ENABLE_BOOK_RECOMMEND_TO_OTHERS 只用于推导初始可见性）。这个 flag 继续管
         "评价是否计入推荐人数/详情页推荐"，不再反过来让首页卡片永远取不到数据。"""
+        if not feature_modules.module_enabled(feature_modules.MODULE_COMMUNITY):
+            return []
         if not CONF.get("ENABLE_BOOK_REVIEW", True) or perf.lite_on("LITE_NO_RECOMMEND"):
             return []
         if not self.current_user or not getattr(self.current_user, "show_home_recommendations", True):
@@ -149,7 +151,13 @@ class Index(BaseHandler):
         return frozenset(ids[:MAX_SHOWN_IDS])
 
     def _recommend_home_ids(self, cnt_random, cnt_recent, exclude_ids, seed, reader_id):
-        if not CONF.get("RECOMMEND_ENABLE", True) or self.get_argument("personalized", "1") == "0" or perf.lite_on("LITE_NO_RECOMMEND"):
+        if not feature_modules.module_enabled(feature_modules.MODULE_COMMUNITY):
+            return None
+        if not CONF.get("RECOMMEND_ENABLE", True):
+            return None
+        if self.get_argument("personalized", "1") == "0":
+            return None
+        if perf.lite_on("LITE_NO_RECOMMEND"):
             return None
         service = self.settings.get("recommend")
         if service is None:
@@ -848,9 +856,9 @@ class BookToPDF(BaseHandler):
             return {"err": "params.book.converting", "msg": _("本书正在转换中，请稍后再试")}
         service.convert_and_save(self.user_id(), book, fpath, "pdf")
         return {"err": "ok", "content": "%s" % _("转换成功，请稍后刷新页面查看")}
-class BookSetSole(feature_modules.ModuleGateMixin, BaseHandler):
-    module_id = feature_modules.MODULE_COMMUNITY
 
+
+class BookSetSole(BaseHandler):
     @js
     @auth
     def post(self, bid):
@@ -1630,9 +1638,7 @@ class PrintBooks(feature_modules.ModuleGateMixin, BaseHandler):
             return {"err": "internal", "msg": _("获取实体书失败")}
 
 
-class BookSoled(feature_modules.ModuleGateMixin, BaseHandler):
-    module_id = feature_modules.MODULE_COMMUNITY
-
+class BookSoled(BaseHandler):
     @js
     @auth
     def get(self):
@@ -2374,6 +2380,10 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
         BaseHandler.prepare(self)
         bid = self.requested_book_id()
         if not self.current_user and not BookAccessService.guest_download_allowed(self, bid):
+            # OPDS 匿名模式：目录和 acquisition 链接都绕过了站点级必须登录，
+            # 下载不能再用 guest_download_allowed 把人挡回去；匿名开关优先于 OPDS 认证项。
+            if self.is_opds and feature_modules.opds_anonymous_allowed(CONF):
+                return
             self.login_by_download_sign()
         if not self.current_user and not BookAccessService.guest_download_allowed(self, bid):
             if self.is_opds:
@@ -4126,6 +4136,8 @@ class BookSuggestion(ListHandler):
         book = self.get_book(id, raise_exception=False)
         if not book:
             return {"err": "params.book.invalid", "msg": _("书籍已不存在")}
+        if not feature_modules.module_enabled(feature_modules.MODULE_COMMUNITY):
+            return {"err": "ok", "msg": _("推荐成功"), "books": []}
         if perf.lite_on("LITE_NO_RECOMMEND"):
             return {"err": "ok", "msg": _("推荐成功"), "books": []}
         books = self._related_books(book["id"]) or self._tag_author_books(book)

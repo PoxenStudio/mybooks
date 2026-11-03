@@ -19,6 +19,22 @@ from webserver.services.book_access_service import BookAccessService
 from webserver.services.book_share_service import BookShareService
 
 
+MODULE_DEFAULTS = {
+    "ENABLE_MODULE_MULTIUSER": True,
+    "ENABLE_MODULE_COMMUNITY": True,
+    "ENABLE_MODULE_AUDIO": True,
+    "ENABLE_MODULE_PHYSICAL": True,
+    "ENABLE_MODULE_AI": True,
+}
+
+
+def _enable_modules(testcase):
+    """测试不依赖外部 auto.py 的模块状态：默认全开，个别用例再覆盖。"""
+    patcher = mock.patch.dict(CONF, MODULE_DEFAULTS, clear=False)
+    patcher.start()
+    testcase.addCleanup(patcher.stop)
+
+
 def _bare_handler(path="/api/index", uri=None):
     """跳过 RequestHandler.__init__（需要 application/ioloop），只装配门禁用得到的东西。"""
     handler = BaseHandler.__new__(BaseHandler)
@@ -139,7 +155,15 @@ class TestLoginGateAllowList(unittest.TestCase):
 
 class TestShouldBeLoggedIn(unittest.TestCase):
     def setUp(self):
-        self._saved = {k: CONF.get(k) for k in ("REQUIRE_LOGIN", "ENABLE_SHARE_LINK")}
+        keys = (
+            "REQUIRE_LOGIN",
+            "ENABLE_SHARE_LINK",
+            "ENABLE_MODULE_MULTIUSER",
+            "OPDS_ALLOW_ANONYMOUS",
+            "ENABLE_OPDS_AUTH",
+        )
+        self._saved = {k: CONF.get(k) for k in keys}
+        _enable_modules(self)
 
     def tearDown(self):
         for key, value in self._saved.items():
@@ -151,6 +175,76 @@ class TestShouldBeLoggedIn(unittest.TestCase):
         self.assertFalse(handler.should_be_logged_in())
         self.assertEqual(handler.written, [])
         self.assertEqual(handler.redirects, [])
+
+    def test_multiuser_off_forces_login(self):
+        # 多用户支持关闭：即使 REQUIRE_LOGIN 还是 false，也要按必须登录处理
+        CONF["REQUIRE_LOGIN"] = False
+        CONF["ENABLE_MODULE_MULTIUSER"] = False
+        handler = _bare_handler("/api/index")
+        with self.assertRaises(web.Finish):
+            handler.should_be_logged_in()
+        self.assertEqual(handler.written[0]["err"], "user.need_login")
+
+    def test_opds_anonymous_switch(self):
+        CONF["REQUIRE_LOGIN"] = True
+        CONF["ENABLE_MODULE_MULTIUSER"] = True
+        CONF["OPDS_ALLOW_ANONYMOUS"] = True
+        CONF["ENABLE_OPDS_AUTH"] = False
+        self.assertFalse(_bare_handler("/opds/nav/new").should_be_logged_in())
+
+        # 匿名开关优先：OPDS 认证项也拦不住它（设置页因此把认证项画成勾选+灰置，
+        # 而把匿名开关留成可勾选的显式例外）
+        CONF["ENABLE_OPDS_AUTH"] = True
+        self.assertFalse(_bare_handler("/opds/nav/new").should_be_logged_in())
+
+        # 关闭匿名开关则回到 401 Basic
+        CONF["OPDS_ALLOW_ANONYMOUS"] = False
+        handler = _bare_handler("/opds/nav/new")
+        with self.assertRaises(web.Finish):
+            handler.should_be_logged_in()
+        self.assertEqual(handler.status, 401)
+        self.assertTrue(handler.headers.get("WWW-Authenticate", "").startswith("Basic "))
+
+    def test_opds_anonymous_acquisition_passes(self):
+        CONF["REQUIRE_LOGIN"] = True
+        CONF["ENABLE_MODULE_MULTIUSER"] = True
+        CONF["OPDS_ALLOW_ANONYMOUS"] = True
+        CONF["ENABLE_OPDS_AUTH"] = False
+        handler = _bare_handler("/api/book/12.epub", uri="/api/book/12.epub?from=opds")
+        handler.get_argument = lambda name, default=None: "opds" if name == "from" else default
+        self.assertFalse(handler.should_be_logged_in())
+
+    def test_opds_anonymous_covers_pass(self):
+        CONF["REQUIRE_LOGIN"] = True
+        CONF["ENABLE_MODULE_MULTIUSER"] = True
+        CONF["OPDS_ALLOW_ANONYMOUS"] = True
+        CONF["ENABLE_OPDS_AUTH"] = False
+        handler = _bare_handler(
+            "/get/thumb_240_320/12.jpg",
+            uri="/get/thumb_240_320/12.jpg?size=240x320&from=opds",
+        )
+        handler.get_argument = lambda name, default=None: "opds" if name == "from" else default
+        self.assertFalse(handler.should_be_logged_in())
+
+        # 匿名开关优先：OPDS 认证项勾选后封面仍可匿名
+        CONF["ENABLE_OPDS_AUTH"] = True
+        handler = _bare_handler(
+            "/get/thumb_240_320/12.jpg",
+            uri="/get/thumb_240_320/12.jpg?size=240x320&from=opds",
+        )
+        handler.get_argument = lambda name, default=None: "opds" if name == "from" else default
+        self.assertFalse(handler.should_be_logged_in())
+
+        # 关掉匿名开关，封面才回到 401
+        CONF["OPDS_ALLOW_ANONYMOUS"] = False
+        handler = _bare_handler(
+            "/get/thumb_240_320/12.jpg",
+            uri="/get/thumb_240_320/12.jpg?size=240x320&from=opds",
+        )
+        handler.get_argument = lambda name, default=None: "opds" if name == "from" else default
+        with self.assertRaises(web.Finish):
+            handler.should_be_logged_in()
+        self.assertEqual(handler.status, 401)
 
     def test_logged_in_user_passes(self):
         CONF["REQUIRE_LOGIN"] = True
@@ -380,6 +474,7 @@ class TestShareGrantedReaderTools(unittest.TestCase):
 
     def setUp(self):
         self._saved = {k: CONF.get(k) for k in ("REQUIRE_LOGIN", "ENABLE_SHARE_LINK")}
+        _enable_modules(self)
 
     def tearDown(self):
         for key, value in self._saved.items():
@@ -446,6 +541,7 @@ class TestShareGuestWhoAmIBridge(unittest.TestCase):
 
     def setUp(self):
         self._saved = {k: CONF.get(k) for k in ("REQUIRE_LOGIN", "ENABLE_SHARE_LINK")}
+        _enable_modules(self)
 
     def tearDown(self):
         for key, value in self._saved.items():
@@ -482,6 +578,7 @@ class TestShareGuestWhoAmIBridge(unittest.TestCase):
 class TestInviteModeInteraction(unittest.TestCase):
     def setUp(self):
         self._saved = {k: CONF.get(k) for k in ("REQUIRE_LOGIN", "INVITE_MODE", "INVITE_CODE")}
+        _enable_modules(self)
 
     def tearDown(self):
         for k, v in self._saved.items():
@@ -511,7 +608,21 @@ class TestInviteModeInteraction(unittest.TestCase):
 
 class TestAllowFlags(unittest.TestCase):
     def setUp(self):
-        self._saved = {k: CONF.get(k) for k in ("REQUIRE_LOGIN", "ALLOW_GUEST_READ", "ALLOW_GUEST_DOWNLOAD", "ALLOW_GUEST_PUSH", "ALLOW_GUEST_UPLOAD", "ENABLE_SHARE_LINK")}
+        keys = (
+            "REQUIRE_LOGIN",
+            "ALLOW_GUEST_READ",
+            "ALLOW_GUEST_DOWNLOAD",
+            "ALLOW_GUEST_PUSH",
+            "ALLOW_GUEST_UPLOAD",
+            "ENABLE_SHARE_LINK",
+            "ENABLE_MODULE_MULTIUSER",
+            "ENABLE_MODULE_COMMUNITY",
+            "ENABLE_BOOK_REVIEW",
+            "ENABLE_BOOK_RECOMMEND_TO_OTHERS",
+            "ENABLE_SHARED_NOTES",
+        )
+        self._saved = {k: CONF.get(k) for k in keys}
+        _enable_modules(self)
 
     def tearDown(self):
         for k, v in self._saved.items():
@@ -549,6 +660,34 @@ class TestAllowFlags(unittest.TestCase):
         self.assertTrue(flags["share_link"])
         CONF["ENABLE_SHARE_LINK"] = False
         self.assertFalse(_bare_handler("/").allow_flags()["share_link"])
+
+    def test_multiuser_off_forces_login(self):
+        CONF["REQUIRE_LOGIN"] = False
+        CONF["ENABLE_MODULE_MULTIUSER"] = False
+        CONF["ALLOW_GUEST_READ"] = True
+        CONF["ALLOW_GUEST_DOWNLOAD"] = True
+        CONF["ALLOW_GUEST_PUSH"] = True
+        CONF["ALLOW_GUEST_UPLOAD"] = True
+        CONF["ENABLE_SHARE_LINK"] = True
+        flags = _bare_handler("/").allow_flags()
+        self.assertTrue(flags["require_login"])
+        for key in ("read", "download", "push", "upload"):
+            self.assertFalse(flags[key], key)
+        # 分享链接归社区互动，不随多用户关闭
+        self.assertTrue(flags["share_link"])
+
+    def test_community_off_degrades_interaction_flags(self):
+        CONF["ENABLE_MODULE_MULTIUSER"] = True
+        CONF["ENABLE_MODULE_COMMUNITY"] = False
+        CONF["ENABLE_BOOK_REVIEW"] = True
+        CONF["ENABLE_BOOK_RECOMMEND_TO_OTHERS"] = True
+        CONF["ENABLE_SHARED_NOTES"] = True
+        CONF["ENABLE_SHARE_LINK"] = True
+        flags = _bare_handler("/").allow_flags()
+        self.assertFalse(flags["book_review"])
+        self.assertFalse(flags["book_recommend"])
+        self.assertFalse(flags["shared_notes"])
+        self.assertFalse(flags["share_link"])
 
 
 if __name__ == "__main__":

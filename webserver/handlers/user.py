@@ -241,9 +241,7 @@ class UserAppearance(BaseHandler):
         return {"err": "ok", "appearance": {}}
 
 
-class SignUp(feature_modules.ModuleGateMixin, BaseHandler):
-    module_id = feature_modules.MODULE_USERS
-
+class SignUp(BaseHandler):
     def check_active_code(self, username, code):
         user = (
             self.sqlite_session.query(Reader)
@@ -272,6 +270,8 @@ class SignUp(feature_modules.ModuleGateMixin, BaseHandler):
 
     @js
     def post(self):
+        if not feature_modules.module_enabled(feature_modules.MODULE_MULTIUSER):
+            return feature_modules.module_disabled_error(feature_modules.MODULE_MULTIUSER)
         if not CONF.get("ALLOW_REGISTER", False):
             return {"err": "permission.denied", "msg": _("当前站点已关闭注册")}
 
@@ -335,7 +335,7 @@ class SignUp(feature_modules.ModuleGateMixin, BaseHandler):
 
 
 class UserNew(feature_modules.ModuleGateMixin, BaseHandler):
-    module_id = feature_modules.MODULE_USERS
+    module_id = feature_modules.MODULE_MULTIUSER
 
     @js
     @auth
@@ -607,7 +607,9 @@ class UserInfo(BaseHandler):
                 }
             return d
 
-        enable_review = CONF.get("ENABLE_BOOK_REVIEW", True)
+        enable_review = CONF.get("ENABLE_BOOK_REVIEW", True) and feature_modules.module_enabled(
+            feature_modules.MODULE_COMMUNITY
+        )
 
         d.update(
             {

@@ -16,7 +16,7 @@ from webserver.services.booklist_service import BookListService
 from webserver.services.book_share_service import BookShareService
 
 WEBSERVER = pathlib.Path(__file__).resolve().parent.parent / "webserver"
-ALLOWED_DIRECT_USERS = {"services/book_access_service.py", "settings.py", "base/setting_saver.py", "handlers/base.py"}
+ALLOWED_DIRECT_USERS = {"services/book_access_service.py", "settings.py", "base/setting_saver.py", "base/modules.py", "handlers/base.py"}
 
 
 class NoCookieHandler:
@@ -25,7 +25,22 @@ class NoCookieHandler:
         return None
 
 
+MODULE_DEFAULTS = {
+    "ENABLE_MODULE_MULTIUSER": True,
+    "ENABLE_MODULE_COMMUNITY": True,
+    "ENABLE_MODULE_AUDIO": True,
+    "ENABLE_MODULE_PHYSICAL": True,
+    "ENABLE_MODULE_AI": True,
+    "REQUIRE_LOGIN": False,
+}
+
+
 class TestBookAccessService(unittest.TestCase):
+
+    def setUp(self):
+        patcher = mock.patch.dict(book_access_service.CONF, MODULE_DEFAULTS, clear=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def check(self, conf, func, book_id=None):
         with mock.patch.dict(book_access_service.CONF, conf, clear=False), mock.patch.object(BookAccessService, "_booklist_allows_read", return_value=False):
@@ -74,6 +89,42 @@ class TestBookAccessService(unittest.TestCase):
             self.assertTrue(BookAccessService.guest_upload_allowed())
             self.assertFalse(BookAccessService.guest_push_allowed())
 
+    def test_multiuser_off_closes_guest_but_not_share(self):
+        share = mock.Mock(allow_read=True, allow_download=True)
+        conf = {
+            "ENABLE_MODULE_MULTIUSER": False,
+            "REQUIRE_LOGIN": False,
+            "ALLOW_GUEST_READ": True,
+            "ALLOW_GUEST_DOWNLOAD": True,
+            "ALLOW_GUEST_UPLOAD": True,
+            "ALLOW_GUEST_PUSH": True,
+            "ENABLE_SHARE_LINK": True,
+        }
+        with mock.patch.dict(book_access_service.CONF, conf, clear=False), \
+                mock.patch.object(BookShareService, "granted_share", return_value=None):
+            self.assertFalse(BookAccessService.guest_read_allowed(NoCookieHandler(), 1))
+            self.assertFalse(BookAccessService.guest_download_allowed(NoCookieHandler(), 1))
+            self.assertFalse(BookAccessService.guest_upload_allowed())
+            self.assertFalse(BookAccessService.guest_push_allowed())
+            # 分享链接归社区互动，不随多用户关闭
+            self.assertTrue(BookAccessService.share_link_enabled())
+        with mock.patch.dict(book_access_service.CONF, conf, clear=False), \
+                mock.patch.object(BookShareService, "granted_share", return_value=share):
+            self.assertTrue(BookAccessService.share_read_granted(NoCookieHandler(), 1))
+            self.assertTrue(BookAccessService.share_download_granted(NoCookieHandler(), 1))
+
+    def test_community_off_closes_share(self):
+        share = mock.Mock(allow_read=True, allow_download=True)
+        conf = {
+            "ENABLE_MODULE_COMMUNITY": False,
+            "ENABLE_SHARE_LINK": True,
+        }
+        with mock.patch.dict(book_access_service.CONF, conf, clear=False), \
+                mock.patch.object(BookShareService, "granted_share", return_value=share):
+            self.assertFalse(BookAccessService.share_link_enabled())
+            self.assertFalse(BookAccessService.share_read_granted(NoCookieHandler(), 1))
+            self.assertFalse(BookAccessService.share_download_granted(NoCookieHandler(), 1))
+
     def test_share_link_flag_disables_existing_grants(self):
         share = mock.Mock(allow_read=True, allow_download=True)
         conf = {"REQUIRE_LOGIN": False, "ENABLE_SHARE_LINK": False}
@@ -112,6 +163,9 @@ class TestBookListGuestRead(unittest.TestCase):
         reader.id, reader.username, reader.name = 1, "u1", "Alice"
         self.session.add(reader)
         self.session.commit()
+        patcher = mock.patch.dict(book_access_service.CONF, MODULE_DEFAULTS, clear=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         patcher = mock.patch.dict(book_access_service.CONF, {"ALLOW_GUEST_READ": False}, clear=False)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -158,6 +212,17 @@ class TestBookListGuestRead(unittest.TestCase):
         row = BookListService.update(self.session, row, guest_read=True)
         self.assertFalse(row.guest_read)
 
+    def test_community_off_keeps_booklist_guest_read(self):
+        # 书单是核心能力，社区互动关闭不应收回公开书单的 guest_read
+        self.make_list()
+        self.assertTrue(self.allowed(10))
+        with mock.patch.dict(
+            book_access_service.CONF,
+            {"ENABLE_MODULE_COMMUNITY": False},
+            clear=False,
+        ):
+            self.assertTrue(self.allowed(10))
+
     def test_deleting_booklist_revokes_access(self):
         row = self.make_list()
         BookListService.delete(self.session, row)
@@ -173,28 +238,6 @@ class TestBookListGuestRead(unittest.TestCase):
         self.assertIsNone(BookAccessService.guest_read_source(NoCookieHandler(), 10))
         self.make_list()
         self.assertEqual(BookAccessService.guest_read_source(NoCookieHandler(), 10), "booklist")
-
-    def test_module_off_revokes_booklist_guest_read(self):
-        # 社区互动模块关闭后书单入口与接口都下线，guest_read 授权必须一并失效；
-        # 只影响判定，不动数据，重新打开即恢复
-        self.make_list()
-        with mock.patch("webserver.base.modules.module_enabled", return_value=False):
-            self.assertFalse(self.allowed(10))
-            self.assertFalse(self.allowed())
-            self.assertIsNone(BookAccessService.guest_read_source(NoCookieHandler(), 10))
-            # 早期返回只拦书单来源：分享链接与全局「访客可读」优先级不变
-            with mock.patch.object(BookAccessService, "_share_allows", return_value=True):
-                self.assertEqual(
-                    BookAccessService.guest_read_source(NoCookieHandler(), 10), "share"
-                )
-            with mock.patch.dict(book_access_service.CONF, {"ALLOW_GUEST_READ": True}):
-                self.assertEqual(
-                    BookAccessService.guest_read_source(NoCookieHandler(), 10), "global"
-                )
-        self.assertTrue(self.allowed(10))
-        self.assertIsNone(BookAccessService.guest_read_source(NoCookieHandler(), 11))
-        with mock.patch.dict(book_access_service.CONF, {"ALLOW_GUEST_READ": True}):
-            self.assertEqual(BookAccessService.guest_read_source(NoCookieHandler(), 11), "global")
 
     def test_global_flag_still_wins(self):
         with mock.patch.dict(book_access_service.CONF, {"ALLOW_GUEST_READ": True}):

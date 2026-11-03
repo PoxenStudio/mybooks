@@ -133,7 +133,7 @@
                         hide-details
                     ></v-select>
                 </v-col>
-                <v-col v-if="communityModuleOn" cols="12" sm="6" md="4" class="mb-2">
+                <v-col cols="12" sm="6" md="4" class="mb-2">
                     <v-checkbox
                         v-model="importSole"
                         :label="$t('imports.import_sole_option')"
@@ -395,15 +395,10 @@ export default {
         allowPhysicalBooks() {
             return !!(this.$store.state.sys && this.$store.state.sys.allow && this.$store.state.sys.allow.physical_books);
         },
-        // 有声书模块开关：关闭后不显示「导入有声书」，也不再去查音频导入状态
+        // 有声书模块开关：关闭后不显示「导入有声书」与批量删除提示
         audioModuleOn() {
             const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
             return mods.audio !== false;
-        },
-        // 社区互动模块开关：关闭后不显示「设为私藏」，提交时也不再携带 sole
-        communityModuleOn() {
-            const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
-            return mods.community !== false;
         },
         pageCount: function () {
             return parseInt(this.total / 20);
@@ -576,7 +571,7 @@ export default {
             // 社区模块关闭时复选框已隐藏，这里兜底不把残留的 true 发出去
             return this.$backend("/admin/import/run", {
                 method: "POST",
-                body: JSON.stringify(Object.assign({ sole: this.importSole && this.communityModuleOn }, payload)),
+                body: JSON.stringify(Object.assign({ sole: this.importSole }, payload)),
             }).then((rsp) => {
                 if (rsp.err !== "ok") {
                     this.$alert("error", rsp.msg);
@@ -807,10 +802,9 @@ export default {
                     }
                 });
 
-            // Check audio import status（有声书模块关闭时跳过该请求）
-            if (this.audioModuleOn) {
-                this.$backend("/admin/audio_import/status")
-                    .then((rsp) => {
+            // Check audio import status
+            this.$backend("/admin/audio_import/status")
+                .then((rsp) => {
                         if (rsp.err !== "ok") {
                             return;
                         }
@@ -834,7 +828,6 @@ export default {
                             this.audioImporting = false;
                         }
                     });
-            }
 
             // Check batch add status
             this.$backend("/admin/batch_add/status")
