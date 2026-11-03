@@ -28,6 +28,7 @@ class NoCookieHandler:
 MODULE_DEFAULTS = {
     "ENABLE_MODULE_MULTIUSER": True,
     "ENABLE_MODULE_COMMUNITY": True,
+    "ENABLE_MODULE_SHARED_READING": True,
     "ENABLE_MODULE_AUDIO": True,
     "ENABLE_MODULE_PHYSICAL": True,
     "ENABLE_MODULE_AI": True,
@@ -213,7 +214,7 @@ class TestBookListGuestRead(unittest.TestCase):
         self.assertFalse(row.guest_read)
 
     def test_community_off_keeps_booklist_guest_read(self):
-        # 书单是核心能力，社区互动关闭不应收回公开书单的 guest_read
+        # 社区互动关闭不影响书单；书单归共享阅读模块
         self.make_list()
         self.assertTrue(self.allowed(10))
         with mock.patch.dict(
@@ -222,6 +223,16 @@ class TestBookListGuestRead(unittest.TestCase):
             clear=False,
         ):
             self.assertTrue(self.allowed(10))
+
+    def test_shared_reading_off_revokes_booklist_guest_read(self):
+        self.make_list()
+        self.assertTrue(self.allowed(10))
+        with mock.patch.dict(
+            book_access_service.CONF,
+            {"ENABLE_MODULE_SHARED_READING": False},
+            clear=False,
+        ):
+            self.assertFalse(self.allowed(10))
 
     def test_deleting_booklist_revokes_access(self):
         row = self.make_list()

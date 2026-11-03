@@ -608,7 +608,7 @@ class UserInfo(BaseHandler):
             return d
 
         enable_review = CONF.get("ENABLE_BOOK_REVIEW", True) and feature_modules.module_enabled(
-            feature_modules.MODULE_COMMUNITY
+            feature_modules.MODULE_SHARED_READING
         )
 
         d.update(

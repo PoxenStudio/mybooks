@@ -101,7 +101,7 @@ class Index(BaseHandler):
         是否展示这张卡由 HOMEPAGE_CONFIG 决定（见 homepage_from_legacy：老站点的
         ENABLE_BOOK_RECOMMEND_TO_OTHERS 只用于推导初始可见性）。这个 flag 继续管
         "评价是否计入推荐人数/详情页推荐"，不再反过来让首页卡片永远取不到数据。"""
-        if not feature_modules.module_enabled(feature_modules.MODULE_COMMUNITY):
+        if not feature_modules.module_enabled(feature_modules.MODULE_SHARED_READING):
             return []
         if not CONF.get("ENABLE_BOOK_REVIEW", True) or perf.lite_on("LITE_NO_RECOMMEND"):
             return []
@@ -151,7 +151,7 @@ class Index(BaseHandler):
         return frozenset(ids[:MAX_SHOWN_IDS])
 
     def _recommend_home_ids(self, cnt_random, cnt_recent, exclude_ids, seed, reader_id):
-        if not feature_modules.module_enabled(feature_modules.MODULE_COMMUNITY):
+        if not feature_modules.module_enabled(feature_modules.MODULE_SHARED_READING):
             return None
         if not CONF.get("RECOMMEND_ENABLE", True):
             return None
@@ -4136,7 +4136,7 @@ class BookSuggestion(ListHandler):
         book = self.get_book(id, raise_exception=False)
         if not book:
             return {"err": "params.book.invalid", "msg": _("书籍已不存在")}
-        if not feature_modules.module_enabled(feature_modules.MODULE_COMMUNITY):
+        if not feature_modules.module_enabled(feature_modules.MODULE_SHARED_READING):
             return {"err": "ok", "msg": _("推荐成功"), "books": []}
         if perf.lite_on("LITE_NO_RECOMMEND"):
             return {"err": "ok", "msg": _("推荐成功"), "books": []}

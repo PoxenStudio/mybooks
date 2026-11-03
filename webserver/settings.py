@@ -87,6 +87,7 @@ settings = {
     # 关闭后入口隐藏、设置不渲染、接口拒绝；不删除任何已有数据。
     "ENABLE_MODULE_MULTIUSER": True,
     "ENABLE_MODULE_COMMUNITY": True,
+    "ENABLE_MODULE_SHARED_READING": True,
     "ENABLE_MODULE_AUDIO": True,
     "ENABLE_MODULE_PHYSICAL": True,
     "ENABLE_MODULE_AI": True,

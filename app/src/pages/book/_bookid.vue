@@ -351,7 +351,7 @@
                                     <v-icon>mdi-cloud-outline</v-icon>
                                     {{ book.shared ? $t('share.manageShare') : $t('share.createShare') }}
                                 </v-list-item>
-                                <v-list-item v-if="communityModuleOn" @click="generateShareCard" :disabled="!hasEBooks">
+                                <v-list-item v-if="sharedReadingModuleOn" @click="generateShareCard" :disabled="!hasEBooks">
                                     <v-icon>mdi-card-bulleted-outline</v-icon>
                                     {{ $t('book.generateShareCard') }}
                                 </v-list-item>
@@ -475,7 +475,7 @@
                                         </template>
                                         <span>{{ $t('readingState.wantsHint') }}</span>
                                     </v-tooltip>
-                                    <BookListQuickAddMenu v-if="$store.state.user?.is_login" :book-id="book.id">
+                                    <BookListQuickAddMenu v-if="$store.state.user?.is_login && sharedReadingModuleOn" :book-id="book.id">
                                         <template v-slot:activator="{ on, attrs }">
                                             <v-tooltip bottom>
                                                 <template v-slot:activator="{ on: onTooltip, attrs: attrsTooltip }">
@@ -1490,10 +1490,10 @@ export default {
             const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
             return mods.audio !== false;
         },
-        /** 社区互动模块（sys.modules.community）：书单、书评、推荐、读书卡片 */
-        communityModuleOn() {
+        /** 共享阅读模块（sys.modules.shared_reading）：书单、书评、推荐、读书卡片 */
+        sharedReadingModuleOn() {
             const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
-            return mods.community !== false;
+            return mods.shared_reading !== false;
         },
         /** 实体书模块（sys.modules.physical）：关闭后互转、册数与书架位置一起消失 */
         physicalModuleOn() {

@@ -35,6 +35,8 @@
                                 prepend-icon="mdi-account-multiple-outline" hide-details class="mt-0"></v-checkbox>
                             <v-checkbox v-model="moduleCommunity" :label="$t('install.moduleCommunity')"
                                 prepend-icon="mdi-account-group-outline" hide-details class="mt-0"></v-checkbox>
+                            <v-checkbox v-model="moduleSharedReading" :label="$t('install.moduleSharedReading')"
+                                prepend-icon="mdi-format-list-bulleted-square" hide-details class="mt-0"></v-checkbox>
                             <v-checkbox v-model="moduleAudio" :label="$t('install.moduleAudio')"
                                 prepend-icon="mdi-headphones" hide-details class="mt-0"></v-checkbox>
                             <v-checkbox v-model="modulePhysical" :label="$t('install.modulePhysical')"
@@ -66,10 +68,11 @@ export default {
         email: "",
         code: "",
         invite: false,
-        // 新装默认勾多用户/有声书/实体书/AI；社区互动默认关闭。
+        // 新装默认勾多用户/共享阅读/有声书/实体书/AI；社区互动默认关闭。
         // 后端 MODULES 默认仍为 true，用于老实例升级零变化。
         moduleMultiUser: true,
         moduleCommunity: false,
+        moduleSharedReading: true,
         moduleAudio: true,
         modulePhysical: true,
         moduleAi: true,
@@ -177,6 +180,7 @@ export default {
             data.append('language', this.language);
             data.append('ENABLE_MODULE_MULTIUSER', this.moduleMultiUser ? 'true' : 'false');
             data.append('ENABLE_MODULE_COMMUNITY', this.moduleCommunity ? 'true' : 'false');
+            data.append('ENABLE_MODULE_SHARED_READING', this.moduleSharedReading ? 'true' : 'false');
             data.append('ENABLE_MODULE_AUDIO', this.moduleAudio ? 'true' : 'false');
             data.append('ENABLE_MODULE_PHYSICAL', this.modulePhysical ? 'true' : 'false');
             data.append('ENABLE_MODULE_AI', this.moduleAi ? 'true' : 'false');

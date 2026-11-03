@@ -28,6 +28,7 @@ from webserver.i18n import _
 
 MODULE_MULTIUSER = "multiuser"
 MODULE_COMMUNITY = "community"
+MODULE_SHARED_READING = "shared_reading"
 MODULE_AUDIO = "audio"
 MODULE_PHYSICAL = "physical"
 MODULE_AI = "ai"
@@ -47,6 +48,11 @@ MODULES = {
         "default": True,
         "name": "社区互动",
     },
+    MODULE_SHARED_READING: {
+        "key": "ENABLE_MODULE_SHARED_READING",
+        "default": True,
+        "name": "共享阅读",
+    },
     MODULE_AUDIO: {
         "key": "ENABLE_MODULE_AUDIO",
         "default": True,
@@ -64,7 +70,7 @@ MODULES = {
     },
 }
 
-# 五个模块互不依赖，可单独启停。
+# 六个模块互不依赖，可单独启停。
 MODULE_DEPENDENCIES = {}
 
 # 模块关闭时写入的主开关。只放主开关：子选项、密钥、列表数据不在此表。
@@ -83,9 +89,11 @@ MODULE_OFF_SWITCHES = {
     MODULE_COMMUNITY: {
         "ENABLE_USER_MEMOS": False,
         "ENABLE_SHARE_LINK": False,
+        "ENABLE_SHARED_NOTES": False,
+    },
+    MODULE_SHARED_READING: {
         "RECOMMEND_ENABLE": False,
         "ENABLE_BOOK_REVIEW": False,
-        "ENABLE_SHARED_NOTES": False,
     },
     # 有声书没有单一主开关：模块闸门负责入口与接口，播客/字幕等子开关保持原值。
     MODULE_AUDIO: {},
@@ -107,9 +115,11 @@ MODULE_ON_SWITCHES = {
     },
     MODULE_COMMUNITY: {
         "ENABLE_USER_MEMOS": True,
+        "ENABLE_SHARED_NOTES": True,
+    },
+    MODULE_SHARED_READING: {
         "RECOMMEND_ENABLE": True,
         "ENABLE_BOOK_REVIEW": True,
-        "ENABLE_SHARED_NOTES": True,
     },
     MODULE_AUDIO: {},
     MODULE_PHYSICAL: {
@@ -252,7 +262,7 @@ class ModuleGateMixin:
     用法::
 
         class BookList(ModuleGateMixin, BaseHandler):
-            module_id = MODULE_COMMUNITY
+            module_id = MODULE_SHARED_READING
 
     - JSON 接口默认返回 ``{"err": "module.disabled"}``（200，沿用项目里 @js 的约定）；
     - 文件流/订阅源/分享页等非 JSON 响应把 ``module_gate_json`` 置 False，改成 404，

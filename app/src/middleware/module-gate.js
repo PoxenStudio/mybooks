@@ -29,7 +29,15 @@ const ROUTE_MODULES = [
             path === "/admin/all-expected" ||
             path.startsWith("/admin/all-expected/") ||
             path === "/admin/shares" ||
-            path.startsWith("/admin/shares/") ||
+            path.startsWith("/admin/shares/"),
+    },
+    {
+        id: "shared_reading",
+        test: (path) =>
+            path === "/booklists" ||
+            path.startsWith("/booklists/") ||
+            path === "/booklist" ||
+            path.startsWith("/booklist/") ||
             path === "/admin/book-reviews" ||
             path.startsWith("/admin/book-reviews/"),
     },

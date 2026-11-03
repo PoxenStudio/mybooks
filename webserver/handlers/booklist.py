@@ -13,6 +13,7 @@ import logging
 import tornado.escape
 
 from webserver import loader
+from webserver.base import modules as feature_modules
 from webserver.handlers.base import BaseHandler, auth, is_admin, js
 from webserver.i18n import _
 from webserver.models import BookList
@@ -115,7 +116,8 @@ class BookListHandlerMixin:
         return row, None
 
 
-class BookListMineHandler(BaseHandler, BookListHandlerMixin):
+class BookListMineHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
+    module_id = feature_modules.MODULE_SHARED_READING
 
     @js
     @auth
@@ -124,7 +126,8 @@ class BookListMineHandler(BaseHandler, BookListHandlerMixin):
         return {"err": "ok", "booklists": self._serialize_many(rows, viewer_id=self.user_id())}
 
 
-class BookListPublicHandler(BaseHandler, BookListHandlerMixin):
+class BookListPublicHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
+    module_id = feature_modules.MODULE_SHARED_READING
 
     @js
     def get(self):
@@ -135,7 +138,8 @@ class BookListPublicHandler(BaseHandler, BookListHandlerMixin):
         return {"err": "ok", "total": total, "page": page, "page_size": page_size, "booklists": self._serialize_many(rows, viewer_id=viewer_id)}
 
 
-class BookListLikedHandler(BaseHandler, BookListHandlerMixin):
+class BookListLikedHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
+    module_id = feature_modules.MODULE_SHARED_READING
 
     @js
     @auth
@@ -144,7 +148,9 @@ class BookListLikedHandler(BaseHandler, BookListHandlerMixin):
         return {"err": "ok", "booklists": self._serialize_many(rows, viewer_id=self.user_id())}
 
 
-class BookListHomepageHandler(BaseHandler, BookListHandlerMixin):
+class BookListHomepageHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
+    module_id = feature_modules.MODULE_SHARED_READING
+
     @js
     def get(self):
         if not CONF.get("ENABLE_HOMEPAGE_BOOKLISTS", True):
@@ -154,7 +160,8 @@ class BookListHomepageHandler(BaseHandler, BookListHandlerMixin):
         return {"err": "ok", "booklists": self._serialize_many(rows, viewer_id=viewer_id)}
 
 
-class BookListCreateHandler(BaseHandler, BookListHandlerMixin):
+class BookListCreateHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
+    module_id = feature_modules.MODULE_SHARED_READING
 
     @js
     @auth
@@ -182,7 +189,8 @@ class BookListCreateHandler(BaseHandler, BookListHandlerMixin):
         return {"err": "ok", "booklist": self._serialize(row, viewer_id=self.user_id()), "msg": _("创建成功")}
 
 
-class BookListDetailHandler(BaseHandler, BookListHandlerMixin):
+class BookListDetailHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
+    module_id = feature_modules.MODULE_SHARED_READING
 
     @js
     def get(self, id):
@@ -235,7 +243,8 @@ class BookListDetailHandler(BaseHandler, BookListHandlerMixin):
         return {"err": "ok", "booklist": self._serialize(row, viewer_id=self.user_id()), "msg": _("已更新")}
 
 
-class BookListDeleteHandler(BaseHandler, BookListHandlerMixin):
+class BookListDeleteHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
+    module_id = feature_modules.MODULE_SHARED_READING
 
     @js
     @auth
@@ -248,7 +257,8 @@ class BookListDeleteHandler(BaseHandler, BookListHandlerMixin):
         return {"err": "ok", "msg": _("已删除")}
 
 
-class BookListStickyHandler(BaseHandler, BookListHandlerMixin):
+class BookListStickyHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
+    module_id = feature_modules.MODULE_SHARED_READING
 
     @js
     @is_admin
@@ -266,7 +276,8 @@ class BookListStickyHandler(BaseHandler, BookListHandlerMixin):
         return {"err": "ok", "booklist": self._serialize(row, viewer_id=self.user_id()), "msg": _("已更新")}
 
 
-class BookListLikeHandler(BaseHandler, BookListHandlerMixin):
+class BookListLikeHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
+    module_id = feature_modules.MODULE_SHARED_READING
 
     @js
     @auth
@@ -280,7 +291,8 @@ class BookListLikeHandler(BaseHandler, BookListHandlerMixin):
         return {"err": "ok", "liked": liked}
 
 
-class BookListViewHandler(BaseHandler, BookListHandlerMixin):
+class BookListViewHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
+    module_id = feature_modules.MODULE_SHARED_READING
 
     @js
     def post(self, id):
@@ -294,7 +306,8 @@ class BookListViewHandler(BaseHandler, BookListHandlerMixin):
         return {"err": "ok"}
 
 
-class BookListBooksAddHandler(BaseHandler, BookListHandlerMixin):
+class BookListBooksAddHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
+    module_id = feature_modules.MODULE_SHARED_READING
 
     @js
     @auth
@@ -326,7 +339,8 @@ class BookListBooksAddHandler(BaseHandler, BookListHandlerMixin):
         return {"err": "ok", "added": added, "book_count": row.book_count, "msg": _("已加入书单")}
 
 
-class BookListBooksRemoveHandler(BaseHandler, BookListHandlerMixin):
+class BookListBooksRemoveHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
+    module_id = feature_modules.MODULE_SHARED_READING
 
     @js
     @auth
@@ -347,7 +361,9 @@ class BookListBooksRemoveHandler(BaseHandler, BookListHandlerMixin):
         return {"err": "ok", "book_count": row.book_count, "msg": _("已从书单移出")}
 
 
-class BookBookListsHandler(BaseHandler, BookListHandlerMixin):
+class BookBookListsHandler(feature_modules.ModuleGateMixin, BaseHandler, BookListHandlerMixin):
+    module_id = feature_modules.MODULE_SHARED_READING
+
     """供书籍详情页"快速加入书单"面板用：当前用户的书单列表 + 该书已在哪些书单中。"""
 
     @js

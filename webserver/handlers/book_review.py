@@ -12,7 +12,7 @@ import logging
 import tornado.escape
 
 from webserver import loader
-from webserver.base.modules import MODULE_COMMUNITY, ModuleGateMixin, module_enabled
+from webserver.base.modules import MODULE_SHARED_READING, ModuleGateMixin, module_enabled
 from webserver.handlers.base import BaseHandler, auth, js
 from webserver.i18n import _
 from webserver.models import BookReview, Reader
@@ -57,14 +57,14 @@ class BookSocialStatsHandler(BaseHandler):
         book_id = int(id)
         # get_stats 返回 TTL 缓存里的同一个 dict，先拷贝再降级，避免污染缓存。
         stats = dict(BookReviewService.get_stats(self.sqlite_session, book_id))
-        if not module_enabled(MODULE_COMMUNITY):
+        if not module_enabled(MODULE_SHARED_READING):
             # 共享阅读关闭时推荐人数不再下发；在读/收藏是核心阅读统计，保留。
             stats["recommend_count"] = 0
         return {"err": "ok", **stats}
 
 
 class BookReviewHandler(ModuleGateMixin, BaseHandler):
-    module_id = MODULE_COMMUNITY
+    module_id = MODULE_SHARED_READING
 
     @js
     @auth
@@ -113,7 +113,7 @@ class BookReviewHandler(ModuleGateMixin, BaseHandler):
 
 
 class BookReviewListHandler(ModuleGateMixin, BaseHandler):
-    module_id = MODULE_COMMUNITY
+    module_id = MODULE_SHARED_READING
 
     @js
     def get(self, id):

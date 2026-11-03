@@ -315,7 +315,7 @@ class AdminBookReviews(feature_modules.ModuleGateMixin, BaseHandler):
     """管理员"用户评论"管理页：分页列出所有评论，支持按状态过滤，以及通过/屏蔽/恢复操作。
     见 plan/Social_Reading_Plan.md §2.6。"""
 
-    module_id = feature_modules.MODULE_COMMUNITY
+    module_id = feature_modules.MODULE_SHARED_READING
 
     @js
     @is_admin

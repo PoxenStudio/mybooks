@@ -158,7 +158,8 @@ def get_homepage_config(apply_modules=True):
 # 设置页必须用 apply_modules=False 取原样配置——否则管理员关闭模块期间保存一次，
 # 这份「强制隐藏」就会被写进用户存的 HOMEPAGE_CONFIG，重新打开模块后卡片也回不来。
 CARD_MODULES = {
-    "index.socialRecommendation": "community",
+    "index.socialRecommendation": "shared_reading",
+    "index.booklistRecommendation": "shared_reading",
 }
 
 

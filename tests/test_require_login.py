@@ -22,6 +22,7 @@ from webserver.services.book_share_service import BookShareService
 MODULE_DEFAULTS = {
     "ENABLE_MODULE_MULTIUSER": True,
     "ENABLE_MODULE_COMMUNITY": True,
+    "ENABLE_MODULE_SHARED_READING": True,
     "ENABLE_MODULE_AUDIO": True,
     "ENABLE_MODULE_PHYSICAL": True,
     "ENABLE_MODULE_AI": True,
@@ -617,6 +618,7 @@ class TestAllowFlags(unittest.TestCase):
             "ENABLE_SHARE_LINK",
             "ENABLE_MODULE_MULTIUSER",
             "ENABLE_MODULE_COMMUNITY",
+            "ENABLE_MODULE_SHARED_READING",
             "ENABLE_BOOK_REVIEW",
             "ENABLE_BOOK_RECOMMEND_TO_OTHERS",
             "ENABLE_SHARED_NOTES",
@@ -684,10 +686,20 @@ class TestAllowFlags(unittest.TestCase):
         CONF["ENABLE_SHARED_NOTES"] = True
         CONF["ENABLE_SHARE_LINK"] = True
         flags = _bare_handler("/").allow_flags()
-        self.assertFalse(flags["book_review"])
-        self.assertFalse(flags["book_recommend"])
+        # 书评/推荐归共享阅读，不随社区关闭
+        self.assertTrue(flags["book_review"])
+        self.assertTrue(flags["book_recommend"])
         self.assertFalse(flags["shared_notes"])
         self.assertFalse(flags["share_link"])
+
+    def test_shared_reading_off_degrades_review_flags(self):
+        CONF["ENABLE_MODULE_MULTIUSER"] = True
+        CONF["ENABLE_MODULE_SHARED_READING"] = False
+        CONF["ENABLE_BOOK_REVIEW"] = True
+        CONF["ENABLE_BOOK_RECOMMEND_TO_OTHERS"] = True
+        flags = _bare_handler("/").allow_flags()
+        self.assertFalse(flags["book_review"])
+        self.assertFalse(flags["book_recommend"])
 
 
 if __name__ == "__main__":

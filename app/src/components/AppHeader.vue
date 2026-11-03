@@ -525,8 +525,8 @@ export default {
             sidebar_items: [],
             socials: [],
             friends: [],
-            // 功能模块快照（multiuser / community / audio / physical / ai）；加载完成前按全开处理
-            modules: { multiuser: true, community: true, audio: true, physical: true, ai: true },
+            // 功能模块快照（multiuser / community / shared_reading / audio / physical / ai）；加载完成前按全开处理
+            modules: { multiuser: true, community: true, shared_reading: true, audio: true, physical: true, ai: true },
             allow: {
                 register: true,
                 download: true,
@@ -711,7 +711,7 @@ export default {
                 .concat(this.user.is_login ? userLinks : [])
                 .concat(this.user.is_admin ? adminLinks : [])
                 .concat(this.user.is_login ? readingLinks : [])
-                .concat(this.user.is_login && showItem("booklists") ? booklistLinks: [])
+                .concat(this.user.is_login && this.moduleOn("shared_reading") && showItem("booklists") ? booklistLinks: [])
                 .concat(navLinks)
                 .concat(this.moduleOn("community") && this.sys.allow.user_memos ? memoLink : [])
                 .concat(this.moduleOn("community") && showItem("friends") && this.sys.friends.length > 0 ? friendLinks : [])

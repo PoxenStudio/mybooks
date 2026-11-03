@@ -445,6 +445,7 @@ class BaseHandler(web.RequestHandler):
         """
         require_login = self.require_login_enabled()
         community = feature_modules.module_enabled(feature_modules.MODULE_COMMUNITY)
+        shared_reading = feature_modules.module_enabled(feature_modules.MODULE_SHARED_READING)
         # 站内留言属于社区互动模块：模块关闭时即使旧开关还开着也按关闭下发
         user_memos = CONF.get("ENABLE_USER_MEMOS", True)
         if not community:
@@ -460,8 +461,8 @@ class BaseHandler(web.RequestHandler):
         share_link = CONF.get("ENABLE_SHARE_LINK", True)
         if not community:
             share_link = False
-        book_review = CONF.get("ENABLE_BOOK_REVIEW", True) and community
-        book_recommend = CONF.get("ENABLE_BOOK_RECOMMEND_TO_OTHERS", True) and community
+        book_review = CONF.get("ENABLE_BOOK_REVIEW", True) and shared_reading
+        book_recommend = CONF.get("ENABLE_BOOK_RECOMMEND_TO_OTHERS", True) and shared_reading
         shared_notes = CONF.get("ENABLE_SHARED_NOTES", True) and community
         return {
             "register": allow_register,

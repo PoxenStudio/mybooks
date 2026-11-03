@@ -1256,6 +1256,7 @@ const SETTING_TEXT_TYPES = ["text", "textarea", "select", "number"];
 const MODULE_SETTING_KEYS = {
   multiuser: "ENABLE_MODULE_MULTIUSER",
   community: "ENABLE_MODULE_COMMUNITY",
+  shared_reading: "ENABLE_MODULE_SHARED_READING",
   audio: "ENABLE_MODULE_AUDIO",
   physical: "ENABLE_MODULE_PHYSICAL",
   ai: "ENABLE_MODULE_AI",
@@ -1935,13 +1936,14 @@ export default {
                   value: v,
                 })),
               },
-              { icon: "mdi-auto-fix", key: "RECOMMEND_ENABLE", label: "settings.recommend_enable", type: "checkbox", module: "community" },
-              { icon: "mdi-account-group-outline", key: "RECOMMEND_USE_CROWD", label: "settings.recommend_use_crowd", type: "checkbox", module: "community" },
+              { icon: "mdi-auto-fix", key: "RECOMMEND_ENABLE", label: "settings.recommend_enable", type: "checkbox", module: "shared_reading" },
+              { icon: "mdi-account-group-outline", key: "RECOMMEND_USE_CROWD", label: "settings.recommend_use_crowd", type: "checkbox", module: "shared_reading" },
               {
                 icon: "mdi-image-multiple-outline",
                 key: "ENABLE_BOOKLIST_COVER_SCROLL",
                 label: "settings.booklist_cover_scroll",
                 type: "checkbox",
+                module: "shared_reading",
               },
               {
                 icon: "mdi-book-multiple",
@@ -2000,7 +2002,7 @@ export default {
                   { value: "series", text: "appHeader.series" },
                   { value: "languages", text: "appHeader.languages" },
                   { value: "rating", text: "appHeader.rating" },
-                  { value: "booklists", text: "appHeader.booklists" },
+                  { value: "booklists", text: "appHeader.booklists", module: "shared_reading" },
                   { value: "friends", text: "appHeader.friendLinks", module: "community" },
                 ],
               },
@@ -2063,7 +2065,7 @@ export default {
             id: "reader-review",
             icon: "mdi-forum-outline",
             title: "settings.sec_reader_review",
-            module: "community",
+            module: "shared_reading",
             fields: [
               { icon: "mdi-star-outline", key: "ENABLE_BOOK_REVIEW", label: "settings.enable_book_review", type: "checkbox" },
               { icon: "mdi-shield-check-outline", key: "REVIEW_REQUIRES_APPROVAL", label: "settings.review_requires_approval", type: "checkbox" },
@@ -2875,7 +2877,7 @@ export default {
       });
       return state;
     },
-    // 5 个模块互不依赖，有效状态即存储状态。
+    // 6 个模块互不依赖，有效状态即存储状态。
     moduleState() {
       return { ...this.storedModuleState };
     },

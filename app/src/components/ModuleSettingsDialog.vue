@@ -12,26 +12,28 @@
         @input="$emit('input', $event)"
         @confirm="confirm"
     >
-        <v-checkbox
-            v-for="mod in moduleDefs"
-            :key="mod.id"
-            :input-value="local[mod.id]"
-            :label="$t(mod.label)"
-            hide-details
-            dense
-            class="mb-2"
-            @change="onToggle(mod.id, $event)"
-        ></v-checkbox>
+        <div v-for="mod in moduleDefs" :key="mod.id" class="mb-3">
+            <v-checkbox
+                :input-value="local[mod.id]"
+                :label="$t(mod.label)"
+                hide-details
+                dense
+                class="mt-0"
+                @change="onToggle(mod.id, $event)"
+            ></v-checkbox>
+            <div class="text-caption grey--text ml-8">{{ $t(mod.tips) }}</div>
+        </div>
     </AppDialog>
 </template>
 
 <script>
 const MODULE_DEFS = [
-    { id: "multiuser", label: "settings.enable_module_multiuser" },
-    { id: "community", label: "settings.enable_module_community" },
-    { id: "audio", label: "settings.enable_module_audio" },
-    { id: "physical", label: "settings.enable_module_physical" },
-    { id: "ai", label: "settings.enable_module_ai" },
+    { id: "multiuser", label: "settings.enable_module_multiuser", tips: "settings.enable_module_multiuser_tips" },
+    { id: "community", label: "settings.enable_module_community", tips: "settings.enable_module_community_tips" },
+    { id: "shared_reading", label: "settings.enable_module_shared_reading", tips: "settings.enable_module_shared_reading_tips" },
+    { id: "audio", label: "settings.enable_module_audio", tips: "settings.enable_module_audio_tips" },
+    { id: "physical", label: "settings.enable_module_physical", tips: "settings.enable_module_physical_tips" },
+    { id: "ai", label: "settings.enable_module_ai", tips: "settings.enable_module_ai_tips" },
 ];
 
 export default {

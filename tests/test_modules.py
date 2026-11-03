@@ -2,7 +2,7 @@
 # -*- coding: UTF-8 -*-
 """模块级开关（webserver/base/modules.py）的单元测试。
 
-5 个模块互不依赖：multiuser / community / audio / physical / ai。
+6 个模块互不依赖：multiuser / community / shared_reading / audio / physical / ai。
 重点守：安全默认值写入、路由归属、数据/密钥不被覆盖、OPDS 匿名优先级。
 """
 
@@ -17,6 +17,7 @@ from webserver.base.modules import (
     MODULE_COMMUNITY,
     MODULE_MULTIUSER,
     MODULE_PHYSICAL,
+    MODULE_SHARED_READING,
     MODULES,
     ModuleGateMixin,
     apply_module_switch_effects,
@@ -33,7 +34,7 @@ from webserver.base.modules import (
 class TestModuleEnabled(unittest.TestCase):
 
     def test_default_enabled_when_key_absent(self):
-        for module_id in (MODULE_MULTIUSER, MODULE_COMMUNITY, MODULE_AUDIO, MODULE_PHYSICAL, MODULE_AI):
+        for module_id in (MODULE_MULTIUSER, MODULE_COMMUNITY, MODULE_SHARED_READING, MODULE_AUDIO, MODULE_PHYSICAL, MODULE_AI):
             with self.subTest(module=module_id):
                 self.assertTrue(module_enabled(module_id, settings={}))
 
@@ -62,12 +63,14 @@ class TestModuleEnabled(unittest.TestCase):
         settings = {
             "ENABLE_MODULE_MULTIUSER": False,
             "ENABLE_MODULE_COMMUNITY": False,
+            "ENABLE_MODULE_SHARED_READING": False,
             "ENABLE_MODULE_AUDIO": False,
             "ENABLE_MODULE_PHYSICAL": True,
             "ENABLE_MODULE_AI": True,
         }
         self.assertFalse(module_enabled(MODULE_MULTIUSER, settings=settings))
         self.assertFalse(module_enabled(MODULE_COMMUNITY, settings=settings))
+        self.assertFalse(module_enabled(MODULE_SHARED_READING, settings=settings))
         self.assertFalse(module_enabled(MODULE_AUDIO, settings=settings))
         self.assertTrue(module_enabled(MODULE_PHYSICAL, settings=settings))
         self.assertTrue(module_enabled(MODULE_AI, settings=settings))
@@ -110,6 +113,7 @@ class TestSnapshot(unittest.TestCase):
             {
                 MODULE_MULTIUSER: True,
                 MODULE_COMMUNITY: True,
+                MODULE_SHARED_READING: True,
                 MODULE_AUDIO: True,
                 MODULE_PHYSICAL: True,
                 MODULE_AI: True,
@@ -121,6 +125,7 @@ class TestSnapshot(unittest.TestCase):
             {
                 "ENABLE_MODULE_MULTIUSER": False,
                 "ENABLE_MODULE_COMMUNITY": True,
+                "ENABLE_MODULE_SHARED_READING": False,
                 "ENABLE_MODULE_AUDIO": False,
                 "ENABLE_MODULE_PHYSICAL": True,
                 "ENABLE_MODULE_AI": False,
@@ -128,6 +133,7 @@ class TestSnapshot(unittest.TestCase):
         )
         self.assertFalse(state[MODULE_MULTIUSER])
         self.assertTrue(state[MODULE_COMMUNITY])
+        self.assertFalse(state[MODULE_SHARED_READING])
         self.assertFalse(state[MODULE_AUDIO])
         self.assertTrue(state[MODULE_PHYSICAL])
         self.assertFalse(state[MODULE_AI])
@@ -193,9 +199,9 @@ class TestApplyModuleSwitchEffects(unittest.TestCase):
             "ENABLE_MODULE_COMMUNITY": False,
             "ENABLE_USER_MEMOS": True,
             "ENABLE_SHARE_LINK": True,
+            "ENABLE_SHARED_NOTES": True,
             "RECOMMEND_ENABLE": True,
             "ENABLE_BOOK_REVIEW": True,
-            "ENABLE_SHARED_NOTES": True,
             "HOMEPAGE_CONFIG": {"order": []},
             "SIDEBAR_ITEMS": ["authors"],
         }
@@ -205,32 +211,60 @@ class TestApplyModuleSwitchEffects(unittest.TestCase):
         for key in (
             "ENABLE_USER_MEMOS",
             "ENABLE_SHARE_LINK",
-            "RECOMMEND_ENABLE",
-            "ENABLE_BOOK_REVIEW",
             "ENABLE_SHARED_NOTES",
         ):
             self.assertFalse(args[key], key)
+        # 推荐/书评归共享阅读，不随社区关闭
+        self.assertTrue(args["RECOMMEND_ENABLE"])
+        self.assertTrue(args["ENABLE_BOOK_REVIEW"])
         self.assertEqual(args["HOMEPAGE_CONFIG"], {"order": []})
         self.assertEqual(args["SIDEBAR_ITEMS"], ["authors"])
+
+    def test_shared_reading_off_writes_feature_defaults(self):
+        args = {
+            "ENABLE_MODULE_SHARED_READING": False,
+            "RECOMMEND_ENABLE": True,
+            "ENABLE_BOOK_REVIEW": True,
+            "ENABLE_SHARE_LINK": True,
+            "ENABLE_USER_MEMOS": True,
+            "HOMEPAGE_CONFIG": {"order": []},
+        }
+        apply_module_switch_effects(
+            args, {"ENABLE_MODULE_SHARED_READING": True}
+        )
+        self.assertFalse(args["RECOMMEND_ENABLE"])
+        self.assertFalse(args["ENABLE_BOOK_REVIEW"])
+        # 社区开关不随共享阅读关闭
+        self.assertTrue(args["ENABLE_SHARE_LINK"])
+        self.assertTrue(args["ENABLE_USER_MEMOS"])
+        self.assertEqual(args["HOMEPAGE_CONFIG"], {"order": []})
 
     def test_community_on_restores_features_but_not_share_link(self):
         args = {
             "ENABLE_MODULE_COMMUNITY": True,
             "ENABLE_USER_MEMOS": False,
             "ENABLE_SHARE_LINK": False,
-            "RECOMMEND_ENABLE": False,
-            "ENABLE_BOOK_REVIEW": False,
             "ENABLE_SHARED_NOTES": False,
         }
         apply_module_switch_effects(
             args, {"ENABLE_MODULE_COMMUNITY": False}
         )
         self.assertTrue(args["ENABLE_USER_MEMOS"])
-        self.assertTrue(args["RECOMMEND_ENABLE"])
-        self.assertTrue(args["ENABLE_BOOK_REVIEW"])
         self.assertTrue(args["ENABLE_SHARED_NOTES"])
         # 分享链接是访问控制，不自动恢复
         self.assertFalse(args["ENABLE_SHARE_LINK"])
+
+    def test_shared_reading_on_restores_review_and_recommend(self):
+        args = {
+            "ENABLE_MODULE_SHARED_READING": True,
+            "RECOMMEND_ENABLE": False,
+            "ENABLE_BOOK_REVIEW": False,
+        }
+        apply_module_switch_effects(
+            args, {"ENABLE_MODULE_SHARED_READING": False}
+        )
+        self.assertTrue(args["RECOMMEND_ENABLE"])
+        self.assertTrue(args["ENABLE_BOOK_REVIEW"])
 
     def test_audio_off_has_no_safe_defaults(self):
         args = {"ENABLE_MODULE_AUDIO": False, "ENABLE_PODCAST_SERVICE": True}
@@ -254,12 +288,12 @@ class TestApplyModuleSwitchEffects(unittest.TestCase):
 
     def test_already_on_does_not_touch_sub_switches(self):
         args = {
-            "ENABLE_MODULE_COMMUNITY": True,
+            "ENABLE_MODULE_SHARED_READING": True,
             "RECOMMEND_ENABLE": False,
             "ENABLE_BOOK_REVIEW": False,
         }
         apply_module_switch_effects(
-            args, {"ENABLE_MODULE_COMMUNITY": True}
+            args, {"ENABLE_MODULE_SHARED_READING": True}
         )
         self.assertFalse(args["RECOMMEND_ENABLE"])
         self.assertFalse(args["ENABLE_BOOK_REVIEW"])
@@ -268,6 +302,7 @@ class TestApplyModuleSwitchEffects(unittest.TestCase):
         args = {
             "ENABLE_MODULE_MULTIUSER": False,
             "ENABLE_MODULE_COMMUNITY": True,
+            "ENABLE_MODULE_SHARED_READING": True,
             "ENABLE_MODULE_AUDIO": True,
             "ENABLE_MODULE_PHYSICAL": False,
             "ENABLE_MODULE_AI": False,
@@ -407,14 +442,15 @@ class TestRoutesAreGated(unittest.TestCase):
                     self.assertEqual(handler.module_id, MODULE_AUDIO, pattern)
         self.assertTrue(seen)
 
-    def test_booklist_routes_are_core(self):
+    def test_booklist_routes_use_shared_reading(self):
         from webserver.handlers import booklist
 
         for pattern, handler in booklist.routes():
             with self.subTest(route=pattern):
-                self.assertFalse(issubclass(handler, ModuleGateMixin), pattern)
+                self.assertTrue(issubclass(handler, ModuleGateMixin), pattern)
+                self.assertEqual(handler.module_id, MODULE_SHARED_READING, pattern)
 
-    def test_book_review_routes_use_community(self):
+    def test_book_review_routes_use_shared_reading(self):
         from webserver.handlers import book_review
 
         for pattern, handler in book_review.routes():
@@ -423,7 +459,7 @@ class TestRoutesAreGated(unittest.TestCase):
                 continue
             with self.subTest(route=pattern):
                 self.assertTrue(issubclass(handler, ModuleGateMixin), pattern)
-                self.assertEqual(handler.module_id, MODULE_COMMUNITY, pattern)
+                self.assertEqual(handler.module_id, MODULE_SHARED_READING, pattern)
 
     def test_share_routes_use_community(self):
         from webserver.handlers import share
@@ -486,7 +522,7 @@ class TestRoutesAreGated(unittest.TestCase):
 
         expected = {
             "/api/admin/users": MODULE_MULTIUSER,
-            "/api/admin/book-reviews": MODULE_COMMUNITY,
+            "/api/admin/book-reviews": MODULE_SHARED_READING,
         }
         seen = set()
         for pattern, handler in admin.routes():

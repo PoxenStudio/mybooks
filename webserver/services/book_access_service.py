@@ -39,7 +39,7 @@ class BookAccessService:
 
     @staticmethod
     def share_link_enabled() -> bool:
-        """分享链接功能总开关；多用户支持关闭时一并失效。"""
+        """分享链接功能总开关；社区互动关闭时一并失效。"""
         return bool(CONF.get("ENABLE_SHARE_LINK", True)) and (
             feature_modules.module_enabled(feature_modules.MODULE_COMMUNITY)
         )
@@ -74,7 +74,9 @@ class BookAccessService:
 
     @staticmethod
     def _booklist_allows_read(book_id: Optional[int]) -> bool:
-        # 书单是核心能力：公开书单的 guest_read 不受功能模块影响。
+        # 书单归共享阅读模块：模块关闭后公开书单不再给访客开放阅读。
+        if not feature_modules.module_enabled(feature_modules.MODULE_SHARED_READING):
+            return False
         db = BookList._session()
         ids = [row[0] for row in db.query(BookList.id).filter(BookList.is_public.is_(True), BookList.guest_read.is_(True)).all()]
         if not ids or book_id is None:
