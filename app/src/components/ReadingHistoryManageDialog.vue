@@ -14,7 +14,7 @@
                 <v-progress-circular indeterminate color="primary"></v-progress-circular>
             </div>
             <template v-else>
-                <div v-if="summary.records === 0" class="empty-state">
+                <div v-if="summary.records === 0 && summary.manual_records === 0" class="empty-state">
                     <v-icon large color="grey">mdi-history</v-icon>
                     <p class="mt-2 mb-0">{{ $t('history.manage.empty') }}</p>
                 </div>
@@ -23,9 +23,12 @@
                         <div class="summary-main">
                             {{ $t('history.manage.summary', { records: summary.records, books: summary.books }) }}
                         </div>
-                        <div class="summary-sub">
+                        <div v-if="summary.records" class="summary-sub">
                             {{ $t('history.manage.range', { start: summary.first_date, end: summary.last_date }) }}
                             · {{ $t('history.manage.totalDuration', { duration: formatDuration(summary.total_seconds) }) }}
+                        </div>
+                        <div v-if="summary.manual_records" class="summary-sub">
+                            {{ $t('history.manage.manualRecords', { records: summary.manual_records }) }}
                         </div>
                     </div>
 
@@ -115,6 +118,9 @@
             @dismiss="resetConfirm"
         >
             <p class="mb-3">{{ confirmMessage }}</p>
+            <p v-if="pendingAction && pendingAction.type === 'all' && summary.manual_records" class="mb-3">
+                {{ $t('history.manage.confirmManual', { records: summary.manual_records }) }}
+            </p>
             <v-checkbox v-model="confirmChecked" :label="$t('history.manage.confirmCheckbox')" hide-details></v-checkbox>
         </AppDialog>
     </div>
@@ -127,6 +133,7 @@ const EMPTY_SUMMARY = {
     total_seconds: 0,
     first_date: null,
     last_date: null,
+    manual_records: 0,
 };
 
 export default {
@@ -138,9 +145,11 @@ export default {
         summary: { ...EMPTY_SUMMARY },
         books: [],
         loading: false,
+        loadSeq: 0,
         expanded: {},
         detailRows: {},
         detailLoading: {},
+        detailSeq: {},
         confirmOpen: false,
         confirmChecked: false,
         deleting: false,
@@ -182,6 +191,7 @@ export default {
                 });
             }
             return this.$t('history.manage.confirmDay', {
+                title: this.bookTitle(action.book),
                 date: action.row.date,
                 duration: this.formatDuration(action.row.duration),
             });
@@ -205,12 +215,14 @@ export default {
             this.load();
         },
         load() {
+            const seq = ++this.loadSeq;
             this.loading = true;
             Promise.all([
                 this.$backend('/user/history/summary'),
                 this.$backend('/user/history/books'),
             ])
                 .then(([summaryRsp, booksRsp]) => {
+                    if (seq !== this.loadSeq) return;
                     if (summaryRsp.err === 'ok') {
                         this.summary = summaryRsp.summary || { ...EMPTY_SUMMARY };
                     } else {
@@ -223,16 +235,22 @@ export default {
                     }
                 })
                 .catch(() => {
+                    if (seq !== this.loadSeq) return;
                     this.$alert('error', this.$t('history.manage.loadFailed'));
                 })
                 .finally(() => {
-                    this.loading = false;
+                    if (seq === this.loadSeq) {
+                        this.loading = false;
+                    }
                 });
         },
         loadDetail(bookId) {
+            const seq = (this.detailSeq[bookId] || 0) + 1;
+            this.$set(this.detailSeq, bookId, seq);
             this.$set(this.detailLoading, bookId, true);
             this.$backend(`/user/history/books/${bookId}`)
                 .then((rsp) => {
+                    if (this.detailSeq[bookId] !== seq) return;
                     if (rsp.err === 'ok') {
                         this.$set(this.detailRows, bookId, rsp.records || []);
                     } else {
@@ -240,10 +258,13 @@ export default {
                     }
                 })
                 .catch(() => {
+                    if (this.detailSeq[bookId] !== seq) return;
                     this.$alert('error', this.$t('history.manage.detailFailed'));
                 })
                 .finally(() => {
-                    this.$set(this.detailLoading, bookId, false);
+                    if (this.detailSeq[bookId] === seq) {
+                        this.$set(this.detailLoading, bookId, false);
+                    }
                 });
         },
         toggleDetail(book) {
@@ -330,6 +351,8 @@ export default {
                 });
         },
         refreshAfterDelete(bookId) {
+            // Invalidate any in-flight detail request for this book before reloading.
+            this.$set(this.detailSeq, bookId, (this.detailSeq[bookId] || 0) + 1);
             this.$delete(this.detailRows, bookId);
             this.load();
             if (this.expanded[bookId]) {

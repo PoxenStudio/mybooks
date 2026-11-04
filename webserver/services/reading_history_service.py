@@ -8,8 +8,9 @@ History rows are daily buckets keyed by (reader_id, book_id, date), so deleting 
 
 import datetime
 
-from sqlalchemy import func
+from sqlalchemy import exists, func
 
+from webserver import site_time
 from webserver.models import ManualReadingLog, Reader, Reading
 from webserver.services import reading_dashboard_service, reading_stats_service
 
@@ -45,12 +46,26 @@ class ReadingHistoryService:
             .filter(Reading.reader_id == reader_id, Reading.action == Reading.ACTION_READ)
             .one()
         )
+        # Zero-duration manual entries can exist without a Reading row. Count those
+        # separately so the manager can still expose clear-all for them.
+        missing_reading = ~exists().where(
+            Reading.reader_id == ManualReadingLog.reader_id,
+            Reading.book_id == ManualReadingLog.book_id,
+            Reading.date == ManualReadingLog.date,
+            Reading.action == Reading.ACTION_READ,
+        )
+        manual_records = (
+            db.query(func.count(ManualReadingLog.id))
+            .filter(ManualReadingLog.reader_id == reader_id, missing_reading)
+            .scalar()
+        )
         return {
             "records": int(records or 0),
             "books": int(books or 0),
             "total_seconds": int(total_seconds or 0),
             "first_date": _iso_date(first_date),
             "last_date": _iso_date(last_date),
+            "manual_records": int(manual_records or 0),
         }
 
     @classmethod
@@ -109,8 +124,10 @@ class ReadingHistoryService:
     @classmethod
     def delete(cls, reader_id, book_id=None, date=None):
         # Flush pending heartbeats first: otherwise a buffered delta can recreate
-        # a row seconds after the user deleted it.
-        reading_stats_service.ReadingStatsService.flush_now()
+        # a row seconds after the user deleted it. A failed flush requeues data, so
+        # abort instead of deleting and letting the next tick recreate it.
+        if not reading_stats_service.ReadingStatsService.flush_now():
+            raise RuntimeError("reading stats flush failed, abort history deletion")
 
         db = Reading._session()
         reading_filters = [
@@ -167,6 +184,8 @@ class ReadingHistoryService:
             "last_date": _iso_date(last_date),
             "manual_records": int(manual_records or 0),
         }
+        if deleted["records"] and (date is None or date == site_time.site_today()):
+            reading_stats_service.ReadingStatsService.reset_sessions(reader_id, book_id)
         if deleted["records"] or deleted["manual_records"]:
             reading_dashboard_service.invalidate_cache(reader_id)
         return deleted

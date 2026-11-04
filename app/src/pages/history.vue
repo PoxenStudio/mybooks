@@ -625,6 +625,7 @@ export default {
         monthReadDoneBooks: [],
         onlineReadingBooks: [],
         historyManagerOpen: false,
+        reloadSeq: 0,
         dashboard: null,
         leaderboard: null,
         LEADERBOARD_TABS,
@@ -660,20 +661,26 @@ export default {
             if ( next ) next();
         },
         reloadReadingData() {
+            // 删除后的刷新与页面初始化请求可能乱序回包，只采纳最新一轮结果
+            const seq = ++this.reloadSeq;
+
             // 获取在线阅读历史（从 Reading 表读取）
             this.$backend("/user/history")
             .then( rsp => {
+                if (seq !== this.reloadSeq) return;
                 if (rsp.err === 'ok') {
                     this.onlineReadingBooks = rsp.books || [];
                 }
             })
             .catch(error => {
+                if (seq !== this.reloadSeq) return;
                 console.warn('Failed to load reading history:', error);
             });
 
             // 获取阅读统计信息（在读/已读计数 + 封面墙）
             this.$backend("/reading/stats")
             .then( rsp => {
+                if (seq !== this.reloadSeq) return;
                 if (rsp.err === 'ok') {
                     this.readingStats = rsp.stats;
                     this.currentReadingBooks = rsp.current_reading_books || [];
@@ -681,15 +688,18 @@ export default {
                 }
             })
             .catch(error => {
+                if (seq !== this.reloadSeq) return;
                 console.warn('Failed to load reading stats:', error);
             });
 
             // 阅读仪表盘（总时长/天数/连击/即将读完）
-            this.loadDashboard();
+            this.loadDashboard(seq);
         },
-        loadDashboard() {
+        loadDashboard(seq) {
+            const requestSeq = seq === undefined ? this.reloadSeq : seq;
             this.$backend("/user/reading_stats")
             .then( rsp => {
+                if (requestSeq !== this.reloadSeq) return;
                 if (rsp.err === 'ok' && rsp.enabled) {
                     this.dashboard = rsp;
                     this.resetAnchor();
@@ -698,15 +708,18 @@ export default {
                 }
             })
             .catch(error => {
+                if (requestSeq !== this.reloadSeq) return;
                 console.warn('Failed to load reading dashboard:', error);
                 this.dashboard = null;
             });
             // 阅读时长排行（全站榜单，不受首页开关影响）
             this.$backend("/user/reading_leaderboard")
             .then( rsp => {
+                if (requestSeq !== this.reloadSeq) return;
                 this.leaderboard = rsp.err === 'ok' && rsp.enabled ? rsp : null;
             })
             .catch(error => {
+                if (requestSeq !== this.reloadSeq) return;
                 console.warn('Failed to load reading leaderboard:', error);
                 this.leaderboard = null;
             });
