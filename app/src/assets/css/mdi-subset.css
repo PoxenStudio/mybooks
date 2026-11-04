@@ -86,6 +86,10 @@
   content: "\F0BF9";
 }
 
+.mdi-animation::before {
+  content: "\F05D8";
+}
+
 .mdi-api::before {
   content: "\F109B";
 }
@@ -1088,6 +1092,10 @@
 
 .mdi-stop::before {
   content: "\F04DB";
+}
+
+.mdi-stop-circle-outline::before {
+  content: "\F0667";
 }
 
 .mdi-storefront-outline::before {

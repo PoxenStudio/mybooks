@@ -446,6 +446,11 @@ class AdminSettings(BaseHandler):
             CONF["ENABLE_RECEIVING_BOOKS"] = CONF.get("ENABLE_BOOKBARN", False)
         if CONF.get("ENABLE_OPDS_SERVICE", None) is None:
             CONF["ENABLE_OPDS_SERVICE"] = True
+        # 旧部署可能显式关闭过「书单封面自动滚动」（旧键默认 True，False 必是有意为之），
+        # 把这一偏好迁移到新键，避免升级后首页动效默认全开、违背站长此前的选择；
+        # 旧键会在下次保存设置时被白名单自动清除
+        if CONF.get("ENABLE_BOOKLIST_COVER_SCROLL") is False:
+            CONF["ENABLE_HOME_MOTION"] = False
 
         if CONF.get("MAIN_PAGE_RANDOM_COUNT", -1) == -1:
             CONF["MAIN_PAGE_RANDOM_COUNT"] = 12

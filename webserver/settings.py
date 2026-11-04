@@ -207,9 +207,12 @@ settings = {
     "ENABLE_HOMEPAGE_READING_STATS": True,
     "ENABLE_HOMEPAGE_READING_BOOKS": True,
     "ENABLE_HOMEPAGE_BOOKLISTS": False,
-    # 书单卡片的封面条是否自动横向轮播。关闭后只保留手动横滑，适合低配设备或
-    # 不希望页面持续动起来的站点；前端读 sys.booklist_cover_scroll
-    "ENABLE_BOOKLIST_COVER_SCROLL": True,
+    # 首页动效总开关（2026-10-26 起取代原「书单封面自动滚动」ENABLE_BOOKLIST_COVER_SCROLL，
+    # 书单滚动并入此开关统一管理）：开启时首页播放区块/封面进场动画、「换一批」换书过渡、
+    # 封面加载淡入与书单封面自动滚动；关闭后首页保持静止（各区块直接呈现终态，
+    # 书单封面只保留手动横滑），访客系统开启「减少动效」偏好时同样按关闭处理。
+    # 前端读 sys.home_motion
+    "ENABLE_HOME_MOTION": True,
     "HOMEPAGE_CONFIG": {},
     "ALLOW_NEW_USER_MANAGE_BOOK": True,
     "ALLOW_NEW_USER_PUSH_BOOK": True,
