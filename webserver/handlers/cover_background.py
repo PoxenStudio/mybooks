@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+# -*- coding: UTF-8 -*-
+"""封面背景图库管理接口，仅管理员可写。"""
+
+import asyncio
+import functools
+
+from tornado import web
+
+from webserver.base import cover_background as cover_background_module
+from webserver.base.cover_background import CoverBackgroundError, CoverBackgroundService
+from webserver.base.image_generator import ImageGenerator
+from webserver.handlers.base import BaseHandler, is_admin, js
+from webserver.i18n import _
+
+
+def _item(name, selected):
+    return {
+        "id": name,
+        "url": "/api/cover_backgrounds/file/" + name,
+        "selected": name in selected,
+    }
+
+
+def _payload():
+    state = CoverBackgroundService.selection()
+    selected = set(state["images"])
+    names = CoverBackgroundService.list_backgrounds()
+    return {
+        "items": [_item(name, selected) for name in names],
+        "count": len(names),
+        "max": cover_background_module.MAX_BACKGROUNDS,
+        "default_selected": state["default"],
+    }
+
+
+class CoverBackgrounds(BaseHandler):
+    @js
+    @is_admin
+    def get(self):
+        return {"err": "ok", "data": _payload()}
+
+    @js
+    @is_admin
+    async def post(self):
+        files = self.request.files.get("file") or []
+        if not files:
+            return {"err": "params.invalid", "msg": _("请选择要上传的图片")}
+        loop = asyncio.get_running_loop()
+        try:
+            # 解码 + 重采样 + JPEG 编码都是 CPU 活，留在 IOLoop 上会卡住其它请求
+            await loop.run_in_executor(None, CoverBackgroundService.save, files[0])
+        except CoverBackgroundError as err:
+            return {"err": "cover_background.invalid", "msg": str(err)}
+        return {"err": "ok", "msg": _("背景图已添加"), "data": _payload()}
+
+
+class CoverBackgroundDelete(BaseHandler):
+    @js
+    @is_admin
+    def post(self):
+        name = self.get_argument("id", "")
+        try:
+            removed = CoverBackgroundService.delete(name)
+        except CoverBackgroundError as err:
+            return {"err": "cover_background.invalid", "msg": str(err)}
+        if not removed:
+            return {"err": "cover_background.not_found", "msg": _("背景图不存在")}
+        return {"err": "ok", "msg": _("背景图已删除"), "data": _payload()}
+
+
+class CoverBackgroundSelect(BaseHandler):
+    @js
+    @is_admin
+    def post(self):
+        name = self.get_argument("id", "")
+        selected = self.get_argument("selected", "1").lower() not in ("0", "false")
+        try:
+            CoverBackgroundService.set_selected(name, selected)
+        except CoverBackgroundError as err:
+            return {"err": "cover_background.invalid", "msg": str(err)}
+        return {"err": "ok", "data": _payload()}
+
+
+class CoverBackgroundPreview(BaseHandler):
+    async def get(self):
+        if not self.is_admin():
+            raise web.HTTPError(403, "admin only")
+        title = self.get_argument("title", "")
+        # 内置「默认彩色封面」选项要预览没有背景图的原生成效果
+        use_library = self.get_argument("library", "1") != "0"
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(
+            None,
+            functools.partial(
+                ImageGenerator.generate_cover,
+                title or _("示例书名"),
+                "",
+                use_library=use_library,
+            ),
+        )
+        if not data:
+            raise web.HTTPError(500, "generate failed")
+        self.set_header("Content-Type", "image/jpeg")
+        self.set_header("Cache-Control", "no-store")
+        self.write(data)
+
+
+class CoverBackgroundFile(BaseHandler):
+    def get(self, name):
+        if not self.is_admin():
+            raise web.HTTPError(403, "admin only")
+        data = CoverBackgroundService.read(name)
+        if data is None:
+            raise web.HTTPError(404, "background not found")
+        self.set_header("Content-Type", "image/jpeg")
+        self.set_header("Cache-Control", "private, max-age=86400")
+        self.write(data)
+
+
+def routes():
+    return [
+        (r"/api/cover_backgrounds", CoverBackgrounds),
+        (r"/api/cover_backgrounds/delete", CoverBackgroundDelete),
+        (r"/api/cover_backgrounds/select", CoverBackgroundSelect),
+        (r"/api/cover_backgrounds/preview", CoverBackgroundPreview),
+        (r"/api/cover_backgrounds/file/([^/]+)", CoverBackgroundFile),
+    ]

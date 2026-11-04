@@ -180,6 +180,12 @@
                   </template>
                 </v-checkbox>
                 <div v-if="f.tips" class="text-caption grey--text ml-8">{{ $t(f.tips) }}</div>
+                <div
+                  v-if="f.expand === 'cover_backgrounds' && settings[f.key]"
+                  class="mt-4 ml-8"
+                >
+                  <cover-background-manager />
+                </div>
               </template>
               <div
                 v-else-if="f.type === 'checkbox_list'"
@@ -1165,6 +1171,7 @@
 
 <script>
 import SSLManager from "~/components/SSLManager.vue";
+import CoverBackgroundManager from "~/components/CoverBackgroundManager.vue";
 import ReadingRangeDialog from "~/components/ReadingRangeDialog.vue";
 import BookNavEditor, { createCategory } from "~/components/BookNavEditor.vue";
 import ReaderDictEditor from "~/components/ReaderDictEditor.vue";
@@ -1741,6 +1748,7 @@ function aliasScoresFor(token) {
 export default {
   components: {
     "ssl-manager": SSLManager,
+    "cover-background-manager": CoverBackgroundManager,
     "reading-range-dialog": ReadingRangeDialog,
     "book-nav-editor": BookNavEditor,
     "reader-dict-editor": ReaderDictEditor,
@@ -2000,7 +2008,7 @@ export default {
                 ],
               },
               { icon: "mdi-sync", key: "ENABLE_DATA_SYNC", label: "settings.enable_data_sync", type: "checkbox" },
-              { icon: "mdi-image-sync-outline", key: "USE_DYNAMIC_COVER", label: "settings.use_dynamic_cover", type: "checkbox" },
+              { icon: "mdi-image-sync-outline", key: "USE_DYNAMIC_COVER", label: "settings.use_dynamic_cover", type: "checkbox", expand: "cover_backgrounds", al: ["封面背景", "背景图", "cover background"] },
               { icon: "mdi-face-man-outline", key: "ENABLE_AUTHOR_INFO", label: "settings.enable_author_info", type: "checkbox" },
               { icon: "mdi-chart-line", key: "ALLOW_USER_DISABLE_STATISTIC", label: "settings.allow_user_disable_statistic", type: "checkbox" },
               { icon: "mdi-note-multiple-outline", key: "ENABLE_SHARED_NOTES", label: "settings.enable_shared_notes", type: "checkbox" },

@@ -453,12 +453,12 @@ def make_app():
     # WebDAV must come before files.routes() because files has a catch-all (r"/(.*)")
     # We need to get routes from handlers module without files, add webdav, then add files
     import importlib
-    names = ["assistant", "mcp", "admin", "barcode", "scan", "opds", "book", "mynexus", "book_review", "booklist", "share", "user", "meta", "audio", "toolbox", "sync", "tts", "folder", "reader_dict", "koreader"]
+    names = ["assistant", "mcp", "admin", "barcode", "scan", "opds", "book", "mynexus", "book_review", "booklist", "share", "user", "meta", "audio", "toolbox", "sync", "tts", "folder", "reader_dict", "koreader", "cover_background"]
     mods = {}
     for name in names:
         with substep("import_handler:" + name):
             mods[name] = importlib.import_module("webserver.handlers." + name)
-    assistant, mcp, admin, barcode, scan, opds, book, mynexus, book_review, booklist, share, user, meta, audio, toolbox, sync, tts, folder, reader_dict, koreader = (mods[n] for n in names)
+    assistant, mcp, admin, barcode, scan, opds, book, mynexus, book_review, booklist, share, user, meta, audio, toolbox, sync, tts, folder, reader_dict, koreader, cover_background = (mods[n] for n in names)
 
     app_routes = []
     app_routes += social_routes.SOCIAL_AUTH_ROUTES
@@ -483,6 +483,7 @@ def make_app():
     app_routes += folder.routes()
     app_routes += reader_dict.routes()
     app_routes += koreader.routes()
+    app_routes += cover_background.routes()
 
     # Podcast routes are always registered; each handler calls check_podcast_enabled()
     # at request time, so toggling ENABLE_PODCAST_SERVICE takes effect without restart.
