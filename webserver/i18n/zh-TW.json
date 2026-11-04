@@ -618,5 +618,6 @@
     "Book Category": "分類",
     "Book Folder": "目錄",
     "Translator": "譯者",
-    "Location": "所在位置"
+    "Location": "所在位置",
+    "访客今日下载次数已达上限(%d/%d)，请明天再试": "訪客今日下載次數已達上限(%d/%d)，請明天再試"
 }

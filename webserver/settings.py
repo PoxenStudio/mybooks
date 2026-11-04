@@ -315,6 +315,8 @@ settings = {
     "ENABLE_DOWNLOAD_QUOTA" : False,   # 是否启用每用户每日下载配额限制
     "ENABLE_USER_MEMOS": True,
     "GLOBAL_DOWNLOAD_QUOTA" : 10,       # 全局每日下载配额（用户未单独设置时使用），0表示不限制
+    "ENABLE_GUEST_DOWNLOAD_QUOTA" : False,  # 是否启用未登录访客按 IP 的每日下载本数限制
+    "GUEST_DOWNLOAD_QUOTA" : 10,        # 每个访客 IP 每日可下载的书籍本数，0表示不限制
     'ALLOW_REGISTER' : False,
     'HEADER': '',
     'FOOTER': '',

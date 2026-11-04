@@ -714,6 +714,8 @@
     "default_read_range_tags_part": "Tags: {value}",
     "enable_download_quota": "Enable a per-user daily download quota limit",
     "global_download_quota": "Global daily download quota (used when a user has no override, 0 means unlimited)",
+    "enable_guest_download_quota": "Enable a per-IP daily download limit for guests",
+    "guest_download_quota": "Daily download limit per guest IP (0 means unlimited; repeated downloads of the same book count once)",
     "signup_mail_title": "Activation Email Title",
     "signup_mail_content": "Activation Email Content",
     "reset_mail_title": "Password Reset Email Title",

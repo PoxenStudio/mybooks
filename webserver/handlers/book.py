@@ -47,6 +47,7 @@ from webserver.models import BookReadingStats as BookFormatReadingStatsModel, It
 from webserver.services.reading_stats_service import ManualReadingService, ReadingStatsService
 from webserver.services.scan_service import ScanService, SCAN_EXT, ImportOptions
 from webserver.services.download_quota_service import DownloadQuotaService
+from webserver.services.guest_download_quota_service import GuestDownloadQuotaService
 from webserver.services.book_review_service import BookReviewService
 from webserver.recommend import RecommendConfig, RecommendContext, home_seed, utc_now
 from webserver.plugins.meta import douban, douban_v2
@@ -2349,9 +2350,27 @@ class BookDeleteFormat(BaseHandler):
 
 class BookDownloadQuota(BaseHandler):
     @js
-    @auth
     def get(self):
-        """返回当前用户今日下载配额的使用情况，供前端在真正触发下载前做提示，不消耗配额。"""
+        """返回今日下载配额的使用情况，供前端在真正触发下载前做提示，不消耗配额。"""
+        try:
+            book_id = int(self.get_argument("book_id", ""))
+        except (TypeError, ValueError):
+            book_id = None
+        if BookAccessService.share_download_granted(self, book_id):
+            return {"err": "ok", "allowed": True, "used": 0, "quota": 0}
+        if not self.current_user:
+            if not GuestDownloadQuotaService.enabled():
+                return {"err": "ok", "allowed": True, "used": 0, "quota": 0}
+            result = GuestDownloadQuotaService.get_usage(self.request.remote_ip, book_id)
+            if result.allowed:
+                return {"err": "ok", "allowed": True, "used": result.used, "quota": result.quota}
+            return {
+                "err": "quota.exceeded",
+                "allowed": False,
+                "used": result.used,
+                "quota": result.quota,
+                "msg": _("访客今日下载次数已达上限(%d/%d)，请明天再试") % (result.used, result.quota),
+            }
         if not CONF.get("ENABLE_DOWNLOAD_QUOTA", False) or self.is_admin():
             return {"err": "ok", "allowed": True, "used": 0, "quota": 0}
         result = DownloadQuotaService.get_usage(self.current_user)
@@ -2465,8 +2484,19 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
     _download_cache = {}
 
     def _charge_download(self, bid, fmt):
-        """同一用户同一本书同一格式在窗口期内的多次请求（分段、续传、重试）只扣一次配额；HEAD 不扣。"""
-        if not self.current_user or self.request.method == "HEAD" or BookAccessService.share_download_granted(self, self.requested_book_id()):
+        """同一用户同一本书同一格式在窗口期内的多次请求（分段、续传、重试）只扣一次配额；HEAD 与分享链接不扣。"""
+        try:
+            book_id = int(bid)
+        except (TypeError, ValueError):
+            book_id = self.requested_book_id()
+        if self.request.method == "HEAD" or BookAccessService.share_download_granted(self, book_id):
+            return
+        if not self.current_user:
+            if not GuestDownloadQuotaService.enabled():
+                return
+            result = GuestDownloadQuotaService.charge(self.request.remote_ip, bid)
+            if not result.allowed:
+                raise web.HTTPError(429, reason=_("访客今日下载次数已达上限(%d/%d)，请明天再试") % (result.used, result.quota))
             return
         protocol = Reading.PROTOCOL_OPDS if self.is_opds else Reading.PROTOCOL_WEB
         result = DownloadQuotaService.charge(self.current_user, bid, fmt, protocol)

@@ -1007,6 +1007,8 @@
     "default_read_range_tags_part": "标签：{value}",
     "enable_download_quota": "开启用户每日下载配额限制",
     "global_download_quota": "全局每日下载配额（用户未单独设置时使用，0表示不限制）",
+    "enable_guest_download_quota": "开启访客每日下载本数限制（按 IP）",
+    "guest_download_quota": "每个访客 IP 每日下载本数（0 表示不限制，同一本书只算一次）",
     "signup_mail_title": "激活邮件标题",
     "signup_mail_content": "激活邮件正文",
     "reset_mail_title": "重置密码邮件标题",

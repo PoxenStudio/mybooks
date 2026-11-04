@@ -1185,6 +1185,27 @@ class BookVisit(Base, SQLAlchemyMixin):
         self.visit_time = visit_time or datetime.datetime.now()
 
 
+class GuestDownloadDaily(Base, SQLAlchemyMixin):
+    """未登录访客按 IP 的每日下载去重记录，见 webserver/services/guest_download_quota_service.py。
+    同一 IP、同一站点日、同一本书只存一行，重复下载/换格式/续传不会重复消耗额度。"""
+
+    __tablename__ = "guest_download_daily"
+
+    ip = Column(String(45), primary_key=True)
+    day = Column(Date, primary_key=True)
+    book_id = Column(Integer, primary_key=True)
+    create_time = Column(DateTime, nullable=False)
+
+    __table_args__ = (Index("ix_guest_download_daily_day", "day"), )
+
+    def __init__(self, ip, day, book_id, create_time=None):
+        super(GuestDownloadDaily, self).__init__()
+        self.ip = ip
+        self.day = day
+        self.book_id = book_id
+        self.create_time = create_time or datetime.datetime.now()
+
+
 class BookShare(Base, SQLAlchemyMixin):
     """管理员创建的匿名分享链接，每本书至多一条。取消为 status=0，删除为物理删除。"""
 
@@ -1281,7 +1302,7 @@ def user_syncdb(engine):
 # 表结构随功能迭代新增的表，不希望依赖运维方手动重新执行 `--syncdb` 才能用上
 # （`docker/start.sh` 每次启动都会跑 --syncdb，但手工部署/测试环境不一定会），
 # 在正常的 make_app() 启动路径里也顺带补建一次，checkfirst=True 天然幂等。
-_NEW_TABLES_AUTO_ENSURE = (ReadingRecord, BookReview, InstalledTool, BookReadingStats, BookList, BookListBook, BookListLike, ManualReadingLog, BookVisit, BookShare, ScanDirSnapshot, MyNexusBookAnalysis, MyNexusChatSession, KoreaderPosition)
+_NEW_TABLES_AUTO_ENSURE = (ReadingRecord, BookReview, InstalledTool, BookReadingStats, BookList, BookListBook, BookListLike, ManualReadingLog, BookVisit, GuestDownloadDaily, BookShare, ScanDirSnapshot, MyNexusBookAnalysis, MyNexusChatSession, KoreaderPosition)
 
 
 def ensure_new_tables(engine):
