@@ -974,6 +974,8 @@
     "default_read_range_tags_part": "標籤：{value}",
     "enable_download_quota": "開啟每個使用者每日下載配額限制",
     "global_download_quota": "全域每日下載配額（使用者未單獨設定時使用，0表示不限制）",
+    "enable_guest_download_quota": "開啟訪客每日下載本數限制（依 IP）",
+    "guest_download_quota": "每個訪客 IP 每日下載本數（0 表示不限制，同一本書只算一次）",
     "signup_mail_title": "啟用郵件標題",
     "signup_mail_content": "啟用郵件內文",
     "reset_mail_title": "重設密碼郵件標題",

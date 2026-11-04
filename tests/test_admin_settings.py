@@ -51,6 +51,12 @@ class TestAdminSettingsPost(unittest.TestCase):
             asyncio.run(AdminSettings.post(handler))
         return handler.written, captured
 
+    def test_guest_download_quota_saved(self):
+        rsp, saved = self.post({"ENABLE_GUEST_DOWNLOAD_QUOTA": True, "GUEST_DOWNLOAD_QUOTA": 3})
+        self.assertEqual("ok", rsp["err"])
+        self.assertTrue(saved["ENABLE_GUEST_DOWNLOAD_QUOTA"])
+        self.assertEqual(3, saved["GUEST_DOWNLOAD_QUOTA"])
+
     def test_site_url_normalized(self):
         """尾部斜杠必须剥掉，否则前端会拼出 https://host//s/<token>。"""
         rsp, saved = self.post({"SITE_URL": "https://books.example.com//"})

@@ -2051,9 +2051,13 @@ export default {
         },
         async openDownloadLink(url) {
             // 与 $store.state.sys.allow.physical_books 相同的用法：功能开关关闭时不做任何检查，直接下载
-            if (this.$store.state.sys.allow.download_quota) {
+            const allow = this.$store.state.sys.allow || {};
+            if (allow.download_quota || allow.guest_download_quota) {
+                const downloadUrl = new URL(url, window.location.href);
+                const match = downloadUrl.pathname.match(/\/api\/book\/(\d+)\.([^/]+)$/);
+                const query = match ? `?book_id=${match[1]}` : '';
                 try {
-                    const rsp = await this.$backend('/book/download_quota');
+                    const rsp = await this.$backend('/book/download_quota' + query);
                     if (rsp.err !== 'ok' || !rsp.allowed) {
                         this.$alert('error', rsp.msg || this.$t('book.downloadQuotaExceeded'));
                         return;

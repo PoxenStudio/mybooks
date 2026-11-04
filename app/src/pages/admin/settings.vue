@@ -375,14 +375,15 @@
               <v-checkbox
                 small
                 hide-details
-                v-model="settings[grp.key]"
+                :input-value="isCheckboxInputValue(grp)"
+                :disabled="isFieldLockedBy(grp)"
                 :label="$t(grp.label)"
                 :prepend-icon="grp.icon"
-                @change="$delete(forceOpen, grp.key)"
+                @change="onCheckboxChange(grp, $event); $delete(forceOpen, grp.key)"
               >
               </v-checkbox>
               </div>
-              <template v-if="settings[grp.key] || forceOpen[grp.key]">
+              <template v-if="isCheckboxInputValue(grp) || forceOpen[grp.key]">
                 <div class="pl-6" :key="grp.key + '-fields'">
                 <template v-for="f in grp.fields">
                   <div :key="'w-' + f.key" :id="'f-' + f.key">
@@ -416,6 +417,15 @@
                       {{ $t(f.label) }}
                     </v-btn>
                   </div>
+                  <v-text-field
+                    v-else-if="f.type === 'number'"
+                    :prepend-icon="f.icon"
+                    v-model.number="settings[f.key]"
+                    :key="f.key + '-number'"
+                    :label="$t(f.label)"
+                    type="number"
+                    min="0"
+                  ></v-text-field>
                   <v-text-field
                     v-else
                     :prepend-icon="f.icon"
@@ -1334,6 +1344,7 @@ const SEARCH_ALIASES = {
     可见: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], 屏蔽: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], 不可见: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"],
     范围: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], 阅读范围: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"],
     配额: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"], 下载: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA", "ALLOW_GUEST_DOWNLOAD"], 每日: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"],
+    访客下载: ["ENABLE_GUEST_DOWNLOAD_QUOTA", "GUEST_DOWNLOAD_QUOTA"], 下载本数: ["GUEST_DOWNLOAD_QUOTA"], 每ip: ["ENABLE_GUEST_DOWNLOAD_QUOTA", "GUEST_DOWNLOAD_QUOTA"], ip: ["ENABLE_GUEST_DOWNLOAD_QUOTA", "GUEST_DOWNLOAD_QUOTA"],
     下载限制: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"], 每日下载: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"],
     // 用户与访问 · 社交登录
     登录: ["SOCIALS", "ALLOW_REGISTER", "INVITE_MODE"], 第三方: ["SOCIALS"], 社交: ["SOCIALS"], oauth: ["SOCIALS"], qq: ["SOCIALS"], 微信: ["SOCIALS"], 微博: ["SOCIALS"], github: ["SOCIALS"],
@@ -1483,6 +1494,7 @@ const SEARCH_ALIASES = {
     可見: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], 封鎖: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], 不可見: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"],
     範圍: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], 閱讀範圍: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"],
     配額: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"], 下載: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA", "ALLOW_GUEST_DOWNLOAD"], 每日: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"],
+    訪客下載: ["ENABLE_GUEST_DOWNLOAD_QUOTA", "GUEST_DOWNLOAD_QUOTA"], 下載本數: ["GUEST_DOWNLOAD_QUOTA"], 每ip: ["ENABLE_GUEST_DOWNLOAD_QUOTA", "GUEST_DOWNLOAD_QUOTA"], ip: ["ENABLE_GUEST_DOWNLOAD_QUOTA", "GUEST_DOWNLOAD_QUOTA"],
     下載限制: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"], 每日下載: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"],
     // 用戶與訪問 · 社群登入
     登入: ["SOCIALS", "ALLOW_REGISTER", "INVITE_MODE"], 第三方: ["SOCIALS"], 社群: ["SOCIALS"], 社群網路: ["SOCIALS"], oauth: ["SOCIALS"], qq: ["SOCIALS"], 微信: ["SOCIALS"], 微博: ["SOCIALS"], github: ["SOCIALS"],
@@ -1627,6 +1639,7 @@ const SEARCH_ALIASES = {
     whitelist: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], blacklist: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], visible: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], hidden: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], restrict: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"],
     "read range": ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], "reading range": ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"],
     quota: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"], quotas: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"], "daily limit": ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"], "download limit": ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"],
+    "guest download": ["ENABLE_GUEST_DOWNLOAD_QUOTA", "GUEST_DOWNLOAD_QUOTA"], "guest quota": ["ENABLE_GUEST_DOWNLOAD_QUOTA", "GUEST_DOWNLOAD_QUOTA"], "per ip": ["ENABLE_GUEST_DOWNLOAD_QUOTA", "GUEST_DOWNLOAD_QUOTA"], ip: ["ENABLE_GUEST_DOWNLOAD_QUOTA", "GUEST_DOWNLOAD_QUOTA"],
     // Users & Access · social login
     login: ["SOCIALS", "ALLOW_REGISTER", "INVITE_MODE", "REQUIRE_LOGIN"], social: ["SOCIALS"], "social login": ["SOCIALS"], oauth: ["SOCIALS"], "third party": ["SOCIALS"], sso: ["SOCIALS"], qq: ["SOCIALS"], wechat: ["SOCIALS"], weibo: ["SOCIALS"], github: ["SOCIALS"],
     // Import & Storage · upload
@@ -2072,6 +2085,17 @@ export default {
               { icon: "mdi-upload", key: "ALLOW_GUEST_UPLOAD", label: "settings.allow_guest_upload", type: "checkbox", lockOn: "REQUIRE_LOGIN" },
               { icon: "mdi-send", key: "ALLOW_GUEST_PUSH", label: "settings.allow_guest_push", type: "checkbox", lockOn: "REQUIRE_LOGIN" },
               { icon: "mdi-link-variant", key: "ENABLE_SHARE_LINK", label: "settings.allow_share_link", type: "checkbox" },
+            ],
+            groups: [
+              {
+                icon: "mdi-download-lock-outline",
+                key: "ENABLE_GUEST_DOWNLOAD_QUOTA",
+                label: "settings.enable_guest_download_quota",
+                lockOn: "REQUIRE_LOGIN",
+                fields: [
+                  { icon: "mdi-counter", key: "GUEST_DOWNLOAD_QUOTA", label: "settings.guest_download_quota", type: "number" },
+                ],
+              },
             ],
           },
           {
