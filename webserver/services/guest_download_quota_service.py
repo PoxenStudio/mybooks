@@ -63,9 +63,12 @@ class GuestDownloadQuotaService:
 
     @classmethod
     def get_usage(cls, ip: str, book_id=None) -> GuestQuotaResult:
+        cls._prune_if_due()
+        if not cls.enabled():
+            return GuestQuotaResult(True, 0, 0)
         quota = cls.quota()
         key = cls.normalize_ip(ip)
-        if not key or not cls.enabled() or quota == 0:
+        if not key or quota == 0:
             return GuestQuotaResult(True, 0, quota)
         day = site_time.site_today()
         db = GuestDownloadDaily._session()
@@ -81,9 +84,12 @@ class GuestDownloadQuotaService:
 
     @classmethod
     def charge(cls, ip: str, book_id: int) -> GuestQuotaResult:
+        cls._prune_if_due()
+        if not cls.enabled():
+            return GuestQuotaResult(True, 0, 0)
         quota = cls.quota()
         key = cls.normalize_ip(ip)
-        if not key or not cls.enabled() or quota == 0:
+        if not key or quota == 0:
             return GuestQuotaResult(True, 0, quota)
         try:
             book_id = int(book_id)
@@ -105,7 +111,6 @@ class GuestDownloadQuotaService:
                 # 主键兜底并发插入同一本书，按已计入处理
                 db.rollback()
                 return GuestQuotaResult(True, used, quota)
-            cls._prune(db, day)
             return GuestQuotaResult(True, used + 1, quota)
 
     @classmethod
@@ -115,6 +120,16 @@ class GuestDownloadQuotaService:
     @classmethod
     def _recorded(cls, db, key, day, book_id) -> bool:
         return db.query(GuestDownloadDaily).filter_by(ip=key, day=day, book_id=book_id).first() is not None
+
+    @classmethod
+    def _prune_if_due(cls):
+        today = site_time.site_today()
+        if cls._last_prune_day == today:
+            return
+        with cls._lock:
+            if cls._last_prune_day == today:
+                return
+            cls._prune(GuestDownloadDaily._session(), today)
 
     @classmethod
     def _prune(cls, db, today):
@@ -127,4 +142,6 @@ class GuestDownloadQuotaService:
             cls._last_prune_day = today
         except Exception:
             db.rollback()
+            # 清理是尽力而为；失败也记到当天，避免每次请求都持锁重试
+            cls._last_prune_day = today
             logging.warning("[guest_download_quota] prune failed", exc_info=True)

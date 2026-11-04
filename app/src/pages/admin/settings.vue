@@ -383,7 +383,7 @@
               >
               </v-checkbox>
               </div>
-              <template v-if="isCheckboxInputValue(grp) || forceOpen[grp.key]">
+              <template v-if="(isCheckboxInputValue(grp) || forceOpen[grp.key]) && !isFieldLockedBy(grp)">
                 <div class="pl-6" :key="grp.key + '-fields'">
                 <template v-for="f in grp.fields">
                   <div :key="'w-' + f.key" :id="'f-' + f.key">

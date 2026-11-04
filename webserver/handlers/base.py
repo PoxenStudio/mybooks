@@ -55,6 +55,7 @@ LOGIN_GATE_ALLOW_EXACT = frozenset({
     "/install",
     "/starting",
     "/api/user/info",
+    "/api/book/download_quota",  # 分享访客下载前的配额预检查，handler 内再校验分享授权
     "/api/user/sign_in",
     "/api/user/sign_up",
     "/api/user/reset",

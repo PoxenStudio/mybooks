@@ -10,6 +10,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 
 from webserver import models
+from webserver.handlers.base import login_gate_allowed
 from webserver.handlers.book import BookDownload, BookDownloadQuota
 from webserver.models import GuestDownloadDaily
 from webserver.services import guest_download_quota_service
@@ -24,6 +25,8 @@ DAY = datetime.date(2026, 11, 4)
 class TestGuestDownloadQuotaService(unittest.TestCase):
 
     def setUp(self):
+        self._prev_base_session = models.Base.__dict__.get("_session")
+        self._prev_mixin_session = models.SQLAlchemyMixin.__dict__.get("_session")
         engine = create_engine("sqlite://")
         self.session = scoped_session(sessionmaker(bind=engine, autoflush=True, autocommit=False))
         models.bind_session(self.session)
@@ -42,6 +45,14 @@ class TestGuestDownloadQuotaService(unittest.TestCase):
 
     def tearDown(self):
         self.session.remove()
+        if self._prev_base_session is not None:
+            models.Base._session = self._prev_base_session
+        elif "_session" in models.Base.__dict__:
+            del models.Base._session
+        if self._prev_mixin_session is not None:
+            models.SQLAlchemyMixin._session = self._prev_mixin_session
+        elif "_session" in models.SQLAlchemyMixin.__dict__:
+            del models.SQLAlchemyMixin._session
 
     def rows(self):
         return self.session.query(GuestDownloadDaily).all()
@@ -113,6 +124,14 @@ class TestGuestDownloadQuotaService(unittest.TestCase):
         days = [row.day for row in self.rows()]
         self.assertEqual(days, [DAY])
 
+    def test_prune_runs_when_disabled(self):
+        old_day = DAY - datetime.timedelta(days=guest_download_quota_service.RETENTION_DAYS + 1)
+        self.session.add(GuestDownloadDaily("1.2.3.4", old_day, 1))
+        self.session.commit()
+        with mock.patch.dict(guest_download_quota_service.CONF, {"ENABLE_GUEST_DOWNLOAD_QUOTA": False}):
+            self.assertTrue(GuestDownloadQuotaService.get_usage("1.2.3.4").allowed)
+        self.assertEqual(self.rows(), [])
+
 
 class TestBookDownloadGuestQuota(unittest.TestCase):
 
@@ -135,11 +154,21 @@ class TestBookDownloadGuestQuota(unittest.TestCase):
     def test_guest_denied_returns_429(self):
         handler = self.make_handler()
         with mock.patch.object(BookAccessService, "share_download_granted", return_value=False), \
-                mock.patch.object(GuestDownloadQuotaService, "enabled", return_value=True), \
                 mock.patch.object(GuestDownloadQuotaService, "charge", return_value=GuestQuotaResult(False, 10, 10)):
             with self.assertRaises(web.HTTPError) as ctx:
                 handler._charge_download("15", "epub")
             self.assertEqual(ctx.exception.status_code, 429)
+
+    def test_missing_file_does_not_charge(self):
+        handler = self.make_handler()
+        handler.set_header = mock.Mock()
+        handler.get_book = mock.Mock(return_value={"id": 15, "title": "t", "fmt_epub": "/nonexistent/gq-test.epub"})
+        BookDownload._download_cache.clear()
+        with mock.patch.object(BookAccessService, "share_download_granted", return_value=False), \
+                mock.patch.object(GuestDownloadQuotaService, "charge") as charge:
+            path = handler.parse_url_path("/x/15.epub")
+            self.assertEqual(path, "/nonexistent/gq-test.epub")
+            charge.assert_not_called()
 
     def test_head_and_share_downloads_do_not_charge(self):
         with mock.patch.object(BookAccessService, "share_download_granted", return_value=False), \
@@ -163,10 +192,14 @@ class TestBookDownloadGuestQuota(unittest.TestCase):
 
 class FakeQuotaHandler:
 
-    def __init__(self, book_id="15", current_user=None, remote_ip="1.2.3.4"):
+    _is_cross_origin = BookDownloadQuota._is_cross_origin
+
+    def __init__(self, book_id="15", current_user=None, remote_ip="1.2.3.4", origin=None):
         self.current_user = current_user
         self.request = mock.Mock(remote_ip=remote_ip)
-        self.request.headers = {}
+        self.request.headers = {"Origin": origin} if origin else {}
+        self.api_url = ""
+        self.site_url = "http://127.0.0.1:8000"
         self._book_id = book_id
         self.written = None
 
@@ -202,14 +235,13 @@ class TestBookDownloadQuotaCheck(unittest.TestCase):
     def test_guest_without_limit_is_allowed(self):
         handler = FakeQuotaHandler()
         with mock.patch.object(BookAccessService, "share_download_granted", return_value=False), \
-                mock.patch.object(GuestDownloadQuotaService, "enabled", return_value=False):
+                mock.patch.object(GuestDownloadQuotaService, "get_usage", return_value=GuestQuotaResult(True, 0, 0)):
             rsp = self.call(handler)
             self.assertEqual(rsp, {"err": "ok", "allowed": True, "used": 0, "quota": 0})
 
     def test_guest_exceeded_reports_quota(self):
         handler = FakeQuotaHandler()
         with mock.patch.object(BookAccessService, "share_download_granted", return_value=False), \
-                mock.patch.object(GuestDownloadQuotaService, "enabled", return_value=True), \
                 mock.patch.object(GuestDownloadQuotaService, "get_usage", return_value=GuestQuotaResult(False, 10, 10)) as usage:
             rsp = self.call(handler)
             self.assertEqual(rsp["err"], "quota.exceeded")
@@ -217,6 +249,29 @@ class TestBookDownloadQuotaCheck(unittest.TestCase):
             self.assertEqual((rsp["used"], rsp["quota"]), (10, 10))
             self.assertIn("10/10", rsp["msg"])
             usage.assert_called_once_with("1.2.3.4", 15)
+
+    def test_cross_origin_guest_check_returns_generic_allowed(self):
+        handler = FakeQuotaHandler(origin="https://evil.example")
+        with mock.patch.object(BookAccessService, "share_download_granted", return_value=False), \
+                mock.patch.object(GuestDownloadQuotaService, "get_usage") as usage:
+            rsp = self.call(handler)
+            self.assertEqual(rsp, {"err": "ok", "allowed": True})
+            usage.assert_not_called()
+
+    def test_same_origin_guest_check_reads_usage(self):
+        handler = FakeQuotaHandler(origin="http://127.0.0.1:8000")
+        with mock.patch.object(BookAccessService, "share_download_granted", return_value=False), \
+                mock.patch.object(GuestDownloadQuotaService, "get_usage", return_value=GuestQuotaResult(False, 10, 10)) as usage:
+            rsp = self.call(handler)
+            self.assertEqual(rsp["err"], "quota.exceeded")
+            self.assertEqual((rsp["used"], rsp["quota"]), (10, 10))
+            usage.assert_called_once_with("1.2.3.4", 15)
+
+
+class TestQuotaCheckLoginGate(unittest.TestCase):
+
+    def test_allowed_under_require_login(self):
+        self.assertTrue(login_gate_allowed("/api/book/download_quota"))
 
 
 if __name__ == "__main__":
