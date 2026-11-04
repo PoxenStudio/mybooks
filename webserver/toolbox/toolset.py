@@ -121,22 +121,24 @@ class ToolSet:
         from .epub_beautify import EpubBeautifyTool
         from .epub_merge import EpubMergeTool
 
-        ToolSet.register(MergeFormatsTool.info())
+        # 注册顺序即工具箱卡片的默认展示顺序（前端置顶工具仍会排到最前），按
+        # EPUB → 文本 → PDF/音频 → 书库整理分组；下载类（古书下载器/书栈接收器）暂排在最后。
         ToolSet.register(EpubBeautifyTool.info())
+        ToolSet.register(EpubFixerTool.info())
         ToolSet.register(EpubMergeTool.info())
-        ToolSet.register(MimoTTSTool.info())
-        if TextReplaceTool is not None:
-            ToolSet.register(TextReplaceTool.info())
+        ToolSet.register(EpubSplitTool.info())
         ToolSet.register(TxtEncodingFixerTool.info())
         ToolSet.register(ChineseConverterTool.info())
+        if TextReplaceTool is not None:
+            ToolSet.register(TextReplaceTool.info())
         ToolSet.register(TextProcessor.info())
-        ToolSet.register(FormatsPruningTool.info())
-        ToolSet.register(EpubSplitTool.info())
-        ToolSet.register(AuthorCleanTool.info())
-        ToolSet.register(RareBookDownloader.info())
-        ToolSet.register(ReviewBookLanguageTool.info())
-        ToolSet.register(EpubFixerTool.info())
         ToolSet.register(MinifyPdfTool.info())
+        ToolSet.register(MimoTTSTool.info())
+        ToolSet.register(AuthorCleanTool.info())
+        ToolSet.register(ReviewBookLanguageTool.info())
+        ToolSet.register(MergeFormatsTool.info())
+        ToolSet.register(FormatsPruningTool.info())
+        ToolSet.register(RareBookDownloader.info())
         ToolSet.register(BookBarnAcceptorTool.info())
 
         MinifyPdfTool.cleanup_old_files()
