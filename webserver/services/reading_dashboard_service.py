@@ -99,6 +99,22 @@ def _save_cache(uid, cache: Dict) -> None:
         logging.warning("[reading_dashboard] failed to save %s: %s", path, e)
 
 
+def invalidate_cache(uid) -> None:
+    """Drop a user's reading.json so the next get_stats rebuilds from the DB.
+
+    Used after history deletion: _reconcile only appends closed days and never
+    notices rows removed from the past, so the cached heatmap/weekly buckets would
+    otherwise keep showing deleted reading time.
+    """
+    path = _user_cache_path(uid)
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        return
+    except Exception as e:
+        logging.warning("[reading_dashboard] failed to remove %s: %s", path, e)
+
+
 def _query_days(
     db, reader_id: int, start: datetime.date, end: datetime.date
 ) -> Dict[str, Dict[str, int]]:
