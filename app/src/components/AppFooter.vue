@@ -81,6 +81,9 @@ export default {
             return this.$store.state.sys.hide_project_links || false;
         },
         podcastEnabled: function () {
+            // 播客订阅属于有声书模块：模块关掉时页脚入口一并消失
+            const modules = this.$store.state.sys.modules || {};
+            if (modules.audio === false) return false;
             return this.$store.state.sys.enable_podcast_service || false;
         },
         opdsEnabled: function () {

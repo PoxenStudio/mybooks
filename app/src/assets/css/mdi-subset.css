@@ -54,12 +54,20 @@
   content: "\F0B58";
 }
 
+.mdi-account-multiple-outline::before {
+  content: "\F000F";
+}
+
 .mdi-account-outline::before {
   content: "\F0013";
 }
 
 .mdi-account-plus::before {
   content: "\F0014";
+}
+
+.mdi-account-plus-outline::before {
+  content: "\F0801";
 }
 
 .mdi-account-remove::before {
@@ -778,12 +786,20 @@
   content: "\F033E";
 }
 
+.mdi-lock-open-variant::before {
+  content: "\F0FC6";
+}
+
 .mdi-lock-open-variant-outline::before {
   content: "\F0FC7";
 }
 
 .mdi-lock-outline::before {
   content: "\F0341";
+}
+
+.mdi-lock-reset::before {
+  content: "\F0773";
 }
 
 .mdi-login-variant::before {
@@ -952,6 +968,10 @@
 
 .mdi-progress-check::before {
   content: "\F0995";
+}
+
+.mdi-puzzle-outline::before {
+  content: "\F0A66";
 }
 
 .mdi-radiobox-blank::before {

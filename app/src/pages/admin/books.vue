@@ -64,7 +64,7 @@
                                 </v-list-item-icon>
                                 <v-list-item-title>{{ $t('admin.books.extractCatalog') }}</v-list-item-title>
                             </v-list-item>
-                            <v-list-item @click="aiFill" :disabled="books_selected.length === 0">
+                            <v-list-item v-if="aiModuleOn" @click="aiFill" :disabled="books_selected.length === 0">
                                 <v-list-item-icon>
                                     <v-icon>mdi-robot</v-icon>
                                 </v-list-item-icon>
@@ -76,7 +76,7 @@
                                 </v-list-item-icon>
                                 <v-list-item-title>{{ $t('folder.batchSet') }}</v-list-item-title>
                             </v-list-item>
-                            <v-list-item @click="showExchangeTypeDialog" :disabled="books_selected.length === 0">
+                            <v-list-item v-if="physicalModuleOn" @click="showExchangeTypeDialog" :disabled="books_selected.length === 0">
                                 <v-list-item-icon>
                                     <v-icon>mdi-swap-horizontal</v-icon>
                                 </v-list-item-icon>
@@ -791,6 +791,15 @@ export default {
         allowPhysicalBooks() {
             return !!(this.$store.state.sys && this.$store.state.sys.allow && this.$store.state.sys.allow.physical_books);
         },
+        // 模块级开关：关闭时批量互转入口与 AI 批量更新入口一并消失
+        physicalModuleOn() {
+            const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
+            return mods.physical !== false;
+        },
+        aiModuleOn() {
+            const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
+            return mods.ai !== false;
+        },
         totalPages() {
             const { itemsPerPage = 100 } = this.options;
             if (itemsPerPage <= 0) return 1;
@@ -1416,7 +1425,7 @@ export default {
             })
         },
         checkAIState() {
-            if (this.ai_scraping) return;
+            if (!this.aiModuleOn || this.ai_scraping) return;
             this.$backend("/admin/book/aifill", {
                 method: "GET",
             })

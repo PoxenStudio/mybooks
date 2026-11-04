@@ -166,6 +166,12 @@ class TestAdminSettingsPost(unittest.TestCase):
         self.assertEqual("ok", rsp["err"])
         self.assertFalse(saved["ENABLE_BOOK_RECOMMEND_TO_OTHERS"])
 
+    def test_opds_anonymous_key_is_backfilled(self):
+        """旧版缓存页/脚本不带 OPDS_ALLOW_ANONYMOUS 时，保存不能把它从 auto.py 抹掉。"""
+        rsp, saved = self.post({"site_title": "abc"})
+        self.assertEqual("ok", rsp["err"])
+        self.assertIn("OPDS_ALLOW_ANONYMOUS", saved)
+
 
 class TestAdminSettingsGet(unittest.TestCase):
     """GET /api/admin/settings 的首页配置必须与 /api/homepage 渲染口径一致。"""

@@ -28,6 +28,23 @@
                             <v-text-field required prepend-icon="mdi-lock" v-model="code" :label="$t('install.accessCode')" type="text"
                                 autocomplete="new-code" :rules="[rules.code]"></v-text-field>
                         </template>
+                        <v-divider class="my-4"></v-divider>
+                        <v-sheet outlined rounded class="pa-3">
+                            <div class="text-subtitle-2 mb-2">{{ $t('install.modulesTitle') }}</div>
+                            <v-checkbox v-model="moduleMultiUser" :label="$t('install.moduleMultiUser')"
+                                prepend-icon="mdi-account-multiple-outline" hide-details class="mt-0"></v-checkbox>
+                            <v-checkbox v-model="moduleCommunity" :label="$t('install.moduleCommunity')"
+                                prepend-icon="mdi-account-group-outline" hide-details class="mt-0"></v-checkbox>
+                            <v-checkbox v-model="moduleSharedReading" :label="$t('install.moduleSharedReading')"
+                                prepend-icon="mdi-format-list-bulleted-square" hide-details class="mt-0"></v-checkbox>
+                            <v-checkbox v-model="moduleAudio" :label="$t('install.moduleAudio')"
+                                prepend-icon="mdi-headphones" hide-details class="mt-0"></v-checkbox>
+                            <v-checkbox v-model="modulePhysical" :label="$t('install.modulePhysical')"
+                                prepend-icon="mdi-bookshelf" hide-details class="mt-0"></v-checkbox>
+                            <v-checkbox v-model="moduleAi" :label="$t('install.moduleAi')"
+                                prepend-icon="mdi-robot-outline" hide-details class="mt-0"></v-checkbox>
+                            <p class="text-caption grey--text mt-2 mb-0">{{ $t('install.modulesHint') }}</p>
+                        </v-sheet>
                     </v-form>
                     <v-alert type="info" v-if="tips"><span v-html="tips"></span></v-alert>
                 </v-card-text>
@@ -51,6 +68,14 @@ export default {
         email: "",
         code: "",
         invite: false,
+        // 新装默认勾多用户/共享阅读/有声书/实体书/AI；社区互动默认关闭。
+        // 后端 MODULES 默认仍为 true，用于老实例升级零变化。
+        moduleMultiUser: true,
+        moduleCommunity: false,
+        moduleSharedReading: true,
+        moduleAudio: true,
+        modulePhysical: true,
+        moduleAi: true,
         language: "zh",
         title: "MyBooks",
         tips: "",
@@ -153,6 +178,12 @@ export default {
             data.append('invite', this.invite);
             data.append('title', this.title);
             data.append('language', this.language);
+            data.append('ENABLE_MODULE_MULTIUSER', this.moduleMultiUser ? 'true' : 'false');
+            data.append('ENABLE_MODULE_COMMUNITY', this.moduleCommunity ? 'true' : 'false');
+            data.append('ENABLE_MODULE_SHARED_READING', this.moduleSharedReading ? 'true' : 'false');
+            data.append('ENABLE_MODULE_AUDIO', this.moduleAudio ? 'true' : 'false');
+            data.append('ENABLE_MODULE_PHYSICAL', this.modulePhysical ? 'true' : 'false');
+            data.append('ENABLE_MODULE_AI', this.moduleAi ? 'true' : 'false');
             this.tips = this.$t('install.writingConfig');
             this.$backend('/admin/install', {
                 method: 'POST',

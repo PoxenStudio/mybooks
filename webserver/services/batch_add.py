@@ -10,6 +10,7 @@ import requests
 import traceback
 
 from webserver import loader
+from webserver.base import modules as feature_modules
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT
 from webserver.constants import CALIBRE_COLUMN_LOCATION
 from webserver.constants import BOOK_TYPE_PHYSICAL, AUTO_FILL_META
@@ -52,6 +53,9 @@ class BatchAddService(AsyncService):
     @AsyncService.register_service
     def start_batch_add(self, csv_path, csv_filename, user_id):
         """启动批量添加任务"""
+        if not feature_modules.module_enabled(feature_modules.MODULE_PHYSICAL):
+            logging.warning("Batch add rejected: physical module disabled")
+            return 0
         if BatchAddService.static_is_running:
             logging.error("Batch adding is running, please wait...")
             return 0
@@ -113,6 +117,10 @@ class BatchAddService(AsyncService):
 
         # 处理每一行
         for idx, row in enumerate(rows):
+            # 运行期间管理员关闭实体书模块：在行边界停下，不再写 #book_type/#book_count/#location
+            if not feature_modules.module_enabled(feature_modules.MODULE_PHYSICAL):
+                logging.warning("Batch add stopped: physical module disabled at row %d", idx + 1)
+                break
             isbn = row.get('isbn', '').strip()
             title = row.get('title', '').strip()
             author = row.get('author', '').strip()

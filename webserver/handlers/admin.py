@@ -42,6 +42,7 @@ from webserver import perf
 from webserver.models import Reader, Item, Authors, Reading, BookReview, Message
 from webserver.services.book_review_service import BookReviewService
 from webserver.base.formatter import SimpleBookFormatter
+from webserver.base import modules as feature_modules
 from webserver.base.setting_saver import ADMIN_SETTING_KEYS, SettingsSaver
 from webserver.base.homepage import get_homepage_config, normalize_homepage
 from webserver.base.sidebar import SIDEBAR_DEFAULT_ITEMS, SIDEBAR_ITEMS_MIGRATED_KEY, get_sidebar_items
@@ -67,7 +68,9 @@ DEFAULT_META_SOURCES = ["douban", "baidu", "xinhua"]
 LOG_PATH = "/data/log/mybooks.log"
 
 
-class AdminUsers(BaseHandler):
+class AdminUsers(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_MULTIUSER
+
     @js
     @auth
     def get(self):
@@ -308,9 +311,11 @@ class AdminUsers(BaseHandler):
         return {"err": "ok"}
 
 
-class AdminBookReviews(BaseHandler):
+class AdminBookReviews(feature_modules.ModuleGateMixin, BaseHandler):
     """管理员"用户评论"管理页：分页列出所有评论，支持按状态过滤，以及通过/屏蔽/恢复操作。
     见 plan/Social_Reading_Plan.md §2.6。"""
+
+    module_id = feature_modules.MODULE_SHARED_READING
 
     @js
     @is_admin
@@ -469,7 +474,9 @@ class AdminSettings(BaseHandler):
 
         # 与首页渲染共用同一套归一化：auto.py 被手改成非 dict/空值时也会回退旧开关，
         # 否则设置页显示"全部可见"，管理员保存任意设置就会被静默改写首页行为。
-        homepage_config = get_homepage_config()
+        # 这里不套模块可见性（apply_modules=False）：模块关闭造成的"强制隐藏"
+        # 只属于运行期渲染，不能因为管理员保存一次设置就被固化进 HOMEPAGE_CONFIG。
+        homepage_config = get_homepage_config(apply_modules=False)
 
         CONF["site_icon"] = "favicon_0"  # default icon, means use current favicon.ico
         CONF["META_ALL_SOURCES"] = BookSearch.all_sources()
@@ -502,7 +509,17 @@ class AdminSettings(BaseHandler):
         # 陈旧缺项固化下来；标记已置位（管理员保存过设置页）则 stored 列表即权威，原样返回。
         # 只改返回给前端的副本，不回写 CONF，也不改写用户存的配置。
         settings["SIDEBAR_ITEMS"] = get_sidebar_items(CONF)
-        return {"err": "ok", "settings": settings, "sns": sns, "site_url": self.site_url}
+        return {
+            "err": "ok",
+            "settings": settings,
+            "sns": sns,
+            "site_url": self.site_url,
+            # 模块弹窗的「将写入/将恢复」预览清单，与后端归一化共用同一份真值。
+            "module_switches": {
+                "off": feature_modules.MODULE_OFF_SWITCHES,
+                "on": feature_modules.MODULE_ON_SWITCHES,
+            },
+        }
 
     @js
     @auth
@@ -537,6 +554,20 @@ class AdminSettings(BaseHandler):
             args[ENABLE_VIP_QUOTA_KEY] = current_vip_quota
         if ENABLE_OPDS_SERVICE not in args:
             args[ENABLE_OPDS_SERVICE] = CONF.get(ENABLE_OPDS_SERVICE, True)
+        # 模块开关：args 会被 dumpfile() 整份写回 auto.py，少一个键就等于把它抹掉、
+        # 重启后回落到默认值。这里按模块表统一补回当前值，新增模块不用再逐条 if，
+        # 也能挡住「旧版前端缓存页 / 脚本直接打接口」不带该键的情况。
+        for _module_spec in feature_modules.MODULES.values():
+            args.setdefault(
+                _module_spec["key"], CONF.get(_module_spec["key"], _module_spec["default"])
+            )
+        # 新键同样要补回：旧版前端缓存页/脚本不带它时，dumpfile() 不能把它抹掉。
+        args.setdefault(
+            "OPDS_ALLOW_ANONYMOUS", CONF.get("OPDS_ALLOW_ANONYMOUS", False)
+        )
+        # 模块开关变化时同步主开关：关闭写安全默认值，开启恢复主功能开关；
+        # 只动 MODULE_OFF_SWITCHES / MODULE_ON_SWITCHES 里的键，不碰数据与密钥。
+        feature_modules.apply_module_switch_effects(args, CONF)
         if args.get(IMPORT_BY_INOTIFY, False):
             # 如果启用基于 inotify 的文件导入，不能默认删除文件
             args["REMOVE_IMPORTED_FILE"] = False
@@ -715,6 +746,13 @@ class AdminInstall(BaseHandler):
             args["INVITE_MODE"] = False
 
         apply_localized_default_settings(args, args["site_language"])
+
+        # 安装页模块勾选：缺省按全开处理（旧脚本直接调接口时保持兼容），
+        # 未勾选模块写入安全默认值，例如关闭多用户会同时写入必须登录、访客权限关闭。
+        for _module_spec in feature_modules.MODULES.values():
+            raw = self.get_argument(_module_spec["key"], "true").strip().lower()
+            args[_module_spec["key"]] = raw not in ("false", "0", "off", "no")
+        feature_modules.apply_module_switch_effects(args, None)
 
         return SettingsSaver().save_extra_settings(args)
 
@@ -914,8 +952,10 @@ class AdminBookFill(BaseHandler):
         return {"err": "ok", "msg": _("任务启动成功！请耐心等待，稍后再来刷新页面")}
 
 
-class AdminBookAIFill(BaseHandler):
+class AdminBookAIFill(feature_modules.ModuleGateMixin, BaseHandler):
     """Admin API: 批量使用 AI 更新指定书籍的信息"""
+
+    module_id = feature_modules.MODULE_AI
 
     @js
     @is_admin
@@ -1850,7 +1890,9 @@ class AdminResources(BaseHandler):
         return {"err": "ok", "resources": resources}
 
 
-class AdminAITestConnection(BaseHandler):
+class AdminAITestConnection(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_AI
+
     @js
     @is_admin
     async def post(self):

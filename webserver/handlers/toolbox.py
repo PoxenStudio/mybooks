@@ -16,6 +16,7 @@ from webserver.loader import get_settings
 from webserver.toolbox.toolset import ToolSet
 from webserver.toolbox import toolbox_manager
 from webserver.services.toolbox_store import ToolboxStoreClient, ToolboxStoreError, get_cached_index, find_in_index
+from webserver.base.modules import MODULE_AUDIO, ModuleGateMixin
 from webserver.handlers.base import BaseHandler, js, is_admin
 from webserver.toolbox.rare_book_downloader import RareBookDownloader
 from webserver.toolbox.merge_formats_tool import MergeFormatsTool
@@ -695,7 +696,10 @@ class AdminAuthorClean(BaseHandler):
             return {"err": "params.action.invalid", "msg": _("无效的操作类型")}
 
 
-class AdminMimoTTSConvert(BaseHandler):
+class AdminMimoTTSConvert(ModuleGateMixin, BaseHandler):
+    # Mimo-TTS 直接往 audio_output_folder 写整本有声书，属于有声书模块的能力
+    module_id = MODULE_AUDIO
+
     @js
     @is_admin
     def post(self):
@@ -766,7 +770,9 @@ class AdminMimoTTSConfig(BaseHandler):
         return {"err": "ok", "msg": _("已清除已保存的配置")}
 
 
-class AdminMimoTTSProgress(BaseHandler):
+class AdminMimoTTSProgress(ModuleGateMixin, BaseHandler):
+    module_id = MODULE_AUDIO
+
     @js
     @is_admin
     def get(self):
@@ -794,7 +800,9 @@ class AdminMimoTTSProgress(BaseHandler):
         return {"err": "ok", "data": result}
 
 
-class AdminMimoTTSTest(BaseHandler):
+class AdminMimoTTSTest(ModuleGateMixin, BaseHandler):
+    module_id = MODULE_AUDIO
+
     @js
     @is_admin
     def post(self):
@@ -875,7 +883,11 @@ class AdminMimoTTSCloneDelete(BaseHandler):
         return {"err": "clone.not_found", "msg": _("克隆音色「%s」不存在") % voice_name}
 
 
-class AdminMimoTTSCloneAudio(BaseHandler):
+class AdminMimoTTSCloneAudio(ModuleGateMixin, BaseHandler):
+    module_id = MODULE_AUDIO
+    # 返回克隆音色样本（音频流），关闭时给 404 而不是 JSON
+    module_gate_json = False
+
     @is_admin
     def get(self):
         voice_name = self.get_argument("voice_name", "").strip()

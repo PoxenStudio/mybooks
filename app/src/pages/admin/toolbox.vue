@@ -21,7 +21,7 @@
       <v-progress-circular indeterminate color="primary" size="48" />
     </v-row>
 
-    <v-row v-else-if="tools.length === 0" justify="center" class="py-10">
+    <v-row v-else-if="visibleTools.length === 0" justify="center" class="py-10">
       <v-col cols="auto" class="text-center grey--text">{{ $t('toolbox.noTools') }}</v-col>
     </v-row>
 
@@ -297,12 +297,21 @@ export default {
     pinnedIds: [],
   }),
   computed: {
+    // 有声书模块关掉时，Mimo-TTS 这个「生成有声书」的工具也一并收起
+    audioModuleOn() {
+      const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
+      return mods.audio !== false;
+    },
+    visibleTools() {
+      if (this.audioModuleOn) return this.tools;
+      return this.tools.filter((t) => t.id !== "mimo_tts");
+    },
     sortedTools() {
       const pinnedSet = new Set(this.pinnedIds);
       const pinnedTools = this.pinnedIds
-        .map((id) => this.tools.find((t) => t.id === id))
+        .map((id) => this.visibleTools.find((t) => t.id === id))
         .filter(Boolean);
-      const restTools = this.tools.filter((t) => !pinnedSet.has(t.id));
+      const restTools = this.visibleTools.filter((t) => !pinnedSet.has(t.id));
       return [...pinnedTools, ...restTools];
     },
   },

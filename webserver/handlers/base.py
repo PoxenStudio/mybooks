@@ -29,6 +29,7 @@ from webserver.base.formatter import BookFormatter
 from webserver.base.query_cache import VersionedCache, library_version
 from webserver.base.global_state import get_global_state
 from webserver.base.sidebar import get_sidebar_items
+from webserver.base import modules as feature_modules
 from webserver.services.resource_service import ResourceService
 from webserver.services.perf_monitor import PerfMonitor
 from webserver.services.book_access_service import BookAccessService
@@ -429,8 +430,11 @@ class BaseHandler(web.RequestHandler):
         self.set_secure_cookie("invited", str(int(time.time())))
 
     def require_login_enabled(self):
-        """站点是否开启了「必须登录才能访问」（私人图书馆标准模式）。"""
-        return bool(CONF.get("REQUIRE_LOGIN", False))
+        """站点是否开启了「必须登录才能访问」（私人图书馆标准模式）。
+
+        多用户支持关闭时按有效登录门禁处理，避免手工改 auto.py 绕过。
+        """
+        return feature_modules.require_login_effective(CONF)
 
     def allow_flags(self):
         """下发给前端的站点开关（sys.allow）。
@@ -440,23 +444,43 @@ class BaseHandler(web.RequestHandler):
         留在"访客还能读"的错误状态。分享链接例外：它优先于必须登录，只看自身开关。
         """
         require_login = self.require_login_enabled()
+        community = feature_modules.module_enabled(feature_modules.MODULE_COMMUNITY)
+        shared_reading = feature_modules.module_enabled(feature_modules.MODULE_SHARED_READING)
+        # 站内留言属于社区互动模块：模块关闭时即使旧开关还开着也按关闭下发
+        user_memos = CONF.get("ENABLE_USER_MEMOS", True)
+        if not community:
+            user_memos = False
+        # 实体书模块关闭时导航/OPDS/筛选等入口一并失效
+        physical_books = CONF.get("ENABLE_PHYSICAL_BOOKS", True)
+        if not feature_modules.module_enabled(feature_modules.MODULE_PHYSICAL):
+            physical_books = False
+        # 多用户支持关闭时不再提供注册入口；登录/个人资料/密码重置仍是核心能力
+        allow_register = CONF["ALLOW_REGISTER"]
+        if not feature_modules.module_enabled(feature_modules.MODULE_MULTIUSER):
+            allow_register = False
+        share_link = CONF.get("ENABLE_SHARE_LINK", True)
+        if not shared_reading:
+            share_link = False
+        book_review = CONF.get("ENABLE_BOOK_REVIEW", True) and shared_reading
+        book_recommend = CONF.get("ENABLE_BOOK_RECOMMEND_TO_OTHERS", True) and shared_reading
+        shared_notes = CONF.get("ENABLE_SHARED_NOTES", True) and shared_reading
         return {
-            "register": CONF["ALLOW_REGISTER"],
+            "register": allow_register,
             "require_login": require_login,
             "download": False if require_login else CONF["ALLOW_GUEST_DOWNLOAD"],
             "push": False if require_login else CONF["ALLOW_GUEST_PUSH"],
             "read": False if require_login else CONF["ALLOW_GUEST_READ"],
             "upload": False if require_login else CONF.get("ALLOW_GUEST_UPLOAD", False),
-            "share_link": CONF.get("ENABLE_SHARE_LINK", True),
-            "physical_books": CONF.get("ENABLE_PHYSICAL_BOOKS", True),
+            "share_link": share_link,
+            "physical_books": physical_books,
             "folder": CONF.get("ENABLE_FOLDER_BROWSE", False),
             "download_quota": CONF.get("ENABLE_DOWNLOAD_QUOTA", False),
             "server_import": CONF.get("ENABLE_SERVER_FILE_IMPORT", False),
             "sync": CONF.get("ENABLE_DATA_SYNC", False),
-            "book_review": CONF.get("ENABLE_BOOK_REVIEW", True),
-            "user_memos": CONF.get("ENABLE_USER_MEMOS", True),
-            "book_recommend": CONF.get("ENABLE_BOOK_RECOMMEND_TO_OTHERS", True),
-            "shared_notes": CONF.get("ENABLE_SHARED_NOTES", True),
+            "book_review": book_review,
+            "user_memos": user_memos,
+            "book_recommend": book_recommend,
+            "shared_notes": shared_notes,
         }
 
     def need_invited(self):
@@ -655,7 +679,17 @@ class BaseHandler(web.RequestHandler):
                 bid, fmt = filename.split(".", 1)
                 if self.parse_download_sign(self.get_argument("dl", ""), bid, fmt):
                     return False
+        # OPDS 匿名模式：feed 里的封面/缩略图带 from=opds，允许匿名取图。
+        # 只放行封面/缩略图本身；/get/extract（正文）、/get/progress（转换日志）、
+        # /get/tool 等仍按各自授权或登录闸处理，不能靠一个参数整段放行。
+        if self.get_argument("from", "") == "opds" and _SHARE_COVER_PATH_RE.match(path):
+            if feature_modules.opds_anonymous_allowed(CONF):
+                return False
         if path.startswith("/opds") or self.is_opds_acquisition(path):
+            # 个人模式：允许 OPDS 绕过站点级必须登录，给无法输入账号的阅读设备用。
+            # 匿名开关优先于 OPDS 认证项，两边（这里与 opds.OpdsHandler）口径一致。
+            if feature_modules.opds_anonymous_allowed(CONF):
+                return False
             self.set_header("WWW-Authenticate", 'Basic realm="MyBooks"')
             self.set_status(401)
             raise web.Finish()
@@ -1260,14 +1294,17 @@ class BaseHandler(web.RequestHandler):
         self._build_custom_column_map()
         merge_start = time.perf_counter()
 
-        # Get audio book ids set once for better performance
+        # Get audio book ids set once for better performance.
+        # 有声书模块关闭时不查这份缓存：既省一次全盘扫描，也让列表不再带
+        # has_audio 角标（前端 BookCards 只看这个字段，无需另加判断）。
         audio_book_ids = set()
-        try:
-            from webserver.handlers.audio import AudioBooksCache
+        if feature_modules.module_enabled(feature_modules.MODULE_AUDIO):
+            try:
+                from webserver.handlers.audio import AudioBooksCache
 
-            audio_book_ids = AudioBooksCache.get_audio_book_ids_set()
-        except Exception as e:
-            logging.error(f"Error getting audio book ids: {e}")
+                audio_book_ids = AudioBooksCache.get_audio_book_ids_set()
+            except Exception as e:
+                logging.error(f"Error getting audio book ids: {e}")
 
         maps, empty_item = item_maps or self._item_maps([book["id"] for book in books])
 
@@ -1831,6 +1868,10 @@ class BaseHandler(web.RequestHandler):
 
     def _build_friends_with_favicon(self):
         """构建带有 favicon 图标信息的友情链接列表"""
+        # 友情链接属于共享阅读模块：关闭时不下发（入口由 sys.friends 是否为空决定），
+        # 也省掉一轮 favicon 抓取
+        if not feature_modules.module_enabled(feature_modules.MODULE_SHARED_READING):
+            return []
         friends = CONF.get("FRIENDS", [])
         result = []
         need_loading_urls = []
@@ -1864,12 +1905,22 @@ class BaseHandler(web.RequestHandler):
             "books": db.count(),
             "tags": len(db.all_tags()),
             "authors": len(db.all_authors()),
-            "audiobooks": self.get_audio_books_count(),
+            # 有声书模块关闭时不再扫音频目录，也不把数量下发（导航那一项本来也不出现）
+            "audiobooks": (
+                self.get_audio_books_count()
+                if feature_modules.module_enabled(feature_modules.MODULE_AUDIO)
+                else 0
+            ),
             "publishers": len(db.all_publishers()),
             "series": len(db.all_series()),
             "categories": self.get_custom_category_count(),
             "folders": self.get_folder_count(),
-            "physicals": self.get_physical_books_count(),
+            # 同上：模块关闭时导航不出实体书，也不必算这个数
+            "physicals": (
+                self.get_physical_books_count()
+                if feature_modules.module_enabled(feature_modules.MODULE_PHYSICAL)
+                else 0
+            ),
             "mtime": db.last_modified().strftime("%Y-%m-%d"),
         }
 
@@ -1883,6 +1934,16 @@ class BaseHandler(web.RequestHandler):
             .filter(Reader.access_time > last_week)
             .scalar()
         )
+        ai_enabled = CONF.get("AI_ENABLED", False)
+        mynexus_enabled = CONF.get("ENABLE_MYNEXUS", False)
+        if not feature_modules.module_enabled(feature_modules.MODULE_AI):
+            # AI 模块关闭：助手、AI 补全、MyNexus、MCP 一律视为未启用
+            ai_enabled = False
+            mynexus_enabled = False
+        # 多用户支持模块关闭：登录页的社交登录按钮一并收起
+        socials = CONF["SOCIALS"]
+        if not feature_modules.module_enabled(feature_modules.MODULE_MULTIUSER):
+            socials = []
         info = dict(stats, users=count_all_users, version=VERSION, active=count_hot_users, performanceMode=perf.CONF.get("PERFORMANCE_MODE", "normal"), lite={"homeCollapse": perf.lite_on("LITE_HOME_COLLAPSE")})
         info.update(
             {
@@ -1907,16 +1968,19 @@ class BaseHandler(web.RequestHandler):
                     CONF["CHUNK_UPLOAD_SIZE"] if "CHUNK_UPLOAD_SIZE" in CONF else "0MB"
                 ),
                 "icon": CONF["site_icon"] if "site_icon" in CONF else "favicon_1",
-                "socials": CONF["SOCIALS"],
+                "socials": socials,
                 "friends": self._build_friends_with_favicon(),
                 "footer": CONF["FOOTER"] if "FOOTER" in CONF else "",
                 "footer_watermark": CONF.get("FOOTER_WATERMARK", ""),
                 "header": CONF["HEADER"] if "HEADER" in CONF else "",
                 "allow": self.allow_flags(),
+                # 功能模块总开关快照（模块级，见 webserver/base/modules.py）：
+                # 前端据 sys.modules.<id> 决定导航、菜单、详情页按钮与设置区块的显隐。
+                "modules": feature_modules.snapshot(CONF),
                 "indexPage": CONF.get("INDEX_PAGE_TYPE", "index"),
                 "epub_viewer": CONF.get("EPUB_VIEWER", "MyReader"),
                 "defaultPageSize": CONF.get("DEFAULT_PAGE_SIZE", 60),
-                "aiEnabled": CONF.get("AI_ENABLED", False),
+                "aiEnabled": ai_enabled,
                 "standalone": CONF.get("STANDALONE", False),
                 "hide_project_links": CONF.get("HIDE_PROJECT_LINKS", False),
                 "enable_podcast_service": CONF.get("ENABLE_PODCAST_SERVICE", False),
@@ -1929,7 +1993,7 @@ class BaseHandler(web.RequestHandler):
                 "sidebar_items": get_sidebar_items(CONF),
                 "invited_enabled": self.need_invited(),
                 "showUserInfo": CONF.get("ENABLE_AUTHOR_INFO", False),
-                "mynexus_enabled": CONF.get("ENABLE_MYNEXUS", False),
+                "mynexus_enabled": mynexus_enabled,
             }
         )
         return info
@@ -1939,10 +2003,16 @@ class BaseHandler(web.RequestHandler):
 
     async def get_sys_info_async(self):
         version = self.library_version()
-        stats = BaseHandler._stats_cache.get("stats", version)
+        # 缓存键带上模块开关：切换模块不改变 library version，否则关闭/重开后的
+        # 计数（audiobooks/physicals）会沿用 60 秒内的旧快照
+        stats_key = "stats:%d:%d" % (
+            feature_modules.module_enabled(feature_modules.MODULE_AUDIO),
+            feature_modules.module_enabled(feature_modules.MODULE_PHYSICAL),
+        )
+        stats = BaseHandler._stats_cache.get(stats_key, version)
         if stats is None:
             stats = await self.run_calibre_read_async(self._library_stats)
-            BaseHandler._stats_cache.put("stats", version, stats)
+            BaseHandler._stats_cache.put(stats_key, version, stats)
         return self._sys_info_with(stats)
 
 

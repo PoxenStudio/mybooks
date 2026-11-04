@@ -16,6 +16,7 @@ from html import escape
 from tornado import web
 
 from webserver import loader, utils
+from webserver.base.modules import MODULE_AUDIO, module_enabled
 from webserver.handlers.base import BaseHandler
 from webserver.podcast.feed_builder import build_book_feed
 from webserver.podcast.opml_builder import build_book_opml
@@ -41,6 +42,13 @@ def _get_provider(handler):
 
 class PodcastBaseHandler(BaseHandler):
     """Base handler for all podcast endpoints."""
+
+    def prepare(self):
+        super().prepare()
+        # 有声书模块关闭时整组订阅源视为不存在：喂 404 而不是 503，
+        # 否则播客客户端会把「服务暂时不可用」当成故障反复重试。
+        if not module_enabled(MODULE_AUDIO):
+            raise web.HTTPError(404, reason="Not Found")
 
     def check_podcast_enabled(self):
         if not CONF.get(constants.ENABLE_PODCAST_SERVICE, False):

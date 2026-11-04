@@ -31,6 +31,7 @@ from webserver.base.image_helper import ImageHelper
 from webserver.base.epub_helper import EpubHelper
 from webserver.base.meta_helper import guess_authors, guess_tags
 from webserver.base.homepage import get_homepage_config
+from webserver.base import modules as feature_modules
 from webserver.services.book_visit_service import BookVisitService
 from webserver.services.book_access_service import BookAccessService
 from webserver.services.autofill import AutoFillService
@@ -100,6 +101,8 @@ class Index(BaseHandler):
         是否展示这张卡由 HOMEPAGE_CONFIG 决定（见 homepage_from_legacy：老站点的
         ENABLE_BOOK_RECOMMEND_TO_OTHERS 只用于推导初始可见性）。这个 flag 继续管
         "评价是否计入推荐人数/详情页推荐"，不再反过来让首页卡片永远取不到数据。"""
+        if not feature_modules.module_enabled(feature_modules.MODULE_SHARED_READING):
+            return []
         if not CONF.get("ENABLE_BOOK_REVIEW", True) or perf.lite_on("LITE_NO_RECOMMEND"):
             return []
         if not self.current_user or not getattr(self.current_user, "show_home_recommendations", True):
@@ -148,7 +151,13 @@ class Index(BaseHandler):
         return frozenset(ids[:MAX_SHOWN_IDS])
 
     def _recommend_home_ids(self, cnt_random, cnt_recent, exclude_ids, seed, reader_id):
-        if not CONF.get("RECOMMEND_ENABLE", True) or self.get_argument("personalized", "1") == "0" or perf.lite_on("LITE_NO_RECOMMEND"):
+        if not feature_modules.module_enabled(feature_modules.MODULE_SHARED_READING):
+            return None
+        if not CONF.get("RECOMMEND_ENABLE", True):
+            return None
+        if self.get_argument("personalized", "1") == "0":
+            return None
+        if perf.lite_on("LITE_NO_RECOMMEND"):
             return None
         service = self.settings.get("recommend")
         if service is None:
@@ -335,24 +344,40 @@ class BookDetail(BaseHandler):
         formated_book = BookFormatter(self, book).format(with_files=True, with_perms=True)
         formated_book["reading_stats"] = ReadingStatsService.get_book_format_stats(self.current_user.id, book_id) if self.current_user else []
         analysis = self.sqlite_session.get(MyNexusBookAnalysis, book_id)
+        ai_module_on = feature_modules.module_enabled(feature_modules.MODULE_AI)
         can_read_ai_data = bool(self.current_user or BookAccessService.guest_read_allowed(self, book_id))
-        formated_book["ai_companion_available"] = bool(self.current_user and analysis and analysis.status == "completed")
-        formated_book["ai_reading_guide"] = analysis.reading_guide if can_read_ai_data and analysis and analysis.status == "completed" else ""
+        formated_book["ai_companion_available"] = bool(
+            ai_module_on and self.current_user and analysis and analysis.status == "completed"
+        )
+        formated_book["ai_reading_guide"] = (
+            analysis.reading_guide
+            if ai_module_on and can_read_ai_data and analysis and analysis.status == "completed"
+            else ""
+        )
         if self.is_admin():
-            formated_book["mynexus_configured"] = bool(CONF.get("ENABLE_MYNEXUS") and CONF.get("MYNEXUS_URL") and CONF.get("MYNEXUS_TOKEN"))
+            mynexus_configured = False
+            if ai_module_on and CONF.get("ENABLE_MYNEXUS") and CONF.get("MYNEXUS_URL") and CONF.get("MYNEXUS_TOKEN"):
+                mynexus_configured = True
+            formated_book["mynexus_configured"] = mynexus_configured
             formated_book["mynexus_analysis"] = {
                 "status": analysis.status,
                 "progress": analysis.progress,
                 "error_msg": analysis.error_msg,
                 "can_retry": analysis.status == "failed",
-            } if analysis else {"status": "not_started", "progress": 0, "error_msg": ""}
+            } if (ai_module_on and analysis) else {"status": "not_started", "progress": 0, "error_msg": ""}
 
         return {
             "err": "ok",
             "kindle_sender": CONF["smtp_username"],
             "guest_access": None if self.current_user else BookAccessService.guest_read_source(self, book_id),
             "book": formated_book,
-            "audios": AudioUtils.get_audios(bid, self.current_user.id if self.current_user else None),
+            # 有声书模块关闭时不再扫音频目录：详情页拿不到 audios，
+            # 前端也就不会渲染播放/转写入口（关闭只隐藏，不动磁盘文件）。
+            "audios": (
+                AudioUtils.get_audios(bid, self.current_user.id if self.current_user else None)
+                if feature_modules.module_enabled(feature_modules.MODULE_AUDIO)
+                else {"status": "unavailable", "msg": _("有声书功能已关闭"), "count": 0}
+            ),
         }
 
 
@@ -398,8 +423,11 @@ class BookTags(BaseHandler):
             return {"err": "internal", "msg": _("更新标签时发生错误，请稍后再试")}
 
 
-class BookAIFill(BaseHandler):
+class BookAIFill(feature_modules.ModuleGateMixin, BaseHandler):
     """使用 AI 同步更新单本书的分类、标签、简介和作者介绍"""
+
+    module_id = feature_modules.MODULE_AI
+
     @js
     @auth
     async def post(self, id):
@@ -493,7 +521,9 @@ class BookCategory(BaseHandler):
             return {"err": "internal", "msg": _("更新分类失败")}
 
 
-class BookLocation(BaseHandler):
+class BookLocation(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_PHYSICAL
+
     @js
     @auth
     def post(self, id):
@@ -826,6 +856,8 @@ class BookToPDF(BaseHandler):
             return {"err": "params.book.converting", "msg": _("本书正在转换中，请稍后再试")}
         service.convert_and_save(self.user_id(), book, fpath, "pdf")
         return {"err": "ok", "content": "%s" % _("转换成功，请稍后刷新页面查看")}
+
+
 class BookSetSole(BaseHandler):
     @js
     @auth
@@ -1570,7 +1602,9 @@ class BookReading(BaseHandler):
                 "books": reading_books}
 
 
-class PrintBooks(BaseHandler):
+class PrintBooks(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_PHYSICAL
+
     @js
     def get(self):
         title = _("实体书")
@@ -2058,6 +2092,13 @@ class BookEdit(BaseHandler):
         return bool(html_pattern.search(content))
 
     def edit_book(self, bid, data):
+        # 实体书模块关闭时忽略物理字段：老缓存页/脚本仍可能提交 book_type/book_count/
+        # location，此时登记与互转入口都已下线，写进去只会得到看不全也改不了的物理书
+        if not feature_modules.module_enabled(feature_modules.MODULE_PHYSICAL):
+            data = {
+                key: val for key, val in data.items()
+                if key not in ("book_type", "book_count", COLUMN_LOCATION)
+            }
         from calibre.utils.date import now as nowf
         mi = self.calibre_db.get_metadata(bid, index_is_id=True, get_cover=True)
         need_update_cover = False
@@ -2337,8 +2378,18 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
 
     def prepare(self):
         BaseHandler.prepare(self)
+        # OPDS 服务关闭后，带 from=opds 的旧直链也一并失效，避免绕过开关继续下载。
+        if self.is_opds and not CONF.get("ENABLE_OPDS_SERVICE", True):
+            raise web.HTTPError(404, reason="OPDS service is not enabled")
         bid = self.requested_book_id()
         if not self.current_user and not BookAccessService.guest_download_allowed(self, bid):
+            # OPDS 匿名模式：目录和 acquisition 链接都绕过了站点级必须登录，
+            # 下载不能再用 guest_download_allowed 把人挡回去；匿名开关优先于 OPDS 认证项。
+            # 私藏（sole）书籍不在 OPDS 目录里，也不允许匿名按 id 直接下载。
+            if self.is_opds and feature_modules.opds_anonymous_allowed(CONF):
+                if self._is_sole_book(bid):
+                    raise web.HTTPError(404, reason=_("书籍不存在"))
+                return
             self.login_by_download_sign()
         if not self.current_user and not BookAccessService.guest_download_allowed(self, bid):
             if self.is_opds:
@@ -2352,6 +2403,12 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
                     raise web.HTTPError(403, reason=_("无权操作，请先登录注册邮箱激活账号。"))
             else:
                 raise web.HTTPError(403, reason=_("无权操作"))
+
+    def _is_sole_book(self, bid):
+        if not bid:
+            return False
+        row = self.sqlite_session.query(Item).filter(Item.book_id == bid, Item.sole == 1).first()
+        return row is not None
 
     def requested_book_id(self):
         try:
@@ -2764,7 +2821,9 @@ class HotBook(ListHandler):
 
 
 # 通ISBN添加实体图书
-class BookAddByISBN(BaseHandler):
+class BookAddByISBN(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_PHYSICAL
+
     @js
     @auth
     async def post(self):
@@ -2846,7 +2905,9 @@ class BookAddByISBN(BaseHandler):
 
 
 # 直接录入书名/作者/ISBN添加实体图书（ISBN、作者可选），添加后强制刮削
-class BookAddManual(BaseHandler):
+class BookAddManual(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_PHYSICAL
+
     @js
     @auth
     def post(self):
@@ -4087,6 +4148,8 @@ class BookSuggestion(ListHandler):
         book = self.get_book(id, raise_exception=False)
         if not book:
             return {"err": "params.book.invalid", "msg": _("书籍已不存在")}
+        if not feature_modules.module_enabled(feature_modules.MODULE_SHARED_READING):
+            return {"err": "ok", "msg": _("推荐成功"), "books": []}
         if perf.lite_on("LITE_NO_RECOMMEND"):
             return {"err": "ok", "msg": _("推荐成功"), "books": []}
         books = self._related_books(book["id"]) or self._tag_author_books(book)
@@ -4728,7 +4791,9 @@ class ClearRareTags(ListHandler):
             return {"err": "error", "msg": _("处理失败：%s") % str(e)}
 
 
-class BookExchangeType(BaseHandler):
+class BookExchangeType(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_PHYSICAL
+
     @js
     @auth
     def post(self):

@@ -13,6 +13,7 @@ import tornado.escape
 from tornado import web
 from webserver import loader, site_time
 from webserver.base import calibre_fast
+from webserver.base import modules as feature_modules
 from webserver.base.appearance import (
     APPEARANCE_KEY,
     is_appearance_too_large,
@@ -269,6 +270,8 @@ class SignUp(BaseHandler):
 
     @js
     def post(self):
+        if not feature_modules.module_enabled(feature_modules.MODULE_MULTIUSER):
+            return feature_modules.module_disabled_error(feature_modules.MODULE_MULTIUSER)
         if not CONF.get("ALLOW_REGISTER", False):
             return {"err": "permission.denied", "msg": _("当前站点已关闭注册")}
 
@@ -331,7 +334,9 @@ class SignUp(BaseHandler):
         return {"err": "ok"}
 
 
-class UserNew(BaseHandler):
+class UserNew(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_MULTIUSER
+
     @js
     @auth
     def post(self):
@@ -602,7 +607,9 @@ class UserInfo(BaseHandler):
                 }
             return d
 
-        enable_review = CONF.get("ENABLE_BOOK_REVIEW", True)
+        enable_review = CONF.get("ENABLE_BOOK_REVIEW", True) and feature_modules.module_enabled(
+            feature_modules.MODULE_SHARED_READING
+        )
 
         d.update(
             {
@@ -1180,7 +1187,8 @@ class UserReadingLeaderboard(BaseHandler):
         }
 
 
-class UserExpectedItems(BaseHandler):
+class UserExpectedItems(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_COMMUNITY
 
     @js
     @auth
@@ -1312,8 +1320,10 @@ class UserExpectedItems(BaseHandler):
             return {"err": "db.error", "msg": _("删除失败")}
 
 
-class UserMemo(BaseHandler):
+class UserMemo(feature_modules.ModuleGateMixin, BaseHandler):
     """用户留言"""
+
+    module_id = feature_modules.MODULE_COMMUNITY
 
     GUEST_DAILY_LIMIT = 20
     USER_DAILY_LIMIT = 10

@@ -60,7 +60,7 @@ export default {
   // 全站路由守卫：REQUIRE_LOGIN 开启且未登录时把页面跳到 /login。
   // 页面 HTML 不经后端 BaseHandler（见 handlers/base.py 的门禁注释），只能在前端补这一层。
   router: {
-    middleware: ["require-login"],
+    middleware: ["require-login", "module-gate"],
   },
 
   // Modules for dev and build (recommended): https://go.nuxtjs.dev/config-modules

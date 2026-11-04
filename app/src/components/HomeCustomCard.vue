@@ -33,7 +33,7 @@
         <v-card :to="book.href" class="ma-1">
           <div class="book-img-container" :title="book.title">
             <v-img :src="book.thumb" class="cover-fill-img book-img-hover"></v-img>
-            <div v-if="book.book_type === 1" class="physical-book-badge">
+            <div v-if="physicalModuleOn && book.book_type === 1" class="physical-book-badge">
               <v-icon small color="white">mdi-bookshelf</v-icon>
             </div>
           </div>
@@ -73,6 +73,10 @@ export default {
     };
   },
   computed: {
+    physicalModuleOn() {
+      const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
+      return mods.physical !== false;
+    },
     icon() {
       return ICONS[this.card.type] || "mdi-card-outline";
     },

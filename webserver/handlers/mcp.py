@@ -9,6 +9,7 @@ import logging
 import json
 
 from webserver import loader
+from webserver.base import modules as feature_modules
 from webserver.handlers.base import BaseHandler, ListHandler, js
 from webserver.i18n import _
 from webserver.version import VERSION
@@ -17,7 +18,9 @@ from webserver.version import VERSION
 CONF = loader.get_settings()
 
 
-class MCPHandler(ListHandler):
+class MCPHandler(feature_modules.ModuleGateMixin, ListHandler):
+    module_id = feature_modules.MODULE_AI
+
     mcp_service_single = None
     mcp_service_with_token = None
     last_service_token = None
@@ -89,7 +92,9 @@ class MCPHandler(ListHandler):
             }
 
 
-class MCPHealthHandler(BaseHandler):
+class MCPHealthHandler(feature_modules.ModuleGateMixin, BaseHandler):
+    module_id = feature_modules.MODULE_AI
+
     @js
     def get(self):
         return {"err": "ok", "status": "healthy", "server": "mybooks-mcp"}

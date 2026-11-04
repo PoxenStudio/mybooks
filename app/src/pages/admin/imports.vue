@@ -59,6 +59,7 @@
                         </v-btn>
                     </template>
                     <v-btn
+                        v-if="audioModuleOn"
                         :disabled="loading || bulkDeleting"
                         :outlined="$vuetify.breakpoint.xs"
                         color="purple darken-1"
@@ -298,7 +299,7 @@
             @confirm="runBulkDelete"
         >
             <p>{{ $t('imports.bulk_delete_desc', { count: bulkSelectedCount, status: bulkStatusLabel }) }}</p>
-            <p>{{ $t('imports.bulk_delete_audiobook_note') }}</p>
+            <p v-if="audioModuleOn">{{ $t('imports.bulk_delete_audiobook_note') }}</p>
             <v-checkbox
                 v-model="bulkDeleteFiles"
                 :label="$t('imports.bulk_delete_files_option')"
@@ -393,6 +394,11 @@ export default {
     computed: {
         allowPhysicalBooks() {
             return !!(this.$store.state.sys && this.$store.state.sys.allow && this.$store.state.sys.allow.physical_books);
+        },
+        // 有声书模块开关：关闭后不显示「导入有声书」与批量删除提示
+        audioModuleOn() {
+            const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
+            return mods.audio !== false;
         },
         pageCount: function () {
             return parseInt(this.total / 20);
@@ -516,6 +522,15 @@ export default {
                     .then((rsp) => {
                         if (rsp.err != "ok") {
                             this.$alert("error", rsp.msg);
+                            // 任务运行期间模块被关闭：后端门禁返回 module.disabled，
+                            // 停止轮询并复位任务态，避免页面一直停在加载中
+                            if (rsp.err === "module.disabled") {
+                                this.loading = false;
+                                this.importing = false;
+                                this.audioImporting = false;
+                                this.batchAdding = false;
+                                this.bulkDeleting = false;
+                            }
                             return;
                         }
                         if (callback(rsp)) {
@@ -789,29 +804,29 @@ export default {
             // Check audio import status
             this.$backend("/admin/audio_import/status")
                 .then((rsp) => {
-                    if (rsp.err !== "ok") {
-                        return;
-                    }
-                    if (rsp.audio_importing) {
-                        this.audioImporting = true;
-                        this.loading = true;
-                        this.loopCheckStatus("/admin/audio_import/status", (rsp) => {
-                            this.count_total = rsp.status.total || 0;
-                            this.count_processed = (rsp.status.imported || 0) + (rsp.status.exist || 0);
-                            this.count_done = rsp.summary.done;
-                            this.count_todo = rsp.summary.todo;
-                            this.audioImporting = rsp.audio_importing || false;
-                            if (!rsp.audio_importing) {
-                                this.loading = false;
-                                return false;
-                            }
+                        if (rsp.err !== "ok") {
+                            return;
+                        }
+                        if (rsp.audio_importing) {
+                            this.audioImporting = true;
                             this.loading = true;
-                            return true;
-                        });
-                    } else {
-                        this.audioImporting = false;
-                    }
-                });
+                            this.loopCheckStatus("/admin/audio_import/status", (rsp) => {
+                                this.count_total = rsp.status.total || 0;
+                                this.count_processed = (rsp.status.imported || 0) + (rsp.status.exist || 0);
+                                this.count_done = rsp.summary.done;
+                                this.count_todo = rsp.summary.todo;
+                                this.audioImporting = rsp.audio_importing || false;
+                                if (!rsp.audio_importing) {
+                                    this.loading = false;
+                                    return false;
+                                }
+                                this.loading = true;
+                                return true;
+                            });
+                        } else {
+                            this.audioImporting = false;
+                        }
+                    });
 
             // Check batch add status
             this.$backend("/admin/batch_add/status")

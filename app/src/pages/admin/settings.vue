@@ -107,6 +107,29 @@
       </div>
     </v-sheet>
 
+    <v-card
+      v-if="settingsLoaded && !searchQuery && activeGroup === 'ops'"
+      class="my-2 elevation-4"
+    >
+      <v-card-text class="d-flex align-center flex-wrap" style="gap: 12px">
+        <v-icon color="primary" large>mdi-puzzle-outline</v-icon>
+        <div class="flex-grow-1">
+          <div class="text-subtitle-1">{{ $t("settings.module_entry_title") }}</div>
+          <div class="text-caption grey--text">{{ $t("settings.module_entry_desc") }}</div>
+        </div>
+        <v-btn color="primary" @click="moduleDialog = true">
+          <v-icon left>mdi-cog-outline</v-icon>{{ $t("settings.module_entry_button") }}
+        </v-btn>
+      </v-card-text>
+    </v-card>
+
+    <module-settings-dialog
+      v-if="settingsLoaded"
+      v-model="moduleDialog"
+      :stored-modules="storedModuleState"
+      @confirm="applyModuleSettings"
+    />
+
     <v-card v-if="searchQuery" class="my-2 elevation-4">
       <v-card-title>{{ $t('settings.search_results', { n: results.length }) }}</v-card-title>
       <v-card-text style="padding: 0 16px 16px">
@@ -170,7 +193,7 @@
                   small
                   hide-details
                   :input-value="isCheckboxInputValue(f)"
-                  :disabled="isFieldLockedBy(f)"
+                  :disabled="isFieldDisabled(f)"
                   :key="f.key + '-checkbox'"
                   :label="$t(f.label)"
                   @change="onCheckboxChange(f, $event)"
@@ -200,7 +223,7 @@
                 <div class="pl-8">
                   <v-row dense>
                     <v-col
-                      v-for="opt in f.items"
+                      v-for="opt in visibleCheckboxItems(f)"
                       :key="f.key + '-' + opt.value"
                       cols="12"
                       sm="6"
@@ -439,7 +462,7 @@
 
             <template v-if="s.special === 'homepage_cards'">
               <div id="f-HOMEPAGE_CONFIG">
-                <homepage-cards-editor v-if="settingsLoaded" v-model="settings.HOMEPAGE_CONFIG"></homepage-cards-editor>
+                <homepage-cards-editor v-if="settingsLoaded" v-model="settings.HOMEPAGE_CONFIG" :modules="moduleState"></homepage-cards-editor>
               </div>
             </template>
 
@@ -1176,6 +1199,7 @@ import ReadingRangeDialog from "~/components/ReadingRangeDialog.vue";
 import BookNavEditor, { createCategory } from "~/components/BookNavEditor.vue";
 import ReaderDictEditor from "~/components/ReaderDictEditor.vue";
 import HomepageCardsEditor from "~/components/HomepageCardsEditor.vue";
+import ModuleSettingsDialog from "~/components/ModuleSettingsDialog.vue";
 import { normalizeHomepageConfig } from "~/utils/homepage";
 import { languageOptions } from "~/utils/languageCodes";
 import { isHexColor, DEFAULT_ACCENT } from "~/utils/appearance";
@@ -1200,12 +1224,12 @@ const LITE_GROUPS = [
 // 特殊块（动态列表/子组件）不在 groups.fields 里，搜索索引需在此手动注册
 const SPECIAL_BLOCKS = [
   { key: "HOMEPAGE_CONFIG", label: "settings.sec_site_home_cards", icon: "mdi-view-grid-plus-outline", gid: "site", sid: "site-home-cards", al: ["首页卡片", "自定义卡片", "homepage cards", "首頁卡片"] },
-  { key: "FRIENDS", label: "settings.friend_links", icon: "mdi-link-variant", gid: "site", sid: "site-friends" },
+  { key: "FRIENDS", label: "settings.friend_links", icon: "mdi-link-variant", gid: "site", sid: "site-friends", module: "shared_reading" },
   { key: "READER_DICT_MYBOOKS_ENABLED", label: "settings.reader_dict_mybooks", icon: "mdi-book-alphabet", gid: "reading", sid: "reader-dict" },
   { key: "READER_DICT_BAIKE_ENABLED", label: "settings.reader_dict_baike", icon: "mdi-book-alphabet", gid: "reading", sid: "reader-dict" },
   { key: "READER_MYDICTS", label: "settings.sec_reader_dict", icon: "mdi-book-alphabet", gid: "reading", sid: "reader-dict", al: ["翻译"] },
   { key: "ENABLE_STAMP_FEATURE", label: "settings.enable_stamp_feature", icon: "mdi-picture-in-picture-bottom-right-outline", gid: "reading", sid: "reader-extended" },
-  { key: "SOCIALS", label: "settings.select_socials", icon: "mdi-at", gid: "users", sid: "users-social", al: ["qq", "微信", "微博", "github", "oauth"] },
+  { key: "SOCIALS", label: "settings.select_socials", icon: "mdi-at", gid: "users", sid: "users-social", al: ["qq", "微信", "微博", "github", "oauth"], module: "multiuser" },
   { key: "DEVICES", label: "settings.device_mgt", icon: "mdi-tablet-cellphone", gid: "push", sid: "push-devices", al: ["kindle", "文石", "掌阅", "汉王", "当当", "koreader", "duokan", "ireader", "boox", "ftp"] },
   { key: "ENABLE_BOOKBARN", label: "settings.bookbarn_enable", icon: "mdi-key", gid: "services", sid: "svc-bookbarn" },
   { key: "BOOKBARN_TOKEN", label: "settings.bookbarn_token", icon: "mdi-key", gid: "services", sid: "svc-bookbarn" },
@@ -1232,6 +1256,18 @@ const SPECIAL_BLOCKS = [
 
 // 值型字段（可安全用空串补默认值的那些；数组/特殊块类型不在此列，缺 key 时保持原样）
 const SETTING_TEXT_TYPES = ["text", "textarea", "select", "number"];
+
+// 功能模块 ↔ 设置键。区块/字段上写 module: "<id>"，模块关闭时该区块/字段不渲染，
+// 也不进搜索索引（见 visibleGroups / flatIndex）。必须与 webserver/base/modules.py
+// 的 MODULES 表保持一致。
+const MODULE_SETTING_KEYS = {
+  multiuser: "ENABLE_MODULE_MULTIUSER",
+  community: "ENABLE_MODULE_COMMUNITY",
+  shared_reading: "ENABLE_MODULE_SHARED_READING",
+  audio: "ENABLE_MODULE_AUDIO",
+  physical: "ENABLE_MODULE_PHYSICAL",
+  ai: "ENABLE_MODULE_AI",
+};
 
 // READER_MYDICTS 元素上的 showToken 只是显隐 token 的视图状态，
 // 点眼睛图标不应算作未保存修改，比较前先剥掉
@@ -1580,7 +1616,7 @@ const SEARCH_ALIASES = {
     // Site & Appearance · home & listing
     random: ["MAIN_PAGE_RANDOM_COUNT"], shuffle: ["MAIN_PAGE_RANDOM_COUNT"],
     recommend: ["RECOMMEND_ENABLE", "RECOMMEND_USE_CROWD", "ENABLE_BOOK_RECOMMEND_TO_OTHERS", "MAIN_PAGE_RANDOM_COUNT", "HOMEPAGE_CONFIG"], recommendation: ["RECOMMEND_ENABLE"], recommendations: ["RECOMMEND_ENABLE"], smart: ["RECOMMEND_ENABLE"], recommender: ["RECOMMEND_ENABLE"],
-    crowd: ["RECOMMEND_USE_CROWD"], collaborative: ["RECOMMEND_USE_CROWD"], "other users": ["RECOMMEND_USE_CROWD"], community: ["RECOMMEND_USE_CROWD"],
+    crowd: ["RECOMMEND_USE_CROWD"], collaborative: ["RECOMMEND_USE_CROWD"], "other users": ["RECOMMEND_USE_CROWD"], community: ["ENABLE_USER_MEMOS"],
     recent: ["MAIN_PAGE_RECENT_COUNT"], latest: ["MAIN_PAGE_RECENT_COUNT"], newest: ["MAIN_PAGE_RECENT_COUNT"], "new books": ["MAIN_PAGE_RECENT_COUNT", "SEND_MAIL_FOR_NEW_BOOKS"],
     pagination: ["DEFAULT_PAGE_SIZE"], "page size": ["DEFAULT_PAGE_SIZE"], "per page": ["DEFAULT_PAGE_SIZE"], "items per page": ["DEFAULT_PAGE_SIZE"],
     sidebar: ["SIDEBAR_ITEMS"], menu: ["SIDEBAR_ITEMS"], navigation: ["SIDEBAR_ITEMS"], nav: ["SIDEBAR_ITEMS", "BOOK_NAV"],
@@ -1753,6 +1789,7 @@ export default {
     "book-nav-editor": BookNavEditor,
     "reader-dict-editor": ReaderDictEditor,
     "homepage-cards-editor": HomepageCardsEditor,
+    "module-settings-dialog": ModuleSettingsDialog,
   },
   created() {
     // 为body添加settings-page类名，应用背景图样式
@@ -1907,13 +1944,14 @@ export default {
                   value: v,
                 })),
               },
-              { icon: "mdi-auto-fix", key: "RECOMMEND_ENABLE", label: "settings.recommend_enable", type: "checkbox" },
-              { icon: "mdi-account-group-outline", key: "RECOMMEND_USE_CROWD", label: "settings.recommend_use_crowd", type: "checkbox" },
+              { icon: "mdi-auto-fix", key: "RECOMMEND_ENABLE", label: "settings.recommend_enable", type: "checkbox", module: "shared_reading" },
+              { icon: "mdi-account-group-outline", key: "RECOMMEND_USE_CROWD", label: "settings.recommend_use_crowd", type: "checkbox", module: "shared_reading" },
               {
                 icon: "mdi-animation",
                 key: "ENABLE_HOME_MOTION",
                 label: "settings.home_motion",
                 type: "checkbox",
+                module: "shared_reading",
                 tips: "settings.home_motion_tips",
               },
               {
@@ -1932,6 +1970,9 @@ export default {
                 label: "settings.enable_user_memos",
                 type: "checkbox",
                 tips: "settings.enable_user_memos_tips",
+                // 站内留言属于社区互动模块：模块关闭时只收起这一项，
+                // 同区块的首页/实体书字段保持可见
+                module: "community",
               },
               {
                 icon: "mdi-bookshelf",
@@ -1939,6 +1980,8 @@ export default {
                 label: "settings.enable_physical_books",
                 type: "checkbox",
                 tips: "settings.enable_physical_books_tips",
+                // 实体书模块关闭时该字段不渲染
+                module: "physical",
                 fields: [
                   {
                     icon: "mdi-swap-horizontal",
@@ -1957,7 +2000,9 @@ export default {
                 // 全不勾选时写入 "none"：空数组表示「全部显示」，无法表达「全部隐藏」
                 emptyValue: "none",
                 items: [
-                  { value: "audiobooks", text: "appHeader.audioBooks" },
+                  // module: 模块关闭时该选项视作「锁定」——从展示值里滤掉（呈现为未勾选），
+                  // 但保存时按存储值补回，关掉期间改其它项不会把这条永久删掉。
+                  { value: "audiobooks", text: "appHeader.audioBooks", module: "audio" },
                   { value: "authors", text: "appHeader.authors" },
                   { value: "publishers", text: "appHeader.publishers" },
                   { value: "folders", text: "appHeader.folders", requires: "ENABLE_FOLDER_BROWSE" },
@@ -1966,8 +2011,8 @@ export default {
                   { value: "series", text: "appHeader.series" },
                   { value: "languages", text: "appHeader.languages" },
                   { value: "rating", text: "appHeader.rating" },
-                  { value: "booklists", text: "appHeader.booklists" },
-                  { value: "friends", text: "appHeader.friendLinks" },
+                  { value: "booklists", text: "appHeader.booklists", module: "shared_reading" },
+                  { value: "friends", text: "appHeader.friendLinks", module: "shared_reading" },
                 ],
               },
             ],
@@ -1984,6 +2029,8 @@ export default {
             icon: "mdi-link-variant",
             title: "settings.friend_links",
             special: "friends",
+            // 友情链接属于共享阅读模块：模块关闭时整块不渲染
+            module: "shared_reading",
           },
         ],
       },
@@ -2011,7 +2058,7 @@ export default {
               { icon: "mdi-image-sync-outline", key: "USE_DYNAMIC_COVER", label: "settings.use_dynamic_cover", type: "checkbox", expand: "cover_backgrounds", al: ["封面背景", "背景图", "cover background"] },
               { icon: "mdi-face-man-outline", key: "ENABLE_AUTHOR_INFO", label: "settings.enable_author_info", type: "checkbox" },
               { icon: "mdi-chart-line", key: "ALLOW_USER_DISABLE_STATISTIC", label: "settings.allow_user_disable_statistic", type: "checkbox" },
-              { icon: "mdi-note-multiple-outline", key: "ENABLE_SHARED_NOTES", label: "settings.enable_shared_notes", type: "checkbox" },
+              { icon: "mdi-note-multiple-outline", key: "ENABLE_SHARED_NOTES", label: "settings.enable_shared_notes", type: "checkbox", module: "shared_reading" },
             ],
           },
           {
@@ -2027,6 +2074,7 @@ export default {
             id: "reader-review",
             icon: "mdi-forum-outline",
             title: "settings.sec_reader_review",
+            module: "shared_reading",
             fields: [
               { icon: "mdi-star-outline", key: "ENABLE_BOOK_REVIEW", label: "settings.enable_book_review", type: "checkbox" },
               { icon: "mdi-shield-check-outline", key: "REVIEW_REQUIRES_APPROVAL", label: "settings.review_requires_approval", type: "checkbox" },
@@ -2065,21 +2113,23 @@ export default {
             icon: "mdi-account",
             title: "settings.sec_users_guest",
             fields: [
-              // 私人图书馆标准模式：开启后所有页面与接口都要求登录，下面各项访问权限随之失效
-              { icon: "mdi-login-variant", key: "REQUIRE_LOGIN", label: "settings.require_login", type: "checkbox", al: ["必须登录", "私人图书馆", "需登录", "login required"] },
-              { icon: "mdi-read", key: "ALLOW_GUEST_READ", label: "settings.allow_guest_read", type: "checkbox", lockOn: "REQUIRE_LOGIN" },
-              { icon: "mdi-download", key: "ALLOW_GUEST_DOWNLOAD", label: "settings.allow_guest_download", type: "checkbox", lockOn: "REQUIRE_LOGIN" },
-              { icon: "mdi-upload", key: "ALLOW_GUEST_UPLOAD", label: "settings.allow_guest_upload", type: "checkbox", lockOn: "REQUIRE_LOGIN" },
-              { icon: "mdi-send", key: "ALLOW_GUEST_PUSH", label: "settings.allow_guest_push", type: "checkbox", lockOn: "REQUIRE_LOGIN" },
-              { icon: "mdi-link-variant", key: "ENABLE_SHARE_LINK", label: "settings.allow_share_link", type: "checkbox" },
+              // 私人图书馆标准模式：开启后所有页面与接口都要求登录，下面各项访问权限随之失效。
+              // 多用户支持关闭时后端恒按必须登录处理，所以这一项不随模块隐藏，画成勾选+灰置。
+              { icon: "mdi-login-variant", key: "REQUIRE_LOGIN", label: "settings.require_login", type: "checkbox", al: ["必须登录", "私人图书馆", "需登录", "login required"], forceOnModuleOff: "multiuser" },
+              { icon: "mdi-read", key: "ALLOW_GUEST_READ", label: "settings.allow_guest_read", type: "checkbox", lockOn: "REQUIRE_LOGIN", module: "multiuser" },
+              { icon: "mdi-download", key: "ALLOW_GUEST_DOWNLOAD", label: "settings.allow_guest_download", type: "checkbox", lockOn: "REQUIRE_LOGIN", module: "multiuser" },
+              { icon: "mdi-upload", key: "ALLOW_GUEST_UPLOAD", label: "settings.allow_guest_upload", type: "checkbox", lockOn: "REQUIRE_LOGIN", module: "multiuser" },
+              { icon: "mdi-send", key: "ALLOW_GUEST_PUSH", label: "settings.allow_guest_push", type: "checkbox", lockOn: "REQUIRE_LOGIN", module: "multiuser" },
+              // 分享链接属于共享阅读模块：模块关闭时入口与设置一起隐藏
+              { icon: "mdi-link-variant", key: "ENABLE_SHARE_LINK", label: "settings.allow_share_link", type: "checkbox", module: "shared_reading" },
             ],
           },
           {
-            id: "users-reg",
-            icon: "mdi-at",
-            title: "settings.sec_users_reg",
+            // 密码重置是核心能力：重置邮件模板不随多用户支持模块隐藏
+            id: "users-reset-mail",
+            icon: "mdi-lock-reset",
+            title: "settings.sec_reset_mail",
             fields: [
-              { icon: "mdi-subtitles-outline", key: "reset-mail-heading", label: "settings.sec_reset_mail", type: "subtitle" },
               {
                 icon: "mdi-format-title",
                 key: "RESET_MAIL_TITLE",
@@ -2092,6 +2142,13 @@ export default {
                 type: "textarea",
               },
             ],
+          },
+          {
+            id: "users-reg",
+            icon: "mdi-at",
+            title: "settings.sec_users_reg",
+            // 注册与邀请属于多用户支持模块
+            module: "multiuser",
             groups: [
               {
                 icon: "mdi-security",
@@ -2140,13 +2197,11 @@ export default {
             ],
           },
           {
-            id: "users-default",
+            // 默认权限与配额属于多用户管理，关闭多用户支持时一并隐藏
+            id: "users-policy",
             icon: "mdi-download-lock-outline",
             title: "settings.sec_users_default",
-            fields: [
-              { icon: "mdi-book-multiple", key: "ALLOW_NEW_USER_MANAGE_BOOK", label: "settings.allow_new_user_manage_book", type: "checkbox" },
-              { icon: "mdi-tablet-cellphone", key: "ALLOW_NEW_USER_PUSH_BOOK", label: "settings.allow_new_user_push_book", type: "checkbox" },
-            ],
+            module: "multiuser",
             groups: [
               {
                 icon: "mdi-book-lock-outline",
@@ -2178,11 +2233,24 @@ export default {
             ],
           },
           {
+            id: "users-new-defaults",
+            icon: "mdi-account-plus-outline",
+            title: "settings.sec_users_new_defaults",
+            // 新用户默认权限只在注册开放时有意义
+            module: "multiuser",
+            fields: [
+              { icon: "mdi-book-multiple", key: "ALLOW_NEW_USER_MANAGE_BOOK", label: "settings.allow_new_user_manage_book", type: "checkbox" },
+              { icon: "mdi-tablet-cellphone", key: "ALLOW_NEW_USER_PUSH_BOOK", label: "settings.allow_new_user_push_book", type: "checkbox" },
+            ],
+          },
+          {
             id: "users-social",
             icon: "mdi-at",
             title: "settings.social_network_login",
             desc: "settings.socials_description",
             special: "socials",
+            // 社交登录属于多用户支持模块
+            module: "multiuser",
           },
         ],
       },
@@ -2390,6 +2458,8 @@ export default {
             icon: "mdi-scatter-plot-outline",
             title: "settings.ai_capability",
             special: "ai_capabilities",
+            // AI 模块关闭时整个 AI 能力区块（含 MyNexus / MCP）不渲染
+            module: "ai",
           },
           {
             id: "svc-bookbarn",
@@ -2439,6 +2509,17 @@ export default {
                 key: "ENABLE_OPDS_AUTH",
                 label: "settings.enable_opds_auth",
                 type: "checkbox",
+                // 必须登录（含多用户支持关闭时的强制登录）时 OPDS 恒要求认证：
+                // 画成勾选+灰置，与后端一致。「OPDS 不需登录」仍可勾选并覆盖这一默认。
+                forceOn: "REQUIRE_LOGIN",
+                forceOnModuleOff: "multiuser",
+              },
+              {
+                icon: "mdi-lock-open-variant",
+                key: "OPDS_ALLOW_ANONYMOUS",
+                label: "settings.allow_opds_anonymous",
+                type: "checkbox",
+                tips: "settings.allow_opds_anonymous_tips",
               },
             ],
           },
@@ -2459,6 +2540,8 @@ export default {
             id: "proto-podcast",
             icon: "mdi-podcast",
             title: "settings.sec_proto_podcast",
+            // 播客订阅属于有声书模块：模块关闭时整块不渲染
+            module: "audio",
             fields: [
               {
                 icon: "mdi-podcast",
@@ -2574,12 +2657,15 @@ export default {
                 key: "ENABLE_AUDIO_CONVERSION_LOG",
                 label: "settings.enable_audio_conversion_log",
                 type: "checkbox",
+                // 字段级：同区块还有调试日志/自动重载/转换超时，不能整块按模块收
+                module: "audio",
               },
               {
                 icon: "mdi-closed-caption-outline",
                 key: "ENABLE_AUDIO_SUBTITLE",
                 label: "settings.enable_audio_subtitle",
                 type: "checkbox",
+                module: "audio",
               },
               {
                 icon: "mdi-restart",
@@ -2633,6 +2719,7 @@ export default {
       this.sns_items = rsp.sns;
       this.settings = rsp.settings;
       this.site_url = rsp.site_url;
+      this.moduleSwitches = rsp.module_switches || { off: {}, on: {} };
       // 当前图标的预览要绕过浏览器缓存，否则保存过新图标后仍显示旧图
       this.siteIconStamp = Date.now();
 
@@ -2729,6 +2816,8 @@ export default {
     sns_items: [],
     settings: {},
     settingsLoaded: false,
+    moduleDialog: false,
+    moduleSwitches: { off: {}, on: {} },
     snapshot: {},
     bookNavSnapshot: [],
     savingDefaultReadRange: false,
@@ -2782,8 +2871,46 @@ export default {
     ],
   }),
   computed: {
+    // 模块的存储勾选值：模块弹窗用这个，避免依赖未满足时把用户的勾选抹掉。
+    storedModuleState() {
+      const state = {};
+      const sysModules =
+        (this.$store.state.sys && this.$store.state.sys.modules) || {};
+      Object.keys(MODULE_SETTING_KEYS).forEach((id) => {
+        const key = MODULE_SETTING_KEYS[id];
+        if (this.settings && key in this.settings) {
+          state[id] = this.settings[key] !== false;
+        } else {
+          state[id] = sysModules[id] !== false;
+        }
+      });
+      return state;
+    },
+    // 6 个模块互不依赖，有效状态即存储状态。
+    moduleState() {
+      return { ...this.storedModuleState };
+    },
+    // 按模块过滤后的分组：区块级 module 整块收起，字段级 module 只收该字段。
+    // 未登记的模块（moduleState 里没有）按开启处理，与后端 modules.py 的兜底一致。
+    visibleGroups() {
+      return this.groups.map((g) => ({
+        ...g,
+        sections: g.sections
+          .filter((s) => this.moduleOn(s.module))
+          .map((s) => ({
+            ...s,
+            fields: (s.fields || []).filter((f) => this.moduleOn(f.module)),
+          }))
+          .filter(
+            (s) =>
+              (s.fields && s.fields.length) ||
+              (s.groups && s.groups.length) ||
+              s.special
+          ),
+      }));
+    },
     currentGroups() {
-      return this.groups.filter((g) => g.id === this.activeGroup);
+      return this.visibleGroups.filter((g) => g.id === this.activeGroup);
     },
     searchQuery() {
       return (this.searchQ || "").trim();
@@ -2893,7 +3020,9 @@ export default {
     flatIndex() {
       const idx = [];
       const pathOf = {};
-      this.groups.forEach((g) => {
+      // 用 visibleGroups：模块关闭时对应区块/字段不进搜索索引，
+      // 否则会「搜得到、点进去是空」
+      this.visibleGroups.forEach((g) => {
         g.sections.forEach((s) => {
           pathOf[g.id + "/" + s.id] =
             this.$t(g.title) + " / " + this.$t(s.title);
@@ -2912,7 +3041,7 @@ export default {
           parentKey: parentKey || "",
         });
       };
-      this.groups.forEach((g) => {
+      this.visibleGroups.forEach((g) => {
         g.sections.forEach((s) => {
           (s.fields || []).forEach((f) => push(f, g.id, s.id, ""));
           (s.groups || []).forEach((grp) => {
@@ -2924,6 +3053,9 @@ export default {
         });
       });
       SPECIAL_BLOCKS.forEach((b) => {
+        if (!this.moduleOn(b.module)) return;
+        // 模块关闭时其所在区块可能不在 pathOf 里，别拼出 "undefined / ..."
+        if (!pathOf[b.gid + "/" + b.sid]) return;
         idx.push({
           key: b.key,
           label: this.$t(b.label),
@@ -3157,20 +3289,47 @@ export default {
     isFieldLockedBy(f) {
       return !!(f && f.lockOn && this.settings && this.settings[f.lockOn]);
     },
+    // forceOn / forceOnModuleOff 是反方向的锁定：字段的有效值恒为「开」，
+    // 于是画成勾选且不可点选（后端同样按有效值处理——必须登录时 OPDS 认证恒生效，
+    // 多用户支持关闭时「必须登录」本身也恒生效）。存储值不动，条件解除后原样恢复。
+    isFieldForcedOn(f) {
+      if (!f) return false;
+      if (f.forceOn && this.settings && this.settings[f.forceOn]) return true;
+      return !!(f.forceOnModuleOff && !this.moduleOn(f.forceOnModuleOff));
+    },
+    isFieldDisabled(f) {
+      return this.isFieldLockedBy(f) || this.isFieldForcedOn(f);
+    },
     isCheckboxInputValue(f) {
+      if (this.isFieldForcedOn(f)) return true;
       return this.isFieldLockedBy(f) ? false : this.settings[f.key];
     },
     onCheckboxChange(f, value) {
-      if (this.isFieldLockedBy(f)) return;
+      if (this.isFieldDisabled(f)) return;
       this.$set(this.settings, f.key, value);
+    },
+    // 模块是否开启。未登记 / 未传 id 一律返回 true（与后端 modules.py 兜底一致），
+    // 避免把 module 标签写错成未登记 id 时整块设置凭空消失且再也改不回来。
+    moduleOn(id) {
+      if (!id) return true;
+      return this.moduleState[id] !== false;
     },
     // checkbox_list 里带 requires 的选项：依赖的总开关关闭时置灰且显示为未勾选。
     // 锁定只是显示层的判断，不改写 settings[f.key]：checkboxListInputValue 把锁定项从
     // 展示数组里滤掉（所以它呈现为未勾选、也点不动），而 onCheckboxListChange 保存时会把
     // 「已存储但当前锁定」的值补回去。于是重新打开总开关后原勾选照旧恢复，用户在锁定期间
     // 改动其它选项也不会把该值永久删掉。
+    // 模块关闭时，侧边栏显示项目里的对应选项直接隐藏。
+    // 保存仍走 onCheckboxListChange：locked 的存储值会补回，重开模块后原勾选恢复。
+    visibleCheckboxItems(f) {
+      return (f.items || []).filter((opt) => this.moduleOn(opt.module));
+    },
     isCheckboxOptionLocked(f, opt) {
-      return !!(opt && opt.requires && this.settings && !this.settings[opt.requires]);
+      if (!opt) return false;
+      if (opt.requires && this.settings && !this.settings[opt.requires]) return true;
+      // 选项标注了 module 时，模块关闭也算锁定：它仍留在 f.items 里，保存时会补回，
+      // 不会因为「关闭期间动过侧边栏」把原来的勾选永久删掉。
+      return !this.moduleOn(opt.module);
     },
     checkboxListInputValue(f) {
       const stored = Array.isArray(this.settings[f.key]) ? this.settings[f.key] : [];
@@ -3455,6 +3614,14 @@ export default {
         .map((cat) => `${cat.name.trim()}=${(cat.tags || []).join("/")}`)
         .join("\n");
     },
+    applyModuleSettings(values) {
+      if (!this.settingsLoaded) return;
+      Object.keys(MODULE_SETTING_KEYS).forEach((id) => {
+        this.$set(this.settings, MODULE_SETTING_KEYS[id], values[id] !== false);
+      });
+      this.moduleDialog = false;
+      this.saveSettings();
+    },
     saveSettings: function () {
       if (this.bookNavDuplicateNames.length > 0) {
         this.$alert(
@@ -3494,18 +3661,24 @@ export default {
           this.$alert("error", rsp.msg || this.$t("settings.save_error"));
           return;
         }
-      });
-      const settingsToSave = { ...this.settings };
-      this.$backend("/admin/settings", {
-        method: "POST",
-        body: JSON.stringify(settingsToSave),
-      }).then((rsp) => {
-        if (rsp.err != "ok") {
-          this.$alert("error", rsp.msg || this.$t("settings.save_error"));
-        } else {
-          this.$alert("success", rsp.msg || this.$t("settings.save_success"));
-          this.$store.commit("refresh_sys");
-        }
+        // 服务端会按模块状态写入安全默认值 / 恢复主功能开关；把这些键同步回本地，
+        // 否则同一页面再次保存会把关闭前的旧值写回去（尤其是关闭模块后重新开启）。
+        const effectKeys = new Set();
+        Object.values(this.moduleSwitches.off || {}).forEach((switches) => {
+          Object.keys(switches).forEach((key) => effectKeys.add(key));
+        });
+        Object.values(this.moduleSwitches.on || {}).forEach((switches) => {
+          Object.keys(switches).forEach((key) => effectKeys.add(key));
+        });
+        Object.values(MODULE_SETTING_KEYS).forEach((key) => effectKeys.add(key));
+        const serverSettings = rsp.rsp || {};
+        effectKeys.forEach((key) => {
+          if (key in serverSettings) {
+            this.$set(this.settings, key, serverSettings[key]);
+            savedSnapshot[key] = serverSettings[key];
+          }
+        });
+        this.$store.commit("refresh_sys");
         // 服务端确认后才把规范化结果落到本地状态与 localStorage
         this.settings["BOOK_NAV"] = payload["BOOK_NAV"];
         this.settings["READER_MYDICTS"] = payload["READER_MYDICTS"];

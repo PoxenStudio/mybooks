@@ -36,6 +36,7 @@ from webserver.constants import (
 )
 from webserver.handlers.base import BaseHandler
 from webserver.models import Item
+from webserver.base import modules as feature_modules
 
 CONF = loader.get_settings()
 
@@ -320,14 +321,14 @@ def ACQUISITION_ENTRY(item, db, updated, CFM, CKEYS, prefix):
     ans.append(
         E.link(
             type="image/jpeg",
-            href=prefix + "/get/thumb_240_320/%s.jpg?size=240x320" % item[FM["id"]],
+            href=prefix + "/get/thumb_240_320/%s.jpg?size=240x320&from=opds" % item[FM["id"]],
             rel="http://opds-spec.org/cover",
         )
     )
     ans.append(
         E.link(
             type="image/jpeg",
-            href=prefix + "/get/thumb_120_200/%s.jpg?size=120x200" % item[FM["id"]],
+            href=prefix + "/get/thumb_120_200/%s.jpg?size=120x200&from=opds" % item[FM["id"]],
             rel="http://opds-spec.org/thumbnail",
         )
     )
@@ -460,7 +461,9 @@ class OpdsHandler(BaseHandler):
         raise web.Finish()
 
     def check_opds_enabled(self):
-        if CONF.get("ENABLE_OPDS_AUTH", False) and self.current_user is None:
+        # OPDS 认证：显式勾选「OPDS 不需登录」时让路，阅读设备多半只能填订阅地址。
+        auth_required = CONF.get("ENABLE_OPDS_AUTH", False) and not feature_modules.opds_anonymous_allowed(CONF)
+        if auth_required and self.current_user is None:
             self.set_header("WWW-Authenticate", "Basic")
             self.set_status(401)
             raise web.Finish()
@@ -566,6 +569,8 @@ class OpdsHandler(BaseHandler):
         page_url = url_for("opdscategorygroup", category=category, which=which)
 
         category = unhexlify(category)
+        if self._physical_category_hidden(category):
+            raise web.HTTPError(404, reason="Category not found")
         if category not in categories:
             raise web.HTTPError(404, reason="Category %r not found" % which)
         category_meta = self.calibre_db.field_metadata
@@ -607,6 +612,14 @@ class OpdsHandler(BaseHandler):
             )
         )
 
+    def _physical_category_hidden(self, category):
+        """实体书模块或子开关关闭时，位置分类连直接 URL 一起下线。"""
+        if category != CALIBRE_COLUMN_LOCATION:
+            return False
+        if not CONF.get("ENABLE_PHYSICAL_BOOKS", True):
+            return True
+        return not feature_modules.module_enabled(feature_modules.MODULE_PHYSICAL)
+
     def opds_navcatalog(self, which=None, offset=0):
         try:
             offset = int(offset)
@@ -621,6 +634,8 @@ class OpdsHandler(BaseHandler):
         which = unhexlify(which)
         type_ = which[0]
         which = which[1:]
+        if self._physical_category_hidden(which):
+            raise web.HTTPError(404, reason="Category not found")
         if type_ == "O":
             return self.get_opds_all_books(which, page_url, up_url, offset=offset)
         elif type_ == "N":
@@ -696,6 +711,8 @@ class OpdsHandler(BaseHandler):
         up_url = url_for("opdsnavcatalog", which=category)
 
         which, category = unhexlify(which), unhexlify(category)
+        if self._physical_category_hidden(category):
+            raise web.HTTPError(404, reason="Category not found")
         type_ = which[0]
         which = which[1:]
         if type_ == "I":
@@ -712,6 +729,11 @@ class OpdsHandler(BaseHandler):
                     and self.calibre_db.field_metadata[category]["datatype"] == "composite"
                 ):
                     raise web.HTTPError(404, reason="Tag %r not found" % which)
+
+        # "I" 分支会用 which 里的后缀覆盖 category，必须再查一次，
+        # 否则 category=tags + which=I<id>:#location 能绕过位置分类下线
+        if self._physical_category_hidden(category):
+            raise web.HTTPError(404, reason="Category not found")
 
         categories = self.calibre_db.get_categories()
         if category not in categories:
@@ -761,7 +783,7 @@ class OpdsHandler(BaseHandler):
         hidden_categories = {"formats", "identifiers", CALIBRE_COLUMN_EXT_LINK}
         if not CONF.get("ENABLE_FOLDER_BROWSE", False):
             hidden_categories.add(CALIBRE_COLUMN_FOLDER)
-        if not CONF.get("ENABLE_PHYSICAL_BOOKS", True):
+        if self._physical_category_hidden(CALIBRE_COLUMN_LOCATION):
             hidden_categories.add(CALIBRE_COLUMN_LOCATION)
 
         for category in sorted(categories, key=lambda x: sort_key(getter(x))):

@@ -21,6 +21,7 @@ import re
 import tornado
 
 from webserver import loader
+from webserver.base.modules import MODULE_AUDIO, ModuleGateMixin
 from webserver.handlers.base import BaseHandler
 from webserver.services.book_access_service import BookAccessService
 
@@ -50,9 +51,13 @@ def _lang_from_voice(voice: str) -> str:
     return match.group(1) if match else "en-US"
 
 
-class EdgeTTSProxy(BaseHandler):
+class EdgeTTSProxy(ModuleGateMixin, BaseHandler):
     """Handles both the voice listing (GET) and the synthesis request (POST)
     at the single `/api/tts/edge` path, matching the Next.js route's shape."""
+
+    module_id = MODULE_AUDIO
+    # 返回的是音频流（MP3），模块关闭时给 404，避免播放器把 JSON 当音频解
+    module_gate_json = False
 
     def _authorized(self) -> bool:
         # Same guest-access convention as AudioFile: TTS is treated as read

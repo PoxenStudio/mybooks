@@ -9,6 +9,7 @@ book_id 为 None 表示不针对具体书籍的通用检查（如阅读器的词
 from typing import Optional
 
 from webserver import loader
+from webserver.base import modules as feature_modules
 from webserver.models import BookList, BookListBook
 from webserver.services.book_share_service import BookShareService
 
@@ -28,7 +29,7 @@ class BookAccessService:
             return "share"
         # REQUIRE_LOGIN（必须登录才能访问）是"整站关闸"：全站访客可读、公开书单的
         # guest_read 一律失效。分享链接已在上面单独放行，不受此门影响。
-        if CONF.get("REQUIRE_LOGIN", False):
+        if feature_modules.require_login_effective(CONF):
             return None
         if CONF.get("ALLOW_GUEST_READ", False):
             return "global"
@@ -38,8 +39,10 @@ class BookAccessService:
 
     @staticmethod
     def share_link_enabled() -> bool:
-        """分享链接功能总开关；与 sys.allow.share_link 一致，不受 REQUIRE_LOGIN 影响。"""
-        return bool(CONF.get("ENABLE_SHARE_LINK", True))
+        """分享链接功能总开关；共享阅读关闭时一并失效。"""
+        return bool(CONF.get("ENABLE_SHARE_LINK", True)) and (
+            feature_modules.module_enabled(feature_modules.MODULE_SHARED_READING)
+        )
 
     @staticmethod
     def _share_allows(handler, book_id: Optional[int], permission: str) -> bool:
@@ -71,6 +74,9 @@ class BookAccessService:
 
     @staticmethod
     def _booklist_allows_read(book_id: Optional[int]) -> bool:
+        # 书单归共享阅读模块：模块关闭后公开书单不再给访客开放阅读。
+        if not feature_modules.module_enabled(feature_modules.MODULE_SHARED_READING):
+            return False
         db = BookList._session()
         ids = [row[0] for row in db.query(BookList.id).filter(BookList.is_public.is_(True), BookList.guest_read.is_(True)).all()]
         if not ids or book_id is None:
@@ -86,7 +92,7 @@ class BookAccessService:
         # 分享授权优先于 REQUIRE_LOGIN，其次才是全局"访客可下载"开关
         if BookAccessService._share_allows(handler, book_id, "allow_download"):
             return True
-        if CONF.get("REQUIRE_LOGIN", False):
+        if feature_modules.require_login_effective(CONF):
             return False
         return bool(CONF.get("ALLOW_GUEST_DOWNLOAD", False))
 
@@ -98,13 +104,13 @@ class BookAccessService:
         否则开了必须登录、但遗留 ALLOW_GUEST_UPLOAD=True 时，登录用户即使没有上传权限
         也能上传。
         """
-        if CONF.get("REQUIRE_LOGIN", False):
+        if feature_modules.require_login_effective(CONF):
             return False
         return bool(CONF.get("ALLOW_GUEST_UPLOAD", False))
 
     @staticmethod
     def guest_push_allowed() -> bool:
         """访客推送的总开关（REQUIRE_LOGIN 下恒 False），语义同 guest_upload_allowed。"""
-        if CONF.get("REQUIRE_LOGIN", False):
+        if feature_modules.require_login_effective(CONF):
             return False
         return bool(CONF.get("ALLOW_GUEST_PUSH", False))
