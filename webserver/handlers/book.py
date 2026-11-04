@@ -2349,6 +2349,12 @@ class BookDeleteFormat(BaseHandler):
 
 
 class BookDownloadQuota(BaseHandler):
+    def _is_cross_origin(self):
+        origin = self.request.headers.get("Origin")
+        if not origin:
+            return False
+        return origin.rstrip("/") != (self.site_url or "").rstrip("/")
+
     @js
     def get(self):
         """返回今日下载配额的使用情况，供前端在真正触发下载前做提示，不消耗配额。"""
@@ -2359,8 +2365,9 @@ class BookDownloadQuota(BaseHandler):
         if BookAccessService.share_download_granted(self, book_id):
             return {"err": "ok", "allowed": True, "used": 0, "quota": 0}
         if not self.current_user:
-            if not GuestDownloadQuotaService.enabled():
-                return {"err": "ok", "allowed": True, "used": 0, "quota": 0}
+            # @js 会反射 Origin 并允许跨域读；访客配额只允许同源预检查读用量
+            if self._is_cross_origin():
+                return {"err": "ok", "allowed": True}
             result = GuestDownloadQuotaService.get_usage(self.request.remote_ip, book_id)
             if result.allowed:
                 return {"err": "ok", "allowed": True, "used": result.used, "quota": result.quota}
@@ -2492,8 +2499,6 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
         if self.request.method == "HEAD" or BookAccessService.share_download_granted(self, book_id):
             return
         if not self.current_user:
-            if not GuestDownloadQuotaService.enabled():
-                return
             result = GuestDownloadQuotaService.charge(self.request.remote_ip, bid)
             if not result.allowed:
                 raise web.HTTPError(429, reason=_("访客今日下载次数已达上限(%d/%d)，请明天再试") % (result.used, result.quota))
@@ -2522,9 +2527,11 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
         book = self.get_book(bid, raise_exception=False)
         if not book or "fmt_%s" % fmt not in book:
             raise web.HTTPError(404, reason=_("%s格式无法下载" % fmt))
-        self._charge_download(bid, fmt)
 
         path = book["fmt_%s" % fmt]
+        if os.path.isfile(path):
+            self._charge_download(bid, fmt)
+
         book["fmt"] = fmt
         book["title"] = urllib.parse.quote_plus(book["title"][:128])
         fname = "%(title)s.%(fmt)s" % book
