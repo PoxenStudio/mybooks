@@ -6,13 +6,15 @@ import os
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import scoped_session, sessionmaker
 
-from webserver import loader, models
+from webserver import loader, models, site_time
 from webserver.models import BookReadingStats, ManualReadingLog, Reader, Reading, ReadingState
 from webserver.services.reading_history_service import ReadingHistoryService
+from webserver.services.reading_stats_service import ReadingStatsService
 
 
 def _dt(day, hour=8):
@@ -30,6 +32,9 @@ class TestReadingHistoryService(unittest.TestCase):
         self.session = scoped_session(sessionmaker(bind=engine, autoflush=True, autocommit=False))
         models.bind_session(self.session)
         models.Base.metadata.create_all(engine)
+        self.session.execute(
+            text("CREATE UNIQUE INDEX ux_readings_read ON readings (reader_id, book_id, date) WHERE action='read'")
+        )
 
         self.reader = Reader()
         self.reader.id = 1
@@ -64,6 +69,10 @@ class TestReadingHistoryService(unittest.TestCase):
                 ManualReadingLog(
                     reader_id=2, book_id=100, format="epub", date=datetime.date(2026, 10, 1),
                     duration_seconds=999, create_time=_dt(1), update_time=_dt(1),
+                ),
+                ManualReadingLog(
+                    reader_id=1, book_id=999, format="epub", date=datetime.date(2026, 10, 5),
+                    duration_seconds=0, create_time=_dt(1), update_time=_dt(1),
                 ),
                 BookReadingStats(
                     reader_id=1, book_id=100, format="epub", state=BookReadingStats.STATE_READING,
@@ -105,6 +114,7 @@ class TestReadingHistoryService(unittest.TestCase):
                 "total_seconds": 210,
                 "first_date": "2026-10-01",
                 "last_date": "2026-10-02",
+                "manual_records": 1,
             },
         )
 
@@ -121,7 +131,10 @@ class TestReadingHistoryService(unittest.TestCase):
         rows = ReadingHistoryService.book_records(1, 100)
         self.assertEqual([row["date"] for row in rows], ["2026-10-02", "2026-10-01"])
         self.assertEqual([row["duration"] for row in rows], [120, 60])
-        self.assertTrue(all(row["protocol"] for row in rows))
+        self.assertEqual(
+            [row["protocol"] for row in rows],
+            [Reading.PROTOCOL_APP, Reading.PROTOCOL_WEB],
+        )
 
     def test_delete_one_day(self):
         deleted = ReadingHistoryService.delete(1, book_id=100, date=datetime.date(2026, 10, 1))
@@ -165,7 +178,7 @@ class TestReadingHistoryService(unittest.TestCase):
         self.assertEqual(deleted["records"], 3)
         self.assertEqual(deleted["books"], 2)
         self.assertEqual(deleted["total_seconds"], 210)
-        self.assertEqual(deleted["manual_records"], 2)
+        self.assertEqual(deleted["manual_records"], 3)
 
         self.assertEqual(self._read_rows(1), [])
         self.assertEqual(len(self._read_rows(action=Reading.ACTION_DOWNLOAD)), 1)
@@ -190,10 +203,53 @@ class TestReadingHistoryService(unittest.TestCase):
         self.assertFalse(os.path.exists(self._cache_path(1)))
 
     def test_delete_empty_scope_keeps_cache(self):
-        deleted = ReadingHistoryService.delete(1, book_id=999)
+        deleted = ReadingHistoryService.delete(1, book_id=998)
         self.assertEqual(deleted["records"], 0)
         self.assertEqual(deleted["manual_records"], 0)
         self.assertTrue(os.path.exists(self._cache_path(1)))
+
+    def test_delete_aborts_when_flush_fails(self):
+        with mock.patch.object(ReadingStatsService, "flush_now", return_value=False):
+            with self.assertRaises(RuntimeError):
+                ReadingHistoryService.delete(1, book_id=100)
+
+        self.assertEqual(len(self._read_rows(1)), 3)
+        self.assertTrue(os.path.exists(self._cache_path(1)))
+
+    def test_delete_resets_in_memory_session(self):
+        buffer = ReadingStatsService._buffer
+        key = (1, 100)
+        buffer._sessions.pop(key, None)
+        try:
+            buffer.on_heartbeat(1, 100, Reading.PROTOCOL_WEB, datetime.datetime.utcnow())
+            session = buffer._sessions[key]
+            session.visit_counted = True
+
+            ReadingHistoryService.delete(1, book_id=100)
+
+            self.assertIn(key, buffer._sessions)
+            self.assertEqual(session.duration_delta, 0)
+            self.assertTrue(session.visit_counted)
+        finally:
+            buffer._sessions.pop(key, None)
+
+    def test_past_day_delete_does_not_reset_session(self):
+        with mock.patch.object(ReadingStatsService, "reset_sessions") as reset:
+            ReadingHistoryService.delete(1, book_id=100, date=datetime.date(2026, 10, 1))
+        reset.assert_not_called()
+
+    def test_today_delete_resets_session(self):
+        today = site_time.site_today()
+        self.session.add(
+            Reading(
+                1, 100, Reading.ACTION_READ, Reading.PROTOCOL_WEB,
+                datetime.datetime.utcnow(), duration=10, date=today,
+            )
+        )
+        self.session.commit()
+        with mock.patch.object(ReadingStatsService, "reset_sessions") as reset:
+            ReadingHistoryService.delete(1, book_id=100, date=today)
+        reset.assert_called_once_with(1, 100)
 
 
 if __name__ == "__main__":

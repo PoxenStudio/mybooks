@@ -1129,9 +1129,12 @@ class UserReadingHistoryBook(BaseHandler):
         if not _can_manage_reading_history(user):
             return _history_permission_error()
         raw_date = self.get_query_argument("date", None)
-        date = _parse_history_date(raw_date)
-        if raw_date and date is None:
-            return {"err": "params.invalid", "msg": _("日期格式错误")}
+        if raw_date is not None:
+            date = _parse_history_date(raw_date)
+            if date is None:
+                return {"err": "params.invalid", "msg": _("日期格式错误")}
+        else:
+            date = None
         try:
             deleted = ReadingHistoryService.delete(user.id, book_id=int(id), date=date)
             return {"err": "ok", "deleted": deleted}
