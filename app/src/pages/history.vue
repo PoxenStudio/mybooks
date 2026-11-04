@@ -274,11 +274,13 @@
                                     v-if="item.name === 'onlineReading' && canClearHistory"
                                     small
                                     text
-                                    color="error"
+                                    color="primary"
                                     class="ml-2"
-                                    :loading="clearingHistory"
-                                    @click="clearHistory(item)"
-                                >{{ $t('history.clearHistory') }}</v-btn>
+                                    @click="historyManagerOpen = true"
+                                >
+                                    <v-icon small left>mdi-cog-outline</v-icon>
+                                    {{ $t('history.manageHistory') }}
+                                </v-btn>
                             </div>
                             <v-divider></v-divider>
                         </v-col>
@@ -294,6 +296,10 @@
                 </div>
             </v-expand-transition>
         </div>
+        <reading-history-manage-dialog
+            v-model="historyManagerOpen"
+            @changed="reloadReadingData"
+        ></reading-history-manage-dialog>
     </div>
 </template>
 
@@ -302,6 +308,7 @@ import draggable from 'vuedraggable';
 import BarChart from '~/components/charts/BarChart.vue';
 import ReadingHeatmap from '~/components/ReadingHeatmap.vue';
 import ReadingMonthCalendar from '~/components/ReadingMonthCalendar.vue';
+import ReadingHistoryManageDialog from '~/components/ReadingHistoryManageDialog.vue';
 import { intlLocale } from '~/utils/intlLocale';
 import { siteTodayDate } from '~/utils/siteTime';
 
@@ -369,6 +376,7 @@ export default {
         BarChart,
         ReadingHeatmap,
         ReadingMonthCalendar,
+        ReadingHistoryManageDialog,
     },
     computed: {
         history: function() {
@@ -616,7 +624,7 @@ export default {
         currentReadingBooks: [],
         monthReadDoneBooks: [],
         onlineReadingBooks: [],
-        clearingHistory: false,
+        historyManagerOpen: false,
         dashboard: null,
         leaderboard: null,
         LEADERBOARD_TABS,
@@ -647,6 +655,11 @@ export default {
                 this.loadCardConfig();
             });
 
+            this.reloadReadingData();
+
+            if ( next ) next();
+        },
+        reloadReadingData() {
             // 获取在线阅读历史（从 Reading 表读取）
             this.$backend("/user/history")
             .then( rsp => {
@@ -673,8 +686,6 @@ export default {
 
             // 阅读仪表盘（总时长/天数/连击/即将读完）
             this.loadDashboard();
-
-            if ( next ) next();
         },
         loadDashboard() {
             this.$backend("/user/reading_stats")
@@ -850,18 +861,6 @@ export default {
                 console.warn('Failed to load reading range:', error);
                 this.rangeDays = [];
             }
-        },
-        clearHistory(_item) {
-            this.clearingHistory = true;
-            this.$backend('/user/history/clear', { method: 'POST' })
-                .then(rsp => {
-                    if (rsp.err === 'ok') {
-                        this.onlineReadingBooks = [];
-                    }
-                })
-                .finally(() => {
-                    this.clearingHistory = false;
-                });
         },
     },
     watch: {

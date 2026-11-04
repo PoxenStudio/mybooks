@@ -22,6 +22,7 @@ from webserver.base.appearance import (
 )
 from webserver.services.book_access_service import BookAccessService
 from webserver.services.mail import MailService
+from webserver.services.reading_history_service import ReadingHistoryService
 from webserver.services.sync_service import MyReaderSyncService
 from webserver.handlers.base import BaseHandler, auth, js
 from webserver.models import (
@@ -974,6 +975,23 @@ class UnpinItem(BaseHandler):
             return {"err": "db.error", "msg": _("取消置顶失败")}
 
 
+def _can_manage_reading_history(user):
+    return bool(CONF.get("ALLOW_USER_DISABLE_STATISTIC", False) or user.is_admin())
+
+
+def _history_permission_error():
+    return {"err": "permission", "msg": _("当前不允许清空阅读历史")}
+
+
+def _parse_history_date(raw):
+    if not raw:
+        return None
+    try:
+        return datetime.datetime.strptime(raw, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+
+
 class UserHistoryClear(BaseHandler):
     """清空用户阅读历史（物理删除 Reading(action=read) 记录）"""
 
@@ -983,16 +1001,142 @@ class UserHistoryClear(BaseHandler):
         user = self.current_user
         if not user:
             return {"err": "auth.error", "msg": _("请先登录")}
-        if not (CONF.get("ALLOW_USER_DISABLE_STATISTIC", False) or user.is_admin()):
-            return {"err": "permission", "msg": _("当前不允许清空阅读历史")}
+        if not _can_manage_reading_history(user):
+            return _history_permission_error()
         try:
-            self.sqlite_session.query(Reading).filter(
-                Reading.reader_id == user.id, Reading.action == Reading.ACTION_READ
-            ).delete(synchronize_session=False)
-            self.sqlite_session.commit()
-            return {"err": "ok"}
+            deleted = ReadingHistoryService.delete(user.id)
+            return {"err": "ok", "deleted": deleted}
         except Exception as e:
             logging.error("Clear read history failed: %s", e)
+            self.sqlite_session.rollback()
+            return {"err": "db.error", "msg": _("数据库操作异常，请重试")}
+
+
+class UserReadingHistorySummary(BaseHandler):
+    """阅读历史删除前的范围统计（条数/书数/时长/日期区间）"""
+
+    @js
+    @auth
+    def get(self):
+        user = self.current_user
+        if not user:
+            return {"err": "auth.error", "msg": _("请先登录")}
+        if not _can_manage_reading_history(user):
+            return _history_permission_error()
+        try:
+            return {"err": "ok", "summary": ReadingHistoryService.summary(user.id)}
+        except Exception as e:
+            logging.error("Read history summary failed: %s", e)
+            return {"err": "db.error", "msg": _("数据库操作异常，请重试")}
+
+
+class UserReadingHistoryBooks(BaseHandler):
+    """按书聚合的阅读历史（管理弹窗数据源）"""
+
+    @js
+    @auth
+    async def get(self):
+        user = self.current_user
+        if not user:
+            return {"err": "auth.error", "msg": _("请先登录")}
+        if not _can_manage_reading_history(user):
+            return _history_permission_error()
+        try:
+            rows = ReadingHistoryService.book_summaries(user.id)
+            ids = [row["book_id"] for row in rows]
+            books_by_id = {}
+            if ids:
+                books = await self.run_calibre_read_async(
+                    self.calibre_db.get_data_as_dict, ids=ids
+                )
+                books_by_id = {b["id"]: b for b in books}
+            result = []
+            for row in rows:
+                b = books_by_id.get(row["book_id"])
+                item = dict(row)
+                if not b:
+                    item.update(
+                        {
+                            "missing": True,
+                            "title": "",
+                            "author": "",
+                            "img": "",
+                            "thumb": "",
+                            "href": "",
+                        }
+                    )
+                else:
+                    timestamp = 0
+                    if row["last_read"]:
+                        timestamp = int(
+                            datetime.datetime.fromisoformat(row["last_read"])
+                            .replace(tzinfo=datetime.timezone.utc)
+                            .timestamp()
+                        )
+                    cover_url = self.cdn_url + "/get/cover/%(id)s.jpg?t=%(timestamp)s" % {
+                        "id": b["id"],
+                        "timestamp": timestamp,
+                    }
+                    thumb_url = self.cdn_url + "/get/thumb_240_320/%(id)s.jpg?t=%(timestamp)s&size=240x320" % {
+                        "id": b["id"],
+                        "timestamp": timestamp,
+                    }
+                    item.update(
+                        {
+                            "missing": False,
+                            "title": b.get("title") or "",
+                            "author": ", ".join(b.get("authors") or []),
+                            "img": cover_url,
+                            "thumb": thumb_url,
+                            "href": "/book/%d" % b["id"],
+                        }
+                    )
+                result.append(item)
+            return {"err": "ok", "books": result}
+        except Exception as e:
+            logging.error("Read history book summaries failed: %s", e)
+            return {"err": "db.error", "msg": _("数据库操作异常，请重试")}
+
+
+class UserReadingHistoryBook(BaseHandler):
+    """单本书的阅读历史明细/删除（按天分桶，date 省略时删除整本）"""
+
+    @js
+    @auth
+    def get(self, id):
+        user = self.current_user
+        if not user:
+            return {"err": "auth.error", "msg": _("请先登录")}
+        if not _can_manage_reading_history(user):
+            return _history_permission_error()
+        book_id = int(id)
+        try:
+            return {
+                "err": "ok",
+                "book_id": book_id,
+                "records": ReadingHistoryService.book_records(user.id, book_id),
+            }
+        except Exception as e:
+            logging.error("Read history book records failed: %s", e)
+            return {"err": "db.error", "msg": _("数据库操作异常，请重试")}
+
+    @js
+    @auth
+    def delete(self, id):
+        user = self.current_user
+        if not user:
+            return {"err": "auth.error", "msg": _("请先登录")}
+        if not _can_manage_reading_history(user):
+            return _history_permission_error()
+        raw_date = self.get_query_argument("date", None)
+        date = _parse_history_date(raw_date)
+        if raw_date and date is None:
+            return {"err": "params.invalid", "msg": _("日期格式错误")}
+        try:
+            deleted = ReadingHistoryService.delete(user.id, book_id=int(id), date=date)
+            return {"err": "ok", "deleted": deleted}
+        except Exception as e:
+            logging.error("Delete read history failed: %s", e)
             self.sqlite_session.rollback()
             return {"err": "db.error", "msg": _("数据库操作异常，请重试")}
 
@@ -1573,6 +1717,9 @@ def routes():
         (r"/api/user/messages", UserMessages),
         (r"/api/user/messages/clear", UserMessagesClear),
         (r"/api/user/history", UserReadingHistory),
+        (r"/api/user/history/summary", UserReadingHistorySummary),
+        (r"/api/user/history/books", UserReadingHistoryBooks),
+        (r"/api/user/history/books/([0-9]+)", UserReadingHistoryBook),
         (r"/api/user/reading_stats", UserReadingDashboard),
         (r"/api/user/reading_range", UserReadingRange),
         (r"/api/user/reading_leaderboard", UserReadingLeaderboard),
