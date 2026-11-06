@@ -34,10 +34,11 @@ from webserver.base.global_state import get_global_state
 from webserver.i18n import _
 
 # Core API 的语义化版本号，工具 manifest.json 里的 core_api_version 据此做兼容性检查
-# 版本与 MyBooks 发行版的对应（表示从该 MyBooks 版本起支持）：
+# 版本与 MyBooks 发行版/功能的对应：
 #   1.3.0 -> v4.3.1
 #   1.4.0 -> v4.4.2
-CORE_API_VERSION = "1.4.0"
+#   1.5.0 -> 新增 calibre.get_category_with_count
+CORE_API_VERSION = "1.5.0"
 
 
 class _NamespaceBase:
@@ -258,6 +259,44 @@ class CalibreAPI(_NamespaceBase):
             字段不存在时抛出 `KeyError`。
         """
         return self._owner.db.new_api.all_field_for(field, book_ids)
+
+    def get_category_with_count(self, meta: str) -> List[dict]:
+        """返回某个分类元数据的全部取值及各自关联的书籍数。
+
+        Args:
+            meta: 分类字段，支持 ``tag``、``author``、``publisher``、``series``、
+                ``rating`` 和 ``language``。
+
+        Returns:
+            按关联书籍数降序排列的 ``{"id", "name", "count"}`` 字典列表，未关联书籍的
+            分类值也会返回且 count 为 0。统计由书库数据库直接完成，不会逐本读取书籍元数据。
+
+        Raises:
+            ValueError: ``meta`` 不是支持的分类字段。
+        """
+        category_fields = {
+            "tag": ("tags", "name", "tag"),
+            "author": ("authors", "name", "author"),
+            "publisher": ("publishers", "name", "publisher"),
+            "series": ("series", "name", "series"),
+            "rating": ("ratings", "rating", "rating"),
+            "language": ("languages", "lang_code", "lang_code"),
+        }
+        try:
+            table, name_column, link_field = category_fields[meta]
+        except KeyError as err:
+            raise ValueError(f"Unsupported category meta: {meta}") from err
+
+        sql = f"""SELECT A.id, A.{name_column}, count(distinct B.book) as count
+            FROM {table} AS A
+            LEFT JOIN books_{table}_link AS B ON A.id = B.{link_field}
+            GROUP BY A.id
+            ORDER BY count DESC"""
+        from webserver.handlers.base import BaseHandler
+
+        with BaseHandler.db_lock:
+            rows = self._owner.db.new_api.backend.conn.get(sql)
+        return [{"id": row[0], "name": row[1], "count": row[2]} for row in rows]
 
     def set_custom(self, label: str, values: dict) -> None:
         """批量写入自定义列的值。
