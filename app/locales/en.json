@@ -1992,7 +1992,7 @@
     "maxWidthLabel": "Max Width",
     "maxWidthDesc": "Maximum width for page rendering (in pixels), must be between 600 and 2048.",
     "qualifyLabel": "Compression Quality",
-    "qualifyDesc": "JPEG re-encoding quality (60-95) for compression control.",
+    "qualifyDesc": "Image compression quality (60-95); prefers JPEG 2000. Lower values make smaller files with more loss.",
     "skipPagesLabel": "Skip Pages",
     "skipPagesPlaceholder": "e.g., 1,3,-1 (negative means from end)",
     "skipPagesDesc": "Comma-separated page numbers (1-indexed). Supports negative indexing from the end. Specified pages skip processing (bw/gray/auto/max_brightness) but remain in the output.",

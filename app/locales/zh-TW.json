@@ -1985,7 +1985,7 @@
     "maxWidthLabel": "最大寬度",
     "maxWidthDesc": "頁面渲染時的最大寬度（像素）, 600~2048之間",
     "qualifyLabel": "壓縮品質",
-    "qualifyDesc": "JPEG 重編碼品質（60-95），用於控制壓縮品質",
+    "qualifyDesc": "圖片壓縮品質（60-95）；優先使用 JPEG2000，數值越低檔案越小、損失越多",
     "skipPagesLabel": "跳過處理的頁碼",
     "skipPagesPlaceholder": "例如: 1,3,-1（負數代表倒數）",
     "skipPagesDesc": "逗號分隔的頁碼（以 1 為起點），支援負數從末尾索引。指定的頁不會應用除縮放外的處理，但仍保留在輸出中。",

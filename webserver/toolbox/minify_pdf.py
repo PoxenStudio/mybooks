@@ -8,14 +8,13 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Optional
 from PIL import Image
+from PIL import features
 
 if TYPE_CHECKING:
     import fitz
 
 from webserver.services import AsyncService
 from webserver.toolbox.base_tool import BaseTool
-
-import io
 from PIL import ImageOps
 
 
@@ -75,19 +74,37 @@ def _cleanup_gray_background(img: Image.Image, max_brightness: int) -> Image.Ima
     return gray.point(lambda value: 255 if value > max_brightness else value)
 
 
-def _apply_qualify(img: Image.Image, qualify: int) -> Image.Image:
-    """Apply quality factor by JPEG re-encode for each page image."""
-    if img.mode == "1":
+def _prepare_pdf_image(img: Image.Image, use_jpeg2000: bool) -> Image.Image:
+    """Prepare images so Pillow's PDF writer uses JPEG 2000 for continuous tones."""
+    if not use_jpeg2000 or img.mode == "1":
         return img
 
-    work_img = img if img.mode in ("RGB", "L") else img.convert("RGB")
-    buffer = io.BytesIO()
-    work_img.save(buffer, format="JPEG", quality=qualify, optimize=True)
-    buffer.seek(0)
-    jpeg_img = Image.open(buffer)
-    result = jpeg_img.copy()
-    jpeg_img.close()
-    return result
+    if img.mode == "L":
+        return img.convert("LA")
+    if img.mode == "RGB":
+        return img.convert("RGBA")
+    raise ValueError(f"Unsupported image mode for PDF output: {img.mode}")
+
+
+def _quality_to_db(qualify: int) -> float:
+    """Map the 1-100 quality factor to a JPEG 2000 target quality of 20-40 dB."""
+    return 20.0 + qualify * 0.2
+
+
+def _save_pdf(images: list[Image.Image], output_pdf: Path, qualify: int, use_jpeg2000: bool) -> None:
+    first, *rest = images
+    encoder_options = {"quality_mode": "dB", "quality_layers": [_quality_to_db(qualify)], "irreversible": True}
+    if not use_jpeg2000:
+        encoder_options = {"quality": qualify}
+
+    first.save(
+        output_pdf,
+        save_all=True,
+        append_images=rest,
+        optimize=True,
+        resolution=150,
+        **encoder_options,
+    )
 
 
 def _parse_page_selection(page_spec: str, total_pages: int, option_name: str) -> set[int]:
@@ -218,7 +235,7 @@ class MinifyPdfTool(BaseTool):
         return {
             "tool_id": "minify_pdf",
             "name": "PDF瘦身器",
-            "description": "对扫描版PDF进行缩放、二值化、灰度化、对比度调整以减小文件体积",
+            "description": "对扫描版PDF进行缩放、灰度化和图片压缩以减小文件体积，优先使用JPEG2000",
             "revision": "0.1.0",
             "author": "MyBooks",
             "publish_date": "2026-05-30",
@@ -288,11 +305,16 @@ class MinifyPdfTool(BaseTool):
             drop_pages_str = params.get("drop_pages", "")
             qualify = params.get("qualify", 75)
             max_brightness = params.get("max_brightness", None)
+            if not isinstance(qualify, int) or qualify < 1 or qualify > 100:
+                raise ValueError("qualify must be in range 1-100")
 
             work_dir = self.get_work_dir("")
             processed_dir = os.path.join(work_dir, "processed")
             os.makedirs(processed_dir, exist_ok=True)
             output_pdf = Path(processed_dir) / f"{input_path.stem}_minify.pdf"
+            use_jpeg2000 = features.check_codec("jpg_2000")
+            if not use_jpeg2000:
+                logging.warning("[MinifyPdfTool] Pillow JPEG 2000 support is unavailable; using JPEG compression.")
 
             logging.info("[MinifyPdfTool] start minify: %s -> %s", input_pdf, output_pdf)
 
@@ -327,7 +349,7 @@ class MinifyPdfTool(BaseTool):
 
                 if img.mode not in ("RGB", "L", "1"):
                     img = img.convert("RGB")
-                img = _apply_qualify(img, qualify)
+                img = _prepare_pdf_image(img, use_jpeg2000)
                 images.append(img)
 
                 if progress_callback:
@@ -339,14 +361,7 @@ class MinifyPdfTool(BaseTool):
             doc.close()
 
             # 保存处理后的 PDF
-            first, *rest = images
-            first.save(
-                output_pdf,
-                save_all=True,
-                append_images=rest,
-                optimize=True,
-                resolution=150,
-            )
+            _save_pdf(images, output_pdf, qualify, use_jpeg2000)
 
             # 写回 metadata
             meta_doc = fitz.open(str(output_pdf))
@@ -354,6 +369,9 @@ class MinifyPdfTool(BaseTool):
             metadata["creator"] = "MyBooks(https://mybooks.top) MinifyTool"
             metadata["title"] = input_path.stem
             meta_doc.set_metadata(metadata)
+            if use_jpeg2000:
+                # JPXDecode requires PDF 1.5; Pillow's PDF writer emits a 1.4 header.
+                meta_doc.xref_set_key(meta_doc.pdf_catalog(), "Version", "/1.5")
             meta_doc.save(str(output_pdf), incremental=True, encryption=fitz.PDF_ENCRYPT_KEEP)
             meta_doc.close()
 

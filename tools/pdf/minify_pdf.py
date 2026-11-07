@@ -2,12 +2,12 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-import io
 from pathlib import Path
 from typing import Optional
 
 import fitz
 from PIL import Image
+from PIL import features
 from PIL import ImageFilter
 from PIL import ImageOps
 
@@ -68,19 +68,37 @@ def _cleanup_gray_background(img: Image.Image, max_brightness: int) -> Image.Ima
     return gray.point(lambda value: 255 if value > max_brightness else value)
 
 
-def _apply_qualify(img: Image.Image, qualify: int) -> Image.Image:
-    """Apply quality factor by JPEG re-encode for each page image."""
-    if img.mode == "1":
+def _prepare_pdf_image(img: Image.Image, use_jpeg2000: bool) -> Image.Image:
+    """Prepare images so Pillow's PDF writer uses JPEG 2000 for continuous tones."""
+    if not use_jpeg2000 or img.mode == "1":
         return img
 
-    work_img = img if img.mode in ("RGB", "L") else img.convert("RGB")
-    buffer = io.BytesIO()
-    work_img.save(buffer, format="JPEG", quality=qualify, optimize=True)
-    buffer.seek(0)
-    jpeg_img = Image.open(buffer)
-    result = jpeg_img.copy()
-    jpeg_img.close()
-    return result
+    if img.mode == "L":
+        return img.convert("LA")
+    if img.mode == "RGB":
+        return img.convert("RGBA")
+    raise ValueError(f"Unsupported image mode for PDF output: {img.mode}")
+
+
+def _quality_to_db(qualify: int) -> float:
+    """Map the 1-100 quality option to a JPEG 2000 target quality of 20-40 dB."""
+    return 20.0 + qualify * 0.2
+
+
+def _save_pdf(images: list[Image.Image], output_pdf: Path, qualify: int, use_jpeg2000: bool) -> None:
+    first, *rest = images
+    encoder_options = {"quality_mode": "dB", "quality_layers": [_quality_to_db(qualify)], "irreversible": True}
+    if not use_jpeg2000:
+        encoder_options = {"quality": qualify}
+
+    first.save(
+        output_pdf,
+        save_all=True,
+        append_images=rest,
+        optimize=True,
+        resolution=150,
+        **encoder_options,
+    )
 
 
 def _apply_dilation(img: Image.Image, dilate: int) -> Image.Image:
@@ -231,7 +249,7 @@ def parse_args() -> argparse.Namespace:
         "--qualify",
         type=int,
         default=75,
-        help="Per-page quality factor (1-100). Lower means smaller file with more loss.",
+        help="Quality factor (1-100). JPEG 2000 maps this to 20-40 dB (75 = 35 dB); lower means smaller file.",
     )
     parser.add_argument(
         "--max-brightness",
@@ -269,6 +287,9 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     output_pdf = output_dir / f"{input_path.stem}_minify.pdf"
+    use_jpeg2000 = features.check_codec("jpg_2000")
+    if not use_jpeg2000:
+        print("Warning: Pillow JPEG 2000 support is unavailable; using JPEG compression.")
 
     doc = fitz.open(str(input_path))
     total_pages = len(doc)
@@ -316,22 +337,15 @@ def main() -> int:
             args.dilate if not skip_filters else 0.0,
             args.blur if not skip_filters else 0.0,
         )
-        # PDF encoder expects RGB/L/1 with consistent dimensions per page.
+        # Normalize uncommon modes before encoding.
         if img.mode not in ("RGB", "L", "1"):
             img = img.convert("RGB")
-        img = _apply_qualify(img, args.qualify)
+        img = _prepare_pdf_image(img, use_jpeg2000)
         images.append(img)
 
     doc.close()
 
-    first, *rest = images
-    first.save(
-        output_pdf,
-        save_all=True,
-        append_images=rest,
-        optimize=True,
-        resolution=150,
-    )
+    _save_pdf(images, output_pdf, args.qualify, use_jpeg2000)
 
     # Ensure creator metadata is written in the final PDF.
     meta_doc = fitz.open(str(output_pdf))
@@ -339,6 +353,9 @@ def main() -> int:
     metadata["creator"] = "MyBooks(https://mybooks.top)"
     metadata["title"] = input_path.stem
     meta_doc.set_metadata(metadata)
+    if use_jpeg2000:
+        # JPXDecode requires PDF 1.5; Pillow's PDF writer emits a 1.4 header.
+        meta_doc.xref_set_key(meta_doc.pdf_catalog(), "Version", "/1.5")
     meta_doc.save(str(output_pdf), incremental=True, encryption=fitz.PDF_ENCRYPT_KEEP)
     meta_doc.close()
 
