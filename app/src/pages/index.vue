@@ -608,9 +608,18 @@ export default {
             // 退场动画总时长（末张卡片 24ms x 11 + 300ms ≈ 564ms）内不切数据，
             // 否则接口快于动画时卡片会在半途被换掉，退场只播了一半
             const minExit = new Promise(resolve => setTimeout(resolve, 580));
-            const request = this.$backend('/index?refresh=1&exclude=' + shown.join(','));
+            // 书籍列表在拆分后的区块接口上（/index 只返回布局配置）：refresh=1 绕过
+            // LITE 缓存并换取新随机种子，exclude 让下一批尽量避开屏幕上的书
+            const request = this.$backend(`/index/${section}?refresh=1&exclude=${shown.join(',')}`);
             Promise.all([request, minExit]).then( ([rsp]) => {
                 if (!rsp || rsp.err !== 'ok') {
+                    this.$set(this.refreshPhase, section, null);
+                    return;
+                }
+                const books = (section === 'new' ? rsp.new_books : rsp.random_books) || [];
+                // 换不出书（极小书库全被排除等）：保留旧数组并取消退场，
+                // 否则空数组会把整个区块卡的 v-if 打掉，卡片直接消失
+                if (books.length === 0) {
                     this.$set(this.refreshPhase, section, null);
                     return;
                 }
@@ -618,9 +627,9 @@ export default {
                 // 不会再叠加一次常规进场（home-cover-in）
                 this.$set(this.refreshPhase, section, 'in');
                 if (section === 'new') {
-                    this.new_books = rsp.new_books || [];
+                    this.new_books = books;
                 } else {
-                    this.random_books = rsp.random_books || [];
+                    this.random_books = books;
                 }
             }).catch( error => {
                 console.error('Failed to refresh books:', error);
