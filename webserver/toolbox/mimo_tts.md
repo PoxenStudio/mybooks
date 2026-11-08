@@ -21,12 +21,24 @@
 ### 2. 新增 TXT 支持
 - 格式选择沿用 chinese_converter 惯例：优先 EPUB，无 EPUB 时回退 TXT
 - TXT 编码自动探测（复用 `chinese_converter.epub_converter.detect_encoding`：
-  UTF-16/32 BOM 与无 BOM → UTF-8 → GB18030 / BIG5 择优）
-- 按「第X章/节/卷/回/部/篇/集、Chapter N、序章/楔子/引子/尾声/终章/后记/番外」
-  行首标题切章（标题行 ≤60 字符防长句误切）；识别不到标题时整本单章；
-  首个标题前 ≥100 字符的开头段保留为「开头」一章
+  UTF-16/32 BOM 与无 BOM → UTF-8 → GB18030 / BIG5 择优；本轮修复无 BOM UTF-32
+  被 UTF-16 启发式误判的问题——严格解码先行区分）
+- 按「第X章/节/卷/回/部/篇/集、Chapter N（大小写不敏感）、序章/楔子/引子/尾声/
+  终章/后记/番外」行首标题切章（标题行 ≤60 字符、不含句末标点，防正文长句
+  误切；特殊章节名需独立成行或后接空格/全角冒号+短标题）；识别不到标题时
+  整本单章；首个标题前 ≥100 字符的开头段保留为「开头」一章；整文件解码前
+  有 64MB 上限（全文解码/切章内存放大约 4~5 倍，防超大文件打挂服务）
 - 章节提取逻辑抽到 `mimo_tts_lib.py`（webserver-free 纯逻辑库，可独立测试，
   同 `epub_split_lib` / `epub_merge_lib` 惯例），新增 `tests/test_mimo_tts_lib.py`
+- Review 修复：`_soup_text` 只取 body（`<head><title>` 等非正文不参与
+  「章节是否有正文」判定、不进 TTS——ebooklib 0.19/0.20 规整 XHTML 会丢 head，
+  但 XML 解析失败走 raw 兜底时 head 仍在）；EPUB 兜底扫描按文件名（而非全
+  路径）跳过 nav/toc 导航页（`OEBPS/nav.xhtml` 此前会漏）
+
+### 已知限制
+- 续传按「章节序号+标题」文件名匹配：源文件内容变化但章节名不变时，同名
+  WAV 会被复用（0.3.x 起的既有设计；改为内容哈希会让存量音频全部失效、
+  触发全量重转的 API 费用，保持现状）
 
 ---
 

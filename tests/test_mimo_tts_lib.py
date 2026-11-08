@@ -136,6 +136,28 @@ class ExtractEpubTest(unittest.TestCase):
         self.assertEqual(len(chapters), 1)
         self.assertIn("编码章节正文", chapters[0]["text"])
 
+    def test_nav_in_subdir_skipped(self):
+        # 兜底扫描按文件名（而非全路径）跳过导航页：OEBPS/nav.xhtml 不入正文
+        path = self._epub(
+            docs=[("OEBPS/nav.xhtml", _page("目录 目录")), ("OEBPS/c1.xhtml", _page("正文甲"))],
+            toc_points=[],
+        )
+        chapters = _usable(lib.extract_epub_chapters(path))
+        self.assertEqual([ch["title"] for ch in chapters], ["c1"])
+        self.assertIn("正文甲", chapters[0]["text"])
+
+
+class SoupTextTest(unittest.TestCase):
+    def test_ignores_head(self):
+        # <head><title>/<style> 不是正文：不参与「是否有正文」判定，也不进 TTS
+        html = ("<html><head><title>书名</title>"
+                "<style>.x{}</style></head><body><p>正文-only</p></body></html>").encode("utf-8")
+        self.assertEqual(lib._soup_text(html), "正文-only")
+
+    def test_no_body_falls_back(self):
+        html = "<html><p>无 body 标签的正文</p></html>".encode("utf-8")
+        self.assertEqual(lib._soup_text(html), "无 body 标签的正文")
+
 
 class ExtractTxtTest(unittest.TestCase):
     def _txt(self, text, encoding="utf-8"):
@@ -166,6 +188,39 @@ class ExtractTxtTest(unittest.TestCase):
         content = "楔子\n楔子正文。\nChapter 1\nThe beginning.\n后记\n记于结尾。\n"
         chapters = lib.extract_txt_chapters(self._txt(content))
         self.assertEqual([ch["title"] for ch in chapters], ["楔子", "Chapter 1", "后记"])
+        # 标题识别之外，正文也必须完整进章节（防「识别到标题但文本为空」回归）
+        self.assertIn("楔子正文", chapters[0]["text"])
+        self.assertIn("The beginning", chapters[1]["text"])
+        self.assertIn("记于结尾", chapters[2]["text"])
+
+    def test_uppercase_chapter_heading(self):
+        content = "CHAPTER 1\nThe beginning.\nCHAPTER 2\nThe end.\n"
+        chapters = lib.extract_txt_chapters(self._txt(content))
+        self.assertEqual([ch["title"] for ch in chapters], ["CHAPTER 1", "CHAPTER 2"])
+        self.assertIn("The end", chapters[1]["text"])
+
+    def test_prose_with_sentence_punct_not_heading(self):
+        # 以「第一章」开头的正文长句（含句末标点）不切章
+        content = "第一章讲完了。大家休息一下。\n正文的其余部分继续。\n"
+        chapters = lib.extract_txt_chapters(self._txt(content))
+        self.assertEqual(len(chapters), 1)
+        self.assertIn("正文的其余部分继续", chapters[0]["text"])
+
+    def test_txt_size_limit(self):
+        original = lib.MAX_TXT_BYTES
+        lib.MAX_TXT_BYTES = 100
+        try:
+            with self.assertRaises(ValueError):
+                lib.extract_txt_chapters(self._txt("一" * 200))
+        finally:
+            lib.MAX_TXT_BYTES = original
+
+    def test_utf32_without_bom(self):
+        # 无 BOM 的 UTF-32 不得被 UTF-16 NUL 启发式误判成乱码
+        content = "第一章 起点\n中文正文。\n"
+        chapters = lib.extract_txt_chapters(self._txt(content, "utf-32-le"))
+        self.assertEqual(chapters[0]["title"], "第一章 起点")
+        self.assertIn("中文正文", chapters[0]["text"])
 
     def test_long_line_not_heading(self):
         # 以「第一章」开头但远超标题长度的行按正文处理，不切章

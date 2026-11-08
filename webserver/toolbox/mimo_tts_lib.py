@@ -14,9 +14,11 @@ EPUB
 
 TXT
     自动探测编码（复用 chinese_converter 的 ``detect_encoding``），
-    按行首「第X章 / Chapter N / 序章|楔子|…」标题切章；识别不到标题时
-    整本作为单章。首个标题前的开头段（≥ ``TXT_PRELUDE_MIN_CHARS`` 字符）
-    作为「开头」一章保留，避免丢失书籍简介等内容。
+    按行首「第X章 / Chapter N / 序章|楔子|…」标题切章（标题行不含句末
+    标点，防正文长句误切）；识别不到标题时整本作为单章。首个标题前的
+    开头段（≥ ``TXT_PRELUDE_MIN_CHARS`` 字符）作为「开头」一章保留，
+    避免丢失书籍简介等内容。整文件解码前有 ``MAX_TXT_BYTES`` 上限，
+    防止超大文件解码 / 切章时内存放大数倍。
 """
 
 import posixpath
@@ -31,19 +33,24 @@ from ebooklib import epub
 from webserver.toolbox.chinese_converter.epub_converter import detect_encoding
 
 # 行首章节标题：第X章节卷回部篇集（允许全角数字与字间空格）/ Chapter N /
-# 常见特殊章节名（独立成行或「词 + 空格 + 短标题」，防止「楔子正文。」这类
-# 以特殊词开头的正文长句被误切）。仅作行首匹配，行中出现不算
+# 常见特殊章节名（独立成行或「词 + 空格/全角冒号 + 短标题」，防止
+# 「楔子正文。」这类以特殊词开头的正文长句被误切）。仅作行首匹配，
+# 行中出现不算；句末标点拦截见 _is_heading_line
 TXT_HEADING_RE = re.compile(
     r"^\s*(?:"
     r"第\s*[0-9０-９一二三四五六七八九十百千万零两][0-9０-９一二三四五六七八九十百千万零两\s]*[章节卷回部篇集]"
-    r"|[Cc]hapter\s+[0-9０-９]+"
-    r"|(?:序章|序言|引子|楔子|尾声|终章|后记|番外)(?:\s+\S{0,30})?\s*$"
+    r"|(?i:chapter)\s+[0-9０-９]+"
+    r"|(?:序章|序言|引子|楔子|尾声|终章|后记|番外)(?:[\s：]\S{0,30})?\s*$"
     r")"
 )
 # 标题行长度上限：超过按正文段落处理，避免误切以「第X章」开头的长句
 TXT_HEADING_MAX_LEN = 60
 # 首个标题前内容作为「开头」章节的最小字符数（过滤纯书名 / 作者行）
 TXT_PRELUDE_MIN_CHARS = 100
+# TXT 整文件解码的大小上限：全文 bytes → str → 行列表 → 章节串的内存
+# 放大约 4~5 倍，64MB 文件对应峰值 ~300MB，足以容纳任何实际书籍，
+# 同时防住异常大文件把服务打挂
+MAX_TXT_BYTES = 64 * 1024 * 1024
 
 
 def _document_items(book) -> dict:
@@ -96,13 +103,19 @@ def _find_item(spine_items: dict, href: str):
 
 
 def _soup_text(content) -> str:
-    """HTML 文档 → 纯文本（剥 script/style/nav，按非空行拼回）。"""
+    """HTML 文档 → 纯文本（剥 script/style/nav，只取 body，按非空行拼回）。
+
+    只取 body：``<head><title>`` 等非正文文本不参与「章节是否有正文」
+    判定，也绝不进入 TTS（ebooklib 0.19/0.20 的 get_content() 对规整
+    XHTML 会重序列化丢掉 head，但 XML 解析失败时走 raw 兜底，head 仍在）。
+    """
     if isinstance(content, bytes):
         content = content.decode("utf-8", errors="ignore")
     soup = BeautifulSoup(content, "html.parser")
     for tag in soup(["script", "style", "nav"]):
         tag.decompose()
-    text = soup.get_text(separator="\n")
+    root = soup.body or soup
+    text = root.get_text(separator="\n")
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     return "\n".join(lines)
 
@@ -113,13 +126,28 @@ def _fill_text(chapters: list, spine_items: dict) -> None:
         ch["text"] = _soup_text(item.get_content()) if item else ""
 
 
+def _is_heading_line(line: str) -> bool:
+    """行首标题判定：匹配 TXT_HEADING_RE、长度受限、不含句末标点。
+
+    句末标点拦截正文长句（如「第一章讲完了。大家休息。」）——标题行
+    几乎不会带 。！？；「第一章大梦初醒」这类无分隔符标题仍放行。
+    """
+    if len(line.strip()) > TXT_HEADING_MAX_LEN:
+        return False
+    match = TXT_HEADING_RE.match(line)
+    if not match:
+        return False
+    return not re.search(r"[。！？!?…]", line[match.end():])
+
+
 def _collect_documents(book, chapters: list, seen: set) -> None:
     """兜底：扫描全部内容文档（跳过 nav/toc 导航页），标题取文件名 stem。"""
     for item in book.get_items():
         if item.get_type() != ebooklib.ITEM_DOCUMENT:
             continue
         name = item.get_name()
-        if name and (name.lower().startswith("nav") or name.lower().startswith("toc")):
+        # 导航页按文件名判断，与所在目录无关（如 OEBPS/nav.xhtml）
+        if name and posixpath.basename(name).lower().startswith(("nav", "toc")):
             continue
         if name in seen:
             continue
@@ -161,14 +189,16 @@ def extract_txt_chapters(txt_path: str) -> list:
     - 标题行本身保留在章节正文中（朗读时念出章节名）。
     """
     data = Path(txt_path).read_bytes()
+    if len(data) > MAX_TXT_BYTES:
+        raise ValueError(
+            "TXT 文件过大（%dMB > 上限 %dMB），无法转换"
+            % (len(data) // (1024 * 1024), MAX_TXT_BYTES // (1024 * 1024))
+        )
     text = data.decode(detect_encoding(data), errors="replace")
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     lines = text.split("\n")
 
-    heads = []
-    for i, line in enumerate(lines):
-        if TXT_HEADING_RE.match(line) and len(line.strip()) <= TXT_HEADING_MAX_LEN:
-            heads.append(i)
+    heads = [i for i, line in enumerate(lines) if _is_heading_line(line)]
 
     chapters = []
     if not heads:
