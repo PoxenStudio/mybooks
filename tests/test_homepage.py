@@ -167,5 +167,34 @@ class TestGetHomepageConfig(unittest.TestCase):
         self.assertIn(r"/api/index/social", paths)
 
 
+class TestLegacyHomeIds(unittest.TestCase):
+    """legacy 选书对 avoid_ids 的避让语义（换一批把屏幕上的书传进 exclude）。
+
+    纯函数测试：_legacy_home_ids 不用 self，传 None 调用。"""
+
+    def pick(self, ids, cnt_random, cnt_recent, avoid=frozenset()):
+        from webserver.handlers import book as book_module
+
+        return book_module.Index._legacy_home_ids(None, ids, cnt_random, cnt_recent, avoid)
+
+    def test_avoids_shown_ids(self):
+        ids = list(range(1, 41))
+        avoid = frozenset(range(1, 21))
+        random_ids, new_ids = self.pick(ids, 12, 12, avoid)
+        self.assertFalse(set(random_ids) & avoid)
+        self.assertFalse(set(new_ids) & avoid)
+        self.assertEqual(len(random_ids), 12)
+        self.assertEqual(len(new_ids), 12)
+
+    def test_falls_back_when_pool_too_small(self):
+        ids = list(range(1, 41))
+        # 全部排除：宁可重复也不开天窗
+        random_ids, new_ids = self.pick(ids, 12, 12, frozenset(ids))
+        self.assertEqual(len(random_ids), 12)
+        self.assertEqual(len(new_ids), 12)
+        self.assertTrue(set(random_ids) <= set(ids))
+        self.assertTrue(set(new_ids) <= set(ids))
+
+
 if __name__ == "__main__":
     unittest.main()

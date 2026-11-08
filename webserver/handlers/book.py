@@ -129,10 +129,16 @@ class Index(BaseHandler):
             result.append(book_data)
         return result
 
-    def _legacy_home_ids(self, ids, cnt_random, cnt_recent):
-        random_ids = random.sample(ids, min(cnt_random, len(ids)))
-        ids = sorted(ids, reverse=True)
-        new_ids = random.sample(ids[0:600], min(cnt_recent, len(ids[0:600])))
+    def _legacy_home_ids(self, ids, cnt_random, cnt_recent, avoid_ids=frozenset()):
+        """avoid_ids：屏幕上已有的书（换一批的 exclude、其它区块已显示的书），尽量避开。
+
+        避开后池子不够时退回全量——宁可重复也不开天窗。"""
+        pool = [i for i in ids if i not in avoid_ids] or list(ids)
+        random_ids = random.sample(pool, min(cnt_random, len(pool)))
+        fresh = sorted(pool, reverse=True)
+        if len(fresh[0:600]) < cnt_recent:
+            fresh = sorted(ids, reverse=True)
+        new_ids = random.sample(fresh[0:600], min(cnt_recent, len(fresh[0:600])))
         return sorted(random_ids, reverse=True), sorted(new_ids, reverse=True)
 
     def _stable_home(self):
@@ -287,7 +293,7 @@ class IndexSection(Index):
         reader_id = self.user_id() or None
         seed = self._home_seed(reader_id)
         home_ids = self._recommend_home_ids(cnt_random, cnt_recent, [], seed, reader_id)
-        random_ids, new_ids, reasons = home_ids or (*self._legacy_home_ids(ids, cnt_random, cnt_recent), {})
+        random_ids, new_ids, reasons = home_ids or (*self._legacy_home_ids(ids, cnt_random, cnt_recent, self._shown_ids()), {})
         t_home = time.perf_counter()
 
         if section == "random":
