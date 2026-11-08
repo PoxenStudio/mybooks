@@ -600,6 +600,17 @@ export default {
             if (this.refreshing[section]) {
                 return;
             }
+            // 初始加载还没落地时不接单：它挂载后才发的响应会把刷新结果盖回去
+            if (this.homeBooksLoading) {
+                return;
+            }
+            // 跨区块串行：两个刷新同时发出去会带同一份 exclude，换出来的书
+            // 可能在两个区块重复出现；先排队，等在途的落地，新请求的 exclude
+            // 就能把刚换出来的书也算上
+            if (this.refreshing.random || this.refreshing.new) {
+                this.$set(this.pendingRefresh, section, true);
+                return;
+            }
             this.$set(this.refreshing, section, true);
             // 旧书先依次抽出（phase=out），数据回来后再依次弹回（phase=in）。
             // 两段都只靠 data-phase 驱动，不依赖 v-if 重挂载，所以书没变时也不会闪
@@ -611,7 +622,13 @@ export default {
             // 书籍列表在拆分后的区块接口上（/index 只返回布局配置）：refresh=1 绕过
             // LITE 缓存并换取新随机种子，exclude 让下一批尽量避开屏幕上的书
             const request = this.$backend(`/index/${section}?refresh=1&exclude=${shown.join(',')}`);
-            Promise.all([request, minExit]).then( ([rsp]) => {
+            // 死线：$backend 没有超时，请求挂起时退场动画已把书藏住，必须有兜底
+            // 把卡片还回来，不能让转圈无限进行。race 只认先到的结局，死线触发后
+            // 迟到的响应整个被丢弃，不会在几秒后突然把书换掉
+            const deadline = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('refresh deadline')), 15000)
+            );
+            Promise.race([Promise.all([request, minExit]), deadline]).then( ([rsp]) => {
                 if (!rsp || rsp.err !== 'ok') {
                     this.$set(this.refreshPhase, section, null);
                     return;
@@ -636,6 +653,12 @@ export default {
                 this.$set(this.refreshPhase, section, null);
             }).finally( () => {
                 this.$set(this.refreshing, section, false);
+                // 落地后放行排队的下一棒：此时所有刷新都已结束，走一遍守卫即可
+                const next = ['new', 'random'].find(s => this.pendingRefresh[s]);
+                if (next) {
+                    this.$set(this.pendingRefresh, next, false);
+                    this.refreshBooks(next);
+                }
             });
         },
         // 统计条读数：滚动中读 statsDisplay，结束后交回 stats
@@ -824,6 +847,8 @@ export default {
         refreshing: { random: false, new: false },
         // 「换一批」的两段过渡阶段：out=旧书抽出中，in=新书弹回中，null=静止
         refreshPhase: { random: null, new: null },
+        // 跨区块刷新排队：另一区块刷新在途时先记下意图，等它落地再发起
+        pendingRefresh: { random: false, new: false },
         // 统计数字滚动期间的显示值；null 表示直接用 stats（computed）
         statsDisplay: null,
         readingStatsHasData: false,
