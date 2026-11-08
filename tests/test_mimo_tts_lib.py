@@ -350,6 +350,33 @@ class ExtractEpubTest(unittest.TestCase):
         chapters = _usable(lib.extract_epub_chapters(path))
         self.assertEqual([ch["title"] for ch in chapters], ["第一章", "第二章", "第三章"])
 
+    def test_empty_toc_pages_do_not_inflate_coverage(self):
+        # TOC 里 10 个纯图片页（0 字）不该把「篇数」抬上去；目录外 3 个 300 字
+        # 的短章仍属正文，必须补上（旧实现会判可信再用 500 字门槛全部丢掉）
+        body = "正文内容。" * 200
+        docs = [("c1.xhtml", _page(body))]
+        toc = [("一", "c1.xhtml")]
+        for i in range(10):
+            href = "img%d.xhtml" % i
+            docs.append((href, _page()))
+            toc.append(("图%d" % i, href))
+        for i in range(3):
+            docs.append(("s%d.xhtml" % i, _page("短章正文。" * 60)))
+        path = self._epub(docs=docs, toc_points=toc)
+        chapters = _usable(lib.extract_epub_chapters(path))
+        self.assertEqual([ch["title"] for ch in chapters], ["一", "s0", "s1", "s2"])
+
+    def test_duplicate_spine_itemref_emitted_once(self):
+        # spine 里重复的 itemref（制作工具 bug）不能让同一章念两遍
+        body = "正文内容。" * 200
+        path = self._epub(
+            docs=[("titlepage.xhtml", _page()), ("c1.xhtml", _page(body)), ("c2.xhtml", _page(body))],
+            toc_points=[("Start", "titlepage.xhtml")],
+            spine_order=[0, 1, 1, 2],
+        )
+        chapters = _usable(lib.extract_epub_chapters(path))
+        self.assertEqual([ch["title"] for ch in chapters], ["c1", "c2"])
+
     def test_nav_in_subdir_skipped(self):
         # 兜底扫描按文件名（而非全路径）跳过导航页：OEBPS/nav.xhtml 不入正文
         path = self._epub(

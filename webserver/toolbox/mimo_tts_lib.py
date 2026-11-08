@@ -109,8 +109,10 @@ def _nav_names(book) -> set:
 # 常见导航页文件名（精确匹配，不用前缀——`naval_battle.xhtml` / `toc2.xhtml`
 # 这类正文不能被误伤）
 _NAV_FILENAMES = frozenset({
-    "nav.xhtml", "nav.html", "toc.xhtml", "toc.html",
-    "contents.xhtml", "contents.html", "toc_page.xhtml",
+    "nav.xhtml", "nav.html", "nav.htm",
+    "toc.xhtml", "toc.html", "toc.htm",
+    "contents.xhtml", "contents.html",
+    "toc_page.xhtml", "toc_page.html",
 })
 
 
@@ -284,7 +286,9 @@ def extract_epub_chapters(epub_path: str) -> list:
                   if n not in toc_by_name and not _is_nav_document(n, nav_names)]
     toc_text_len = sum(len(ch["text"]) for ch in toc_by_name.values())
     rest_text_len = sum(len(text_by_name[n]) for n in rest_names)
-    trusted = _is_trusted_toc(toc_text_len, len(toc_by_name), rest_text_len, len(rest_names))
+    # 篇数只数「有正文」的 TOC 章：纯图片页 / 空章不该把覆盖率抬上去
+    toc_count = sum(1 for ch in toc_by_name.values() if ch["text"].strip())
+    trusted = _is_trusted_toc(toc_text_len, toc_count, rest_text_len, len(rest_names))
 
     # TOC 可信时不补零页（版权行 / 制作说明），但**实质正文**仍要补：
     # calibre 常把「正文不在 TOC 里」的书做成 TOC 覆盖大半、剩余几十万字
@@ -306,15 +310,21 @@ def extract_epub_chapters(epub_path: str) -> list:
         )
 
     # 按 spine 阅读顺序重建，TOC 章节插回原位（保留标题），补扫章节按位置插入；
-    # 空文本（纯图片页）交给调用方过滤
+    # 空文本（纯图片页）交给调用方过滤。spine 里重复的 itemref 只出一次
     chapters = []
     supplement_names = set(supplements)
+    emitted = set()
     for item in spine_docs:
         name = item.get_name()
+        if name in emitted:
+            continue
         if name in toc_by_name:
             chapters.append(toc_by_name[name])
         elif name in supplement_names:
             chapters.append({"title": Path(name).stem, "href": name, "text": text_by_name[name]})
+        else:
+            continue
+        emitted.add(name)
     return chapters
 
 

@@ -37,9 +37,6 @@ MAX_PROMPT_DESC_LEN = 2000
 # 本轮生成的文件清单（隐藏文件）：续传/清理用——只认自己写过的文件，
 # 绝不删用户放进音频目录的其它内容
 AUDIO_MANIFEST_NAME = ".mimo_tts_manifest.json"
-# 转换过程中每隔多少个分片刷一次清单：进程被杀时已写出的文件不至于变成
-# 「没人认领」的孤儿，又不至于每片都去 stat 一遍目录
-MANIFEST_FLUSH_FILES = 50
 
 PRESET_VOICES = [
     {"id": "mimo_default", "name": "MiMo-默认", "lang": "zh", "gender": "female", "sample": "mimo_default.wav"},
@@ -323,19 +320,21 @@ class MimoTTSTool(BaseTool):
         return {f for f in files if isinstance(f, str) and f}
 
     @classmethod
-    def _write_manifest(cls, output_dir: str, fmt: str, files: set) -> None:
-        """写清单：只记磁盘上真的存在的文件，并保留尚未清理的旧记录。
+    def _write_manifest(cls, output_dir: str, fmt: str, files: set,
+                        verify: bool = True) -> None:
+        """把文件清单落盘：并入旧记录，可选校验文件是否真的存在。
 
-        - 只记存在的文件：避免「计划里有、实际没生成」的名字在下一轮被当作
-          自己写过的文件删掉（用户可能手工补了同名文件）；
-        - 保留旧记录：本轮有分片失败时不清理旧音频，若清单只写本轮计划，
+        - 并入旧记录：本轮有分片失败时不清理旧音频，若清单只写本轮计划，
           这些旧文件的记录就永远丢失，之后再改名也删不掉（孤儿）。
+        - ``verify=True``（收尾）时只留磁盘上真实存在的文件，避免「计划里有、
+          实际没生成 / 已被清理」的名字留在册里；转换过程中的中途落盘传
+          ``False``，省掉对整份清单的 stat。
         """
         previous = cls._read_manifest_files(output_dir) or set()
-        on_disk = {f for f in files if os.path.isfile(os.path.join(output_dir, f))}
-        leftover = {f for f in previous - files
-                    if os.path.isfile(os.path.join(output_dir, f))}
-        data = {"format": fmt, "files": sorted(on_disk | leftover)}
+        merged = previous | set(files)
+        if verify:
+            merged = {f for f in merged if os.path.isfile(os.path.join(output_dir, f))}
+        data = {"format": fmt, "files": sorted(merged)}
         tmp = cls._manifest_path(output_dir) + ".tmp"
         try:
             with open(tmp, "w", encoding="utf-8") as f:
@@ -610,11 +609,13 @@ class MimoTTSTool(BaseTool):
                 logging.error(f"[MimoTTSTool]Failed to save cover image for book {book_id}: {e}")
 
             existing = set()
-            if os.path.isdir(output_dir):
+            try:
                 for fname in os.listdir(output_dir):
                     fpath = os.path.join(output_dir, fname)
                     if fname.endswith(".wav") and os.path.isfile(fpath) and os.path.getsize(fpath) >= MIN_WAV_SIZE:
                         existing.add(fname)
+            except OSError as e:
+                logging.warning("[MimoTTSTool] 列举音频目录失败 %s: %s", output_dir, e)
 
             self._clean_partial_files(output_dir)
             previous_files = self._read_manifest_files(output_dir)
@@ -639,7 +640,6 @@ class MimoTTSTool(BaseTool):
             total_parts_all = sum(len(parts) for _, _, parts, _ in plans)
             completed_parts = 0
             written = set()
-            pending_manifest = set()
 
             for idx, chapter, parts, names in plans:
                 chapter_written = set()
@@ -679,13 +679,10 @@ class MimoTTSTool(BaseTool):
                     "total": total_chapters,
                     "chapter_title": chapter.get("title", ""),
                 })
-                # 定期把已写出的文件记进清单：进程被杀时这一轮写出的文件也在
-                # 册，下一轮才清得掉（只在末尾写会留下永远没人认领的孤儿）
+                # 每章结束都把已写出的文件记进清单（不校验存在性，省 stat）：
+                # 进程被杀时这一轮写出的文件也在册，下一轮才清得掉
                 if chapter_written:
-                    pending_manifest |= chapter_written
-                    if len(pending_manifest) >= MANIFEST_FLUSH_FILES:
-                        self._write_manifest(output_dir, fmt, pending_manifest)
-                        pending_manifest.clear()
+                    self._write_manifest(output_dir, fmt, chapter_written, verify=False)
 
             # 全部成功后才清理旧音频：本轮有失败时保留旧文件，别让用户两头落空
             if failed_parts == 0:
