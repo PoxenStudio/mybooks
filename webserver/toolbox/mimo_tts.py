@@ -34,6 +34,12 @@ CLONE_ALLOWED_EXT = (".mp3", ".wav")
 CLONE_DIR_NAME = "clones"
 PROMPT_FILE_NAME = "voice_prompts.json"
 MAX_PROMPT_DESC_LEN = 2000
+# 本轮生成的文件清单（隐藏文件）：续传/清理用——只认自己写过的文件，
+# 绝不删用户放进音频目录的其它内容
+AUDIO_MANIFEST_NAME = ".mimo_tts_manifest.json"
+# 转换过程中每隔多少个分片刷一次清单：进程被杀时已写出的文件不至于变成
+# 「没人认领」的孤儿，又不至于每片都去 stat 一遍目录
+MANIFEST_FLUSH_FILES = 50
 
 PRESET_VOICES = [
     {"id": "mimo_default", "name": "MiMo-默认", "lang": "zh", "gender": "female", "sample": "mimo_default.wav"},
@@ -186,13 +192,6 @@ class MimoTTSTool(BaseTool):
         except Exception as e:
             return False, str(e)
 
-    # ── EPUB / TXT parsing ──────────────────────────────────────
-
-    @staticmethod
-    def _extract_chapters(epub_path: str) -> list[dict]:
-        # 提取逻辑已抽到 mimo_tts_lib（webserver-free，可独立测试）
-        return mimo_tts_lib.extract_epub_chapters(epub_path)
-
     # ── Text splitting ──────────────────────────────────────────
 
     @staticmethod
@@ -292,6 +291,118 @@ class MimoTTSTool(BaseTool):
         if len(title) > MAX_FILENAME_LEN:
             title = title[:MAX_FILENAME_LEN].rsplit('_', 1)[0]
         return title or fallback
+
+    @classmethod
+    def _chapter_filename(cls, index: int, title: str, part_index: int, part_count: int) -> str:
+        """章节音频文件名：``0001_标题.wav``（长文再带 ``_partNNN``）。
+
+        计划阶段与合成阶段共用同一函数，避免清理时算出的名字和实际写盘的
+        名字不一致（不一致会误删刚生成的文件）。
+        """
+        safe_title = cls._sanitize_filename(title, f"ch{index + 1}")
+        suffix = f"_part{part_index + 1:03d}" if part_count > 1 else ""
+        return f"{index + 1:04d}_{safe_title}{suffix}.wav"
+
+    # ── Audio manifest (resume / prune) ────────────────────────
+
+    @staticmethod
+    def _manifest_path(output_dir: str) -> str:
+        return os.path.join(output_dir, AUDIO_MANIFEST_NAME)
+
+    @classmethod
+    def _read_manifest_files(cls, output_dir: str) -> Optional[set]:
+        """读上一轮生成的文件清单；没有清单（0.4.0 及更早的目录）返回 None。"""
+        try:
+            with open(cls._manifest_path(output_dir), "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            return None
+        files = data.get("files") if isinstance(data, dict) else None
+        if not isinstance(files, list):
+            return None
+        return {f for f in files if isinstance(f, str) and f}
+
+    @classmethod
+    def _write_manifest(cls, output_dir: str, fmt: str, files: set) -> None:
+        """写清单：只记磁盘上真的存在的文件，并保留尚未清理的旧记录。
+
+        - 只记存在的文件：避免「计划里有、实际没生成」的名字在下一轮被当作
+          自己写过的文件删掉（用户可能手工补了同名文件）；
+        - 保留旧记录：本轮有分片失败时不清理旧音频，若清单只写本轮计划，
+          这些旧文件的记录就永远丢失，之后再改名也删不掉（孤儿）。
+        """
+        previous = cls._read_manifest_files(output_dir) or set()
+        on_disk = {f for f in files if os.path.isfile(os.path.join(output_dir, f))}
+        leftover = {f for f in previous - files
+                    if os.path.isfile(os.path.join(output_dir, f))}
+        data = {"format": fmt, "files": sorted(on_disk | leftover)}
+        tmp = cls._manifest_path(output_dir) + ".tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, cls._manifest_path(output_dir))
+        except OSError as e:
+            logging.warning("[MimoTTSTool] 写入音频清单失败 %s: %s", output_dir, e)
+
+    @classmethod
+    def _prune_stale_audio(cls, output_dir: str, expected: set) -> int:
+        """删掉上一轮生成、本轮计划外的音频（源格式切换 / 章节增删改名）。
+
+        只删清单里记录过的文件——用户自己放进音频目录的文件不在清单内，不会
+        被误删。返回删除数量。
+        """
+        previous = cls._read_manifest_files(output_dir)
+        if previous is None:
+            return 0
+        removed = 0
+        for fname in sorted(previous - expected):
+            # 只处理同层文件名，防止清单被篡改成 ../ 之类的越界路径
+            if os.path.basename(fname) != fname or fname.startswith("."):
+                continue
+            path = os.path.join(output_dir, fname)
+            if not os.path.isfile(path):
+                continue
+            try:
+                os.remove(path)
+                removed += 1
+            except OSError as e:
+                logging.warning("[MimoTTSTool] 删除旧音频失败 %s: %s", path, e)
+        if removed:
+            logging.info("[MimoTTSTool] 清理 %d 个本轮计划外的旧音频：%s", removed, output_dir)
+        return removed
+
+    @staticmethod
+    def _drop_audio_zip(output_dir: str) -> None:
+        """删掉打包下载的缓存 zip：音频集合变了让它重建。
+
+        ``AudioCollection`` 是「zip 存在就复用」，不删的话新增/改名的章节
+        不会出现在打包下载里。删失败只记日志（Windows 上可能被占用）。
+        """
+        try:
+            names = os.listdir(output_dir)
+        except OSError as e:
+            logging.warning("[MimoTTSTool] 列举音频目录失败 %s: %s", output_dir, e)
+            return
+        for fname in names:
+            if fname.startswith("audio_collection_") and fname.endswith(".zip"):
+                try:
+                    os.remove(os.path.join(output_dir, fname))
+                except OSError as e:
+                    logging.warning("[MimoTTSTool] 删除过期音频包失败 %s: %s", fname, e)
+
+    @staticmethod
+    def _clean_partial_files(output_dir: str) -> None:
+        """清掉上一轮中断留下的 ``*.wav.part``（全局转换锁保证没有并发写）。"""
+        try:
+            names = os.listdir(output_dir)
+        except OSError:
+            return
+        for fname in names:
+            if fname.endswith(".wav.part"):
+                try:
+                    os.remove(os.path.join(output_dir, fname))
+                except OSError:
+                    pass
 
     # ── Voice clone storage ────────────────────────────────────
 
@@ -498,7 +609,6 @@ class MimoTTSTool(BaseTool):
             except Exception as e:
                 logging.error(f"[MimoTTSTool]Failed to save cover image for book {book_id}: {e}")
 
-
             existing = set()
             if os.path.isdir(output_dir):
                 for fname in os.listdir(output_dir):
@@ -506,23 +616,34 @@ class MimoTTSTool(BaseTool):
                     if fname.endswith(".wav") and os.path.isfile(fpath) and os.path.getsize(fpath) >= MIN_WAV_SIZE:
                         existing.add(fname)
 
-            skipped = 0
-            failed_parts = 0
-            total_parts_all = sum(len(self._split_text(ch.get("text", "").strip())) for ch in chapters)
-            completed_parts = 0
+            self._clean_partial_files(output_dir)
+            previous_files = self._read_manifest_files(output_dir)
 
+            # 先按「本轮计划」算出每个分片的文件名：用于清理旧音频（源格式从
+            # EPUB 换成 TXT、章节增删改名后，旧文件会和新文件并存，播放列表
+            # 按目录全量列举 → 章节重复/混杂），也顺带得到总片数
+            plans = []
+            expected_files = set()
             for idx, chapter in enumerate(chapters):
                 text = chapter.get("text", "").strip()
                 if not text:
                     continue
-
                 parts = self._split_text(text)
-                chapter_ok = True
-                for pidx, part in enumerate(parts):
-                    safe_title = self._sanitize_filename(chapter.get("title", ""), f"ch{idx+1}")
-                    suffix = f"_part{pidx+1:03d}" if len(parts) > 1 else ""
-                    filename = f"{idx+1:04d}_{safe_title}{suffix}.wav"
+                names = [self._chapter_filename(idx, chapter.get("title", ""), pidx, len(parts))
+                         for pidx in range(len(parts))]
+                expected_files.update(names)
+                plans.append((idx, chapter, parts, names))
 
+            skipped = 0
+            failed_parts = 0
+            total_parts_all = sum(len(parts) for _, _, parts, _ in plans)
+            completed_parts = 0
+            written = set()
+            pending_manifest = set()
+
+            for idx, chapter, parts, names in plans:
+                chapter_written = set()
+                for pidx, (part, filename) in enumerate(zip(parts, names)):
                     if filename in existing:
                         skipped += 1
                         completed_parts += 1
@@ -536,12 +657,17 @@ class MimoTTSTool(BaseTool):
                     except Exception as e:
                         logging.error("[MimoTTSTool] TTS failed for chapter %d part %d: %s", idx+1, pidx+1, e)
                         failed_parts += 1
-                        chapter_ok = False
                         continue
 
                     filepath = os.path.join(output_dir, filename)
-                    with open(filepath, "wb") as f:
+                    # 先写 .part 再原子改名：中途失败（磁盘满 / 进程被杀）不会留下
+                    # 一个 >= MIN_WAV_SIZE 的半截文件被下一轮当成「已完成」复用
+                    tmp_path = filepath + ".part"
+                    with open(tmp_path, "wb") as f:
                         f.write(wav_data)
+                    os.replace(tmp_path, filepath)
+                    written.add(filename)
+                    chapter_written.add(filename)
                     completed_parts += 1
 
                 # 按已完成 part 数 / 总 part 数 计算进度
@@ -553,6 +679,21 @@ class MimoTTSTool(BaseTool):
                     "total": total_chapters,
                     "chapter_title": chapter.get("title", ""),
                 })
+                # 定期把已写出的文件记进清单：进程被杀时这一轮写出的文件也在
+                # 册，下一轮才清得掉（只在末尾写会留下永远没人认领的孤儿）
+                if chapter_written:
+                    pending_manifest |= chapter_written
+                    if len(pending_manifest) >= MANIFEST_FLUSH_FILES:
+                        self._write_manifest(output_dir, fmt, pending_manifest)
+                        pending_manifest.clear()
+
+            # 全部成功后才清理旧音频：本轮有失败时保留旧文件，别让用户两头落空
+            if failed_parts == 0:
+                self._prune_stale_audio(output_dir, expected_files)
+            # 音频集合变了（新增/改名/删除）就让打包下载的缓存 zip 重建
+            if previous_files != expected_files:
+                self._drop_audio_zip(output_dir)
+            self._write_manifest(output_dir, fmt, written | (expected_files & existing))
 
             AudioBooksCache.async_update()
 
