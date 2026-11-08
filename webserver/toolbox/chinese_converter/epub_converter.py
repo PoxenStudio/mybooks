@@ -264,13 +264,17 @@ def detect_encoding(data: bytes) -> str:
     if head.count(b"\x00") > len(head) // 100:
         # 无 BOM 的 UTF-32 先行：按 UTF-16 启发式会把 4 字节一单元的码点
         # 拆成两个 UTF-16 单元解出乱码。用严格解码区分——真实 UTF-16 数据
-        # 的 4 字节组几乎必然拼出超平面码点（> 0x10FFFF）而解码失败
-        for enc in ("utf-32-le", "utf-32-be"):
-            try:
-                data.decode(enc)
-                return enc
-            except UnicodeDecodeError:
-                pass
+        # 的 4 字节组几乎必然拼出超平面码点（> 0x10FFFF）而解码失败。
+        # 只探头部（按 4 字节对齐），既省掉整本解码，也不会因文件尾部截断
+        # 把真 UTF-32 判回 UTF-16
+        probe = head[:len(head) - len(head) % 4]
+        if len(probe) >= 4:
+            for enc in ("utf-32-le", "utf-32-be"):
+                try:
+                    probe.decode(enc)
+                    return enc
+                except UnicodeDecodeError:
+                    pass
         even = head[0::2].count(b"\x00")
         odd = head[1::2].count(b"\x00")
         return "utf-16-be" if even > odd else "utf-16-le"
