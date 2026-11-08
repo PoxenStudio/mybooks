@@ -1,9 +1,32 @@
 # Mimo TTS 有声书工具
 
 > 工具 ID：`mimo_tts`
-> 版本：0.4.0
-> 功能：将 EPUB 电子书转换为有声书（TTS），支持 MiMo 与 OpenAI 兼容 API
+> 版本：0.4.1
+> 功能：将 EPUB / TXT 电子书转换为有声书（TTS），支持 MiMo 与 OpenAI 兼容 API
 > 使用：书库 → 工具箱 → Mimo TTS → 选择书籍、配置 API 与音色 → 开始转换 → `/audio/{book_id}` 播放
+
+---
+
+## 〇、0.4.1 变更
+
+### 1. 修复「未从 EPUB 中提取到任何章节内容」
+- 原实现只按 TOC 取章节，且 TOC 兜底扫描仅在 TOC 为空时触发：TOC 只登记
+  纯图片扉页（calibre 转换无标题层级书的常见产物）而正文文档不在 TOC 里时，
+  唯一章节被空文本过滤 → 报错
+- 现改为：TOC 提取的章节**全部无正文文本**时，兜底扫描全部内容文档
+  （跳过 nav/toc 导航页），正文不再丢失
+- TOC href 与 manifest href 在百分号编码 / 目录前缀上不一致时逐级放宽匹配
+  （精确 → URL 解码 → 唯一文件名），避免章节文本静默置空
+
+### 2. 新增 TXT 支持
+- 格式选择沿用 chinese_converter 惯例：优先 EPUB，无 EPUB 时回退 TXT
+- TXT 编码自动探测（复用 `chinese_converter.epub_converter.detect_encoding`：
+  UTF-16/32 BOM 与无 BOM → UTF-8 → GB18030 / BIG5 择优）
+- 按「第X章/节/卷/回/部/篇/集、Chapter N、序章/楔子/引子/尾声/终章/后记/番外」
+  行首标题切章（标题行 ≤60 字符防长句误切）；识别不到标题时整本单章；
+  首个标题前 ≥100 字符的开头段保留为「开头」一章
+- 章节提取逻辑抽到 `mimo_tts_lib.py`（webserver-free 纯逻辑库，可独立测试，
+  同 `epub_split_lib` / `epub_merge_lib` 惯例），新增 `tests/test_mimo_tts_lib.py`
 
 ---
 

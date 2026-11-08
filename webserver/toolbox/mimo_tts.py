@@ -10,15 +10,13 @@ import traceback
 from pathlib import Path
 from typing import Optional
 
-import ebooklib
 import requests
-from bs4 import BeautifulSoup
-from ebooklib import epub
 
 from webserver.handlers.audio import AudioBooksCache
 from webserver.i18n import _
 from webserver.services import AsyncService
 from webserver.services.background_service import BackgroundService, BackgroundTask
+from webserver.toolbox import mimo_tts_lib
 from webserver.toolbox.base_tool import BaseTool
 
 DEFAULT_AUDIO_OUTPUT_FOLDER = "/data/books/audios/"
@@ -72,8 +70,8 @@ class MimoTTSTool(BaseTool):
         return {
             "tool_id": "mimo_tts",
             "name": "Mimo-TTS有声书",
-            "description": "通过 TTS API（支持 MiMo TTS / OpenAI TTS 格式）将 EPUB 书籍合成为有声书（WAV格式），目前仅支持 EPUB 格式，生成后可在线播放",
-            "revision": "0.4.0",
+            "description": "通过 TTS API（支持 MiMo TTS / OpenAI TTS 格式）将 EPUB / TXT 书籍合成为有声书（WAV格式），生成后可在线播放",
+            "revision": "0.4.1",
             "author": "黏菌",
             "publish_date": "2026-07-21",
         }
@@ -188,65 +186,12 @@ class MimoTTSTool(BaseTool):
         except Exception as e:
             return False, str(e)
 
-    # ── EPUB parsing ────────────────────────────────────────────
+    # ── EPUB / TXT parsing ──────────────────────────────────────
 
     @staticmethod
     def _extract_chapters(epub_path: str) -> list[dict]:
-        book = epub.read_epub(epub_path)
-        spine_items = {}
-        for item in book.get_items():
-            if item.get_type() == ebooklib.ITEM_DOCUMENT:
-                spine_items[item.get_name()] = item
-
-        chapters = []
-        seen = set()
-        def resolve_toc(toc_items, depth=0):
-            for entry in toc_items:
-                if isinstance(entry, tuple):
-                    link, sub = entry
-                    if hasattr(link, 'href') and link.href:
-                        href = link.href.split('#')[0]
-                        title = link.title or ""
-                        if href not in seen:
-                            seen.add(href)
-                            chapters.append({"title": title, "href": href})
-                        if sub:
-                            resolve_toc(sub, depth + 1)
-                elif hasattr(entry, 'href') and entry.href:
-                    href = entry.href.split('#')[0]
-                    title = getattr(entry, 'title', '') or ''
-                    if href not in seen:
-                        seen.add(href)
-                        chapters.append({"title": title, "href": href})
-
-        resolve_toc(book.toc)
-
-        if not chapters:
-            for item in book.get_items():
-                if item.get_type() == ebooklib.ITEM_DOCUMENT:
-                    name = item.get_name()
-                    # 跳过导航文件
-                    if name and not name.lower().startswith('nav') and not name.lower().startswith('toc'):
-                        title = Path(name).stem
-                        chapters.append({"title": title, "href": name})
-
-        for ch in chapters:
-            href = ch["href"]
-            item = spine_items.get(href)
-            if item:
-                content = item.get_content()
-                if isinstance(content, bytes):
-                    content = content.decode('utf-8', errors='ignore')
-                soup = BeautifulSoup(content, "html.parser")
-                for tag in soup(["script", "style", "nav"]):
-                    tag.decompose()
-                text = soup.get_text(separator="\n")
-                lines = [line.strip() for line in text.splitlines() if line.strip()]
-                ch["text"] = "\n".join(lines)
-            else:
-                ch["text"] = ""
-
-        return chapters
+        # 提取逻辑已抽到 mimo_tts_lib（webserver-free，可独立测试）
+        return mimo_tts_lib.extract_epub_chapters(epub_path)
 
     # ── Text splitting ──────────────────────────────────────────
 
@@ -517,21 +462,26 @@ class MimoTTSTool(BaseTool):
             book = books[0]
             book_title = book.get("title", "Unknown")
             fmts = [f.upper() for f in (book.get("available_formats") or [])]
-            if "EPUB" not in fmts:
-                raise RuntimeError(_("该书籍没有 EPUB 格式，无法转换"))
+            fmt = next((f for f in ("EPUB", "TXT") if f in fmts), None)
+            if fmt is None:
+                raise RuntimeError(_("该书籍没有 EPUB / TXT 格式，无法转换"))
 
-            epub_path = self.api.calibre.format_abspath(book_id, "EPUB")
-            if not epub_path or not os.path.exists(epub_path):
-                raise RuntimeError(_("找不到 EPUB 文件"))
+            src_path = self.api.calibre.format_abspath(book_id, fmt)
+            if not src_path or not os.path.exists(src_path):
+                raise RuntimeError(_("找不到 %s 文件，可能已被移除") % fmt)
+            logging.info("[MimoTTSTool] Converting book_id=%d fmt=%s", book_id, fmt)
 
             self.update_task_progress(task_id, 5, {"status": "running", "stage": "parsing"})
 
-            chapters = self._extract_chapters(epub_path)
+            if fmt == "EPUB":
+                chapters = mimo_tts_lib.extract_epub_chapters(src_path)
+            else:
+                chapters = mimo_tts_lib.extract_txt_chapters(src_path)
             chapters = [ch for ch in chapters if ch.get("text", "").strip()]
             total_chapters = len(chapters)
 
             if total_chapters == 0:
-                raise RuntimeError(_("未从 EPUB 中提取到任何章节内容"))
+                raise RuntimeError(_("未从书籍中提取到任何章节内容"))
 
             audio_output_folder = self.api.settings.get("audio_output_folder", DEFAULT_AUDIO_OUTPUT_FOLDER)
             output_dir = os.path.join(audio_output_folder, str(book_id))
@@ -636,11 +586,14 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) != 2:
-        print("Usage: python -m webserver.toolbox.mimo_tts <epub_path>")
+        print("Usage: python -m webserver.toolbox.mimo_tts <epub_or_txt_path>")
         sys.exit(1)
 
-    epub_path = sys.argv[1]
-    chapters = MimoTTSTool._extract_chapters(epub_path)
-    print(f"Extracted {len(chapters)} chapters from {epub_path}")
+    src_path = sys.argv[1]
+    if src_path.lower().endswith(".txt"):
+        chapters = mimo_tts_lib.extract_txt_chapters(src_path)
+    else:
+        chapters = mimo_tts_lib.extract_epub_chapters(src_path)
+    print(f"Extracted {len(chapters)} chapters from {src_path}")
     for i, ch in enumerate(chapters):
-        print(f"[{i}] {ch['title']!r} ({len(ch['text'])} chars) href={ch['href']}")
+        print(f"[{i}] {ch['title']!r} ({len(ch['text'])} chars)")
