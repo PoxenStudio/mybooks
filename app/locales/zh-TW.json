@@ -2230,7 +2230,7 @@
   "mimoTts": {
     "title": "Mimo-TTS 有聲書",
     "close": "關閉",
-    "hint": "透過 TTS API 將書籍合成為有聲書（WAV格式），支援 MiMo Chat / OpenAI TTS 等相容介面。目前僅支援 EPUB 格式，生成後可在書籍詳情頁線上播放。",
+    "hint": "透過 TTS API 將書籍合成為有聲書（WAV格式），支援 MiMo Chat / OpenAI TTS 等相容介面。支援 EPUB / TXT 格式，生成後可在書籍詳情頁線上播放。",
     "selectBook": "選擇書籍",
     "apiType": "API 類型",
     "apiTypeChat": "MiMo TTS",
