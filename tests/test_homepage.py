@@ -167,5 +167,72 @@ class TestGetHomepageConfig(unittest.TestCase):
         self.assertIn(r"/api/index/social", paths)
 
 
+class TestLegacyHomeIds(unittest.TestCase):
+    """legacy 选书对 avoid_ids 的避让语义与条数补齐（换一批把屏幕上的书传进 exclude）。
+
+    纯函数测试：_legacy_home_ids 不用 self，传 None 调用。"""
+
+    def pick(self, ids, cnt_random, cnt_recent, avoid=frozenset()):
+        from webserver.handlers import book as book_module
+
+        return book_module.Index._legacy_home_ids(None, ids, cnt_random, cnt_recent, avoid)
+
+    def test_avoids_shown_ids(self):
+        ids = list(range(1, 41))
+        avoid = frozenset(range(1, 21))
+        random_ids, new_ids = self.pick(ids, 12, 12, avoid)
+        self.assertFalse(set(random_ids) & avoid)
+        self.assertFalse(set(new_ids) & avoid)
+        self.assertEqual(len(random_ids), 12)
+        self.assertEqual(len(new_ids), 12)
+
+    def test_fills_count_when_pool_is_partial(self):
+        """池子还有书但不够 cnt：先挑光池子，再从避让集合补齐条数。
+
+        回归：只 sample 池子（min(cnt, len(pool)) 不补）会让「换一批」把
+        随便看看越换越短——20 本库首屏 8 张、刷新后 3 张。"""
+        ids = list(range(1, 21))
+        avoid = frozenset(range(1, 13))  # 剩 8 本没在屏幕上
+        pool = set(ids) - avoid
+        random_ids, new_ids = self.pick(ids, 12, 12, avoid)
+        for picked in (random_ids, new_ids):
+            self.assertEqual(len(picked), 12)
+            self.assertTrue(set(picked) <= set(ids))
+            # 避让后的池子必须被用完，重复只允许出现在补齐的那部分
+            self.assertTrue(pool <= set(picked), picked)
+
+    def test_falls_back_when_pool_too_small(self):
+        ids = list(range(1, 41))
+        # 全部排除：宁可重复也不开天窗
+        random_ids, new_ids = self.pick(ids, 12, 12, frozenset(ids))
+        self.assertEqual(len(random_ids), 12)
+        self.assertEqual(len(new_ids), 12)
+        self.assertTrue(set(random_ids) <= set(ids))
+        self.assertTrue(set(new_ids) <= set(ids))
+
+    def test_new_ids_stay_in_newest_window(self):
+        """补足只从「全库最新 600 本」里取，不会把 600 窗口外的老书当新书推。
+
+        补 40 本是为了让断言确定：若放开窗口，40 本全落在窗口内的概率可忽略。"""
+        ids = list(range(1, 1001))
+        avoid = frozenset(range(1, 981))  # 池子只剩 981..1000
+        random_ids, new_ids = self.pick(ids, 12, 60, avoid)
+        self.assertEqual((len(random_ids), len(new_ids)), (12, 60))
+        self.assertGreaterEqual(min(new_ids), 401, new_ids)  # 全库 top-600 的下界
+
+    def test_count_is_independent_of_avoid_set(self):
+        """条数只由书库大小决定，不随 exclude 缩水（0..全部 都扫一遍）。"""
+        for size in (3, 12, 20, 24, 40):
+            ids = list(range(1, size + 1))
+            expected = min(12, size)
+            for avoid_size in range(0, size + 1, 4):
+                avoid = frozenset(range(1, avoid_size + 1))
+                random_ids, new_ids = self.pick(ids, 12, 12, avoid)
+                self.assertEqual(
+                    (len(random_ids), len(new_ids)), (expected, expected),
+                    "size=%d avoid=%d" % (size, avoid_size),
+                )
+
+
 if __name__ == "__main__":
     unittest.main()

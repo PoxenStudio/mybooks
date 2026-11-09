@@ -129,10 +129,30 @@ class Index(BaseHandler):
             result.append(book_data)
         return result
 
-    def _legacy_home_ids(self, ids, cnt_random, cnt_recent):
-        random_ids = random.sample(ids, min(cnt_random, len(ids)))
-        ids = sorted(ids, reverse=True)
-        new_ids = random.sample(ids[0:600], min(cnt_recent, len(ids[0:600])))
+    def _legacy_home_ids(self, ids, cnt_random, cnt_recent, avoid_ids=frozenset()):
+        """avoid_ids：屏幕上已有的书（换一批的 exclude、其它区块已显示的书），尽量避开。
+
+        先把避让后的池子用完，选不满再从全量里补——宁可重复也不开天窗，
+        条数与不避让时一致（和推荐引擎 _pick_avoiding 同款语义：avoiding → excluding）。
+        池子小就少给卡会让「换一批」把书架越换越短，小书库上尤其明显。"""
+
+        def pick(pool, cnt, fallback_ids):
+            """先挑光 pool；不够时从 fallback_ids() 里补到 cnt（宁可重复也不开天窗）。
+
+            fallback 传函数是为了懒计算：全量排序在大书库上不便宜，只在真要补时才排。"""
+            picked = random.sample(pool, min(cnt, len(pool)))
+            if len(picked) < cnt:
+                taken = set(picked)
+                rest = [i for i in fallback_ids() if i not in taken]
+                picked += random.sample(rest, min(cnt - len(picked), len(rest)))
+            return picked
+
+        pool = [i for i in ids if i not in avoid_ids]
+        random_ids = pick(pool, cnt_random, lambda: ids)
+        # 新书区沿用旧窗口：先从避让后池子里最新 600 本挑，不够时退到全库最新
+        # 600 本补足（旧实现的兜底窗口），两处都不会把很旧的书当新书推
+        fresh = sorted(pool, reverse=True)[0:600]
+        new_ids = pick(fresh, cnt_recent, lambda: sorted(ids, reverse=True)[0:600])
         return sorted(random_ids, reverse=True), sorted(new_ids, reverse=True)
 
     def _stable_home(self):
@@ -287,7 +307,7 @@ class IndexSection(Index):
         reader_id = self.user_id() or None
         seed = self._home_seed(reader_id)
         home_ids = self._recommend_home_ids(cnt_random, cnt_recent, [], seed, reader_id)
-        random_ids, new_ids, reasons = home_ids or (*self._legacy_home_ids(ids, cnt_random, cnt_recent), {})
+        random_ids, new_ids, reasons = home_ids or (*self._legacy_home_ids(ids, cnt_random, cnt_recent, self._shown_ids()), {})
         t_home = time.perf_counter()
 
         if section == "random":

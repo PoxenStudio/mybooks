@@ -184,7 +184,7 @@
                 storage-key="index.randomRecommendation"
             >
                 <template #header-extra>
-                    <v-icon color="primary" class="ml-1 refresh-icon" :class="{ 'refresh-icon--spinning': refreshing.random }" @click="refreshBooks('random')">mdi-refresh</v-icon>
+                    <v-icon color="primary" class="ml-1 refresh-icon" :class="{ 'refresh-icon--spinning': refreshing.random || pendingRefresh.random }" @click="refreshBooks('random')">mdi-refresh</v-icon>
                 </template>
                 <v-row>
                     <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="(book,idx) in get_random_books" :key="'rec'+idx+book.id" class="book-card" :style="{ '--i': idx }">
@@ -219,7 +219,7 @@
                 storage-key="index.newRecommendation"
             >
                 <template #header-extra>
-                    <v-icon color="primary" class="ml-1 refresh-icon" :class="{ 'refresh-icon--spinning': refreshing.new }" @click="refreshBooks('new')">mdi-refresh</v-icon>
+                    <v-icon color="primary" class="ml-1 refresh-icon" :class="{ 'refresh-icon--spinning': refreshing.new || pendingRefresh.new }" @click="refreshBooks('new')">mdi-refresh</v-icon>
                 </template>
                 <v-row v-if="get_recent_books.length > 0">
                     <v-col cols="12">
@@ -600,6 +600,18 @@ export default {
             if (this.refreshing[section]) {
                 return;
             }
+            // 初始加载还没落地时不接单：它挂载后才发的响应会把刷新结果盖回去
+            if (this.homeBooksLoading) {
+                return;
+            }
+            // 跨区块串行：两个刷新同时发出去会带同一份 exclude，换出来的书
+            // 可能在两个区块重复出现；先排队，等在途的落地，新请求的 exclude
+            // 就能把刚换出来的书也算上。排队态图标也转（模板里认 pendingRefresh），
+            // 否则点了没反应，用户会以为点击丢了
+            if (this.refreshing.random || this.refreshing.new) {
+                this.$set(this.pendingRefresh, section, true);
+                return;
+            }
             this.$set(this.refreshing, section, true);
             // 旧书先依次抽出（phase=out），数据回来后再依次弹回（phase=in）。
             // 两段都只靠 data-phase 驱动，不依赖 v-if 重挂载，所以书没变时也不会闪
@@ -607,26 +619,58 @@ export default {
             const shown = this.random_books.concat(this.new_books).map(b => b.id);
             // 退场动画总时长（末张卡片 24ms x 11 + 300ms ≈ 564ms）内不切数据，
             // 否则接口快于动画时卡片会在半途被换掉，退场只播了一半
-            const minExit = new Promise(resolve => setTimeout(resolve, 580));
-            const request = this.$backend('/index?refresh=1&exclude=' + shown.join(','));
-            Promise.all([request, minExit]).then( ([rsp]) => {
+            let exitTimer = null;
+            const minExit = new Promise(resolve => { exitTimer = setTimeout(resolve, 580); });
+            // 书籍列表在拆分后的区块接口上（/index 只返回布局配置）：refresh=1 绕过
+            // LITE 缓存并换取新随机种子，exclude 让下一批尽量避开屏幕上的书
+            const request = this.$backend(`/index/${section}?refresh=1&exclude=${shown.join(',')}`);
+            // 死线：$backend 没有超时，请求挂起时退场动画已把书藏住，必须有兜底
+            // 把卡片还回来，不能让转圈无限进行。race 只认先到的结局，死线触发后
+            // 迟到的响应整个被丢弃，不会在几秒后突然把书换掉
+            let deadlineTimer = null;
+            const deadline = new Promise((_, reject) => {
+                deadlineTimer = setTimeout(() => reject(new Error('refresh deadline')), 15000);
+            });
+            Promise.race([Promise.all([request, minExit]), deadline]).then( ([rsp]) => {
+                // 失败路径也用 'in' 而不是 null：out 是 forwards，580ms 时卡片已经
+                // opacity:0，直接撤掉 data-phase 会让它们从 0 硬跳到 1；走一遍回场
+                // 动画才是「把书还回来」该有的观感
                 if (!rsp || rsp.err !== 'ok') {
-                    this.$set(this.refreshPhase, section, null);
+                    this.$set(this.refreshPhase, section, 'in');
+                    return;
+                }
+                const books = (section === 'new' ? rsp.new_books : rsp.random_books) || [];
+                // 换不出书（极小书库全被排除等）：保留旧数组、让卡片回场，
+                // 否则空数组会把整个区块卡的 v-if 打掉，卡片直接消失
+                if (books.length === 0) {
+                    this.$set(this.refreshPhase, section, 'in');
                     return;
                 }
                 // 切阶段与换数组放在同一 tick：新卡片一挂载就处在入场动画里，
                 // 不会再叠加一次常规进场（home-cover-in）
                 this.$set(this.refreshPhase, section, 'in');
                 if (section === 'new') {
-                    this.new_books = rsp.new_books || [];
+                    this.new_books = books;
                 } else {
-                    this.random_books = rsp.random_books || [];
+                    this.random_books = books;
                 }
             }).catch( error => {
                 console.error('Failed to refresh books:', error);
-                this.$set(this.refreshPhase, section, null);
+                this.$set(this.refreshPhase, section, 'in');
             }).finally( () => {
+                // 结局已定，两个定时器都没用了：不清的话死线会在成功 15s 后
+                // 空 reject 一次（被 race 吞掉，但计时器白挂）
+                clearTimeout(exitTimer);
+                clearTimeout(deadlineTimer);
                 this.$set(this.refreshing, section, false);
+                // 落地后放行排队的下一棒。这里会重新过一遍守卫——目前唯一可能拦住
+                // 它的是 homeBooksLoading（初始加载只在 mounted 跑一次，和刷新起跑
+                // 条件互斥，实际到不了），真发生则这一棒被丢弃，不会卡住队列
+                const next = ['new', 'random'].find(s => this.pendingRefresh[s]);
+                if (next) {
+                    this.$set(this.pendingRefresh, next, false);
+                    this.refreshBooks(next);
+                }
             });
         },
         // 统计条读数：滚动中读 statsDisplay，结束后交回 stats
@@ -815,6 +859,8 @@ export default {
         refreshing: { random: false, new: false },
         // 「换一批」的两段过渡阶段：out=旧书抽出中，in=新书弹回中，null=静止
         refreshPhase: { random: null, new: null },
+        // 跨区块刷新排队：另一区块刷新在途时先记下意图，等它落地再发起
+        pendingRefresh: { random: false, new: false },
         // 统计数字滚动期间的显示值；null 表示直接用 stats（computed）
         statsDisplay: null,
         readingStatsHasData: false,
