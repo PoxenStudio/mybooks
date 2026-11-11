@@ -3916,7 +3916,8 @@ class BookRead(BaseHandler):
                 myreader_format = "fb2"
             if myreader_format:
                 return self.redirect(
-                    "/readerx/open?bookId=%s&format=%s" % (book_id, myreader_format)
+                    "/readerx/open?bookId=%s&format=%s&title=%s"
+                    % (book_id, myreader_format, urllib.parse.quote_plus(book.get("title") or ""))
                 )
             # Fallback to the original reading logic if MyReader is not used or the format is not supported
             book_reader = "epubjs.html"
@@ -3995,7 +3996,10 @@ class BookRead(BaseHandler):
         """跳转到 PDF 阅读器：PDF_READER 为 MyReader 时走内嵌阅读器，
         否则使用 PDF_VIEWER 指定的兼容阅读器（默认 pdf.js）。"""
         if CONF.get("PDF_READER", "MyReader") == "MyReader":
-            return self.redirect("/readerx/open?bookId=%s&format=pdf" % book["id"])
+            return self.redirect(
+                "/readerx/open?bookId=%s&format=pdf&title=%s"
+                % (book["id"], urllib.parse.quote_plus(book.get("title") or ""))
+            )
 
         if self.current_user and not self.current_user.can_save():
             raise web.HTTPError(403, reason=_("无权在线阅读PDF类书籍"))

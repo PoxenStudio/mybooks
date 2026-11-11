@@ -636,7 +636,12 @@ class TestBook(TestWithUserLogin):
         with self._mock_djvu_only_book("cbz"), mock.patch.dict(webserver.handlers.book.CONF, {"EPUB_VIEWER": "MyReader"}):
             rsp = self.fetch("/read/%s?format=cbz" % BID_PDF, follow_redirects=False)
             self.assertEqual(rsp.code, 302)
-            self.assertEqual(rsp.headers["Location"], "/readerx/open?bookId=%s&format=cbz" % BID_PDF)
+            location = rsp.headers["Location"]
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(location).query)
+            self.assertEqual(urllib.parse.urlsplit(location).path, "/readerx/open")
+            self.assertEqual(query["bookId"], [str(BID_PDF)])
+            self.assertEqual(query["format"], ["cbz"])
+            self.assertIn("title", query)
             d = self.json("/api/book/%s/read" % BID_PDF, method="POST", body=json.dumps({"format": "cbz"}))
             self.assertEqual(d["err"], "ok")
             self.assertEqual(d["data"]["status"], "ready")
