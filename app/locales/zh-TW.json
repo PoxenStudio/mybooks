@@ -1082,6 +1082,8 @@
     "default_language": "預設語言",
     "enable_txt_to_txtz_plugin": "啟用 TXT 轉 TXTZ 外掛（將 TXT 格式的書籍轉換為 TXTZ 格式，TXTZ 為內部格式，啟用後匯入 TXT 耗時較長）",
     "epub_viewer": "閱讀器",
+    "pdf_viewer": "PDF閱讀器",
+    "pdf_viewer_default": "PDF.js （兼容性好，但不支持閱讀數據同步）",
     "epubjs": "EPUB Reader（純本地，簡潔清爽）",
     "myreader": "MyReader (完整功能，多端數據同步，推荐)",
     "avatar_service": "可使用 www.gravatar.com 或 cravatar.cn 大頭貼服務",

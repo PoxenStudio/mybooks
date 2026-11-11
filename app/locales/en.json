@@ -798,6 +798,8 @@
     "default_language": "Default Language",
     "enable_txt_to_txtz_plugin": "Enable TXT to TXTZ plugin (converts TXT format books to TXTZ format, TXTZ is an internal format, enabling this will make importing TXT take longer)",
     "epub_viewer": "EPUB Viewer",
+    "pdf_viewer": "PDF Viewer",
+    "pdf_viewer_default": "PDF.js (High Compatibility, Does Not Support Data Synchronization)",
     "epubjs": "Epub Reader (Old Version)",
     "myreader": "MyReader (Full functions, directly synchronize data in MyBooks, recommended)",
     "avatar_service": "Avatar service available at www.gravatar.com or cravatar.cn",

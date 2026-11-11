@@ -195,6 +195,8 @@ settings = {
     "READER_DICT_MYBOOKS_ENABLED": True,
     "READER_DICT_BAIKE_ENABLED": True,
     "READER_MYDICTS": [],
+    # PDF 阅读器：MyReader=内嵌阅读器，取其它值（如 default）则使用 PDF_VIEWER
+    "PDF_READER": "MyReader",
     "PDF_VIEWER": "/static/pdfjs/web/viewer.html?file=%(pdf_url)s",
     "DJVU_VIEWER": "/static/djvureader/index.html?file=%(djvu_url)s&name=%(name)s",
     "ENABLE_PODCAST_SERVICE": False,

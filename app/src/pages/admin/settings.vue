@@ -269,6 +269,7 @@
                 :items="f.items"
                 :key="f.key + '-select'"
                 :label="$t(f.label)"
+                @change="onSelectChange(f, $event)"
               >
                 <template v-if="f.icon" v-slot:prepend>
                   <v-icon :color="f.color">{{ f.icon }}</v-icon>
@@ -1223,6 +1224,9 @@ const LEGACY_TIMEZONE_VALUES = {
   "Asia/Seoul": "Asia/Tokyo",
 };
 
+// PDF 阅读器选择值：「默认」使用 PDF_VIEWER 配置的兼容阅读器
+const PDF_READER_DEFAULT = "default";
+
 const LITE_GROUPS = [
   "LITE_GROUP_LISTING",
   "LITE_GROUP_RECOMMEND",
@@ -1346,7 +1350,7 @@ const SEARCH_ALIASES = {
     分类: ["BOOK_NAV", "IMPORT_CATEGORY_WITH_FOLDER", "ENABLE_FOLDER_BROWSE", "AI_ALLOW_SET_CATEGORY"], 导航: ["BOOK_NAV"], 标签: ["BOOK_NAV"],
     分类导航: ["BOOK_NAV"], 分类管理: ["BOOK_NAV"], 分类树: ["BOOK_NAV"],
     // 阅读与内容 · 阅读器与同步
-    阅读器: ["EPUB_VIEWER", "DEVICES"], epub: ["EPUB_VIEWER"], epubjs: ["EPUB_VIEWER"], myreader: ["EPUB_VIEWER", "ENABLE_DATA_SYNC"],
+    阅读器: ["EPUB_VIEWER", "PDF_READER", "DEVICES"], epub: ["EPUB_VIEWER"], epubjs: ["EPUB_VIEWER"], myreader: ["EPUB_VIEWER", "PDF_READER", "ENABLE_DATA_SYNC"],
     阅读引擎: ["EPUB_VIEWER"],
     同步: ["ENABLE_DATA_SYNC", "ENABLE_WEBDAV_SERVICE", "WEBDAV_SYNC_FOLDER"], 进度: ["ENABLE_DATA_SYNC"], 阅读数据: ["ENABLE_DATA_SYNC"], 跨设备: ["ENABLE_DATA_SYNC", "DEVICES"],
     封面: ["USE_DYNAMIC_COVER", "ENABLE_STAMP_FEATURE", "THUMB_CACHE"], 动态封面: ["USE_DYNAMIC_COVER"], 书封: ["USE_DYNAMIC_COVER"],
@@ -1402,7 +1406,7 @@ const SEARCH_ALIASES = {
     源文件: ["KEEP_UPLOAD_SOURCE_FILE", "REMOVE_IMPORTED_FILE"], 保留: ["KEEP_UPLOAD_SOURCE_FILE"], 临时文件: ["KEEP_UPLOAD_SOURCE_FILE", "REMOVE_IMPORTED_FILE"], 暂存文件: ["KEEP_UPLOAD_SOURCE_FILE"],
     删除源文件: ["REMOVE_IMPORTED_FILE"], 导入后删除: ["REMOVE_IMPORTED_FILE"],
     // 导入与存储 · 导入规则
-    pdf: ["PDF_TILE_WITH_FILE_NAME"], 文件名: ["PDF_TILE_WITH_FILE_NAME", "BOOK_NAMES_FORMAT"], 书名: ["PDF_TILE_WITH_FILE_NAME"],
+    pdf: ["PDF_TILE_WITH_FILE_NAME", "PDF_READER"], 文件名: ["PDF_TILE_WITH_FILE_NAME", "BOOK_NAMES_FORMAT"], 书名: ["PDF_TILE_WITH_FILE_NAME"],
     txt: ["ENABLE_TXT_TO_TXTZ_PLUGIN"], txtz: ["ENABLE_TXT_TO_TXTZ_PLUGIN"], 转换: ["ENABLE_TXT_TO_TXTZ_PLUGIN", "convert_timeout", "ENABLE_BOOKS_TYPE_CONVERT_DIRECT"],
     服务端: ["ENABLE_SERVER_FILE_IMPORT"], 目录浏览: ["ENABLE_SERVER_FILE_IMPORT"], 服务器导入: ["ENABLE_SERVER_FILE_IMPORT"],
     isbn: ["BATCH_ADD_IN_FORCE"], 强制: ["BATCH_ADD_IN_FORCE"], 无效: ["BATCH_ADD_IN_FORCE"], 强制添加: ["BATCH_ADD_IN_FORCE"],
@@ -1497,7 +1501,7 @@ const SEARCH_ALIASES = {
     分類: ["BOOK_NAV", "IMPORT_CATEGORY_WITH_FOLDER", "ENABLE_FOLDER_BROWSE", "AI_ALLOW_SET_CATEGORY"], 導覽: ["BOOK_NAV"], 標籤: ["BOOK_NAV"],
     分類導覽: ["BOOK_NAV"], 分類管理: ["BOOK_NAV"], 分類樹: ["BOOK_NAV"],
     // 閱讀與內容 · 閱讀器與同步
-    閱讀器: ["EPUB_VIEWER", "DEVICES"], epub: ["EPUB_VIEWER"], epubjs: ["EPUB_VIEWER"], myreader: ["EPUB_VIEWER", "ENABLE_DATA_SYNC"], 閱讀引擎: ["EPUB_VIEWER"],
+    閱讀器: ["EPUB_VIEWER", "PDF_READER", "DEVICES"], epub: ["EPUB_VIEWER"], epubjs: ["EPUB_VIEWER"], myreader: ["EPUB_VIEWER", "PDF_READER", "ENABLE_DATA_SYNC"], 閱讀引擎: ["EPUB_VIEWER"],
     同步: ["ENABLE_DATA_SYNC", "ENABLE_WEBDAV_SERVICE", "WEBDAV_SYNC_FOLDER"], 進度: ["ENABLE_DATA_SYNC"], 閱讀資料: ["ENABLE_DATA_SYNC"], 跨裝置: ["ENABLE_DATA_SYNC", "DEVICES"],
     封面: ["USE_DYNAMIC_COVER", "ENABLE_STAMP_FEATURE", "THUMB_CACHE"], 動態封面: ["USE_DYNAMIC_COVER"], 書封: ["USE_DYNAMIC_COVER"],
     作者: ["ENABLE_AUTHOR_INFO"], 簡介: ["ENABLE_AUTHOR_INFO"], 頭像: ["ENABLE_AUTHOR_INFO"], 作者資訊: ["ENABLE_AUTHOR_INFO"],
@@ -1552,7 +1556,7 @@ const SEARCH_ALIASES = {
     來源檔案: ["KEEP_UPLOAD_SOURCE_FILE", "REMOVE_IMPORTED_FILE"], 保留: ["KEEP_UPLOAD_SOURCE_FILE"], 暫存檔案: ["KEEP_UPLOAD_SOURCE_FILE"], 原始檔: ["KEEP_UPLOAD_SOURCE_FILE", "REMOVE_IMPORTED_FILE"],
     刪除原始檔: ["REMOVE_IMPORTED_FILE"], 匯入後刪除: ["REMOVE_IMPORTED_FILE"],
     // 匯入與儲存 · 匯入規則
-    pdf: ["PDF_TILE_WITH_FILE_NAME"], 檔名: ["PDF_TILE_WITH_FILE_NAME", "BOOK_NAMES_FORMAT"], 書名: ["PDF_TILE_WITH_FILE_NAME"],
+    pdf: ["PDF_TILE_WITH_FILE_NAME", "PDF_READER"], 檔名: ["PDF_TILE_WITH_FILE_NAME", "BOOK_NAMES_FORMAT"], 書名: ["PDF_TILE_WITH_FILE_NAME"],
     txt: ["ENABLE_TXT_TO_TXTZ_PLUGIN"], txtz: ["ENABLE_TXT_TO_TXTZ_PLUGIN"], 轉換: ["ENABLE_TXT_TO_TXTZ_PLUGIN", "convert_timeout", "ENABLE_BOOKS_TYPE_CONVERT_DIRECT"],
     伺服器: ["ENABLE_SERVER_FILE_IMPORT", "smtp_server"], 目錄瀏覽: ["ENABLE_SERVER_FILE_IMPORT"], 伺服器匯入: ["ENABLE_SERVER_FILE_IMPORT"],
     isbn: ["BATCH_ADD_IN_FORCE"], 強制: ["BATCH_ADD_IN_FORCE"], 無效: ["BATCH_ADD_IN_FORCE"], 強制加入: ["BATCH_ADD_IN_FORCE"],
@@ -1647,7 +1651,7 @@ const SEARCH_ALIASES = {
     // Site & Appearance · categories
     category: ["BOOK_NAV", "IMPORT_CATEGORY_WITH_FOLDER", "AI_ALLOW_SET_CATEGORY"], categories: ["BOOK_NAV", "IMPORT_CATEGORY_WITH_FOLDER"], categorize: ["AI_ALLOW_SET_CATEGORY"], tag: ["BOOK_NAV"], tags: ["BOOK_NAV"],
     // Reading & Content · reader & sync
-    reader: ["EPUB_VIEWER", "DEVICES"], epub: ["EPUB_VIEWER"], epubjs: ["EPUB_VIEWER"], myreader: ["EPUB_VIEWER", "ENABLE_DATA_SYNC"], viewer: ["EPUB_VIEWER"], engine: ["EPUB_VIEWER"],
+    reader: ["EPUB_VIEWER", "PDF_READER", "DEVICES"], epub: ["EPUB_VIEWER"], epubjs: ["EPUB_VIEWER"], myreader: ["EPUB_VIEWER", "PDF_READER", "ENABLE_DATA_SYNC"], viewer: ["EPUB_VIEWER", "PDF_READER"], engine: ["EPUB_VIEWER"],
     sync: ["ENABLE_DATA_SYNC", "ENABLE_WEBDAV_SERVICE", "WEBDAV_SYNC_FOLDER"], progress: ["ENABLE_DATA_SYNC"], "data sync": ["ENABLE_DATA_SYNC"], "cross device": ["ENABLE_DATA_SYNC", "DEVICES"],
     cover: ["USE_DYNAMIC_COVER", "ENABLE_STAMP_FEATURE", "THUMB_CACHE"], "dynamic cover": ["USE_DYNAMIC_COVER"], "book cover": ["USE_DYNAMIC_COVER"],
     author: ["ENABLE_AUTHOR_INFO"], bio: ["ENABLE_AUTHOR_INFO"], biography: ["ENABLE_AUTHOR_INFO"], avatar: ["ENABLE_AUTHOR_INFO"],
@@ -1692,7 +1696,7 @@ const SEARCH_ALIASES = {
     metadata: ["auto_fill_meta", "META_SELECTED_SOURCES", "DEFAULT_LANGUAGE"], "book info": ["auto_fill_meta", "META_SELECTED_SOURCES"], "source file": ["KEEP_UPLOAD_SOURCE_FILE", "REMOVE_IMPORTED_FILE"], "keep source": ["KEEP_UPLOAD_SOURCE_FILE"], "temp file": ["KEEP_UPLOAD_SOURCE_FILE"], staged: ["KEEP_UPLOAD_SOURCE_FILE"],
     "delete source": ["REMOVE_IMPORTED_FILE"], "remove original": ["REMOVE_IMPORTED_FILE"],
     // Import & Storage · import rules
-    pdf: ["PDF_TILE_WITH_FILE_NAME"], filename: ["PDF_TILE_WITH_FILE_NAME", "BOOK_NAMES_FORMAT"], "file name": ["PDF_TILE_WITH_FILE_NAME", "BOOK_NAMES_FORMAT"],
+    pdf: ["PDF_TILE_WITH_FILE_NAME", "PDF_READER"], filename: ["PDF_TILE_WITH_FILE_NAME", "BOOK_NAMES_FORMAT"], "file name": ["PDF_TILE_WITH_FILE_NAME", "BOOK_NAMES_FORMAT"],
     txt: ["ENABLE_TXT_TO_TXTZ_PLUGIN"], txtz: ["ENABLE_TXT_TO_TXTZ_PLUGIN"], server: ["ENABLE_SERVER_FILE_IMPORT"], "bind directory": ["ENABLE_SERVER_FILE_IMPORT"], "browse server": ["ENABLE_SERVER_FILE_IMPORT"],
     isbn: ["BATCH_ADD_IN_FORCE"], force: ["BATCH_ADD_IN_FORCE"], invalid: ["BATCH_ADD_IN_FORCE"],
     "top folder": ["IMPORT_CATEGORY_WITH_FOLDER"], "first level folder": ["IMPORT_CATEGORY_WITH_FOLDER"], "custom category": ["IMPORT_CATEGORY_WITH_FOLDER"], "folder category": ["IMPORT_CATEGORY_WITH_FOLDER"],
@@ -2073,6 +2077,16 @@ export default {
                 type: "select",
                 items: [
                   { text: this.$t("settings.epubjs"), value: "epubjs.html", icon: "mdi-alpha-e-circle-outline" },
+                  { text: this.$t("settings.myreader"), value: "MyReader", icon: "mdi-water-outline" }
+                ],
+              },
+              {
+                icon: "mdi-file-pdf-box",
+                key: "PDF_READER",
+                label: "settings.pdf_viewer",
+                type: "select",
+                items: [
+                  { text: this.$t("settings.pdf_viewer_default"), value: PDF_READER_DEFAULT, icon: "mdi-file-pdf-box" },
                   { text: this.$t("settings.myreader"), value: "MyReader", icon: "mdi-water-outline" }
                 ],
               },
@@ -2776,6 +2790,10 @@ export default {
           );
         }
         this.ensureTimezoneOptionVisible();
+        // 老配置没有 PDF_READER 时按默认 MyReader 补齐，保证 select 有值且可编辑
+        if (!this.settings["PDF_READER"]) {
+          this.$set(this.settings, "PDF_READER", "MyReader");
+        }
         if (
           !("site_icon" in this.settings) ||
           this.settings["site_icon"] === ""
@@ -3340,6 +3358,13 @@ export default {
     onCheckboxChange(f, value) {
       if (this.isFieldDisabled(f)) return;
       this.$set(this.settings, f.key, value);
+    },
+    onSelectChange(f, value) {
+      this.$set(this.settings, f.key, value);
+      // EPUB 阅读器切到 MyReader 时，PDF 阅读器跟随切换；之后用户仍可单独改回默认
+      if (f.key === "EPUB_VIEWER" && value === "MyReader") {
+        this.$set(this.settings, "PDF_READER", "MyReader");
+      }
     },
     // 模块是否开启。未登记 / 未传 id 一律返回 true（与后端 modules.py 兜底一致），
     // 避免把 module 标签写错成未登记 id 时整块设置凭空消失且再也改不回来。

@@ -3895,18 +3895,21 @@ class BookRead(BaseHandler):
 
         book_reader = CONF.get("EPUB_VIEWER", "MyReader")
 
-        # 用户在设置中选择了 MyReader 作为阅读器时，epub/pdf/cbz/fb2 直接跳转到 MyReader
-        # 的内嵌阅读入口；其余格式（mobi/azw3/txt 等）沿用下面既有的转换+内置阅读器逻辑，
-        # 因为 MyReader 侧目前只支持 epub/pdf/cbz/fb2（见 document/MyReader_Embedded_WebApp.md）。
+        # 用户在设置中选择了 MyReader 作为阅读器时，epub/cbz/fb2 直接跳转到 MyReader
+        # 的内嵌阅读入口；PDF 由独立的 PDF_READER 设置决定（见下方 PDF 分支），
+        # 其余格式（mobi/azw3/txt 等）沿用下面既有的转换+内置阅读器逻辑，
         if book_reader == "MyReader":
             myreader_format = None
             if fmt_arg:
-                if fmt_arg in ("epub", "pdf", "cbz", "fb2") and fpath_arg:
+                if fmt_arg in ("epub", "cbz", "fb2") and fpath_arg:
                     myreader_format = fmt_arg
             elif book.get("fmt_epub"):
                 myreader_format = "epub"
-            elif "fmt_pdf" in book:
-                myreader_format = "pdf"
+            elif book.get("fmt_pdf"):
+                # PDF 是否走 MyReader 由 PDF_READER 决定；不是 MyReader 时不再
+                # 继续匹配 cbz/fb2，交由下方 PDF 分支使用兼容阅读器
+                if CONF.get("PDF_READER", "MyReader") == "MyReader":
+                    myreader_format = "pdf"
             elif "fmt_cbz" in book:
                 myreader_format = "cbz"
             elif "fmt_fb2" in book:
@@ -3923,12 +3926,7 @@ class BookRead(BaseHandler):
                 return self.redirect(f'/book/{book_id}/readtxt')
 
             if fmt_arg == "pdf":
-                if self.current_user and not self.current_user.can_save():
-                    raise web.HTTPError(403, reason=_("无权在线阅读"))
-
-                pdf_url = urllib.parse.quote_plus(self.api_url + "/api/book/%(id)d.pdf" % book)
-                pdf_reader_url = CONF["PDF_VIEWER"] % {"pdf_url": pdf_url}
-                return self.redirect(pdf_reader_url)
+                return self._redirect_pdf_reader(book)
 
             if fmt_arg == "djvu":
                 return self._redirect_djvu_reader(book)
@@ -3981,12 +3979,7 @@ class BookRead(BaseHandler):
                 has_converted_pdf = True
 
         if "fmt_pdf" in book or has_converted_pdf:
-            if self.current_user and not self.current_user.can_save():
-                raise web.HTTPError(403, reason=_("无权在线阅读PDF类书籍"))
-
-            pdf_url = urllib.parse.quote_plus(self.api_url + "/api/book/%(id)d.PDF" % book)
-            pdf_reader_url = CONF["PDF_VIEWER"] % {"pdf_url": pdf_url}
-            return self.redirect(pdf_reader_url)
+            return self._redirect_pdf_reader(book)
 
         if 'fmt_djvu' in book:
             return self._redirect_djvu_reader(book)
@@ -3997,6 +3990,19 @@ class BookRead(BaseHandler):
             return self.redirect(txt_reader_url)
 
         raise web.HTTPError(404, reason=_("抱歉，在线阅读器暂不支持该格式的书籍，可以转为epub或者pdf后阅读"))
+
+    def _redirect_pdf_reader(self, book):
+        """跳转到 PDF 阅读器：PDF_READER 为 MyReader 时走内嵌阅读器，
+        否则使用 PDF_VIEWER 指定的兼容阅读器（默认 pdf.js）。"""
+        if CONF.get("PDF_READER", "MyReader") == "MyReader":
+            return self.redirect("/readerx/open?bookId=%s&format=pdf" % book["id"])
+
+        if self.current_user and not self.current_user.can_save():
+            raise web.HTTPError(403, reason=_("无权在线阅读PDF类书籍"))
+
+        pdf_url = urllib.parse.quote_plus(self.api_url + "/api/book/%(id)d.PDF" % book)
+        pdf_reader_url = CONF["PDF_VIEWER"] % {"pdf_url": pdf_url}
+        return self.redirect(pdf_reader_url)
 
     def _redirect_djvu_reader(self, book):
         """跳转到 DjVu.js 阅读器（与 PDF 一样直接读取原文件，需下载权限）"""

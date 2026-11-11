@@ -1302,8 +1302,8 @@ user.appearance为外观设置（顶栏品牌色、侧栏图标配色、深浅�
   - `id` (path, 必填): 图书ID
   - `format` (string, 可选): 指定阅读格式 `epub`/`pdf`/`mobi`/`azw`/`azw3`/`txt`；不传时按 epub → mobi → azw → azw3 → txt → pdf 优先级选择
 - **响应**：HTML 阅读页面或重定向（非 JSON）：
-  - 阅读器设置为 MyReader 且格式为 epub/pdf → 302 到 `/readerx/open?bookId=<id>&format=<fmt>`
-  - pdf → 302 到 `PDF_VIEWER` 配置的阅读器；txt → 302 到 `/read/txt/<id>`
+  - 阅读器（`EPUB_VIEWER`）设置为 MyReader 且格式为 epub/cbz/fb2 → 302 到 `/readerx/open?bookId=<id>&format=<fmt>`
+  - pdf → `PDF_READER` 为 `MyReader` 时 302 到 `/readerx/open?bookId=<id>&format=pdf`，否则 302 到 `PDF_VIEWER` 配置的兼容阅读器；txt → 302 到 `/read/txt/<id>`
   - 非 epub 的 mobi/azw/azw3/txt 会在后台自动转换为 epub
   - 不支持的格式返回 HTTP 404；无权限返回 HTTP 403
   - 登录用户每次打开会记录一次阅读心跳（分格式阅读统计）

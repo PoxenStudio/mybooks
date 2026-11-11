@@ -565,6 +565,10 @@ class AdminSettings(BaseHandler):
         args.setdefault(
             "OPDS_ALLOW_ANONYMOUS", CONF.get("OPDS_ALLOW_ANONYMOUS", False)
         )
+        args.setdefault(
+            "PDF_READER",
+            CONF.get("PDF_READER", "MyReader"),
+        )
         # 模块开关变化时同步主开关：关闭写安全默认值，开启恢复主功能开关；
         # 只动 MODULE_OFF_SWITCHES / MODULE_ON_SWITCHES 里的键，不碰数据与密钥。
         feature_modules.apply_module_switch_effects(args, CONF)

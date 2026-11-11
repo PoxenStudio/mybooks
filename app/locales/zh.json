@@ -1087,6 +1087,8 @@
     "default_language": "默认语言",
     "enable_txt_to_txtz_plugin": "启用TXT转TXTZ插件（将TXT格式的书籍转换为TXTZ格式，TXTZ为内部格式，启用后导入TXT耗时较长）",
     "epub_viewer": "阅读器",
+    "pdf_viewer": "PDF阅读器",
+    "pdf_viewer_default": "PDF.js （兼容性好，但不支持阅读数据同步）",
     "epubjs": "EPUB Reader（纯本地, 简洁清爽，仅支持EPUB）",
     "myreader": "MyReader (完整功能, 多端数据同步，推荐使用)",
     "avatar_service": "可使用www.gravatar.com或cravatar.cn头像服务",
