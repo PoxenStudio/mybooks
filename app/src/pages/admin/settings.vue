@@ -1214,6 +1214,7 @@ import ModuleSettingsDialog from "~/components/ModuleSettingsDialog.vue";
 import { normalizeHomepageConfig } from "~/utils/homepage";
 import { languageOptions } from "~/utils/languageCodes";
 import { isHexColor, DEFAULT_ACCENT } from "~/utils/appearance";
+import { siteBaseUrl } from "~/utils/siteUrl";
 
 // 已从设置页去掉的旧选项 → 等价选项：+8 的港/台/新加坡合并到北京，+9 的首尔合并到东京，
 // 偏移与夏令时规则完全一致。旧配置在加载时归一化，避免 select 匹配不到选项而显示空白。
@@ -3803,7 +3804,7 @@ export default {
       var msg = `${this.$t("settings.sns_config_message", {
         text: s.text,
         link: s.link,
-        site_url: this.site_url,
+        site_url: siteBaseUrl(this.$store) || this.site_url,
         value: s.value,
       })}`;
       this.$alert("warning", msg);
