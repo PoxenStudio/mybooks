@@ -1046,6 +1046,7 @@ export default {
                 'cover_update': this.$t('appHeader.taskTypeCoverUpdate'),
                 'save_meta': this.$t('appHeader.taskTypeSaveMeta'),
                 'bulk_delete': this.$t('appHeader.taskTypeBulkDelete'),
+                'word_count': this.$t('appHeader.taskTypeWordCount'),
             };
             return typeMap[serviceType] || "";
         },

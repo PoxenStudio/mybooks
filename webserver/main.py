@@ -37,7 +37,7 @@ from webserver.services.resource_service import ResourceService
 from webserver.recommend import CalibreFeatureSource, RecommendConfig, RecommendService, SqlCrowdSource, SqlProfileSource
 from webserver.constants import COLUMN_CATEGORY, COLUMN_FOLDER, COLUMN_PHY_COUNT, COLUMN_BOOK_TYPE, COLUMN_TRANSLATORS
 from webserver.constants import COLUMN_EXT_LINK, CUSTOM_COVER_IMAGE, COLUMN_DYNAMIC_COVER
-from webserver.constants import COLUMN_LOCATION, COLUMN_CATALOG
+from webserver.constants import COLUMN_LOCATION, COLUMN_CATALOG, COLUMN_WORD_COUNT
 from webserver.constants import SOCIAL_AUTH_PIPELINE, SOCIAL_AUTH_INACTIVE_USER_URL
 from webserver.version import VERSION
 
@@ -374,7 +374,8 @@ def make_app():
         _ = add_meta_in_calibre(cache, COLUMN_DYNAMIC_COVER, "Dynamic Cover", "int")
         added_translator = add_meta_in_calibre(cache, COLUMN_TRANSLATORS, "Translator", "text")
         added_catalog = add_meta_in_calibre(cache, COLUMN_CATALOG, "Catalog", "comments")
-        if added_source or added_category or added_phy_count or added_location or added_translator or added_catalog:
+        added_word_count = add_meta_in_calibre(cache, COLUMN_WORD_COUNT, "Word Count", "int")
+        if added_source or added_category or added_phy_count or added_location or added_translator or added_catalog or added_word_count:
             need_sync_item_to_calibre = added_source or added_category or added_phy_count
             book_db = LibraryDatabase(os.path.expanduser(options.with_library))
             cache = book_db.new_api

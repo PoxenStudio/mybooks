@@ -64,6 +64,10 @@ CALIBRE_COLUMN_TRANSLATORS = "#translators"
 COLUMN_CATALOG = "catalog"
 CALIBRE_COLUMN_CATALOG = "#catalog"
 
+# 正文字数（中文字符 + 西文单词），见 webserver/services/word_count.py
+COLUMN_WORD_COUNT = "word_count"
+CALIBRE_COLUMN_WORD_COUNT = "#word_count"
+
 # Audio related constants
 ENABLE_VIP_QUOTA_KEY = "ENABLE_VIP_QUOTA"
 ENABLE_AUDIO_CONVERSION_LOG = "ENABLE_AUDIO_CONVERSION_LOG"
