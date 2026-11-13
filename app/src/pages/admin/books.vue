@@ -64,6 +64,12 @@
                                 </v-list-item-icon>
                                 <v-list-item-title>{{ $t('admin.books.extractCatalog') }}</v-list-item-title>
                             </v-list-item>
+                            <v-list-item @click="showExtractWordCountDialog">
+                                <v-list-item-icon>
+                                    <word-count-icon />
+                                </v-list-item-icon>
+                                <v-list-item-title>{{ $t('admin.books.extractWordCount') }}</v-list-item-title>
+                            </v-list-item>
                             <v-list-item v-if="aiModuleOn" @click="aiFill" :disabled="books_selected.length === 0">
                                 <v-list-item-icon>
                                     <v-icon>mdi-robot</v-icon>
@@ -645,6 +651,26 @@
             </p>
         </AppDialog>
 
+        <!-- 统计字数确认对话框 -->
+        <AppDialog
+            v-model="extract_word_count_dialog"
+            type="confirm"
+            :title="$t('admin.books.reminderTitle')"
+            color="info"
+            width="500"
+            transition="dialog-bottom-transition"
+            :dismiss-label="$t('admin.books.cancel')"
+            :confirm-text="$t('admin.books.execute')"
+            @confirm="extractWordCountBatch"
+        >
+            <p v-if="books_selected.length > 0">
+                {{ $t('admin.books.extractWordCountSelectedConfirm', { count: books_selected.length }) }}
+            </p>
+            <p v-else>
+                {{ $t('admin.books.extractWordCountAllConfirm') }}
+            </p>
+        </AppDialog>
+
         <!-- 清理无效记录确认对话框 -->
         <AppDialog
             v-model="clear_invalid_items_dialog"
@@ -700,9 +726,10 @@
 import { languageOptions } from "~/utils/languageCodes";
 import { toStars, fromStars } from "~/utils/rating";
 import SearchBar from "~/components/SearchBar.vue";
+import WordCountIcon from "~/components/WordCountIcon.vue";
 
 export default {
-    components: { SearchBar },
+    components: { SearchBar, WordCountIcon },
     data: () => ({
         snack: false,
         snackColor: "",
@@ -714,6 +741,7 @@ export default {
         kindle_convert_dialog: false,
         update_title_sort_dialog: false,
         extract_catalog_dialog: false,
+        extract_word_count_dialog: false,
         clear_invalid_items_dialog: false,
         delete_book_dialog: false,
         delete_selected_books_dialog: false,
@@ -1053,6 +1081,10 @@ export default {
             this.extract_catalog_dialog = true;
         },
 
+        showExtractWordCountDialog() {
+            this.extract_word_count_dialog = true;
+        },
+
         showClearInvalidItemsDialog() {
             this.clear_invalid_items_dialog = true;
         },
@@ -1184,6 +1216,32 @@ export default {
             }
 
             this.$backend("/book/catalog/batch", {
+                method: "POST",
+                body: JSON.stringify(body),
+            })
+                .then((rsp) => {
+                    this.handleApiResponse(rsp);
+                    if (rsp.err === "ok") {
+                        this.$alert("success", rsp.msg);
+                    }
+                    this.books_selected = [];
+                    this.getDataFromApi();
+                })
+                .finally(() => {
+                    this.loading = false;
+                });
+        },
+
+        extractWordCountBatch() {
+            this.loading = true;
+            this.extract_word_count_dialog = false;
+
+            const body = {};
+            if (this.books_selected.length > 0) {
+                body.idlist = this.books_selected.map((book) => book.id);
+            }
+
+            this.$backend("/book/word_count/batch", {
                 method: "POST",
                 body: JSON.stringify(body),
             })

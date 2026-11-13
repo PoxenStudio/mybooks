@@ -10,7 +10,7 @@ from webserver.constants import CALIBRE_COLUMN_EXT_LINK, CALIBRE_COLUMN_CATEGORY
 from webserver.constants import CALIBRE_COLUMN_TRANSLATORS
 from webserver.constants import BOOK_TYPE_EBOOK, CALIBRE_COLUMN_DYNAMIC_COVER
 from webserver.constants import CALIBRE_COLUMN_LOCATION, BOOK_TYPE_PHYSICAL
-from webserver.constants import CALIBRE_COLUMN_CATALOG
+from webserver.constants import CALIBRE_COLUMN_CATALOG, CALIBRE_COLUMN_WORD_COUNT
 
 CONF = get_settings()
 
@@ -65,6 +65,7 @@ class SimpleBookFormatter:
         comments = self.val("comments", _("暂无简介")) if include_comments else ""
         translators = self.val(CALIBRE_COLUMN_TRANSLATORS, "")
         catalog = self.val(CALIBRE_COLUMN_CATALOG, "") if include_comments else ""
+        word_count = int(self.val(CALIBRE_COLUMN_WORD_COUNT, 0) or 0)
         if strip_comments and comments:
             comments = comments[:120] + "..." if len(comments) > 120 else comments
         return {
@@ -82,6 +83,7 @@ class SimpleBookFormatter:
             "publisher": self.val("publisher"),
             "comments": comments,
             "catalog": catalog,
+            "word_count": word_count,
             "series": self.val("series", None),
             "series_index": self.val("series_index", None),
             "languages": self.val("languages", None),

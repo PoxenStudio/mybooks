@@ -38,6 +38,7 @@ from webserver.services.autofill import AutoFillService
 from webserver.services.perf_monitor import PerfMonitor
 from webserver.services.ai_fillinfo import AIFillInfoService
 from webserver.services.catalog import CatalogExtractService
+from webserver.services.word_count import WordCountService
 from webserver.services.book_search import BookSearch
 from webserver.services.converter import ConverterService
 from webserver.services.extract import ExtractService, load_txt_content_index
@@ -617,6 +618,56 @@ class BookCatalog(BaseHandler):
         if result.get("err") != "ok":
             return {"err": result.get("err", "internal"), "msg": result.get("msg", _("目录提取失败"))}
         return {"err": "ok", "msg": _("目录提取成功"), "catalog": result.get("catalog", "")}
+
+
+class BookWordCount(BaseHandler):
+    """按需统计单本书籍字数（EPUB > TXT），结果写入 #word_count"""
+
+    @js
+    @auth
+    def post(self, id):
+        book_id = int(id)
+        book = self.get_book(book_id, raise_exception=False)
+        if not book:
+            return {"err": "params.book.invalid", "msg": _("书籍不存在")}
+
+        if not self.is_admin() and not self.is_book_owner(book_id, self.user_id()):
+            return {"err": "user.no_permission", "msg": _("无权限")}
+
+        return WordCountService().count_one(book_id)
+
+
+class BookWordCountBatch(BaseHandler):
+    """批量统计字数：传入 idlist 时只处理所选书（强制重算），否则处理全部书（跳过已有字数）"""
+
+    @js
+    @auth
+    def post(self):
+        if not self.is_admin():
+            return {"err": "user.no_permission", "msg": _("无权限")}
+
+        service = WordCountService()
+        if service.is_running:
+            return {"err": "task.running", "msg": _("有字数统计任务正在运行中，请稍后再试")}
+
+        data = tornado.escape.json_decode(self.request.body)
+        idlist = data.get("idlist")
+
+        if isinstance(idlist, list) and len(idlist) > 0:
+            book_ids = [int(bid) for bid in idlist]
+            force = True
+        else:
+            book_ids = list(self.calibre_db_cache.all_book_ids())
+            force = False
+
+        service.is_running = True
+        try:
+            service.count_batch(self.current_user.id, book_ids, force=force)
+        except Exception:
+            service.is_running = False
+            raise
+        msg = _("字数统计任务已启动，共 %d 本，右上角可以查看进度") % len(book_ids)
+        return {"err": "ok", "msg": msg}
 
 
 class BookCatalogBatch(BaseHandler):
@@ -5059,6 +5110,8 @@ def routes():
         (r"/api/book/([0-9]+)/category", BookCategory),
         (r"/api/book/([0-9]+)/location", BookLocation),
         (r"/api/book/([0-9]+)/catalog", BookCatalog),
+        (r"/api/book/([0-9]+)/word_count", BookWordCount),
+        (r"/api/book/word_count/batch", BookWordCountBatch),
         (r"/api/book/catalog/batch", BookCatalogBatch),
         (r"/api/categories", BookCategories),
         (r"/api/tags/search", TagSearch),
