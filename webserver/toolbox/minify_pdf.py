@@ -2,6 +2,7 @@
 PDF 扫描档瘦身工具
 @author: PoxenStudio, 2026
 """
+import io
 import logging
 import os
 import shutil
@@ -16,6 +17,9 @@ if TYPE_CHECKING:
 from webserver.services import AsyncService
 from webserver.toolbox.base_tool import BaseTool
 from PIL import ImageOps
+
+# Resolution used when rendering pages and storing them in the output PDF.
+DEFAULT_RENDER_DPI = 150
 
 
 def _otsu_threshold(gray_img: Image.Image) -> int:
@@ -74,16 +78,25 @@ def _cleanup_gray_background(img: Image.Image, max_brightness: int) -> Image.Ima
     return gray.point(lambda value: 255 if value > max_brightness else value)
 
 
-def _prepare_pdf_image(img: Image.Image, use_jpeg2000: bool) -> Image.Image:
-    """Prepare images so Pillow's PDF writer uses JPEG 2000 for continuous tones."""
-    if not use_jpeg2000 or img.mode == "1":
-        return img
+def _page_render_dpi(page: "fitz.Page") -> float:
+    """Avoid upsampling pages that consist of a single full-page raster image."""
+    images = page.get_image_info()
+    if len(images) != 1:
+        return DEFAULT_RENDER_DPI
 
-    if img.mode == "L":
-        return img.convert("LA")
-    if img.mode == "RGB":
-        return img.convert("RGBA")
-    raise ValueError(f"Unsupported image mode for PDF output: {img.mode}")
+    image = images[0]
+    x0, y0, x1, y1 = image["bbox"]
+    page_rect = page.rect
+    if (
+        x0 > page_rect.x0 + page_rect.width * 0.05
+        or y0 > page_rect.y0 + page_rect.height * 0.05
+        or x1 < page_rect.x1 - page_rect.width * 0.05
+        or y1 < page_rect.y1 - page_rect.height * 0.05
+    ):
+        return DEFAULT_RENDER_DPI
+
+    image_dpi = min(image["width"] * 72 / (x1 - x0), image["height"] * 72 / (y1 - y0))
+    return min(DEFAULT_RENDER_DPI, image_dpi) if image_dpi > 0 else DEFAULT_RENDER_DPI
 
 
 def _quality_to_db(qualify: int) -> float:
@@ -91,20 +104,49 @@ def _quality_to_db(qualify: int) -> float:
     return 20.0 + qualify * 0.2
 
 
-def _save_pdf(images: list[Image.Image], output_pdf: Path, qualify: int, use_jpeg2000: bool) -> None:
-    first, *rest = images
-    encoder_options = {"quality_mode": "dB", "quality_layers": [_quality_to_db(qualify)], "irreversible": True}
-    if not use_jpeg2000:
-        encoder_options = {"quality": qualify}
+def _save_pdf(
+    images: list[Image.Image],
+    output_pdf: Path,
+    qualify: int,
+    use_jpeg2000: bool,
+    page_sizes: Optional[list[tuple[float, float]]] = None,
+) -> None:
+    import fitz
 
-    first.save(
-        output_pdf,
-        save_all=True,
-        append_images=rest,
-        optimize=True,
-        resolution=150,
-        **encoder_options,
-    )
+    merged = fitz.open()
+    try:
+        for index, img in enumerate(images):
+            buffer = io.BytesIO()
+            page_width, page_height = (
+                page_sizes[index]
+                if page_sizes is not None
+                else (img.width * 72 / DEFAULT_RENDER_DPI, img.height * 72 / DEFAULT_RENDER_DPI)
+            )
+            if use_jpeg2000 and img.mode != "1":
+                # Embed a plain (opaque) JPEG 2000 stream. Pillow's PDF writer
+                # only emits JPEG 2000 for LA/RGBA and adds SMaskInData, which
+                # some readers mis-handle; MuPDF embeds the stream as-is instead.
+                img.save(
+                    buffer,
+                    format="JPEG2000",
+                    quality_mode="dB",
+                    quality_layers=[_quality_to_db(qualify)],
+                    irreversible=True,
+                )
+                page = merged.new_page(width=page_width, height=page_height)
+                page.insert_image(page.rect, stream=buffer.getvalue())
+            else:
+                # 1-bit pages use CCITT; other modes fall back to PIL's JPEG writer.
+                save_options = {"optimize": True, "resolution": img.width * 72 / page_width}
+                if img.mode != "1":
+                    save_options["quality"] = qualify
+                img.save(buffer, format="PDF", **save_options)
+                page_doc = fitz.open(stream=buffer.getvalue(), filetype="pdf")
+                merged.insert_pdf(page_doc)
+                page_doc.close()
+        merged.save(str(output_pdf))
+    finally:
+        merged.close()
 
 
 def _parse_page_selection(page_spec: str, total_pages: int, option_name: str) -> set[int]:
@@ -136,6 +178,12 @@ def _parse_page_selection(page_spec: str, total_pages: int, option_name: str) ->
     return parsed
 
 
+def _is_bilevel_page(page: "fitz.Page") -> bool:
+    """True when every image on the page is already 1-bit (a bilevel scan)."""
+    images = page.get_images(full=True)
+    return bool(images) and all(image[4] == 1 for image in images)
+
+
 def _render_page(
     page: "fitz.Page",
     max_width: Optional[int],
@@ -145,13 +193,11 @@ def _render_page(
     max_brightness: Optional[int],
 ) -> Image.Image:
     src_width = float(page.rect.width)
-    if not max_width:
-        max_width = 800
-    else:
+    if max_width:
         max_width = min(max(max_width, 600), 2048)
-
-    if src_width > 0:
-        scale = max_width / src_width
+        scale = max_width / src_width if src_width > 0 else 1.0
+    elif src_width > 0:
+        scale = _page_render_dpi(page) / 72.0
     else:
         scale = 1.0
     scale = max(scale, 0.01)
@@ -332,6 +378,7 @@ class MinifyPdfTool(BaseTool):
                 raise ValueError("所有页面均被丢弃")
 
             images = []
+            page_sizes = []
             total_kept = len(kept_page_indices)
 
             for i, page_index in enumerate(kept_page_indices):
@@ -341,7 +388,7 @@ class MinifyPdfTool(BaseTool):
                 img = _render_page(
                     page,
                     max_width,
-                    bw and not skip_filters,
+                    (bw or _is_bilevel_page(page)) and not skip_filters,
                     gray and not skip_filters,
                     auto_correct and not skip_filters,
                     max_brightness if gray and not skip_filters else None,
@@ -349,8 +396,8 @@ class MinifyPdfTool(BaseTool):
 
                 if img.mode not in ("RGB", "L", "1"):
                     img = img.convert("RGB")
-                img = _prepare_pdf_image(img, use_jpeg2000)
                 images.append(img)
+                page_sizes.append((page.rect.width, page.rect.height))
 
                 if progress_callback:
                     # 前90%进度用于处理图片
@@ -361,7 +408,7 @@ class MinifyPdfTool(BaseTool):
             doc.close()
 
             # 保存处理后的 PDF
-            _save_pdf(images, output_pdf, qualify, use_jpeg2000)
+            _save_pdf(images, output_pdf, qualify, use_jpeg2000, page_sizes)
 
             # 写回 metadata
             meta_doc = fitz.open(str(output_pdf))

@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import io
+from collections import Counter
 from pathlib import Path
 from typing import Optional
 
@@ -10,6 +12,10 @@ from PIL import Image
 from PIL import features
 from PIL import ImageFilter
 from PIL import ImageOps
+from tqdm import tqdm
+
+# Resolution used when rendering pages and storing them in the output PDF.
+DEFAULT_RENDER_DPI = 150
 
 
 def _otsu_threshold(gray_img: Image.Image) -> int:
@@ -56,6 +62,12 @@ def _to_binary(img: Image.Image) -> Image.Image:
     return gray.point(lambda x: 255 if x > threshold else 0, mode="1")
 
 
+def _is_bilevel_page(page: fitz.Page) -> bool:
+    """True when every image on the page is already 1-bit (a bilevel scan)."""
+    images = page.get_images(full=True)
+    return bool(images) and all(image[4] == 1 for image in images)
+
+
 def _auto_correct_by_histogram(img: Image.Image) -> Image.Image:
     """Auto-correct image contrast based on page histogram."""
     # Use a small cutoff to avoid extreme outliers dominating the stretch.
@@ -68,16 +80,32 @@ def _cleanup_gray_background(img: Image.Image, max_brightness: int) -> Image.Ima
     return gray.point(lambda value: 255 if value > max_brightness else value)
 
 
-def _prepare_pdf_image(img: Image.Image, use_jpeg2000: bool) -> Image.Image:
-    """Prepare images so Pillow's PDF writer uses JPEG 2000 for continuous tones."""
-    if not use_jpeg2000 or img.mode == "1":
-        return img
+def _pdf_filter_name(mode: str, use_jpeg2000: bool) -> str:
+    """Return the PDF filter used for an image of the given mode."""
+    if mode == "1":
+        return "CCITTFaxDecode" if features.check("libtiff") else "DCTDecode"
+    return "JPXDecode" if use_jpeg2000 else "DCTDecode"
 
-    if img.mode == "L":
-        return img.convert("LA")
-    if img.mode == "RGB":
-        return img.convert("RGBA")
-    raise ValueError(f"Unsupported image mode for PDF output: {img.mode}")
+
+def _page_render_dpi(page: fitz.Page) -> float:
+    """Avoid upsampling pages that consist of a single full-page raster image."""
+    images = page.get_image_info()
+    if len(images) != 1:
+        return DEFAULT_RENDER_DPI
+
+    image = images[0]
+    bbox = fitz.Rect(image["bbox"])
+    page_rect = page.rect
+    if (
+        bbox.x0 > page_rect.x0 + page_rect.width * 0.05
+        or bbox.y0 > page_rect.y0 + page_rect.height * 0.05
+        or bbox.x1 < page_rect.x1 - page_rect.width * 0.05
+        or bbox.y1 < page_rect.y1 - page_rect.height * 0.05
+    ):
+        return DEFAULT_RENDER_DPI
+
+    image_dpi = min(image["width"] * 72 / bbox.width, image["height"] * 72 / bbox.height)
+    return min(DEFAULT_RENDER_DPI, image_dpi) if image_dpi > 0 else DEFAULT_RENDER_DPI
 
 
 def _quality_to_db(qualify: int) -> float:
@@ -85,20 +113,48 @@ def _quality_to_db(qualify: int) -> float:
     return 20.0 + qualify * 0.2
 
 
-def _save_pdf(images: list[Image.Image], output_pdf: Path, qualify: int, use_jpeg2000: bool) -> None:
-    first, *rest = images
-    encoder_options = {"quality_mode": "dB", "quality_layers": [_quality_to_db(qualify)], "irreversible": True}
-    if not use_jpeg2000:
-        encoder_options = {"quality": qualify}
-
-    first.save(
-        output_pdf,
-        save_all=True,
-        append_images=rest,
-        optimize=True,
-        resolution=150,
-        **encoder_options,
-    )
+def _save_pdf(
+    images: list[Image.Image],
+    output_pdf: Path,
+    qualify: int,
+    use_jpeg2000: bool,
+    page_sizes: Optional[list[tuple[float, float]]] = None,
+) -> None:
+    # Encode one page at a time so progress can be reported.
+    merged = fitz.open()
+    try:
+        for index, img in enumerate(tqdm(images, desc="Encoding pages", unit="page")):
+            buffer = io.BytesIO()
+            page_width, page_height = (
+                page_sizes[index]
+                if page_sizes is not None
+                else (img.width * 72 / DEFAULT_RENDER_DPI, img.height * 72 / DEFAULT_RENDER_DPI)
+            )
+            if use_jpeg2000 and img.mode != "1":
+                # Embed a plain (opaque) JPEG 2000 stream. Pillow's PDF writer
+                # only emits JPEG 2000 for LA/RGBA and adds SMaskInData, which
+                # some readers mis-handle; MuPDF embeds the stream as-is instead.
+                img.save(
+                    buffer,
+                    format="JPEG2000",
+                    quality_mode="dB",
+                    quality_layers=[_quality_to_db(qualify)],
+                    irreversible=True,
+                )
+                page = merged.new_page(width=page_width, height=page_height)
+                page.insert_image(page.rect, stream=buffer.getvalue())
+            else:
+                # 1-bit pages use CCITT; other modes fall back to PIL's JPEG writer.
+                save_options = {"optimize": True, "resolution": img.width * 72 / page_width}
+                if img.mode != "1":
+                    save_options["quality"] = qualify
+                img.save(buffer, format="PDF", **save_options)
+                page_doc = fitz.open(stream=buffer.getvalue(), filetype="pdf")
+                merged.insert_pdf(page_doc)
+                page_doc.close()
+        merged.save(str(output_pdf))
+    finally:
+        merged.close()
 
 
 def _apply_dilation(img: Image.Image, dilate: int) -> Image.Image:
@@ -158,13 +214,15 @@ def _render_page(
     if max_width and src_width > 0:
         scale = max_width / src_width
     else:
-        scale = 1.0
+        scale = _page_render_dpi(page) / 72.0
     scale = max(scale, 0.01)
 
     matrix = fitz.Matrix(scale, scale)
     pix = page.get_pixmap(matrix=matrix, alpha=False)
     mode = "RGB" if pix.n >= 3 else "L"
     img = Image.frombytes(mode, (pix.width, pix.height), pix.samples)
+
+    # print(f"Rendering page {page.number} at scale {scale:.2f}, original width {src_width:.2f}, target width {pix.width:.2f}")
 
     if auto_correct:
         img = _auto_correct_by_histogram(img)
@@ -288,7 +346,9 @@ def main() -> int:
 
     output_pdf = output_dir / f"{input_path.stem}_minify.pdf"
     use_jpeg2000 = features.check_codec("jpg_2000")
-    if not use_jpeg2000:
+    if use_jpeg2000:
+        print("JPEG 2000 support: available.")
+    else:
         print("Warning: Pillow JPEG 2000 support is unavailable; using JPEG compression.")
 
     doc = fitz.open(str(input_path))
@@ -303,13 +363,16 @@ def main() -> int:
 
     dry_run_pages = min(args.dry_run_pages, len(kept_page_indices))
     if dry_run_pages > 0:
-        for output_index, page_index in enumerate(kept_page_indices[:dry_run_pages], start=1):
+        for output_index, page_index in enumerate(
+            tqdm(kept_page_indices[:dry_run_pages], desc="Rendering pages", unit="page"), start=1
+        ):
             page = doc.load_page(page_index)
             skip_filters = page_index in skip_page_indices
+            to_bw = (args.bw or _is_bilevel_page(page)) and not skip_filters
             img = _render_page(
                 page,
                 args.max_width,
-                args.bw and not skip_filters,
+                to_bw,
                 args.gray and not skip_filters,
                 args.auto and not skip_filters,
                 args.max_brightness if args.gray and not skip_filters else None,
@@ -318,19 +381,21 @@ def main() -> int:
             )
             preview_path = output_dir / f"{input_path.stem}_preview_{output_index:04d}.png"
             img.save(preview_path, format="PNG")
-            print(f"[dry-run] saved: {preview_path}")
+            tqdm.write(f"[dry-run] saved: {preview_path}")
         doc.close()
         print(f"Dry run completed: {dry_run_pages} page(s)")
         return 0
 
     images = []
-    for page_index in kept_page_indices:
+    page_sizes = []
+    for page_index in tqdm(kept_page_indices, desc="Rendering pages", unit="page"):
         page = doc.load_page(page_index)
         skip_filters = page_index in skip_page_indices
+        to_bw = (args.bw or _is_bilevel_page(page)) and not skip_filters
         img = _render_page(
             page,
             args.max_width,
-            args.bw and not skip_filters,
+            to_bw,
             args.gray and not skip_filters,
             args.auto and not skip_filters,
             args.max_brightness if args.gray and not skip_filters else None,
@@ -340,12 +405,18 @@ def main() -> int:
         # Normalize uncommon modes before encoding.
         if img.mode not in ("RGB", "L", "1"):
             img = img.convert("RGB")
-        img = _prepare_pdf_image(img, use_jpeg2000)
         images.append(img)
+        page_sizes.append((page.rect.width, page.rect.height))
+
+    filter_counts = Counter(_pdf_filter_name(img.mode, use_jpeg2000) for img in images)
+    summary = ", ".join(f"{name} x{count}" for name, count in sorted(filter_counts.items()))
+    print(f"PDF image encoding ({len(images)} pages): {summary}")
+    if "JPXDecode" in filter_counts:
+        print(f"JPEG 2000 target quality: {_quality_to_db(args.qualify):.1f} dB")
 
     doc.close()
 
-    _save_pdf(images, output_pdf, args.qualify, use_jpeg2000)
+    _save_pdf(images, output_pdf, args.qualify, use_jpeg2000, page_sizes)
 
     # Ensure creator metadata is written in the final PDF.
     meta_doc = fitz.open(str(output_pdf))
