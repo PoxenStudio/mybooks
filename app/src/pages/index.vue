@@ -11,18 +11,18 @@
                         <div class="stats-content">
                             <div class="stat-group">
                                 <span class="stat-label">{{ $t('index.totalBooks') }}:</span>
-                                <span class="stat-value">{{ statValue('total_books') }}</span>
+                                <span class="stat-value" :class="{ 'is-pending': statText('total_books') === null }">{{ statText('total_books') }}</span>
                             </div>
                             <div class="stat-separator">|</div>
                             <div class="stat-group">
                                 <span class="stat-label">{{ $t('index.ebookCount') }}:</span>
-                                <span class="stat-value">{{ statValue('ebook_count') }}</span>
+                                <span class="stat-value" :class="{ 'is-pending': statText('ebook_count') === null }">{{ statText('ebook_count') }}</span>
                             </div>
                             <template v-if="allowPhysicalBooks">
                                 <div class="stat-separator">|</div>
                                 <div class="stat-group">
                                     <span class="stat-label">{{ $t('index.physicalCount') }}:</span>
-                                    <span class="stat-value">{{ statValue('physical_count') }}</span>
+                                    <span class="stat-value" :class="{ 'is-pending': statText('physical_count') === null }">{{ statText('physical_count') }}</span>
                                 </div>
                             </template>
                             <div class="stat-separator">|</div>
@@ -31,7 +31,7 @@
                                 <!-- 原来这里把「电子书」当标签塞进数值里：
                                      「本月新增: 电子书 60 + 实体书 0」读起来像一条算式。
                                      现在只给合计，细分在下面的详情面板里。 -->
-                                <span class="stat-value month-new">{{ formatNum(monthNewTotal) }}</span>
+                                <span class="stat-value month-new" :class="{ 'is-pending': statText('month_new') === null }">{{ statText('month_new') }}</span>
                             </div>
                         </div>
                     </div>
@@ -396,9 +396,22 @@ export default {
         isAdmin() {
             return !!(this.$store.state.user && this.$store.state.user.is_admin);
         },
+        // 统计接口回填前不再塞「-」占位：未就绪的语义交给 statText() 返回 null，
+        // 模板据此出骨架条。这里只做空对象兜底，避免读到 undefined
         stats() {
-            return this.libraryStats || {
-                total_books: '-', ebook_count: '-', physical_count: '-', month_ebook_count: '-', month_physical_count: '-',
+            return this.libraryStats || {};
+        },
+        // 滚动动效的目标值。null = 数据未到。四个数字（含「本月新增」）一起滚，
+        // 免得三个在跳、一个静止，看着像漏了一个
+        statsTargets() {
+            if (!this.libraryStats) {
+                return null;
+            }
+            return {
+                total_books: Number(this.libraryStats.total_books) || 0,
+                ebook_count: Number(this.libraryStats.ebook_count) || 0,
+                physical_count: Number(this.libraryStats.physical_count) || 0,
+                month_new: this.monthNewTotal,
             };
         },
         readingStatsPending() {
@@ -492,11 +505,16 @@ export default {
             this.statsLoading = true;
             try {
                 const rsp = await this.$backend('/library/stats');
-                if (rsp.err === 'ok') {
+                if (rsp.err === 'ok' && rsp.stats) {
                     this.libraryStats = rsp.stats;
+                    this.statsFailed = false;
+                } else {
+                    // 接口通了但没给数据：算失败，别让骨架一直闪成「还在加载」
+                    this.statsFailed = true;
                 }
             } catch (error) {
                 console.warn('Failed to load library stats:', error);
+                this.statsFailed = true;
             } finally {
                 this.statsLoading = false;
             }
@@ -673,15 +691,21 @@ export default {
                 }
             });
         },
-        // 统计条读数：滚动中读 statsDisplay，结束后交回 stats
-        statValue(key) {
-            if (this.statsDisplay && this.statsDisplay[key] !== undefined) {
-                return this.statsDisplay[key];
+        // 统计条读数：滚动中读 statsDisplay，结束后交回目标值。
+        // 返回 null 表示统计还没回来 —— 模板此时画骨架，不留「-」这种看着像真值的东西
+        statText(key) {
+            const targets = this.statsTargets;
+            if (!targets) {
+                // 拉取失败给「—」，只有「还在路上」才是骨架
+                return this.statsFailed ? '—' : null;
             }
-            return this.stats[key];
+            const rolling = this.statsDisplay && this.statsDisplay[key] !== undefined;
+            return this.formatNum(rolling ? this.statsDisplay[key] : targets[key]);
         },
-        // 统计数字 0 → 目标值。只在首页动效开启且系统未要求减少动效时执行；
-        // 数据回填前模板显示的是占位符「-」，所以从 0 起滚不会出现数字跳变
+        // 统计数字 0 → 目标值。只在首页动效开启且系统未要求减少动效时执行。
+        // 曲线用 easeInOutQuad（起步零速、中段最快、末段缓停）而不是 easeOutCubic：
+        // 后者起始导数是平均速度的 3 倍，第一帧就吃掉 3.9%、400ms 冲到 70%，
+        // 肉眼看就是「唰一下上去再磨」。这条曲线每帧增量从 0 渐增，数字是一位一位数上去的
         rollStats() {
             if (this._statsRolled || !this.homeMotionEnabled) {
                 return;
@@ -692,22 +716,28 @@ export default {
             if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
                 return;
             }
-            const keys = ['total_books', 'ebook_count', 'physical_count'];
-            const target = {};
-            keys.forEach((k) => { target[k] = Number(this.stats[k]) || 0; });
-            // 空库（或统计接口失败）时数字太小，滚动没有意义，直接显示原值
-            if (target.total_books < 10) {
+            const targets = this.statsTargets;
+            if (!targets) {
                 return;
             }
+            // 空库（或统计接口失败）时数字太小，滚动没有意义，直接显示原值
+            if (targets.total_books < 10) {
+                return;
+            }
+            const keys = Object.keys(targets);
             this._statsRolled = true;
             const started = performance.now();
-            const duration = 1200;
-            this.statsDisplay = { total_books: 0, ebook_count: 0, physical_count: 0 };
+            const duration = 1600;
+            const zero = {};
+            keys.forEach((k) => { zero[k] = 0; });
+            this.statsDisplay = zero;
             const tick = (now) => {
                 const p = Math.min(1, (now - started) / duration);
-                const eased = 1 - Math.pow(1 - p, 3);
+                const eased = p < 0.5
+                    ? 2 * p * p
+                    : 1 - Math.pow(-2 * p + 2, 2) / 2;
                 const next = {};
-                keys.forEach((k) => { next[k] = Math.round(target[k] * eased); });
+                keys.forEach((k) => { next[k] = Math.round(targets[k] * eased); });
                 this.statsDisplay = next;
                 if (p < 1) {
                     this._statsRaf = requestAnimationFrame(tick);
@@ -870,6 +900,8 @@ export default {
         booklistsLoaded: false,
         deferTimers: [],
         libraryStats: null,
+        // 统计接口失败标记：骨架只在「真的还在加载」时出现，失败改显「—」
+        statsFailed: false,
         showDetail: false,
         releaseNotesDialog: false,
         releaseNotesContent: '',
@@ -958,6 +990,34 @@ export default {
     /* 原来是绿色底：绿色在这套界面里代表「成功/已完成」，用在一个中性计数上会误读 */
     background: rgba(255, 255, 255, 0.22);
     border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+/* 数据未到时的骨架：在胶囊里放一条半透明占位条。
+   比「-」好读——「-」容易被当成真的读数，而且它换成 0 的那一帧会闪 */
+.stat-value.is-pending {
+    color: transparent;
+}
+
+.stat-value.is-pending::before {
+    content: '';
+    display: inline-block;
+    width: 2.6em;
+    height: 0.92em;
+    border-radius: 3px;
+    vertical-align: -0.12em;
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.14) 25%,
+        rgba(255, 255, 255, 0.30) 37%,
+        rgba(255, 255, 255, 0.14) 63%
+    );
+    background-size: 400% 100%;
+    animation: stat-skeleton-shimmer 1.4s ease infinite;
+}
+
+@keyframes stat-skeleton-shimmer {
+    from { background-position: 100% 0; }
+    to { background-position: 0 0; }
 }
 
 .stat-separator {
@@ -1428,6 +1488,11 @@ export default {
     transition: none !important;
 }
 
+/* 占位骨架的呼吸光同理：减少动效时只留一条静态灰条 */
+.home-motion-reduced .stat-value.is-pending::before {
+    animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .home-section-slot,
     .home-section-slot .book-card,
@@ -1439,6 +1504,10 @@ export default {
 
     .home-section-slot .v-image__image.fade-transition-enter-active {
         transition: none !important;
+    }
+
+    .stat-value.is-pending::before {
+        animation: none !important;
     }
 }
 </style>
