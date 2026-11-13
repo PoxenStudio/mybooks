@@ -102,4 +102,6 @@ package-lock.json
 !webserver/services/cfi_gen/package-lock.json
 .DS_Store
 .vscode
+.pnpm-store
+.impeccable
 plan/

@@ -114,3 +114,20 @@ DEFAULT_LANGUAGE_CODE = "zho"
 JAPANESE_CODE = "jpn"
 
 UPGRABLE_REVISION = "UPGRABLE_REVISION"
+
+SOCIAL_AUTH_INACTIVE_USER_URL = '/login?social_error=pending'
+
+# 社交登录流水线（静态配置，不随站点设置持久化）
+SOCIAL_AUTH_PIPELINE = (
+    'social_core.pipeline.social_auth.social_details',
+    'social_core.pipeline.social_auth.social_uid',
+    'social_core.pipeline.social_auth.auth_allowed',
+    'social_core.pipeline.social_auth.social_user',
+    'webserver.social_pipeline.check_registration',
+    'social_core.pipeline.user.get_username',
+    'social_core.pipeline.user.create_user',
+    'social_core.pipeline.social_auth.associate_user',
+    'social_core.pipeline.social_auth.load_extra_data',
+    'webserver.social_pipeline.init_new_user',
+    'social_core.pipeline.user.user_details',
+)

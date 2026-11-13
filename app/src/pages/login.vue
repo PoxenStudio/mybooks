@@ -89,6 +89,13 @@ export default {
         this.username = "";
         this.password = "";
 
+        const socialError = this.$route.query.social_error;
+        if (socialError) {
+            this.alert.msg = socialError === "pending"
+                ? this.$t("login.social_pending_approval")
+                : this.$t("login.social_register_closed");
+        }
+
         this.$store.commit("navbar", false);
 
         // 只在客户端执行DOM和localStorage操作

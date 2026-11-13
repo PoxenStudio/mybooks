@@ -38,6 +38,7 @@ from webserver.recommend import CalibreFeatureSource, RecommendConfig, Recommend
 from webserver.constants import COLUMN_CATEGORY, COLUMN_FOLDER, COLUMN_PHY_COUNT, COLUMN_BOOK_TYPE, COLUMN_TRANSLATORS
 from webserver.constants import COLUMN_EXT_LINK, CUSTOM_COVER_IMAGE, COLUMN_DYNAMIC_COVER
 from webserver.constants import COLUMN_LOCATION, COLUMN_CATALOG
+from webserver.constants import SOCIAL_AUTH_PIPELINE, SOCIAL_AUTH_INACTIVE_USER_URL
 from webserver.version import VERSION
 
 CONF = loader.get_settings()
@@ -428,6 +429,8 @@ def make_app():
         "build_time": fromtimestamp(os.stat(path).st_mtime),
         "default_cover": default_cover,
         "autoreload": VERSION == "v0.0.1",
+        "SOCIAL_AUTH_PIPELINE": SOCIAL_AUTH_PIPELINE,
+        "SOCIAL_AUTH_INACTIVE_USER_URL": SOCIAL_AUTH_INACTIVE_USER_URL,
         "recommend": RecommendService(
             CalibreFeatureSource(cache), lambda: RecommendConfig.from_conf(CONF), SqlCrowdSource(ScopedSession), SqlProfileSource(ScopedSession)
         ),
