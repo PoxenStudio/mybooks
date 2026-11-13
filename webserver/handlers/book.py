@@ -3893,7 +3893,9 @@ class BookRead(BaseHandler):
             stat_fmt = fmt_arg or next((f for f in self.READABLE_FORMATS if book.get("fmt_%s" % f)), None)
             ReadingStatsService.heartbeat(self.current_user.id, book_id, Reading.PROTOCOL_WEB, fmt=stat_fmt)
 
-        book_reader = CONF.get("EPUB_VIEWER", "MyReader")
+        book_reader = CONF.get("EPUB_VIEWER", constants.EPUB_VIEWER_MYREADADER)
+        if book_reader != constants.EPUB_VIEWER_MYREADADER:
+            book_reader = constants.EPUB_VIEWER_DEFAULT
 
         # 用户在设置中选择了 MyReader 作为阅读器时，epub/cbz/fb2 直接跳转到 MyReader
         # 的内嵌阅读入口；PDF 由独立的 PDF_READER 设置决定（见下方 PDF 分支），
@@ -3920,7 +3922,7 @@ class BookRead(BaseHandler):
                     % (book_id, myreader_format, urllib.parse.quote_plus(book.get("title") or ""))
                 )
             # Fallback to the original reading logic if MyReader is not used or the format is not supported
-            book_reader = "epubjs.html"
+            book_reader = constants.EPUB_VIEWER_DEFAULT
 
         if fpath_arg:
             if fmt_arg == "txt":
@@ -4061,7 +4063,7 @@ class BookRead(BaseHandler):
             # _epub_conversion_source 返回 None 有两种含义：已可直接阅读，或没有任何可读格式。
             # 仅含 UVZ 的书籍不允许进入阅读流程（DJVU 有 DjVu.js 阅读器，CBZ 仅 MyReader 可读）。
             readable = constants.SUPPORTED_EBOOK_FORMATS + ["djvu"]
-            if CONF.get("EPUB_VIEWER", "MyReader") == "MyReader":
+            if CONF.get("EPUB_VIEWER", constants.EPUB_VIEWER_MYREADADER) == constants.EPUB_VIEWER_MYREADADER:
                 readable.append("cbz")
             if not any(book.get("fmt_%s" % f) for f in readable):
                 return {"err": "params.book.invalid", "msg": _("抱歉，在线阅读器暂不支持该格式的书籍，可以转为epub或者pdf后阅读")}

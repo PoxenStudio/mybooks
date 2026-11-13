@@ -7,6 +7,8 @@ import os
 import sys
 import traceback
 
+from webserver import constants
+
 DEFAULT_GOOGLE_ANALYTICS_ID = "G-LLF01B5ZZ8"
 
 
@@ -87,6 +89,10 @@ _settings = SettingsLoader()
 CONF = _settings
 if CONF.get("google_analytics_id", "").strip() == DEFAULT_GOOGLE_ANALYTICS_ID:
     CONF["google_analytics_id"] = ""  # disable it by default
+if CONF.get("EPUB_VIEWER", "") not in [constants.EPUB_VIEWER_DEFAULT, constants.EPUB_VIEWER_MYREADADER]:
+    CONF["EPUB_VIEWER"] = constants.EPUB_VIEWER_DEFAULT
+if CONF.get("PDF_READER", "") not in [constants.PDF_READER_DEFAULT, constants.PDF_READER_MYREADADER]:
+    CONF["PDF_READER"] = constants.PDF_READER_DEFAULT
 
 
 def get_settings():

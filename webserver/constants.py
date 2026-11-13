@@ -131,3 +131,8 @@ SOCIAL_AUTH_PIPELINE = (
     'webserver.social_pipeline.init_new_user',
     'social_core.pipeline.user.user_details',
 )
+
+EPUB_VIEWER_DEFAULT = "epubjs.html"
+EPUB_VIEWER_MYREADADER = "MyReader"
+PDF_READER_DEFAULT = "pdfjs.html"
+PDF_READER_MYREADADER = "MyReader"
