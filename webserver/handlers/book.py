@@ -809,20 +809,29 @@ class BookCategories(BaseHandler):
         table = f"custom_column_{meta['colnum']}"
         link_table = f"books_{table}_link"
 
-        sql = f"""
-            SELECT t.value, count(l.book) as count
-            FROM {table} t
-            JOIN {link_table} l ON t.id = l.value
-            GROUP BY t.id
-            ORDER BY count DESC
-        """
+        # simple=1 时只返回自定义字段 #category 的分类列表，不统计数量
+        simple = (self.get_argument("simple", "") or "").strip() == "1"
+        if simple:
+            sql = f"SELECT t.value FROM {table} t ORDER BY t.value"
+        else:
+            sql = f"""
+                SELECT t.value, count(l.book) as count
+                FROM {table} t
+                JOIN {link_table} l ON t.id = l.value
+                GROUP BY t.id
+                ORDER BY count DESC
+            """
 
         try:
             version = self.library_version()
-            rows = BaseHandler._catalog_cache.get(("categories", sql), version)
+            cache_key = ("categories_simple" if simple else "categories", sql)
+            rows = BaseHandler._catalog_cache.get(cache_key, version)
             if rows is None:
-                rows = [(row[0], row[1]) for row in await self.run_calibre_sql(sql)]
-                BaseHandler._catalog_cache.put(("categories", sql), version, rows)
+                if simple:
+                    rows = [(row[0], 0) for row in await self.run_calibre_sql(sql)]
+                else:
+                    rows = [(row[0], row[1]) for row in await self.run_calibre_sql(sql)]
+                BaseHandler._catalog_cache.put(cache_key, version, rows)
             categories = [{"name": row[0], "count": row[1]} for row in rows]
 
             if CONF.get(constants.ALLOW_READ_RANGE_SETTING, False):

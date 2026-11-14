@@ -3212,6 +3212,8 @@ export default {
                 this.categories = [];
                 return;
             }
+            // 分类列表异步加载，不阻塞设置请求与 UI
+            this.loadCategories();
             try {
                 const [settingsResponse, devicesResponse] = await Promise.all([
                     this.$backend('/admin/settings').catch(() => null),
@@ -3223,14 +3225,6 @@ export default {
                 const usedNames = new Set(personalDevices.map(d => d.name));
                 const extraGlobal = globalDevices.filter(d => !usedNames.has(d.name));
                 this.devices = [...personalDevices, ...extraGlobal];
-                if (settingsResponse?.err === 'ok' && settingsResponse.settings?.BOOK_NAV) {
-                    this.categories = settingsResponse.settings.BOOK_NAV.split('\n').map(line => {
-                        const parts = line.split('=');
-                        return parts[0].trim();
-                    }).filter(c => c);
-                    // 添加国际化的"清除"选项
-                    this.categories.push(this.$t('book.clearCategory'));
-                }
                 // 获取图章默认位置
                 if (settingsResponse?.err === 'ok') {
                     this.stamp_default_position = settingsResponse.settings.STAMP_POSITION || 'bottom-right';
@@ -3238,6 +3232,20 @@ export default {
                 }
             } catch (error) {
                 console.error('Failed to get settings:', error);
+            }
+        },
+
+        // 异步加载分类列表（只取自定义字段 #category，不需要数量）
+        async loadCategories() {
+            try {
+                const response = await this.$backend('/categories?simple=1');
+                if (response.err === 'ok') {
+                    this.categories = (response.categories || []).map(c => c.name).filter(c => c);
+                    // 添加国际化的"清除"选项
+                    this.categories.push(this.$t('book.clearCategory'));
+                }
+            } catch (error) {
+                console.error('Failed to load categories:', error);
             }
         },
 

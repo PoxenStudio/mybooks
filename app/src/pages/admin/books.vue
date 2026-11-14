@@ -797,6 +797,7 @@ export default {
         this.checkCurrentState();
         this.checkAIState();
         this.getSettings();
+        this.loadCategories();
     },
     watch: {
         options: {
@@ -1527,15 +1528,20 @@ export default {
                     if (response.settings.USE_DYNAMIC_COVER) {
                         this.use_dynamic_cover = response.settings.USE_DYNAMIC_COVER;
                     }
-                    if (response.settings.BOOK_NAV) {
-                        this.categories = response.settings.BOOK_NAV.split('\n').map(line => {
-                            const parts = line.split('=');
-                            return parts[0].trim();
-                        }).filter(c => c);
-                    }
                 }
             } catch (error) {
                 console.error('Failed to get settings:', error);
+            }
+        },
+        // 异步加载分类列表（只取自定义字段 #category，不需要数量）
+        async loadCategories() {
+            try {
+                const response = await this.$backend('/categories?simple=1');
+                if (response.err === 'ok') {
+                    this.categories = (response.categories || []).map(c => c.name).filter(c => c);
+                }
+            } catch (error) {
+                console.error('Failed to load categories:', error);
             }
         },
     },
