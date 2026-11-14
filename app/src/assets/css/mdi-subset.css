@@ -602,6 +602,10 @@
   content: "\F0226";
 }
 
+.mdi-file-replace-outline::before {
+  content: "\F0B33";
+}
+
 .mdi-file-sync::before {
   content: "\F1216";
 }
@@ -632,6 +636,10 @@
 
 .mdi-folder-multiple-outline::before {
   content: "\F0255";
+}
+
+.mdi-folder-off-outline::before {
+  content: "\F19F9";
 }
 
 .mdi-folder-outline::before {

@@ -362,6 +362,12 @@
                 :key="f.key + '-book_nav'"
                 v-model="bookNavList"
               ></book-nav-editor>
+              <scan-ignore-dirs-editor
+                v-else-if="f.type === 'scan_ignore_dirs'"
+                :key="f.key + '-scan_ignore_dirs'"
+                v-model="settings[f.key]"
+                class="ml-12"
+              ></scan-ignore-dirs-editor>
               <v-text-field
                 v-else-if="f.type === 'number'"
                 v-model.number="settings[f.key]"
@@ -1208,6 +1214,9 @@ import SSLManager from "~/components/SSLManager.vue";
 import CoverBackgroundManager from "~/components/CoverBackgroundManager.vue";
 import ReadingRangeDialog from "~/components/ReadingRangeDialog.vue";
 import BookNavEditor, { createCategory } from "~/components/BookNavEditor.vue";
+import ScanIgnoreDirsEditor, {
+  isInvalidScanIgnoreDirName,
+} from "~/components/ScanIgnoreDirsEditor.vue";
 import ReaderDictEditor from "~/components/ReaderDictEditor.vue";
 import HomepageCardsEditor from "~/components/HomepageCardsEditor.vue";
 import ModuleSettingsDialog from "~/components/ModuleSettingsDialog.vue";
@@ -1805,6 +1814,7 @@ export default {
     "cover-background-manager": CoverBackgroundManager,
     "reading-range-dialog": ReadingRangeDialog,
     "book-nav-editor": BookNavEditor,
+    "scan-ignore-dirs-editor": ScanIgnoreDirsEditor,
     "reader-dict-editor": ReaderDictEditor,
     "homepage-cards-editor": HomepageCardsEditor,
     "module-settings-dialog": ModuleSettingsDialog,
@@ -2352,6 +2362,20 @@ export default {
             title: "settings.sec_imp_rules",
             fields: [
               { icon: "mdi-import", key: "scan_upload_path", label: "settings.scan_upload_path" },
+              {
+                icon: "mdi-folder-off-outline",
+                key: "SCAN_IGNORE_DIRS",
+                label: "settings.scan_ignore_dirs",
+                type: "scan_ignore_dirs",
+                al: ["忽略目录", "跳过目录"],
+              },
+              {
+                icon: "mdi-file-replace-outline",
+                key: "SCAN_REPLACE_SAME_TITLE",
+                label: "settings.scan_replace_same_title",
+                type: "checkbox",
+                tips: "settings.scan_replace_same_title_tips",
+              },
               {
                 icon: "mdi-server",
                 key: "ENABLE_SERVER_FILE_IMPORT",
@@ -3224,6 +3248,25 @@ export default {
         ? this.$t("settings.save_confirm_message_autoreload")
         : this.$t("settings.save_confirm_message_no_autoreload");
     },
+    scanIgnoreDirProblems() {
+      const invalid = [];
+      const duplicates = [];
+      const counts = {};
+      (this.settings["SCAN_IGNORE_DIRS"] || []).forEach((item) => {
+        const name = (item || "").trim();
+        if (!name) return;
+        if (isInvalidScanIgnoreDirName(name)) {
+          invalid.push(name);
+        }
+        counts[name] = (counts[name] || 0) + 1;
+      });
+      Object.keys(counts).forEach((name) => {
+        if (counts[name] > 1 && invalid.indexOf(name) < 0) {
+          duplicates.push(name);
+        }
+      });
+      return { invalid, duplicates };
+    },
     bookNavDuplicateNames() {
       const counts = {};
       this.bookNavList.forEach((cat) => {
@@ -3682,6 +3725,25 @@ export default {
       this.saveSettings();
     },
     saveSettings: function () {
+      const ignoreProblems = this.scanIgnoreDirProblems;
+      if (ignoreProblems.invalid.length > 0) {
+        this.$alert(
+          "error",
+          this.$t("settings.scan_ignore_dirs_invalid_names", {
+            names: ignoreProblems.invalid.join("、"),
+          })
+        );
+        return;
+      }
+      if (ignoreProblems.duplicates.length > 0) {
+        this.$alert(
+          "error",
+          this.$t("settings.scan_ignore_dirs_duplicate", {
+            names: ignoreProblems.duplicates.join("、"),
+          })
+        );
+        return;
+      }
       if (this.bookNavDuplicateNames.length > 0) {
         this.$alert(
           "error",
@@ -3695,6 +3757,9 @@ export default {
       // 若先改写 live settings，保存失败会留下用户没动过的假 diff 且无自愈出口
       const payload = JSON.parse(JSON.stringify(this.settings));
       payload["BOOK_NAV"] = this.serializeBookNav(this.bookNavList);
+      payload["SCAN_IGNORE_DIRS"] = (payload["SCAN_IGNORE_DIRS"] || [])
+        .map((name) => (name || "").trim())
+        .filter(Boolean);
       // showToken is view state only; the server drops incomplete entries.
       payload["READER_MYDICTS"] = (payload["READER_MYDICTS"] || []).map((dict) => {
         const entry = { ...dict };
@@ -3740,6 +3805,7 @@ export default {
         this.$store.commit("refresh_sys");
         // 服务端确认后才把规范化结果落到本地状态与 localStorage
         this.settings["BOOK_NAV"] = payload["BOOK_NAV"];
+        this.settings["SCAN_IGNORE_DIRS"] = payload["SCAN_IGNORE_DIRS"];
         this.settings["READER_MYDICTS"] = payload["READER_MYDICTS"];
         this.settings["site_language"] = payload["site_language"];
         if (this.settings["site_language"] !== "") {

@@ -859,6 +859,52 @@ class ScanService(AsyncService):
         return [st.st_size, st.st_mtime_ns, st.st_ctime_ns, st.st_ino]
 
     @staticmethod
+    def _scan_ignore_dir_names():
+        """SCAN_IGNORE_DIRS 的归一化集合：只保留合法目录名，非法/空值忽略。"""
+        raw = CONF.get("SCAN_IGNORE_DIRS", [])
+        if not isinstance(raw, (list, tuple, set)):
+            return frozenset()
+        names = set()
+        for item in raw:
+            if not isinstance(item, str):
+                continue
+            name = item.strip()
+            if not name or name in (".", ".."):
+                continue
+            if any(ch in name for ch in '/\\:*?"<>|') or any(ord(ch) < 32 for ch in name):
+                continue
+            names.add(name)
+        return frozenset(names)
+
+    @staticmethod
+    def _is_ignored_scan_subpath(fpath, ignore_names, is_dir=None, real_path=None, scan_root=None):
+        """路径是否位于忽略目录之下：只比对相对扫描根的目录层级名。
+
+        扫描根本身不跳过；扫描根之外的路径（上传临时目录等）不受影响。
+        """
+        if not ignore_names:
+            return False
+        root = scan_root if scan_root is not None else CONF.get("scan_upload_path", "")
+        if not root:
+            return False
+        try:
+            root_real = os.path.realpath(root)
+            real = real_path if real_path is not None else os.path.realpath(fpath)
+        except (OSError, ValueError):
+            return False
+        if real != root_real and not real.startswith(root_real + os.sep):
+            return False
+        rel = os.path.relpath(real, root_real)
+        if rel == ".":
+            return False
+        parts = rel.split(os.sep)
+        if is_dir is None:
+            is_dir = os.path.isdir(fpath)
+        if not is_dir:
+            parts = parts[:-1]
+        return any(part in ignore_names for part in parts)
+
+    @staticmethod
     def _classify_scan_entry(fpath):
         """目录条目分类，供剪枝安全判定（扫描目录里的每本书都必须能落行或被剪枝排除）：
 
@@ -1011,6 +1057,7 @@ class ScanService(AsyncService):
         visited: dict = {}
         file_dir: dict = {}
         skipped_dirs = 0
+        ignore_names = self._scan_ignore_dir_names()
         for p in dirs:
             # 归一化扫描根：尾斜杠/冗余斜杠会让下面「根一次 realpath + 后缀拼接」
             # 产生坏键（realpath 吞尾斜杠而 dirpath 切片不随——"…/imports/" 的
@@ -1020,6 +1067,9 @@ class ScanService(AsyncService):
             p = os.path.normpath(p)
             if os.path.basename(p).startswith("."):
                 logging.info(f"[SCAN]Ignore {p}")
+                continue
+            if ScanService._is_ignored_scan_subpath(p, ignore_names):
+                logging.info("[SCAN] Ignore by scan_ignore_dirs: %s", p)
                 continue
             logging.info(f"[SCAN]scan {p}")
             if os.path.isfile(p):
@@ -1045,7 +1095,7 @@ class ScanService(AsyncService):
                     # scandir 原始条目数（过滤前口径）：写读两侧必须同一定义，否则隐藏目录
                     # 增删会导致永久 miss 或永久重走。本计数含点开头条目（文件循环里再跳过）。
                     entry_count = len(dirnames) + len(filenames)
-                    dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+                    dirnames[:] = [d for d in dirnames if not d.startswith(".") and d not in ignore_names]
                     try:
                         dir_mtime = os.stat(dirpath).st_mtime_ns
                     except OSError:
@@ -1114,6 +1164,7 @@ class ScanService(AsyncService):
             return filelist
         if not rows:
             return filelist
+        ignore_names = self._scan_ignore_dir_names()
         seen = set(filelist)
         added = 0
         for (p,) in rows:
@@ -1125,6 +1176,10 @@ class ScanService(AsyncService):
             except (ValueError, OSError):
                 continue
             if not inside or not os.path.isfile(p):
+                continue
+            if ScanService._is_ignored_scan_subpath(
+                p, ignore_names, is_dir=False, real_path=real, scan_root=scan_root
+            ):
                 continue
             seen.add(p)
             filelist.append(p)
@@ -1170,6 +1225,14 @@ class ScanService(AsyncService):
 
         # 快照剪枝只走全量作用域（细则见 _snapshot_active）。
         use_snapshot = ScanService._snapshot_active(paths, options.force, options.skip_last_dirs)
+        if use_snapshot and CONF.get("SCAN_REPLACE_SAME_TITLE", False):
+            # 原地修改文件内容不会 bump 父目录 mtime（目录快照命中 → 整个目录文件被跳过），
+            # 要识别「同名但内容已变」必须每轮实际枚举文件并比对签名，因此关闭快照剪枝。
+            use_snapshot = False
+            logging.info(
+                "[SCAN] SCAN_REPLACE_SAME_TITLE enabled, bypass dir snapshot pruning "
+                "to detect modified files"
+            )
         filelist, visited, file_dir = self._collect_files(paths, use_snapshot=use_snapshot)
         logging.info("[IMPORT] Collected %d files in %.3f seconds (skip_last_dirs=%d)", len(filelist), time.time() - start_time, options.skip_last_dirs)
         if not filelist:
@@ -1306,6 +1369,27 @@ class ScanService(AsyncService):
             logging.error("[IMPORT] Error reading file %s: %s", fpath, e)
             return None, ScanFile.INVALID
 
+    def _scan_files_same_content(self, target_path, source_path, source_hash):
+        """书库文件与待导入文件内容比对：先属性签名，再大小，最后哈希。
+
+        True=相同，False=不同；无法安全判定（stat/哈希失败）返回 None，
+        调用方按“不替换”保守处理，避免误覆盖书库文件。
+        """
+        if not target_path or not os.path.isfile(target_path):
+            return False
+        target_sig = ScanService.file_signature(target_path)
+        source_sig = ScanService.file_signature(source_path)
+        if target_sig is None or source_sig is None:
+            return None
+        if target_sig == source_sig:
+            return True
+        if target_sig[0] != source_sig[0]:
+            return False
+        target_hash, bad_reason = self._compute_hash(target_path)
+        if bad_reason or not target_hash:
+            return None
+        return target_hash == source_hash
+
     def _import_one_file(self, row, session, staged_ops=None, opts=None):
         """
             Read metadata and import one READY ScanFile into calibre.
@@ -1417,6 +1501,7 @@ class ScanService(AsyncService):
                 logging.info("[IMPORT] %d same-title candidates for scanned document, import as new book", len(ids))
                 ids = []
             existed_ebook = False
+            replaced_ebook = False
             if ids:
                 row.book_id = 0
                 for bid in ids:
@@ -1426,9 +1511,28 @@ class ScanService(AsyncService):
                     existed_ebook = True
                     row.book_id = bid
                     if b.formats and fmt.upper() in b.formats:
-                        row.status = ScanFile.EXIST
+                        if not CONF.get("SCAN_REPLACE_SAME_TITLE", False):
+                            row.status = ScanFile.EXIST
+                            break
+                        target_path = self.db.format_abspath(bid, fmt.upper(), index_is_id=True)
+                        same_content = self._scan_files_same_content(target_path, fpath, row.hash)
+                        if same_content is False:
+                            logging.info(
+                                "[IMPORT] Replace existing %s file for book %d with different file: %s",
+                                fmt.upper(), bid, fpath,
+                            )
+                            self.db.add_format(bid, fmt.upper(), fpath, True)
+                            row.status = ScanFile.IMPORTED
+                            replaced_ebook = True
+                        else:
+                            if same_content is None:
+                                logging.warning(
+                                    "[IMPORT] Cannot compare existing %s file for book %d, keep it: %s",
+                                    fmt.upper(), bid, fpath,
+                                )
+                            row.status = ScanFile.EXIST
                         break
-                if existed_ebook and row.status != ScanFile.EXIST:
+                if existed_ebook and not replaced_ebook and row.status != ScanFile.EXIST:
                     logging.info("[IMPORT] Adding format %s to existing book %d", fmt, row.book_id)
                     self.db.add_format(row.book_id, fmt.upper(), fpath, True)
                     row.status = ScanFile.IMPORTED
@@ -1510,7 +1614,9 @@ class ScanService(AsyncService):
                     else:
                         logging.warning("[IMPORT] Skipping category for '%s': invalid dir name", first_dir)
 
-            if CONF.get("REMOVE_IMPORTED_FILE", False) and (not existed_ebook or row.status == ScanFile.EXIST):
+            if CONF.get("REMOVE_IMPORTED_FILE", False) and (
+                not existed_ebook or row.status == ScanFile.EXIST or replaced_ebook
+            ):
                 self._remove_imported_file(fpath)
         except Exception as err:
             new_book_id = None
@@ -1701,12 +1807,24 @@ class ScanService(AsyncService):
             return None, None
 
         same_path_rows = session.query(ScanFile).filter(ScanFile.path == fpath).all()
+        reimport_row = None
+        replace_same_title = bool(CONF.get("SCAN_REPLACE_SAME_TITLE", False))
         for r in same_path_rows:
             if force:
                 break
             if r.status == ScanFile.IMPORTED and self._calibre_book_exists(r.book_id):
-                logging.info("[SCAN] Already imported by path: %s", fpath)
-                return None, None
+                if not replace_same_title:
+                    logging.info("[SCAN] Already imported by path: %s", fpath)
+                    return None, None
+                stored_sig = r.data.get(FILE_SIG_KEY) if isinstance(r.data, dict) else None
+                current_sig = ScanService.file_signature(fpath)
+                if current_sig is None or current_sig == stored_sig:
+                    # stat 失败（瞬时不可达）沿用旧行为保留记录，避免误判为缺失；
+                    # 签名一致则确定未变化。
+                    logging.info("[SCAN] Already imported by path and unchanged: %s", fpath)
+                    return None, None
+                logging.info("[SCAN] Already imported by path but file changed, re-evaluate: %s", fpath)
+                reimport_row = r
             elif r.status == ScanFile.EXIST:
                 logging.info("[SCAN] Found duplicated record with same path %s", fpath)
                 return None, None
@@ -1733,6 +1851,8 @@ class ScanService(AsyncService):
             "stale_rows": len(same_path_rows),
             "reuse_hash": reuse_hash,
             "reuse_stored_sig": reuse_stored_sig,
+            "reimport_row_id": reimport_row.id if reimport_row is not None else None,
+            "reimport_hash": reimport_row.hash if reimport_row is not None else None,
         }, None
 
     def _hash_job(self, ctx):
@@ -1783,9 +1903,26 @@ class ScanService(AsyncService):
         hash_val = result.get("hash")
         bad_reason = result.get("bad_reason")
         current_sig = result.get("sig")
+        reimport_row_id = ctx.get("reimport_row_id")
+        reimport_hash = ctx.get("reimport_hash")
+        if (reimport_row_id and reimport_hash and hash_val and hash_val == reimport_hash
+                and current_sig is not None):
+            # 已导入文件仅属性变化（如 touch/cp -p），内容哈希未变：保留原行并更新签名，
+            # 不再重复比对/替换书库文件。
+            old_row = session.get(ScanFile, reimport_row_id)
+            if old_row is not None and old_row.status == ScanFile.IMPORTED:
+                data = dict(old_row.data) if isinstance(old_row.data, dict) else {}
+                data[FILE_SIG_KEY] = current_sig
+                old_row.data = data
+                if staged is None:
+                    self.save_or_rollback(old_row, session)
+                else:
+                    staged.append(("save", old_row, old_row.status))
+                logging.info("[SCAN] File attributes changed but content identical, update signature: %s", fpath)
+                return None, None
         if ctx["stale_rows"]:
             # Delete all same path records to avoid confusion
-            logging.warning("[SCAN] Found multiple records with same path %s, count: %d. Cleaning up...", fpath, ctx["stale_rows"])
+            logging.warning("[SCAN] Clean up stale records with same path %s, count: %d", fpath, ctx["stale_rows"])
             if staged is None:
                 session.query(ScanFile).filter(ScanFile.path == fpath).delete(synchronize_session=False)
                 session.flush()

@@ -437,6 +437,25 @@ class AdminOwnerMode(BaseHandler):
         self.redirect("/", 302)
 
 
+def sanitize_scan_ignore_dirs(value):
+    """规范化扫描忽略目录名：只保留合法目录名（不含路径分隔符/通配符等）。"""
+    if not isinstance(value, (list, tuple)):
+        return []
+    names = []
+    seen = set()
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        name = item.strip()
+        if not name or name in (".", "..") or name in seen:
+            continue
+        if any(ch in name for ch in '/\\:*?"<>|') or any(ord(ch) < 32 for ch in name):
+            continue
+        seen.add(name)
+        names.append(name)
+    return names
+
+
 class AdminSettings(BaseHandler):
     @js
     @auth
@@ -545,6 +564,9 @@ class AdminSettings(BaseHandler):
                     args[key] = val
             elif key in KEYS:
                 args[key] = val
+
+        if "SCAN_IGNORE_DIRS" in args:
+            args["SCAN_IGNORE_DIRS"] = sanitize_scan_ignore_dirs(args["SCAN_IGNORE_DIRS"])
 
         # Check and set the favicon
         if "site_icon" not in args or not args["site_icon"]:
