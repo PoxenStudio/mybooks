@@ -38,6 +38,7 @@ from webserver.services.autofill import AutoFillService
 from webserver.services.perf_monitor import PerfMonitor
 from webserver.services.ai_fillinfo import AIFillInfoService
 from webserver.services.catalog import CatalogExtractService
+from webserver.services.word_count import WordCountService
 from webserver.services.book_search import BookSearch
 from webserver.services.converter import ConverterService
 from webserver.services.extract import ExtractService, load_txt_content_index
@@ -47,6 +48,7 @@ from webserver.models import BookReadingStats as BookFormatReadingStatsModel, It
 from webserver.services.reading_stats_service import ManualReadingService, ReadingStatsService
 from webserver.services.scan_service import ScanService, SCAN_EXT, ImportOptions
 from webserver.services.download_quota_service import DownloadQuotaService
+from webserver.services.guest_download_quota_service import GuestDownloadQuotaService
 from webserver.services.book_review_service import BookReviewService
 from webserver.recommend import RecommendConfig, RecommendContext, home_seed, utc_now
 from webserver.plugins.meta import douban, douban_v2
@@ -128,10 +130,30 @@ class Index(BaseHandler):
             result.append(book_data)
         return result
 
-    def _legacy_home_ids(self, ids, cnt_random, cnt_recent):
-        random_ids = random.sample(ids, min(cnt_random, len(ids)))
-        ids = sorted(ids, reverse=True)
-        new_ids = random.sample(ids[0:600], min(cnt_recent, len(ids[0:600])))
+    def _legacy_home_ids(self, ids, cnt_random, cnt_recent, avoid_ids=frozenset()):
+        """avoid_ids：屏幕上已有的书（换一批的 exclude、其它区块已显示的书），尽量避开。
+
+        先把避让后的池子用完，选不满再从全量里补——宁可重复也不开天窗，
+        条数与不避让时一致（和推荐引擎 _pick_avoiding 同款语义：avoiding → excluding）。
+        池子小就少给卡会让「换一批」把书架越换越短，小书库上尤其明显。"""
+
+        def pick(pool, cnt, fallback_ids):
+            """先挑光 pool；不够时从 fallback_ids() 里补到 cnt（宁可重复也不开天窗）。
+
+            fallback 传函数是为了懒计算：全量排序在大书库上不便宜，只在真要补时才排。"""
+            picked = random.sample(pool, min(cnt, len(pool)))
+            if len(picked) < cnt:
+                taken = set(picked)
+                rest = [i for i in fallback_ids() if i not in taken]
+                picked += random.sample(rest, min(cnt - len(picked), len(rest)))
+            return picked
+
+        pool = [i for i in ids if i not in avoid_ids]
+        random_ids = pick(pool, cnt_random, lambda: ids)
+        # 新书区沿用旧窗口：先从避让后池子里最新 600 本挑，不够时退到全库最新
+        # 600 本补足（旧实现的兜底窗口），两处都不会把很旧的书当新书推
+        fresh = sorted(pool, reverse=True)[0:600]
+        new_ids = pick(fresh, cnt_recent, lambda: sorted(ids, reverse=True)[0:600])
         return sorted(random_ids, reverse=True), sorted(new_ids, reverse=True)
 
     def _stable_home(self):
@@ -187,105 +209,135 @@ class Index(BaseHandler):
     def _all_book_ids(self):
         return list(self.calibre_db_cache.all_book_ids())
 
-    async def _home_books(self, random_ids, new_ids):
-        books = {b["id"]: b for b in await self.get_books_for_list_async(ids=list(set(random_ids) | set(new_ids)), convert_to_local_tz=False)}
-        return [books[i] for i in random_ids if i in books], [books[i] for i in new_ids if i in books]
+    @js
+    async def get(self):
+        """首页基础数据：只返回布局配置。
+
+        随机/新书/社交推荐的计算很重（读 calibre、构建推荐池），原来放在这里会阻塞
+        SSR 的 asyncData，推迟首屏 HTML（FCP）。现在书籍列表拆到 /api/index/<section>，
+        由页面 mounted 后按需加载，/api/index 只做一次内存里的配置读取。
+        """
+        return {"err": "ok", "homepage": get_homepage_config()}
+
+
+class IndexSection(Index):
+    """按需加载的首页图书区块：/api/index/random、/api/index/new、/api/index/social。
+
+    推荐池按键（读者、n_random、n_new、特征版本）缓存，所以 random/new 两个接口
+    用同一组 canonical 数量调用时只会构建一次池，第二个接口直接复用。
+    """
+
+    SECTION = ""
+    SECTION_KEYS = {
+        "random": "index.randomRecommendation",
+        "new": "index.newRecommendation",
+        "social": "index.socialRecommendation",
+    }
+
+    def _hidden(self, hidden):
+        key = self.SECTION_KEYS.get(self.SECTION, "")
+        return key in hidden
+
+    def _canonical_counts(self, hidden):
+        random_count = int(CONF.get("MAIN_PAGE_RANDOM_COUNT", 12))
+        recent_count = int(CONF.get("MAIN_PAGE_RECENT_COUNT", 12))
+        if perf.lite_on("LITE_PAGE_SIZE"):
+            random_count = min(random_count, 12)
+            recent_count = min(recent_count, 12)
+        if "index.randomRecommendation" in hidden:
+            random_count = 0
+        if "index.newRecommendation" in hidden:
+            recent_count = 0
+        return max(random_count, 0), max(recent_count, 0)
+
+    def _empty_result(self):
+        result = {"err": "ok", "%s_books" % self.SECTION: []}
+        if self.SECTION in ("random", "new"):
+            result["%s_books_count" % self.SECTION] = 0
+            result["seed"] = ""
+        return result
+
+    async def _section_books(self, ids, reasons, cover_only):
+        if not ids:
+            return []
+        books = {b["id"]: b for b in await self.get_books_for_list_async(ids=list(ids), convert_to_local_tz=False)}
+        return [self._fmt_with_reason(books[i], reasons, cover_only=cover_only) for i in ids if i in books]
 
     @js
     @throttle()
     async def get(self):
-        """首页显示随机书籍和最近添加的书籍"""
+        section = self.SECTION
         homepage_config = get_homepage_config()
         hidden = set(homepage_config.get("hidden") or [])
-        need_random = "index.randomRecommendation" not in hidden
-        need_new = "index.newRecommendation" not in hidden
-        need_social = "index.socialRecommendation" not in hidden
+        if self._hidden(hidden):
+            return self._empty_result()
 
-        setting_random_count = CONF.get("MAIN_PAGE_RANDOM_COUNT", 12)
-        setting_recent_count = CONF.get("MAIN_PAGE_RECENT_COUNT", 12)
-        if perf.lite_on("LITE_PAGE_SIZE"):
-            setting_random_count = min(setting_random_count, 12)
-            setting_recent_count = min(setting_recent_count, 12)
-        if need_random:
-            cnt_random = min(int(self.get_argument("random", setting_random_count)), setting_random_count)
+        if section == "social":
+            return {"err": "ok", "social_recommend_books": await self._social_recommend_books()}
+
+        cnt_random, cnt_recent = self._canonical_counts(hidden)
+        if section == "random":
+            if cnt_random <= 0:
+                return self._empty_result()
+            requested = max(0, min(int(self.get_argument("random", cnt_random)), cnt_random))
         else:
-            cnt_random = 0
-        if need_new:
-            cnt_recent = min(int(self.get_argument("recent", setting_recent_count)), 200)
-        else:
-            cnt_recent = 0
+            if cnt_recent <= 0:
+                return self._empty_result()
+            requested = max(0, min(int(self.get_argument("recent", cnt_recent)), min(cnt_recent, 200)))
 
         home_key = None
         if perf.lite_on("LITE_HOME_CACHE") and self.get_argument("refresh", "0") != "1":
             home_key = (
-                self.user_id(), cnt_random, cnt_recent, self.get_argument("exclude", ""), self.get_argument("personalized", "1"),
-                self.get_argument("seed", ""), need_random, need_new, need_social, tuple(sorted(hidden)),
+                section, self.user_id(), requested, cnt_random, cnt_recent, self.get_argument("exclude", ""),
+                self.get_argument("personalized", "1"), self.get_argument("seed", ""),
             )
             cached = BaseHandler._home_cache.get(home_key, self.library_version())
             if cached is not None:
-                cached = dict(cached)
-                cached["homepage"] = homepage_config
                 return cached
-
-        if not need_random and not need_new and not need_social:
-            return {
-                "err": "ok",
-                "random_books_count": 0,
-                "new_books_count": 0,
-                "random_books": [],
-                "new_books": [],
-                "social_recommend_books": [],
-                "seed": "",
-                "homepage": homepage_config,
-            }
 
         t0 = time.perf_counter()
         ids = await self.run_calibre_read_async(self._all_book_ids)
         t_ids = time.perf_counter()
         if not ids:
-            return {
-                "err": "nobooks",
-                "random_books_count": 0,
-                "new_books_count": 0,
-                "random_books": [],
-                "new_books": [],
-                "social_recommend_books": [],
-                "homepage": homepage_config,
-            }
+            result = self._empty_result()
+            result["err"] = "nobooks"
+            return result
 
         cnt_recent = min(cnt_recent, len(ids))
         cnt_random = min(cnt_random, len(ids))
-        social_books = await self._social_recommend_books() if need_social else []
-        t_social = time.perf_counter()
         reader_id = self.user_id() or None
         seed = self._home_seed(reader_id)
-        home_ids = self._recommend_home_ids(cnt_random, cnt_recent, [b["id"] for b in social_books], seed, reader_id)
-        random_ids, new_ids, reasons = home_ids or (*self._legacy_home_ids(ids, cnt_random, cnt_recent), {})
+        home_ids = self._recommend_home_ids(cnt_random, cnt_recent, [], seed, reader_id)
+        random_ids, new_ids, reasons = home_ids or (*self._legacy_home_ids(ids, cnt_random, cnt_recent, self._shown_ids()), {})
         t_home = time.perf_counter()
-        random_books, new_books = await self._home_books(random_ids, new_ids)
-        t_books = time.perf_counter()
 
-        result = {
-            "err": "ok",
-            "random_books_count": len(random_books),
-            "new_books_count": len(new_books),
-            "random_books": [self._fmt_with_reason(b, reasons, cover_only=True) for b in random_books],
-            "new_books": [self._fmt_with_reason(b, reasons) for b in new_books],
-            "social_recommend_books": social_books,
-            "seed": seed if home_ids else "",
-            "homepage": homepage_config,
-        }
-        t_fmt = time.perf_counter()
+        if section == "random":
+            books = await self._section_books(random_ids[:requested], reasons, cover_only=True)
+            result = {"err": "ok", "random_books_count": len(books), "random_books": books, "seed": seed if home_ids else ""}
+        else:
+            books = await self._section_books(new_ids[:requested], reasons, cover_only=False)
+            result = {"err": "ok", "new_books_count": len(books), "new_books": books, "seed": seed if home_ids else ""}
+        t_books = time.perf_counter()
         logging.info(
-            "[index timing] ids=%.0fms social=%.0fms home(%s)=%.0fms get_books=%.0fms fmt=%.0fms total=%.0fms",
-            (t_ids - t0) * 1000, (t_social - t_ids) * 1000, "recommend" if home_ids else "legacy",
-            (t_home - t_social) * 1000, (t_books - t_home) * 1000, (t_fmt - t_books) * 1000, (t_fmt - t0) * 1000,
+            "[index/%s timing] ids=%.0fms home(%s)=%.0fms fmt=%.0fms total=%.0fms",
+            section, (t_ids - t0) * 1000, "recommend" if home_ids else "legacy",
+            (t_home - t_ids) * 1000, (t_books - t_home) * 1000, (t_books - t0) * 1000,
         )
         if home_key is not None:
-            cache_payload = dict(result)
-            cache_payload.pop("homepage", None)
-            BaseHandler._home_cache.put(home_key, self.library_version(), cache_payload)
+            BaseHandler._home_cache.put(home_key, self.library_version(), result)
         return result
+
+
+class IndexRandom(IndexSection):
+    SECTION = "random"
+
+
+class IndexNew(IndexSection):
+    SECTION = "new"
+
+
+class IndexSocial(IndexSection):
+    SECTION = "social"
 
 
 class HomepageConfig(BaseHandler):
@@ -568,6 +620,56 @@ class BookCatalog(BaseHandler):
         return {"err": "ok", "msg": _("目录提取成功"), "catalog": result.get("catalog", "")}
 
 
+class BookWordCount(BaseHandler):
+    """按需统计单本书籍字数（EPUB > TXT），结果写入 #word_count"""
+
+    @js
+    @auth
+    def post(self, id):
+        book_id = int(id)
+        book = self.get_book(book_id, raise_exception=False)
+        if not book:
+            return {"err": "params.book.invalid", "msg": _("书籍不存在")}
+
+        if not self.is_admin() and not self.is_book_owner(book_id, self.user_id()):
+            return {"err": "user.no_permission", "msg": _("无权限")}
+
+        return WordCountService().count_one(book_id)
+
+
+class BookWordCountBatch(BaseHandler):
+    """批量统计字数：传入 idlist 时只处理所选书（强制重算），否则处理全部书（跳过已有字数）"""
+
+    @js
+    @auth
+    def post(self):
+        if not self.is_admin():
+            return {"err": "user.no_permission", "msg": _("无权限")}
+
+        service = WordCountService()
+        if service.is_running:
+            return {"err": "task.running", "msg": _("有字数统计任务正在运行中，请稍后再试")}
+
+        data = tornado.escape.json_decode(self.request.body)
+        idlist = data.get("idlist")
+
+        if isinstance(idlist, list) and len(idlist) > 0:
+            book_ids = [int(bid) for bid in idlist]
+            force = True
+        else:
+            book_ids = list(self.calibre_db_cache.all_book_ids())
+            force = False
+
+        service.is_running = True
+        try:
+            service.count_batch(self.current_user.id, book_ids, force=force)
+        except Exception:
+            service.is_running = False
+            raise
+        msg = _("字数统计任务已启动，共 %d 本，右上角可以查看进度") % len(book_ids)
+        return {"err": "ok", "msg": msg}
+
+
 class BookCatalogBatch(BaseHandler):
     """批量提取书籍目录：传入idlist时只处理指定书籍(强制重新提取)，否则处理全部书籍(跳过已有目录的书籍)"""
 
@@ -707,20 +809,29 @@ class BookCategories(BaseHandler):
         table = f"custom_column_{meta['colnum']}"
         link_table = f"books_{table}_link"
 
-        sql = f"""
-            SELECT t.value, count(l.book) as count
-            FROM {table} t
-            JOIN {link_table} l ON t.id = l.value
-            GROUP BY t.id
-            ORDER BY count DESC
-        """
+        # simple=1 时只返回自定义字段 #category 的分类列表，不统计数量
+        simple = (self.get_argument("simple", "") or "").strip() == "1"
+        if simple:
+            sql = f"SELECT t.value FROM {table} t ORDER BY t.value"
+        else:
+            sql = f"""
+                SELECT t.value, count(l.book) as count
+                FROM {table} t
+                JOIN {link_table} l ON t.id = l.value
+                GROUP BY t.id
+                ORDER BY count DESC
+            """
 
         try:
             version = self.library_version()
-            rows = BaseHandler._catalog_cache.get(("categories", sql), version)
+            cache_key = ("categories_simple" if simple else "categories", sql)
+            rows = BaseHandler._catalog_cache.get(cache_key, version)
             if rows is None:
-                rows = [(row[0], row[1]) for row in await self.run_calibre_sql(sql)]
-                BaseHandler._catalog_cache.put(("categories", sql), version, rows)
+                if simple:
+                    rows = [(row[0], 0) for row in await self.run_calibre_sql(sql)]
+                else:
+                    rows = [(row[0], row[1]) for row in await self.run_calibre_sql(sql)]
+                BaseHandler._catalog_cache.put(cache_key, version, rows)
             categories = [{"name": row[0], "count": row[1]} for row in rows]
 
             if CONF.get(constants.ALLOW_READ_RANGE_SETTING, False):
@@ -2318,10 +2429,35 @@ class BookDeleteFormat(BaseHandler):
 
 
 class BookDownloadQuota(BaseHandler):
+    def _is_cross_origin(self):
+        origin = self.request.headers.get("Origin")
+        if not origin:
+            return False
+        return origin.rstrip("/") != (self.site_url or "").rstrip("/")
+
     @js
-    @auth
     def get(self):
-        """返回当前用户今日下载配额的使用情况，供前端在真正触发下载前做提示，不消耗配额。"""
+        """返回今日下载配额的使用情况，供前端在真正触发下载前做提示，不消耗配额。"""
+        try:
+            book_id = int(self.get_argument("book_id", ""))
+        except (TypeError, ValueError):
+            book_id = None
+        if BookAccessService.share_download_granted(self, book_id):
+            return {"err": "ok", "allowed": True, "used": 0, "quota": 0}
+        if not self.current_user:
+            # @js 会反射 Origin 并允许跨域读；访客配额只允许同源预检查读用量
+            if self._is_cross_origin():
+                return {"err": "ok", "allowed": True}
+            result = GuestDownloadQuotaService.get_usage(self.request.remote_ip, book_id)
+            if result.allowed:
+                return {"err": "ok", "allowed": True, "used": result.used, "quota": result.quota}
+            return {
+                "err": "quota.exceeded",
+                "allowed": False,
+                "used": result.used,
+                "quota": result.quota,
+                "msg": _("访客今日下载次数已达上限(%d/%d)，请明天再试") % (result.used, result.quota),
+            }
         if not CONF.get("ENABLE_DOWNLOAD_QUOTA", False) or self.is_admin():
             return {"err": "ok", "allowed": True, "used": 0, "quota": 0}
         result = DownloadQuotaService.get_usage(self.current_user)
@@ -2435,8 +2571,17 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
     _download_cache = {}
 
     def _charge_download(self, bid, fmt):
-        """同一用户同一本书同一格式在窗口期内的多次请求（分段、续传、重试）只扣一次配额；HEAD 不扣。"""
-        if not self.current_user or self.request.method == "HEAD" or BookAccessService.share_download_granted(self, self.requested_book_id()):
+        """同一用户同一本书同一格式在窗口期内的多次请求（分段、续传、重试）只扣一次配额；HEAD 与分享链接不扣。"""
+        try:
+            book_id = int(bid)
+        except (TypeError, ValueError):
+            book_id = self.requested_book_id()
+        if self.request.method == "HEAD" or BookAccessService.share_download_granted(self, book_id):
+            return
+        if not self.current_user:
+            result = GuestDownloadQuotaService.charge(self.request.remote_ip, bid)
+            if not result.allowed:
+                raise web.HTTPError(429, reason=_("访客今日下载次数已达上限(%d/%d)，请明天再试") % (result.used, result.quota))
             return
         protocol = Reading.PROTOCOL_OPDS if self.is_opds else Reading.PROTOCOL_WEB
         result = DownloadQuotaService.charge(self.current_user, bid, fmt, protocol)
@@ -2462,9 +2607,11 @@ class BookDownload(BaseHandler, web.StaticFileHandler):
         book = self.get_book(bid, raise_exception=False)
         if not book or "fmt_%s" % fmt not in book:
             raise web.HTTPError(404, reason=_("%s格式无法下载" % fmt))
-        self._charge_download(bid, fmt)
 
         path = book["fmt_%s" % fmt]
+        if os.path.isfile(path):
+            self._charge_download(bid, fmt)
+
         book["fmt"] = fmt
         book["title"] = urllib.parse.quote_plus(book["title"][:128])
         fname = "%(title)s.%(fmt)s" % book
@@ -3679,16 +3826,23 @@ class BookUploadBatch(BaseHandler):
             first_seg = self._sanitize_relative_path(next(p for p in norm_rel_paths if "/" in p)).split("/", 1)[0]
             top_folder = first_seg or None
 
+        scan_upload_root = scan_upload_path.rstrip(os.sep) + os.sep
+
         if top_folder:
             candidate, suffix = top_folder, 1
-            while os.path.exists(os.path.join(scan_upload_path, candidate)):
+            while True:
+                batch_dir = os.path.realpath(os.path.join(scan_upload_path, candidate))
+                # realpath 归一后做前缀校验：用户提供的目录名不得把暂存目录带出扫描导入目录
+                if not batch_dir.startswith(scan_upload_root):
+                    return {"err": "server.error", "msg": _("非法的暂存路径")}
+                if not os.path.exists(batch_dir):
+                    break
                 candidate = f"{top_folder}_{import_id}_{suffix}"
                 suffix += 1
-            batch_dir = os.path.realpath(os.path.join(scan_upload_path, candidate))
         else:
             batch_dir = os.path.realpath(os.path.join(scan_upload_path, f"_upload_{self.user_id() or 0}_{import_id}"))
 
-        if os.path.commonpath([scan_upload_path, batch_dir]) != scan_upload_path:
+        if not batch_dir.startswith(scan_upload_root):
             return {"err": "server.error", "msg": _("非法的暂存路径")}
 
         saved = 0
@@ -3711,7 +3865,7 @@ class BookUploadBatch(BaseHandler):
                 if fmt not in SCAN_EXT:
                     continue
                 target_path = os.path.realpath(os.path.join(batch_dir, rel_path))
-                if os.path.commonpath([batch_dir, target_path]) != batch_dir:
+                if not target_path.startswith(batch_dir + os.sep):
                     continue
                 os.makedirs(os.path.dirname(target_path), exist_ok=True)
                 with open(target_path, "wb") as f:
@@ -3806,42 +3960,43 @@ class BookRead(BaseHandler):
             stat_fmt = fmt_arg or next((f for f in self.READABLE_FORMATS if book.get("fmt_%s" % f)), None)
             ReadingStatsService.heartbeat(self.current_user.id, book_id, Reading.PROTOCOL_WEB, fmt=stat_fmt)
 
-        book_reader = CONF.get("EPUB_VIEWER", "MyReader")
+        book_reader = CONF.get("EPUB_VIEWER", constants.EPUB_VIEWER_MYREADADER)
+        if book_reader != constants.EPUB_VIEWER_MYREADADER:
+            book_reader = constants.EPUB_VIEWER_DEFAULT
 
-        # 用户在设置中选择了 MyReader 作为阅读器时，epub/pdf/cbz/fb2 直接跳转到 MyReader
-        # 的内嵌阅读入口；其余格式（mobi/azw3/txt 等）沿用下面既有的转换+内置阅读器逻辑，
-        # 因为 MyReader 侧目前只支持 epub/pdf/cbz/fb2（见 document/MyReader_Embedded_WebApp.md）。
+        # 用户在设置中选择了 MyReader 作为阅读器时，epub/cbz/fb2 直接跳转到 MyReader
+        # 的内嵌阅读入口；PDF 由独立的 PDF_READER 设置决定（见下方 PDF 分支），
+        # 其余格式（mobi/azw3/txt 等）沿用下面既有的转换+内置阅读器逻辑，
         if book_reader == "MyReader":
             myreader_format = None
             if fmt_arg:
-                if fmt_arg in ("epub", "pdf", "cbz", "fb2") and fpath_arg:
+                if fmt_arg in ("epub", "cbz", "fb2") and fpath_arg:
                     myreader_format = fmt_arg
             elif book.get("fmt_epub"):
                 myreader_format = "epub"
-            elif "fmt_pdf" in book:
-                myreader_format = "pdf"
+            elif book.get("fmt_pdf"):
+                # PDF 是否走 MyReader 由 PDF_READER 决定；不是 MyReader 时不再
+                # 继续匹配 cbz/fb2，交由下方 PDF 分支使用兼容阅读器
+                if CONF.get("PDF_READER", "MyReader") == "MyReader":
+                    myreader_format = "pdf"
             elif "fmt_cbz" in book:
                 myreader_format = "cbz"
             elif "fmt_fb2" in book:
                 myreader_format = "fb2"
             if myreader_format:
                 return self.redirect(
-                    "/readerx/open?bookId=%s&format=%s" % (book_id, myreader_format)
+                    "/readerx/open?bookId=%s&format=%s&title=%s"
+                    % (book_id, myreader_format, urllib.parse.quote_plus(book.get("title") or ""))
                 )
             # Fallback to the original reading logic if MyReader is not used or the format is not supported
-            book_reader = "epubjs.html"
+            book_reader = constants.EPUB_VIEWER_DEFAULT
 
         if fpath_arg:
             if fmt_arg == "txt":
                 return self.redirect(f'/book/{book_id}/readtxt')
 
             if fmt_arg == "pdf":
-                if self.current_user and not self.current_user.can_save():
-                    raise web.HTTPError(403, reason=_("无权在线阅读"))
-
-                pdf_url = urllib.parse.quote_plus(self.api_url + "/api/book/%(id)d.pdf" % book)
-                pdf_reader_url = CONF["PDF_VIEWER"] % {"pdf_url": pdf_url}
-                return self.redirect(pdf_reader_url)
+                return self._redirect_pdf_reader(book)
 
             if fmt_arg == "djvu":
                 return self._redirect_djvu_reader(book)
@@ -3894,12 +4049,7 @@ class BookRead(BaseHandler):
                 has_converted_pdf = True
 
         if "fmt_pdf" in book or has_converted_pdf:
-            if self.current_user and not self.current_user.can_save():
-                raise web.HTTPError(403, reason=_("无权在线阅读PDF类书籍"))
-
-            pdf_url = urllib.parse.quote_plus(self.api_url + "/api/book/%(id)d.PDF" % book)
-            pdf_reader_url = CONF["PDF_VIEWER"] % {"pdf_url": pdf_url}
-            return self.redirect(pdf_reader_url)
+            return self._redirect_pdf_reader(book)
 
         if 'fmt_djvu' in book:
             return self._redirect_djvu_reader(book)
@@ -3910,6 +4060,22 @@ class BookRead(BaseHandler):
             return self.redirect(txt_reader_url)
 
         raise web.HTTPError(404, reason=_("抱歉，在线阅读器暂不支持该格式的书籍，可以转为epub或者pdf后阅读"))
+
+    def _redirect_pdf_reader(self, book):
+        """跳转到 PDF 阅读器：PDF_READER 为 MyReader 时走内嵌阅读器，
+        否则使用 PDF_VIEWER 指定的兼容阅读器（默认 pdf.js）。"""
+        if CONF.get("PDF_READER", "MyReader") == "MyReader":
+            return self.redirect(
+                "/readerx/open?bookId=%s&format=pdf&title=%s"
+                % (book["id"], urllib.parse.quote_plus(book.get("title") or ""))
+            )
+
+        if self.current_user and not self.current_user.can_save():
+            raise web.HTTPError(403, reason=_("无权在线阅读PDF类书籍"))
+
+        pdf_url = urllib.parse.quote_plus(self.api_url + "/api/book/%(id)d.PDF" % book)
+        pdf_reader_url = CONF["PDF_VIEWER"] % {"pdf_url": pdf_url}
+        return self.redirect(pdf_reader_url)
 
     def _redirect_djvu_reader(self, book):
         """跳转到 DjVu.js 阅读器（与 PDF 一样直接读取原文件，需下载权限）"""
@@ -3964,7 +4130,7 @@ class BookRead(BaseHandler):
             # _epub_conversion_source 返回 None 有两种含义：已可直接阅读，或没有任何可读格式。
             # 仅含 UVZ 的书籍不允许进入阅读流程（DJVU 有 DjVu.js 阅读器，CBZ 仅 MyReader 可读）。
             readable = constants.SUPPORTED_EBOOK_FORMATS + ["djvu"]
-            if CONF.get("EPUB_VIEWER", "MyReader") == "MyReader":
+            if CONF.get("EPUB_VIEWER", constants.EPUB_VIEWER_MYREADADER) == constants.EPUB_VIEWER_MYREADADER:
                 readable.append("cbz")
             if not any(book.get("fmt_%s" % f) for f in readable):
                 return {"err": "params.book.invalid", "msg": _("抱歉，在线阅读器暂不支持该格式的书籍，可以转为epub或者pdf后阅读")}
@@ -4902,6 +5068,9 @@ class BookExchangeType(feature_modules.ModuleGateMixin, BaseHandler):
 def routes():
     return [
         (r"/api/index", Index),
+        (r"/api/index/random", IndexRandom),
+        (r"/api/index/new", IndexNew),
+        (r"/api/index/social", IndexSocial),
         (r"/api/homepage", HomepageConfig),
         (r"/api/search", SearchBook),
         (r"/api/recent", RecentBook),
@@ -4957,6 +5126,8 @@ def routes():
         (r"/api/book/([0-9]+)/category", BookCategory),
         (r"/api/book/([0-9]+)/location", BookLocation),
         (r"/api/book/([0-9]+)/catalog", BookCatalog),
+        (r"/api/book/([0-9]+)/word_count", BookWordCount),
+        (r"/api/book/word_count/batch", BookWordCountBatch),
         (r"/api/book/catalog/batch", BookCatalogBatch),
         (r"/api/categories", BookCategories),
         (r"/api/tags/search", TagSearch),

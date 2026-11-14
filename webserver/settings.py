@@ -195,6 +195,8 @@ settings = {
     "READER_DICT_MYBOOKS_ENABLED": True,
     "READER_DICT_BAIKE_ENABLED": True,
     "READER_MYDICTS": [],
+    # PDF 阅读器：MyReader=内嵌阅读器，取其它值（如 default）则使用 PDF_VIEWER
+    "PDF_READER": "MyReader",
     "PDF_VIEWER": "/static/pdfjs/web/viewer.html?file=%(pdf_url)s",
     "DJVU_VIEWER": "/static/djvureader/index.html?file=%(djvu_url)s&name=%(name)s",
     "ENABLE_PODCAST_SERVICE": False,
@@ -236,6 +238,8 @@ settings = {
     "UPDATE_CATEGORY_WITH_FOLDER_RENAME": False,
     "SEND_MAIL_FOR_NEW_BOOKS" : False,
     "REMOVE_IMPORTED_FILE": False,
+    "SCAN_IGNORE_DIRS": [],
+    "SCAN_REPLACE_SAME_TITLE": False,
     "KEEP_UPLOAD_SOURCE_FILE": False,
     "ENABLE_SERVER_FILE_IMPORT": False,
     "UPLOAD_IGNORE_TITLE_CHECKING": False,
@@ -315,6 +319,8 @@ settings = {
     "ENABLE_DOWNLOAD_QUOTA" : False,   # 是否启用每用户每日下载配额限制
     "ENABLE_USER_MEMOS": True,
     "GLOBAL_DOWNLOAD_QUOTA" : 10,       # 全局每日下载配额（用户未单独设置时使用），0表示不限制
+    "ENABLE_GUEST_DOWNLOAD_QUOTA" : False,  # 是否启用未登录访客按 IP 的每日下载本数限制
+    "GUEST_DOWNLOAD_QUOTA" : 10,        # 每个访客 IP 每日可下载的书籍本数，0表示不限制
     'ALLOW_REGISTER' : False,
     'HEADER': '',
     'FOOTER': '',

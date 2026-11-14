@@ -2,6 +2,7 @@
 
 import datetime
 import unittest
+from unittest import mock
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import scoped_session, sessionmaker
@@ -34,6 +35,23 @@ class TestReadingWriteBufferFlush(unittest.TestCase):
 
     def tearDown(self):
         self.session.remove()
+
+    def test_flush_failure_returns_false_and_requeues(self):
+        t0 = datetime.datetime(2026, 1, 1, 0, 0, 0)
+        self.buf.on_heartbeat(1, 100, Reading.PROTOCOL_APP, t0)
+        t1 = t0 + datetime.timedelta(seconds=5)
+        self.buf.on_heartbeat(1, 100, Reading.PROTOCOL_APP, t1)
+
+        fake_db = mock.Mock()
+        fake_db.query.return_value.filter.return_value.first.return_value = None
+        fake_db.execute.side_effect = RuntimeError("boom")
+        with mock.patch.object(Reading, "_session", return_value=fake_db):
+            self.assertFalse(self.buf.flush())
+
+        session = self.buf._sessions[(1, 100)]
+        self.assertEqual(session.duration_delta, 5)
+        self.assertTrue(session.dirty)
+        self.assertEqual(self.buf._reader_seconds_delta[1], 5)
 
     def test_first_read_creates_row_and_bumps_item_visit_once(self):
         t0 = datetime.datetime(2026, 1, 1, 0, 0, 0)

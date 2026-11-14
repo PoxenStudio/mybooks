@@ -208,7 +208,7 @@ class TestBookReviewHandler(TestWithUserLogin):
 
 
 class TestHomeSocialRecommendations(TestWithUserLogin):
-    """`/api/index` 的 `social_recommend_books` 字段，见 plan §2.3。"""
+    """`/api/index/social` 的 `social_recommend_books` 字段，见 plan §2.3。"""
 
     def setUp(self):
         super().setUp()
@@ -217,7 +217,7 @@ class TestHomeSocialRecommendations(TestWithUserLogin):
 
     def test_shows_recently_recommended_book(self):
         self.json("/api/book/%d/review" % BID_EPUB, method="POST", body=json.dumps({"rating": 9, "comment": "great"}))
-        d = self.json("/api/index")
+        d = self.json("/api/index/social")
         self.assertEqual(d["err"], "ok")
         book_ids = [b["id"] for b in d["social_recommend_books"]]
         self.assertIn(BID_EPUB, book_ids)
@@ -228,7 +228,7 @@ class TestHomeSocialRecommendations(TestWithUserLogin):
         self.json("/api/book/%d/review" % BID_EPUB, method="POST", body=json.dumps({"rating": 9, "comment": ""}))
         main.CONF["ENABLE_BOOK_RECOMMEND_TO_OTHERS"] = False
         try:
-            d = self.json("/api/index")
+            d = self.json("/api/index/social")
             self.assertEqual(d["social_recommend_books"], [])
         finally:
             main.CONF["ENABLE_BOOK_RECOMMEND_TO_OTHERS"] = True
@@ -237,7 +237,7 @@ class TestHomeSocialRecommendations(TestWithUserLogin):
         self.json("/api/book/%d/review" % BID_EPUB, method="POST", body=json.dumps({"rating": 9, "comment": ""}))
         self.json("/api/user/update", method="POST", body=json.dumps({"show_home_recommendations": False}))
         try:
-            d = self.json("/api/index")
+            d = self.json("/api/index/social")
             self.assertEqual(d["social_recommend_books"], [])
         finally:
             self.json("/api/user/update", method="POST", body=json.dumps({"show_home_recommendations": True}))

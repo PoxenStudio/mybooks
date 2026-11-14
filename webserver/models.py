@@ -8,14 +8,15 @@ import re
 import time
 import json
 import os
+import uuid
 import zlib
 from webserver import site_time
 from webserver.i18n import _
 
 from social_sqlalchemy.storage import JSONType, SQLAlchemyMixin
-from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, or_
+from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func, or_
 from sqlalchemy.ext.mutable import Mutable
-from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.orm import object_session, relationship, declarative_base
 from webserver.constants import BOOK_TYPE_EBOOK
 
 
@@ -162,12 +163,51 @@ class Reader(Base, SQLAlchemyMixin):
         self.init(DefaultUserInfo())
 
     def init(self, social_user):
-        self.username = self.get_social_username(social_user)
+        if not self.username:
+            self.username = self.get_social_username(social_user)
+            self.ensure_unique_username()
         self.create_time = datetime.datetime.now()
         self.update_time = datetime.datetime.now()
         self.access_time = datetime.datetime.now()
         self.extra = {"kindle_email": "", "allow_sending_mail": True}
         self.init_avatar(social_user)
+
+    def apply_default_read_range(self, conf):
+        default_range = conf.get("DEFAULT_READ_RANGE") or {}
+        self.read_limit = default_range.get("mode", 0) or 0
+        self.limit_categories = default_range.get("categories", "") or ""
+        self.limit_tags = default_range.get("tags", "") or ""
+
+    def apply_signup_defaults(self, conf):
+        self.permission = self.DEFAULT_PERMISSION
+        if not conf.get("ALLOW_NEW_USER_MANAGE_BOOK", True):
+            self.permission += self.DISABLE_MANAGE
+        if not conf.get("ALLOW_NEW_USER_PUSH_BOOK", True):
+            self.permission += self.DISABLE_PUSH
+        self.active = conf.get("ENABLE_AUTO_NEW_USER_APPROVAL", False)
+        self.apply_default_read_range(conf)
+
+    def username_available(self, username):
+        if not username:
+            return False
+        session = object_session(self)
+        if session is None:
+            return True
+        query = session.query(Reader).filter(
+            func.lower(Reader.username) == username.lower()
+        )
+        if self.id:
+            query = query.filter(Reader.id != self.id)
+        return query.first() is None
+
+    def ensure_unique_username(self):
+        name = (self.username or "").strip()
+        if not name or self.username_available(name):
+            return
+        base = name[:180]
+        while not self.username_available(name):
+            name = "%s%s" % (base, uuid.uuid4().hex[:8])
+        self.username = name
 
     def reset_password(self):
         s = "%s%s%s" % (self.username, self.create_time.strftime("%s"), time.time())
@@ -206,9 +246,10 @@ class Reader(Base, SQLAlchemyMixin):
 
     def check_and_update(self, social_user):
         name = self.get_social_username(social_user)
-        if self.username != name:
-            logging.info("userid[%s] username needs update to [%s]" % (self.id, name))
-            self.username = name
+        if self.username == name or not self.username_available(name):
+            return
+        logging.info("userid[%s] username needs update to [%s]" % (self.id, name))
+        self.username = name
 
     def set_permission(self, operations):
         ALL = "delprsuv"
@@ -1185,6 +1226,27 @@ class BookVisit(Base, SQLAlchemyMixin):
         self.visit_time = visit_time or datetime.datetime.now()
 
 
+class GuestDownloadDaily(Base, SQLAlchemyMixin):
+    """未登录访客按 IP 的每日下载去重记录，见 webserver/services/guest_download_quota_service.py。
+    同一 IP、同一站点日、同一本书只存一行，重复下载/换格式/续传不会重复消耗额度。"""
+
+    __tablename__ = "guest_download_daily"
+
+    ip = Column(String(45), primary_key=True)
+    day = Column(Date, primary_key=True)
+    book_id = Column(Integer, primary_key=True)
+    create_time = Column(DateTime, nullable=False)
+
+    __table_args__ = (Index("ix_guest_download_daily_day", "day"), )
+
+    def __init__(self, ip, day, book_id, create_time=None):
+        super(GuestDownloadDaily, self).__init__()
+        self.ip = ip
+        self.day = day
+        self.book_id = book_id
+        self.create_time = create_time or datetime.datetime.now()
+
+
 class BookShare(Base, SQLAlchemyMixin):
     """管理员创建的匿名分享链接，每本书至多一条。取消为 status=0，删除为物理删除。"""
 
@@ -1281,7 +1343,7 @@ def user_syncdb(engine):
 # 表结构随功能迭代新增的表，不希望依赖运维方手动重新执行 `--syncdb` 才能用上
 # （`docker/start.sh` 每次启动都会跑 --syncdb，但手工部署/测试环境不一定会），
 # 在正常的 make_app() 启动路径里也顺带补建一次，checkfirst=True 天然幂等。
-_NEW_TABLES_AUTO_ENSURE = (ReadingRecord, BookReview, InstalledTool, BookReadingStats, BookList, BookListBook, BookListLike, ManualReadingLog, BookVisit, BookShare, ScanDirSnapshot, MyNexusBookAnalysis, MyNexusChatSession, KoreaderPosition)
+_NEW_TABLES_AUTO_ENSURE = (ReadingRecord, BookReview, InstalledTool, BookReadingStats, BookList, BookListBook, BookListLike, ManualReadingLog, BookVisit, GuestDownloadDaily, BookShare, ScanDirSnapshot, MyNexusBookAnalysis, MyNexusChatSession, KoreaderPosition)
 
 
 def ensure_new_tables(engine):

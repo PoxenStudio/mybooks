@@ -182,10 +182,10 @@ export default {
 
 <style scoped>
 .upload-dialog-card {
-    border-radius: 16px 16px 4px 4px !important;
+    border-radius: var(--app-dialog-radius, 8px) !important;
 }
 .upload-dialog-toolbar {
-    border-radius: 16px 16px 0 0 !important;
+    border-radius: var(--app-dialog-radius, 8px) var(--app-dialog-radius, 8px) 0 0 !important;
     overflow: hidden;
 }
 </style>

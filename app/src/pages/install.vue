@@ -23,11 +23,6 @@
                             autocomplete="new-password" :rules="[rules.pass]"></v-text-field>
                         <v-text-field required prepend-icon="mdi-email" v-model="email" :label="$t('install.adminEmail')" type="text"
                             autocomplete="new-email" :rules="[rules.email]"></v-text-field>
-                        <v-checkbox v-model="invite" :label="$t('install.privateLibraryMode')"></v-checkbox>
-                        <template v-if="invite">
-                            <v-text-field required prepend-icon="mdi-lock" v-model="code" :label="$t('install.accessCode')" type="text"
-                                autocomplete="new-code" :rules="[rules.code]"></v-text-field>
-                        </template>
                         <v-divider class="my-4"></v-divider>
                         <v-sheet outlined rounded class="pa-3">
                             <div class="text-subtitle-2 mb-2">{{ $t('install.modulesTitle') }}</div>
@@ -66,8 +61,6 @@ export default {
         username: "admin",
         password: "",
         email: "",
-        code: "",
-        invite: false,
         // 新装默认勾多用户/共享阅读/有声书/实体书/AI；社区互动默认关闭。
         // 后端 MODULES 默认仍为 true，用于老实例升级零变化。
         moduleMultiUser: true,
@@ -85,7 +78,6 @@ export default {
             user: null,
             pass: null,
             email: null,
-            code: null,
         },
 
     }),
@@ -95,7 +87,6 @@ export default {
     created() {
         this.rules.user = (v) => (20 >= v.length && v.length >= 3) || this.$t('install.usernameRule');
         this.rules.pass = (v) => (20 >= v.length && v.length >= 6) || this.$t('install.passwordRule');
-        this.rules.code = (v) => (64 >= v.length && v.length >= 4) || this.$t('install.accessCodeRule');
         this.rules.email = (email) => {
             var re = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
             return re.test(email) || this.$t('install.invalidEmail');
@@ -174,8 +165,6 @@ export default {
             data.append('username', this.username);
             data.append('password', this.password);
             data.append('email', this.email);
-            data.append('code', this.code);
-            data.append('invite', this.invite);
             data.append('title', this.title);
             data.append('language', this.language);
             data.append('ENABLE_MODULE_MULTIUSER', this.moduleMultiUser ? 'true' : 'false');

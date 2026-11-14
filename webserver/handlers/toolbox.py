@@ -50,13 +50,10 @@ class AdminToolList(BaseHandler):
     @is_admin
     def get(self):
         # 注意：不在这里调用 ToolSet.collect_tools() —— 工具的注册（含外部工具、被更新覆盖
-        # 的内置工具）只在进程启动时 toolbox_manager.load_all() 里发生一次（"重启生效"模型，
-        # 见 document/Toolbox_Dynamic_Design.md 3.3.1 节）；每次请求都重新 collect_tools()
-        # 会用仓库自带的 info() 把已加载的覆盖版本元数据冲掉。
+        # 的内置工具）只在进程启动时 toolbox_manager.load_all() 里发生一次（"重启生效"模型；
+        # 每次请求都重新 collect_tools() 会用仓库自带的 info() 把已加载的覆盖版本元数据冲掉。
         #
-        # include_disabled=1：仅供 /admin/toolbox 管理页使用（同样要求 is_admin）——3.3.1
-        # 节要求"禁用立即从可见列表消失"针对的是工具启动入口（普通工具墙/工具承载页），
-        # 但管理页面需要能看到被禁用的工具才能把它重新启用，否则禁用会变成有去无回的单向操作。
+        # include_disabled=1：仅供 /admin/toolbox 管理页使用（同样要求 is_admin）
         include_disabled = self.get_argument("include_disabled", "") == "1"
         tools = []
         for t in ToolSet.all_tools():
@@ -66,7 +63,7 @@ class AdminToolList(BaseHandler):
                 # 直接跳过，不展示（3.3.1 节要求卸载后立即从列表消失）
                 continue
             if state["type"] == "tool" and state["status"] == "disabled" and not include_disabled:
-                # 禁用的外部工具立即从列表消失，无需重启（3.3.1 节）
+                # 禁用的外部工具立即从列表消失，无需重启
                 continue
             data = t.to_dict()
             data.update(state)
@@ -192,10 +189,10 @@ class AdminToolUninstall(BaseHandler):
 
 
 class AdminToolStoreIndex(BaseHandler):
-    """商店可安装工具列表（3.4 节 `GET toolbox/index` 的内部代理，带 TTL 缓存）。
+    """商店可安装工具列表
 
     `ENABLE_TOOLBOX_STORE=False`（默认）时 `get_cached_index()` 恒为空列表，接口照常返回
-    `200`，前端商店面板展示"暂无可安装工具"而不是报错（3.4.1 节）。
+    `200`，前端商店面板展示"暂无可安装工具"而不是报错
     """
 
     @js
@@ -1604,8 +1601,7 @@ class AdminEpubMergeCoverUpload(BaseHandler):
 
 
 def routes():
-    # 动态 import 外部工具 / 被更新覆盖的内置工具，只在这里（进程启动、路由拼接时）跑一次，
-    # 对应 document/Toolbox_Dynamic_Design.md 3.3.1 节确认的"重启生效"模型。
+    # 动态 import 外部工具 / 被更新覆盖的内置工具，只在这里（进程启动、路由拼接时）跑一次
     toolbox_manager.load_all()
 
     return [

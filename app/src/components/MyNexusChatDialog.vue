@@ -8,7 +8,7 @@
         color="primary"
         :dismiss-label="$t('common.close')"
         width="760"
-        max-width="95vw"
+        max-width="calc(100vw - 48px)"
         hide-footer-button
     >
         <div ref="mynexusChatMessages" class="mynexus-chat-messages">

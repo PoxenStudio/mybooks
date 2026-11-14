@@ -7,12 +7,12 @@
         :scrollable="scrollable"
         :transition="transition"
     >
-        <v-card :class="cardClass" style="border-radius:16px 16px 0px 0px !important">
+        <v-card :class="cardClass" style="border-radius: var(--app-dialog-radius, 8px) !important">
             <template v-if="type !== 'progress'">
                 <!-- Vuetify 的 dark/light 是三态：dark=true 强制白字、light=true 强制深字，都不传才继承根主题。
                      默认（lightHeader=false）等价于原来的裸 dark 属性，行为不变；传了浅色自定义色（如浅色品牌色）
                      的调用方需要传 light-header，否则白字会落在浅底上。 -->
-                <v-toolbar flat dense :dark="!lightHeader" :light="lightHeader" :color="color" :class="toolbarClass" style="border-radius:16px 16px 0px 0px !important">
+                <v-toolbar flat dense :dark="!lightHeader" :light="lightHeader" :color="color" :class="toolbarClass" style="border-radius: var(--app-dialog-radius, 8px) var(--app-dialog-radius, 8px) 0px 0px !important">
                     <v-icon v-if="icon" class="mr-2">{{ icon }}</v-icon>
                     <v-toolbar-title>{{ title }}</v-toolbar-title>
                     <v-spacer></v-spacer>

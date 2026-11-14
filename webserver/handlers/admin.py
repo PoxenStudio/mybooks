@@ -437,6 +437,25 @@ class AdminOwnerMode(BaseHandler):
         self.redirect("/", 302)
 
 
+def sanitize_scan_ignore_dirs(value):
+    """规范化扫描忽略目录名：只保留合法目录名（不含路径分隔符/通配符等）。"""
+    if not isinstance(value, (list, tuple)):
+        return []
+    names = []
+    seen = set()
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        name = item.strip()
+        if not name or name in (".", "..") or name in seen:
+            continue
+        if any(ch in name for ch in '/\\:*?"<>|') or any(ord(ch) < 32 for ch in name):
+            continue
+        seen.add(name)
+        names.append(name)
+    return names
+
+
 class AdminSettings(BaseHandler):
     @js
     @auth
@@ -546,6 +565,9 @@ class AdminSettings(BaseHandler):
             elif key in KEYS:
                 args[key] = val
 
+        if "SCAN_IGNORE_DIRS" in args:
+            args["SCAN_IGNORE_DIRS"] = sanitize_scan_ignore_dirs(args["SCAN_IGNORE_DIRS"])
+
         # Check and set the favicon
         if "site_icon" not in args or not args["site_icon"]:
             args["site_icon"] = "favicon_0"
@@ -565,6 +587,10 @@ class AdminSettings(BaseHandler):
         args.setdefault(
             "OPDS_ALLOW_ANONYMOUS", CONF.get("OPDS_ALLOW_ANONYMOUS", False)
         )
+        args.setdefault(
+            "PDF_READER",
+            CONF.get("PDF_READER", "MyReader"),
+        )
         # 模块开关变化时同步主开关：关闭写安全默认值，开启恢复主功能开关；
         # 只动 MODULE_OFF_SWITCHES / MODULE_ON_SWITCHES 里的键，不碰数据与密钥。
         feature_modules.apply_module_switch_effects(args, CONF)
@@ -581,13 +607,27 @@ class AdminSettings(BaseHandler):
             args["META_SELECTED_SOURCES"] = DEFAULT_META_SOURCES
 
         if args["site_icon"] != "favicon_0" and args["site_icon"] != current_icon:
-            new_icon_path = CONF["static_path"] + "/logo/" + args["site_icon"] + ".ico"
-            logging.info(_("Set new favicon: %s") % new_icon_path)
-            if os.path.exists(new_icon_path):
+            icon_base = CONF["static_path"] + "/logo/" + args["site_icon"]
+            # 随附图标有 .ico（旧版）和 .png（64x64）两种扩展名
+            new_icon_path = next(
+                (p for p in (icon_base + ".ico", icon_base + ".png") if os.path.exists(p)),
+                None,
+            )
+            logging.info(_("Set new favicon: %s") % (new_icon_path or icon_base))
+            if new_icon_path:
                 # Copy the new icon to the static directory
                 static_icon_path = CONF["static_path"] + "/logo/" + "/favicon.ico"
                 try:
-                    shutil.copy(new_icon_path, static_icon_path)
+                    if new_icon_path.endswith(".png"):
+                        # 站点各处统一引用 /logo/favicon.ico，PNG 图标要转成真正的 ICO，
+                        # 直接拷贝 PNG 字节部分浏览器识别不了
+                        from PIL import Image
+
+                        Image.open(new_icon_path).save(
+                            static_icon_path, format="ICO", sizes=[(64, 64)]
+                        )
+                    else:
+                        shutil.copy(new_icon_path, static_icon_path)
                 except Exception as e:
                     logging.info("Error: %s", str(e))
         # 网站默认访问链接：留空表示按当前访问地址生成分享链接/二维码；
@@ -870,7 +910,8 @@ class AdminBookList(BaseHandler):
             % (num, page, sort, desc, book_type)
         )
         if book_type >= 0 and book_type <= BOOK_TYPE_PHYSICAL:
-            book_type_query = f"{"not" if book_type == BOOK_TYPE_EBOOK else ""} {CALIBRE_COLUMN_BOOK_TYPE}:={BOOK_TYPE_PHYSICAL}"
+            book_type_prefix = "not" if book_type == BOOK_TYPE_EBOOK else ""
+            book_type_query = f"{book_type_prefix} {CALIBRE_COLUMN_BOOK_TYPE}:={BOOK_TYPE_PHYSICAL}"
             if search:
                 search = f"({search}) AND {book_type_query}"
             else:

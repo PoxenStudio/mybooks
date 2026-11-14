@@ -935,37 +935,67 @@ user.appearance为外观设置（顶栏品牌色、侧栏图标配色、深浅�
 
 ## 3. 图书基础接口
 
-### 3.1 首页图书列表
+### 3.1 首页基础配置
 
 - **路径**：`/api/index`
 - **方法**：GET
+- **认证**：无需认证
+- **说明**：只返回首页布局配置，**不包含书籍列表**。随机/新书/社交推荐分别由
+  `/api/index/random`、`/api/index/new`、`/api/index/social` 按需加载（页面挂载后再请求），
+  避免推荐计算阻塞首屏 HTML（FCP）。
+- **响应**：
+  - `err` (string): `ok`
+  - `homepage` (object): 归一化后的首页配置（`version` / `order` / `hidden` / `custom`）
+- **响应示例**：
+
+```json
+{
+  "err": "ok",
+  "homepage": {"version": 1, "order": ["libraryStats", "index.randomRecommendation"], "hidden": [], "custom": []}
+}
+```
+
+#### 3.1.1 首页随机推荐
+
+- **路径**：`/api/index/random`
+- **方法**：GET
 - **认证**：无需认证（登录后结果个性化）
 - **参数**：
-  - `random` (int, 可选): “随便看看”数量，默认且最大为 `MAIN_PAGE_RANDOM_COUNT`（12）
-  - `recent` (int, 可选): “新书推荐”数量，默认 `MAIN_PAGE_RECENT_COUNT`（12），最大 200
+  - `random` (int, 可选): 数量，默认且最大为 `MAIN_PAGE_RANDOM_COUNT`（12）
   - `refresh` (string, 可选): `1` 表示用户主动换一批（不使用按时间段固定的种子）
   - `seed` (string, 可选): 指定推荐随机种子（复现同一批结果）
   - `exclude` (string, 可选): 逗号分隔的书籍ID，当前已展示的书，下一批尽量避开
   - `personalized` (string, 可选): `0` 关闭个性化推荐引擎，退化为随机选取
 - **响应**：
   - `err` (string): `ok` / `nobooks`（书库为空）
-  - `random_books` / `new_books` (array): 图书对象；由推荐引擎产生时带 `reason: {type, value}`（推荐理由）
-  - `random_books_count` / `new_books_count` (int)
-  - `social_recommend_books` (array): 其他用户最近 90 天推荐（评价）的书，带 `recommender: {nickname, avatar}`；游客或用户关闭“首页推荐”时为空
+  - `random_books` (array): 图书对象（仅封面级字段）；推荐引擎产生时带 `reason: {type, value}`
+  - `random_books_count` (int)
   - `seed` (string): 本次使用的推荐种子（未使用推荐引擎时为空）
-- **响应示例**：
+  - 首页区块被配置隐藏时返回空数组
 
-```json
-{
-  "err": "ok",
-  "random_books_count": 12,
-  "new_books_count": 12,
-  "random_books": [{"id": 42, "title": "三体", "reason": {"type": "author", "value": "刘慈欣"}, "...": "..."}],
-  "new_books": [...],
-  "social_recommend_books": [],
-  "seed": "1790000000000000000"
-}
-```
+#### 3.1.2 首页新书推荐
+
+- **路径**：`/api/index/new`
+- **方法**：GET
+- **认证**：无需认证（登录后结果个性化）
+- **参数**：
+  - `recent` (int, 可选): 数量，默认 `MAIN_PAGE_RECENT_COUNT`（12），最大 200
+  - 其余参数同 `/api/index/random`
+- **响应**：
+  - `err` (string): `ok` / `nobooks`
+  - `new_books` (array): 图书对象（完整字段）；推荐引擎产生时带 `reason: {type, value}`
+  - `new_books_count` (int)
+  - `seed` (string)
+
+#### 3.1.3 首页社交推荐
+
+- **路径**：`/api/index/social`
+- **方法**：GET
+- **认证**：无需认证；游客或用户关闭“首页推荐”时返回空列表
+- **响应**：
+  - `err` (string): `ok`
+  - `social_recommend_books` (array): 其他用户最近 90 天推荐（评价）的书，带 `recommender: {nickname, avatar}`
+
 
 ### 3.2 搜索图书
 
@@ -1272,8 +1302,8 @@ user.appearance为外观设置（顶栏品牌色、侧栏图标配色、深浅�
   - `id` (path, 必填): 图书ID
   - `format` (string, 可选): 指定阅读格式 `epub`/`pdf`/`mobi`/`azw`/`azw3`/`txt`；不传时按 epub → mobi → azw → azw3 → txt → pdf 优先级选择
 - **响应**：HTML 阅读页面或重定向（非 JSON）：
-  - 阅读器设置为 MyReader 且格式为 epub/pdf → 302 到 `/readerx/open?bookId=<id>&format=<fmt>`
-  - pdf → 302 到 `PDF_VIEWER` 配置的阅读器；txt → 302 到 `/read/txt/<id>`
+  - 阅读器（`EPUB_VIEWER`）设置为 MyReader 且格式为 epub/cbz/fb2 → 302 到 `/readerx/open?bookId=<id>&format=<fmt>&title=<书名>`
+  - pdf → `PDF_READER` 为 `MyReader` 时 302 到 `/readerx/open?bookId=<id>&format=pdf&title=<书名>`，否则 302 到 `PDF_VIEWER` 配置的兼容阅读器；txt → 302 到 `/read/txt/<id>`
   - 非 epub 的 mobi/azw/azw3/txt 会在后台自动转换为 epub
   - 不支持的格式返回 HTTP 404；无权限返回 HTTP 403
   - 登录用户每次打开会记录一次阅读心跳（分格式阅读统计）

@@ -63,7 +63,10 @@ export function defaults() {
         accent: DEFAULT_ACCENT,
         radius: DEFAULT_RADIUS,
         background: DEFAULT_BACKGROUND,
-        sidebarIconMode: 'multi',
+        // 默认「统一着色」：侧栏原本每行一个高饱和色（蓝/橙/绿/青/红/紫/琥珀…），
+        // 颜色不编码任何含义，却把品牌色淹掉。默认改为跟随强调色单色上色，
+        // 想要原来的多彩外观可在「外观 → 侧栏图标」里显式选回「多彩」。
+        sidebarIconMode: 'theme',
         sidebarIconColor: null,
     };
 }
@@ -124,7 +127,7 @@ export function settingsOf(state) {
         accent: isHexColor(state.accent) ? state.accent : DEFAULT_ACCENT,
         radius: ALLOWED_RADII.indexOf(state.radius) >= 0 ? state.radius : DEFAULT_RADIUS,
         background: ALLOWED_BACKGROUNDS.indexOf(state.background) >= 0 ? state.background : DEFAULT_BACKGROUND,
-        sidebarIconMode: SIDEBAR_ICON_MODES.indexOf(state.sidebarIconMode) >= 0 ? state.sidebarIconMode : 'multi',
+        sidebarIconMode: SIDEBAR_ICON_MODES.indexOf(state.sidebarIconMode) >= 0 ? state.sidebarIconMode : 'theme',
         sidebarIconColor: isHexColor(state.sidebarIconColor) ? state.sidebarIconColor : null,
     };
 }

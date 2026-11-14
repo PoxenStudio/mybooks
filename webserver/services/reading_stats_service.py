@@ -27,6 +27,9 @@ CONF = loader.get_settings()
 
 HEARTBEAT_MAX_GAP = datetime.timedelta(seconds=60)
 
+# 心跳间隔超过 HEARTBEAT_MAX_GAP 本来就会开新 bucket，过期条目留着只会让每 5 秒的 flush 全量遍历
+SESSION_IDLE_EVICT_AFTER = datetime.timedelta(seconds=600)
+
 MANUAL_READING_MAX_SECONDS = 18 * 3600
 FORMAT_PREFERENCE_ORDER = ("epub", "azw3", "mobi", "azw", "docx", "pdf", "txt")
 
@@ -167,16 +170,43 @@ class ReadingWriteBuffer:
             elif action == Reading.ACTION_PUSH:
                 self._reader_push_delta[reader_id] = self._reader_push_delta.get(reader_id, 0) + 1
 
-    def flush(self) -> None:
+    def reset_sessions(self, reader_id: int, book_id: Optional[int] = None, now_utc: Optional[datetime.datetime] = None) -> None:
+        """Reset in-memory session timing after a history deletion.
+
+        Without this the next heartbeat continues the pre-delete session and a later
+        flush can recreate a row with the pre-delete gap. Keep visit_counted for the
+        same day: the open was already counted before deletion, so re-counting it
+        would inflate Item.count_visit.
+        """
+        now = now_utc or datetime.datetime.utcnow()
+        today = site_time.site_date(now)
+        with self._lock:
+            for key, session in self._sessions.items():
+                if key[0] != reader_id:
+                    continue
+                if book_id is not None and key[1] != book_id:
+                    continue
+                if session.current_date != today:
+                    session.visit_counted = False
+                session.current_date = today
+                session.session_start = now
+                session.last_seen = now
+                session.duration_delta = 0
+                session.dirty = False
+
+    def flush(self) -> bool:
         with self._lock:
             pending = []  # (reader_id, book_id, date, session_start, duration_delta, last_seen, protocol)
             visit_check_keys = set()  # (reader_id, book_id, date)
-            for (reader_id, book_id), s in self._sessions.items():
+            stale_keys = []
+            now_utc = datetime.datetime.utcnow()
+            for key, s in self._sessions.items():
                 if s.duration_delta or s.dirty:
-                    pending.append((reader_id, book_id, s.current_date, s.session_start, s.duration_delta, s.last_seen, s.protocol))
+                    pending.append((key[0], key[1], s.current_date, s.session_start, s.duration_delta, s.last_seen, s.protocol))
                     if not s.visit_counted:
-                        visit_check_keys.add((reader_id, book_id, s.current_date))
-            for s in self._sessions.values():
+                        visit_check_keys.add((key[0], key[1], s.current_date))
+                elif now_utc - s.last_seen > SESSION_IDLE_EVICT_AFTER:
+                    stale_keys.append(key)
                 s.duration_delta = 0
                 s.dirty = False
             # 显式上报的条目是一次性的（没有"当前会话"状态要在 flush 后留存），直接整个
@@ -194,7 +224,8 @@ class ReadingWriteBuffer:
             push_delta, self._reader_push_delta = self._reader_push_delta, {}
 
         if not (pending_all or events_snapshot or seconds_delta or download_delta or push_delta):
-            return
+            self._evict_sessions(stale_keys)
+            return True
 
         db = Reading._session()
         try:
@@ -275,6 +306,8 @@ class ReadingWriteBuffer:
                         # 否则这个 date 对应的 bucket 已经不是当前打开的那个了。
                         if session is not None and session.current_date == date:
                             session.visit_counted = True
+            self._evict_sessions(stale_keys)
+            return True
         except Exception:
             db.rollback()
             logging.error("[reading_stats] flush failed, data kept for retry on next tick", exc_info=True)
@@ -303,6 +336,17 @@ class ReadingWriteBuffer:
                     self._reader_download_delta[reader_id] = self._reader_download_delta.get(reader_id, 0) + delta
                 for reader_id, delta in push_delta.items():
                     self._reader_push_delta[reader_id] = self._reader_push_delta.get(reader_id, 0) + delta
+                return False
+
+    # flush 成功后才清理，避免落库失败时丢掉待重试的增量
+    def _evict_sessions(self, keys) -> None:
+        if not keys:
+            return
+        with self._lock:
+            for key in keys:
+                s = self._sessions.get(key)
+                if s is not None and not s.duration_delta and not s.dirty and datetime.datetime.utcnow() - s.last_seen > SESSION_IDLE_EVICT_AFTER:
+                    del self._sessions[key]
 
 
 @dataclass
@@ -558,22 +602,30 @@ class BookFormatStatsBuffer:
                 state.progress = progress
             state.touched = True
 
-    def flush(self) -> None:
+    def flush(self) -> bool:
         with self._lock:
             pending = [
                 (key, s.duration_delta, s.progress, s.last_seen) for key, s in self._states.items() if s.touched or s.duration_delta
+            ]
+            stale_keys = [
+                key
+                for key, s in self._states.items()
+                if not s.touched and not s.duration_delta and datetime.datetime.utcnow() - s.last_seen > SESSION_IDLE_EVICT_AFTER
             ]
             for s in self._states.values():
                 s.duration_delta = 0
                 s.touched = False
         if not pending:
-            return
+            self._evict_states(stale_keys)
+            return True
 
         db = Reading._session()
         try:
             for (reader_id, book_id, fmt), duration_delta, progress, last_seen in pending:
                 apply_book_format_update(db, reader_id, book_id, fmt, last_seen, duration_delta=duration_delta, progress=progress)
             db.commit()
+            self._evict_states(stale_keys)
+            return True
         except Exception:
             db.rollback()
             logging.error("[reading_stats] book_format flush failed, data kept for retry on next tick", exc_info=True)
@@ -584,6 +636,16 @@ class BookFormatStatsBuffer:
                         state.duration_delta += duration_delta
                         state.touched = True
                         # progress 留用内存里更新的最新值即可，不需要把旧值塞回去
+            return False
+
+    def _evict_states(self, keys) -> None:
+        if not keys:
+            return
+        with self._lock:
+            for key in keys:
+                s = self._states.get(key)
+                if s is not None and not s.touched and not s.duration_delta and datetime.datetime.utcnow() - s.last_seen > SESSION_IDLE_EVICT_AFTER:
+                    del self._states[key]
 
 
 class ReadingStatsService:
@@ -698,9 +760,14 @@ class ReadingStatsService:
         return row.format_dict()
 
     @classmethod
-    def flush_now(cls) -> None:
-        cls._buffer.flush()
-        cls._format_buffer.flush()
+    def flush_now(cls) -> bool:
+        reading_ok = cls._buffer.flush()
+        format_ok = cls._format_buffer.flush()
+        return reading_ok and format_ok
+
+    @classmethod
+    def reset_sessions(cls, reader_id: int, book_id: Optional[int] = None) -> None:
+        cls._buffer.reset_sessions(reader_id, book_id)
 
     @classmethod
     def start(cls) -> None:
@@ -716,5 +783,7 @@ class ReadingStatsService:
         if cls._periodic_callback is not None:
             cls._periodic_callback.stop()
             cls._periodic_callback = None
-        cls.flush_now()
-        logging.info("[reading_stats] ReadingStatsService stopped, final flush done")
+        if cls.flush_now():
+            logging.info("[reading_stats] ReadingStatsService stopped, final flush done")
+        else:
+            logging.warning("[reading_stats] ReadingStatsService stopped, final flush failed")

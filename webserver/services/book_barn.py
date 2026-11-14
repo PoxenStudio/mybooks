@@ -443,7 +443,7 @@ class BookBarnService(AsyncService):
 
             if current_hour != hour:
                 if output_hour != current_hour:
-                    logging.info(f"[BARN]Not target time {hour}, now is {current_hour}")
+                    logging.debug(f"[BARN]Not target time {hour}, now is {current_hour}")
                     output_hour = current_hour
                 time.sleep(30 * 60)
                 continue

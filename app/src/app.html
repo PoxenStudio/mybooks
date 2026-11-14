@@ -37,7 +37,9 @@
         var accent = cleanHex(s.accent) || ACCENT_FALLBACK;
         var radius = RADII.indexOf(s.radius) >= 0 ? s.radius : RADIUS_FALLBACK;
         var pattern = BACKGROUNDS.indexOf(s.background) >= 0 ? s.background : 'default';
-        var iconMode = (s.sidebarIconMode === 'theme' || s.sidebarIconMode === 'custom') ? s.sidebarIconMode : 'multi';
+        /* 侧栏图标默认「统一着色」（跟随强调色）；只有显式选了「多彩 / 自定义」才偏离。
+           与 utils/appearance.js 的 defaults().sidebarIconMode 保持一致。 */
+        var iconMode = (s.sidebarIconMode === 'multi' || s.sidebarIconMode === 'custom') ? s.sidebarIconMode : 'theme';
         var iconColor = iconMode === 'multi' ? null : (cleanHex(s.sidebarIconColor) || accent);
 
         root.style.setProperty('--app-nav-bg', brand);

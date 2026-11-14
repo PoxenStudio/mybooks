@@ -64,6 +64,10 @@ CALIBRE_COLUMN_TRANSLATORS = "#translators"
 COLUMN_CATALOG = "catalog"
 CALIBRE_COLUMN_CATALOG = "#catalog"
 
+# 正文字数（中文字符 + 西文单词），见 webserver/services/word_count.py
+COLUMN_WORD_COUNT = "word_count"
+CALIBRE_COLUMN_WORD_COUNT = "#word_count"
+
 # Audio related constants
 ENABLE_VIP_QUOTA_KEY = "ENABLE_VIP_QUOTA"
 ENABLE_AUDIO_CONVERSION_LOG = "ENABLE_AUDIO_CONVERSION_LOG"
@@ -114,3 +118,25 @@ DEFAULT_LANGUAGE_CODE = "zho"
 JAPANESE_CODE = "jpn"
 
 UPGRABLE_REVISION = "UPGRABLE_REVISION"
+
+SOCIAL_AUTH_INACTIVE_USER_URL = '/login?social_error=pending'
+
+# 社交登录流水线（静态配置，不随站点设置持久化）
+SOCIAL_AUTH_PIPELINE = (
+    'social_core.pipeline.social_auth.social_details',
+    'social_core.pipeline.social_auth.social_uid',
+    'social_core.pipeline.social_auth.auth_allowed',
+    'social_core.pipeline.social_auth.social_user',
+    'webserver.social_pipeline.check_registration',
+    'social_core.pipeline.user.get_username',
+    'social_core.pipeline.user.create_user',
+    'social_core.pipeline.social_auth.associate_user',
+    'social_core.pipeline.social_auth.load_extra_data',
+    'webserver.social_pipeline.init_new_user',
+    'social_core.pipeline.user.user_details',
+)
+
+EPUB_VIEWER_DEFAULT = "epubjs.html"
+EPUB_VIEWER_MYREADADER = "MyReader"
+PDF_READER_DEFAULT = "pdfjs.html"
+PDF_READER_MYREADADER = "MyReader"

@@ -269,6 +269,7 @@
                 :items="f.items"
                 :key="f.key + '-select'"
                 :label="$t(f.label)"
+                @change="onSelectChange(f, $event)"
               >
                 <template v-if="f.icon" v-slot:prepend>
                   <v-icon :color="f.color">{{ f.icon }}</v-icon>
@@ -361,6 +362,12 @@
                 :key="f.key + '-book_nav'"
                 v-model="bookNavList"
               ></book-nav-editor>
+              <scan-ignore-dirs-editor
+                v-else-if="f.type === 'scan_ignore_dirs'"
+                :key="f.key + '-scan_ignore_dirs'"
+                v-model="settings[f.key]"
+                class="ml-12"
+              ></scan-ignore-dirs-editor>
               <v-text-field
                 v-else-if="f.type === 'number'"
                 v-model.number="settings[f.key]"
@@ -404,14 +411,15 @@
               <v-checkbox
                 small
                 hide-details
-                v-model="settings[grp.key]"
+                :input-value="isCheckboxInputValue(grp)"
+                :disabled="isFieldLockedBy(grp)"
                 :label="$t(grp.label)"
                 :prepend-icon="grp.icon"
-                @change="$delete(forceOpen, grp.key)"
+                @change="onCheckboxChange(grp, $event); $delete(forceOpen, grp.key)"
               >
               </v-checkbox>
               </div>
-              <template v-if="settings[grp.key] || forceOpen[grp.key]">
+              <template v-if="(isCheckboxInputValue(grp) || forceOpen[grp.key]) && !isFieldLockedBy(grp)">
                 <div class="pl-6" :key="grp.key + '-fields'">
                 <template v-for="f in grp.fields">
                   <div :key="'w-' + f.key" :id="'f-' + f.key">
@@ -445,6 +453,15 @@
                       {{ $t(f.label) }}
                     </v-btn>
                   </div>
+                  <v-text-field
+                    v-else-if="f.type === 'number'"
+                    :prepend-icon="f.icon"
+                    v-model.number="settings[f.key]"
+                    :key="f.key + '-number'"
+                    :label="$t(f.label)"
+                    type="number"
+                    min="0"
+                  ></v-text-field>
                   <v-text-field
                     v-else
                     :prepend-icon="f.icon"
@@ -1197,12 +1214,16 @@ import SSLManager from "~/components/SSLManager.vue";
 import CoverBackgroundManager from "~/components/CoverBackgroundManager.vue";
 import ReadingRangeDialog from "~/components/ReadingRangeDialog.vue";
 import BookNavEditor, { createCategory } from "~/components/BookNavEditor.vue";
+import ScanIgnoreDirsEditor, {
+  isInvalidScanIgnoreDirName,
+} from "~/components/ScanIgnoreDirsEditor.vue";
 import ReaderDictEditor from "~/components/ReaderDictEditor.vue";
 import HomepageCardsEditor from "~/components/HomepageCardsEditor.vue";
 import ModuleSettingsDialog from "~/components/ModuleSettingsDialog.vue";
 import { normalizeHomepageConfig } from "~/utils/homepage";
 import { languageOptions } from "~/utils/languageCodes";
 import { isHexColor, DEFAULT_ACCENT } from "~/utils/appearance";
+import { siteBaseUrl } from "~/utils/siteUrl";
 
 // 已从设置页去掉的旧选项 → 等价选项：+8 的港/台/新加坡合并到北京，+9 的首尔合并到东京，
 // 偏移与夏令时规则完全一致。旧配置在加载时归一化，避免 select 匹配不到选项而显示空白。
@@ -1212,6 +1233,9 @@ const LEGACY_TIMEZONE_VALUES = {
   "Asia/Singapore": "Asia/Shanghai",
   "Asia/Seoul": "Asia/Tokyo",
 };
+
+// PDF 阅读器选择值：「默认」使用 PDF_VIEWER 配置的兼容阅读器
+const PDF_READER_DEFAULT = "default";
 
 const LITE_GROUPS = [
   "LITE_GROUP_LISTING",
@@ -1336,7 +1360,7 @@ const SEARCH_ALIASES = {
     分类: ["BOOK_NAV", "IMPORT_CATEGORY_WITH_FOLDER", "ENABLE_FOLDER_BROWSE", "AI_ALLOW_SET_CATEGORY"], 导航: ["BOOK_NAV"], 标签: ["BOOK_NAV"],
     分类导航: ["BOOK_NAV"], 分类管理: ["BOOK_NAV"], 分类树: ["BOOK_NAV"],
     // 阅读与内容 · 阅读器与同步
-    阅读器: ["EPUB_VIEWER", "DEVICES"], epub: ["EPUB_VIEWER"], epubjs: ["EPUB_VIEWER"], myreader: ["EPUB_VIEWER", "ENABLE_DATA_SYNC"],
+    阅读器: ["EPUB_VIEWER", "PDF_READER", "DEVICES"], epub: ["EPUB_VIEWER"], epubjs: ["EPUB_VIEWER"], myreader: ["EPUB_VIEWER", "PDF_READER", "ENABLE_DATA_SYNC"],
     阅读引擎: ["EPUB_VIEWER"],
     同步: ["ENABLE_DATA_SYNC", "ENABLE_WEBDAV_SERVICE", "WEBDAV_SYNC_FOLDER"], 进度: ["ENABLE_DATA_SYNC"], 阅读数据: ["ENABLE_DATA_SYNC"], 跨设备: ["ENABLE_DATA_SYNC", "DEVICES"],
     封面: ["USE_DYNAMIC_COVER", "ENABLE_STAMP_FEATURE", "THUMB_CACHE"], 动态封面: ["USE_DYNAMIC_COVER"], 书封: ["USE_DYNAMIC_COVER"],
@@ -1377,6 +1401,7 @@ const SEARCH_ALIASES = {
     可见: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], 屏蔽: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], 不可见: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"],
     范围: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], 阅读范围: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"],
     配额: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"], 下载: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA", "ALLOW_GUEST_DOWNLOAD"], 每日: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"],
+    访客下载: ["ENABLE_GUEST_DOWNLOAD_QUOTA", "GUEST_DOWNLOAD_QUOTA"], 下载本数: ["GUEST_DOWNLOAD_QUOTA"], 每ip: ["ENABLE_GUEST_DOWNLOAD_QUOTA", "GUEST_DOWNLOAD_QUOTA"], ip: ["ENABLE_GUEST_DOWNLOAD_QUOTA", "GUEST_DOWNLOAD_QUOTA"],
     下载限制: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"], 每日下载: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"],
     // 用户与访问 · 社交登录
     登录: ["SOCIALS", "ALLOW_REGISTER", "INVITE_MODE"], 第三方: ["SOCIALS"], 社交: ["SOCIALS"], oauth: ["SOCIALS"], qq: ["SOCIALS"], 微信: ["SOCIALS"], 微博: ["SOCIALS"], github: ["SOCIALS"],
@@ -1391,7 +1416,7 @@ const SEARCH_ALIASES = {
     源文件: ["KEEP_UPLOAD_SOURCE_FILE", "REMOVE_IMPORTED_FILE"], 保留: ["KEEP_UPLOAD_SOURCE_FILE"], 临时文件: ["KEEP_UPLOAD_SOURCE_FILE", "REMOVE_IMPORTED_FILE"], 暂存文件: ["KEEP_UPLOAD_SOURCE_FILE"],
     删除源文件: ["REMOVE_IMPORTED_FILE"], 导入后删除: ["REMOVE_IMPORTED_FILE"],
     // 导入与存储 · 导入规则
-    pdf: ["PDF_TILE_WITH_FILE_NAME"], 文件名: ["PDF_TILE_WITH_FILE_NAME", "BOOK_NAMES_FORMAT"], 书名: ["PDF_TILE_WITH_FILE_NAME"],
+    pdf: ["PDF_TILE_WITH_FILE_NAME", "PDF_READER"], 文件名: ["PDF_TILE_WITH_FILE_NAME", "BOOK_NAMES_FORMAT"], 书名: ["PDF_TILE_WITH_FILE_NAME"],
     txt: ["ENABLE_TXT_TO_TXTZ_PLUGIN"], txtz: ["ENABLE_TXT_TO_TXTZ_PLUGIN"], 转换: ["ENABLE_TXT_TO_TXTZ_PLUGIN", "convert_timeout", "ENABLE_BOOKS_TYPE_CONVERT_DIRECT"],
     服务端: ["ENABLE_SERVER_FILE_IMPORT"], 目录浏览: ["ENABLE_SERVER_FILE_IMPORT"], 服务器导入: ["ENABLE_SERVER_FILE_IMPORT"],
     isbn: ["BATCH_ADD_IN_FORCE"], 强制: ["BATCH_ADD_IN_FORCE"], 无效: ["BATCH_ADD_IN_FORCE"], 强制添加: ["BATCH_ADD_IN_FORCE"],
@@ -1486,7 +1511,7 @@ const SEARCH_ALIASES = {
     分類: ["BOOK_NAV", "IMPORT_CATEGORY_WITH_FOLDER", "ENABLE_FOLDER_BROWSE", "AI_ALLOW_SET_CATEGORY"], 導覽: ["BOOK_NAV"], 標籤: ["BOOK_NAV"],
     分類導覽: ["BOOK_NAV"], 分類管理: ["BOOK_NAV"], 分類樹: ["BOOK_NAV"],
     // 閱讀與內容 · 閱讀器與同步
-    閱讀器: ["EPUB_VIEWER", "DEVICES"], epub: ["EPUB_VIEWER"], epubjs: ["EPUB_VIEWER"], myreader: ["EPUB_VIEWER", "ENABLE_DATA_SYNC"], 閱讀引擎: ["EPUB_VIEWER"],
+    閱讀器: ["EPUB_VIEWER", "PDF_READER", "DEVICES"], epub: ["EPUB_VIEWER"], epubjs: ["EPUB_VIEWER"], myreader: ["EPUB_VIEWER", "PDF_READER", "ENABLE_DATA_SYNC"], 閱讀引擎: ["EPUB_VIEWER"],
     同步: ["ENABLE_DATA_SYNC", "ENABLE_WEBDAV_SERVICE", "WEBDAV_SYNC_FOLDER"], 進度: ["ENABLE_DATA_SYNC"], 閱讀資料: ["ENABLE_DATA_SYNC"], 跨裝置: ["ENABLE_DATA_SYNC", "DEVICES"],
     封面: ["USE_DYNAMIC_COVER", "ENABLE_STAMP_FEATURE", "THUMB_CACHE"], 動態封面: ["USE_DYNAMIC_COVER"], 書封: ["USE_DYNAMIC_COVER"],
     作者: ["ENABLE_AUTHOR_INFO"], 簡介: ["ENABLE_AUTHOR_INFO"], 頭像: ["ENABLE_AUTHOR_INFO"], 作者資訊: ["ENABLE_AUTHOR_INFO"],
@@ -1526,6 +1551,7 @@ const SEARCH_ALIASES = {
     可見: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], 封鎖: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], 不可見: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"],
     範圍: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], 閱讀範圍: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"],
     配額: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"], 下載: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA", "ALLOW_GUEST_DOWNLOAD"], 每日: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"],
+    訪客下載: ["ENABLE_GUEST_DOWNLOAD_QUOTA", "GUEST_DOWNLOAD_QUOTA"], 下載本數: ["GUEST_DOWNLOAD_QUOTA"], 每ip: ["ENABLE_GUEST_DOWNLOAD_QUOTA", "GUEST_DOWNLOAD_QUOTA"], ip: ["ENABLE_GUEST_DOWNLOAD_QUOTA", "GUEST_DOWNLOAD_QUOTA"],
     下載限制: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"], 每日下載: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"],
     // 用戶與訪問 · 社群登入
     登入: ["SOCIALS", "ALLOW_REGISTER", "INVITE_MODE"], 第三方: ["SOCIALS"], 社群: ["SOCIALS"], 社群網路: ["SOCIALS"], oauth: ["SOCIALS"], qq: ["SOCIALS"], 微信: ["SOCIALS"], 微博: ["SOCIALS"], github: ["SOCIALS"],
@@ -1540,7 +1566,7 @@ const SEARCH_ALIASES = {
     來源檔案: ["KEEP_UPLOAD_SOURCE_FILE", "REMOVE_IMPORTED_FILE"], 保留: ["KEEP_UPLOAD_SOURCE_FILE"], 暫存檔案: ["KEEP_UPLOAD_SOURCE_FILE"], 原始檔: ["KEEP_UPLOAD_SOURCE_FILE", "REMOVE_IMPORTED_FILE"],
     刪除原始檔: ["REMOVE_IMPORTED_FILE"], 匯入後刪除: ["REMOVE_IMPORTED_FILE"],
     // 匯入與儲存 · 匯入規則
-    pdf: ["PDF_TILE_WITH_FILE_NAME"], 檔名: ["PDF_TILE_WITH_FILE_NAME", "BOOK_NAMES_FORMAT"], 書名: ["PDF_TILE_WITH_FILE_NAME"],
+    pdf: ["PDF_TILE_WITH_FILE_NAME", "PDF_READER"], 檔名: ["PDF_TILE_WITH_FILE_NAME", "BOOK_NAMES_FORMAT"], 書名: ["PDF_TILE_WITH_FILE_NAME"],
     txt: ["ENABLE_TXT_TO_TXTZ_PLUGIN"], txtz: ["ENABLE_TXT_TO_TXTZ_PLUGIN"], 轉換: ["ENABLE_TXT_TO_TXTZ_PLUGIN", "convert_timeout", "ENABLE_BOOKS_TYPE_CONVERT_DIRECT"],
     伺服器: ["ENABLE_SERVER_FILE_IMPORT", "smtp_server"], 目錄瀏覽: ["ENABLE_SERVER_FILE_IMPORT"], 伺服器匯入: ["ENABLE_SERVER_FILE_IMPORT"],
     isbn: ["BATCH_ADD_IN_FORCE"], 強制: ["BATCH_ADD_IN_FORCE"], 無效: ["BATCH_ADD_IN_FORCE"], 強制加入: ["BATCH_ADD_IN_FORCE"],
@@ -1635,7 +1661,7 @@ const SEARCH_ALIASES = {
     // Site & Appearance · categories
     category: ["BOOK_NAV", "IMPORT_CATEGORY_WITH_FOLDER", "AI_ALLOW_SET_CATEGORY"], categories: ["BOOK_NAV", "IMPORT_CATEGORY_WITH_FOLDER"], categorize: ["AI_ALLOW_SET_CATEGORY"], tag: ["BOOK_NAV"], tags: ["BOOK_NAV"],
     // Reading & Content · reader & sync
-    reader: ["EPUB_VIEWER", "DEVICES"], epub: ["EPUB_VIEWER"], epubjs: ["EPUB_VIEWER"], myreader: ["EPUB_VIEWER", "ENABLE_DATA_SYNC"], viewer: ["EPUB_VIEWER"], engine: ["EPUB_VIEWER"],
+    reader: ["EPUB_VIEWER", "PDF_READER", "DEVICES"], epub: ["EPUB_VIEWER"], epubjs: ["EPUB_VIEWER"], myreader: ["EPUB_VIEWER", "PDF_READER", "ENABLE_DATA_SYNC"], viewer: ["EPUB_VIEWER", "PDF_READER"], engine: ["EPUB_VIEWER"],
     sync: ["ENABLE_DATA_SYNC", "ENABLE_WEBDAV_SERVICE", "WEBDAV_SYNC_FOLDER"], progress: ["ENABLE_DATA_SYNC"], "data sync": ["ENABLE_DATA_SYNC"], "cross device": ["ENABLE_DATA_SYNC", "DEVICES"],
     cover: ["USE_DYNAMIC_COVER", "ENABLE_STAMP_FEATURE", "THUMB_CACHE"], "dynamic cover": ["USE_DYNAMIC_COVER"], "book cover": ["USE_DYNAMIC_COVER"],
     author: ["ENABLE_AUTHOR_INFO"], bio: ["ENABLE_AUTHOR_INFO"], biography: ["ENABLE_AUTHOR_INFO"], avatar: ["ENABLE_AUTHOR_INFO"],
@@ -1670,6 +1696,7 @@ const SEARCH_ALIASES = {
     whitelist: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], blacklist: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], visible: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], hidden: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], restrict: ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"],
     "read range": ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"], "reading range": ["ALLOW_READ_RANGE_SETTING", "DEFAULT_READ_RANGE"],
     quota: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"], quotas: ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"], "daily limit": ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"], "download limit": ["ENABLE_DOWNLOAD_QUOTA", "GLOBAL_DOWNLOAD_QUOTA"],
+    "guest download": ["ENABLE_GUEST_DOWNLOAD_QUOTA", "GUEST_DOWNLOAD_QUOTA"], "guest quota": ["ENABLE_GUEST_DOWNLOAD_QUOTA", "GUEST_DOWNLOAD_QUOTA"], "per ip": ["ENABLE_GUEST_DOWNLOAD_QUOTA", "GUEST_DOWNLOAD_QUOTA"], ip: ["ENABLE_GUEST_DOWNLOAD_QUOTA", "GUEST_DOWNLOAD_QUOTA"],
     // Users & Access · social login
     login: ["SOCIALS", "ALLOW_REGISTER", "INVITE_MODE", "REQUIRE_LOGIN"], social: ["SOCIALS"], "social login": ["SOCIALS"], oauth: ["SOCIALS"], "third party": ["SOCIALS"], sso: ["SOCIALS"], qq: ["SOCIALS"], wechat: ["SOCIALS"], weibo: ["SOCIALS"], github: ["SOCIALS"],
     // Import & Storage · upload
@@ -1679,7 +1706,7 @@ const SEARCH_ALIASES = {
     metadata: ["auto_fill_meta", "META_SELECTED_SOURCES", "DEFAULT_LANGUAGE"], "book info": ["auto_fill_meta", "META_SELECTED_SOURCES"], "source file": ["KEEP_UPLOAD_SOURCE_FILE", "REMOVE_IMPORTED_FILE"], "keep source": ["KEEP_UPLOAD_SOURCE_FILE"], "temp file": ["KEEP_UPLOAD_SOURCE_FILE"], staged: ["KEEP_UPLOAD_SOURCE_FILE"],
     "delete source": ["REMOVE_IMPORTED_FILE"], "remove original": ["REMOVE_IMPORTED_FILE"],
     // Import & Storage · import rules
-    pdf: ["PDF_TILE_WITH_FILE_NAME"], filename: ["PDF_TILE_WITH_FILE_NAME", "BOOK_NAMES_FORMAT"], "file name": ["PDF_TILE_WITH_FILE_NAME", "BOOK_NAMES_FORMAT"],
+    pdf: ["PDF_TILE_WITH_FILE_NAME", "PDF_READER"], filename: ["PDF_TILE_WITH_FILE_NAME", "BOOK_NAMES_FORMAT"], "file name": ["PDF_TILE_WITH_FILE_NAME", "BOOK_NAMES_FORMAT"],
     txt: ["ENABLE_TXT_TO_TXTZ_PLUGIN"], txtz: ["ENABLE_TXT_TO_TXTZ_PLUGIN"], server: ["ENABLE_SERVER_FILE_IMPORT"], "bind directory": ["ENABLE_SERVER_FILE_IMPORT"], "browse server": ["ENABLE_SERVER_FILE_IMPORT"],
     isbn: ["BATCH_ADD_IN_FORCE"], force: ["BATCH_ADD_IN_FORCE"], invalid: ["BATCH_ADD_IN_FORCE"],
     "top folder": ["IMPORT_CATEGORY_WITH_FOLDER"], "first level folder": ["IMPORT_CATEGORY_WITH_FOLDER"], "custom category": ["IMPORT_CATEGORY_WITH_FOLDER"], "folder category": ["IMPORT_CATEGORY_WITH_FOLDER"],
@@ -1787,6 +1814,7 @@ export default {
     "cover-background-manager": CoverBackgroundManager,
     "reading-range-dialog": ReadingRangeDialog,
     "book-nav-editor": BookNavEditor,
+    "scan-ignore-dirs-editor": ScanIgnoreDirsEditor,
     "reader-dict-editor": ReaderDictEditor,
     "homepage-cards-editor": HomepageCardsEditor,
     "module-settings-dialog": ModuleSettingsDialog,
@@ -1833,13 +1861,22 @@ export default {
                 key: "site_icon",
                 label: "settings.site_icon",
                 type: "select_image",
-                items: Array.from({ length: 9 }, (_, i) => ({
-                  image_file: "favicon_" + i.toString(),
-                  value: "favicon_" + i.toString(),
-                  // favicon_0 表示「沿用当前图标」：预览读取站点当前的 favicon.ico，
-                  // 而不是自带的默认 favicon_0.ico（后者不会随选择更新）
-                  is_current: i === 0,
-                })),
+                items: [
+                  ...Array.from({ length: 9 }, (_, i) => ({
+                    image_file: "favicon_" + i.toString(),
+                    value: "favicon_" + i.toString(),
+                    ext: "ico",
+                    // favicon_0 表示「沿用当前图标」：预览读取站点当前的 favicon.ico，
+                    // 而不是自带的默认 favicon_0.ico（后者不会随选择更新）
+                    is_current: i === 0,
+                  })),
+                  // favicon_9 起是 svg_source 转换出的 64x64 PNG 图标
+                  ...Array.from({ length: 17 }, (_, i) => ({
+                    image_file: "favicon_" + (i + 9).toString(),
+                    value: "favicon_" + (i + 9).toString(),
+                    ext: "png",
+                  })),
+                ],
               },
               { icon: "mdi-copyright", key: "HEADER", label: "settings.site_header", type: "textarea" },
               { icon: "mdi-copyright", key: "FOOTER", label: "settings.site_footer", type: "textarea" },
@@ -2054,6 +2091,16 @@ export default {
                   { text: this.$t("settings.myreader"), value: "MyReader", icon: "mdi-water-outline" }
                 ],
               },
+              {
+                icon: "mdi-file-pdf-box",
+                key: "PDF_READER",
+                label: "settings.pdf_viewer",
+                type: "select",
+                items: [
+                  { text: this.$t("settings.pdf_viewer_default"), value: PDF_READER_DEFAULT, icon: "mdi-file-pdf-box" },
+                  { text: this.$t("settings.myreader"), value: "MyReader", icon: "mdi-water-outline" }
+                ],
+              },
               { icon: "mdi-sync", key: "ENABLE_DATA_SYNC", label: "settings.enable_data_sync", type: "checkbox" },
               { icon: "mdi-image-sync-outline", key: "USE_DYNAMIC_COVER", label: "settings.use_dynamic_cover", type: "checkbox", expand: "cover_backgrounds", al: ["封面背景", "背景图", "cover background"] },
               { icon: "mdi-face-man-outline", key: "ENABLE_AUTHOR_INFO", label: "settings.enable_author_info", type: "checkbox" },
@@ -2122,6 +2169,17 @@ export default {
               { icon: "mdi-send", key: "ALLOW_GUEST_PUSH", label: "settings.allow_guest_push", type: "checkbox", lockOn: "REQUIRE_LOGIN", module: "multiuser" },
               // 分享链接属于共享阅读模块：模块关闭时入口与设置一起隐藏
               { icon: "mdi-link-variant", key: "ENABLE_SHARE_LINK", label: "settings.allow_share_link", type: "checkbox", module: "shared_reading" },
+            ],
+            groups: [
+              {
+                icon: "mdi-download-lock-outline",
+                key: "ENABLE_GUEST_DOWNLOAD_QUOTA",
+                label: "settings.enable_guest_download_quota",
+                lockOn: "REQUIRE_LOGIN",
+                fields: [
+                  { icon: "mdi-counter", key: "GUEST_DOWNLOAD_QUOTA", label: "settings.guest_download_quota", type: "number" },
+                ],
+              },
             ],
           },
           {
@@ -2304,6 +2362,20 @@ export default {
             title: "settings.sec_imp_rules",
             fields: [
               { icon: "mdi-import", key: "scan_upload_path", label: "settings.scan_upload_path" },
+              {
+                icon: "mdi-folder-off-outline",
+                key: "SCAN_IGNORE_DIRS",
+                label: "settings.scan_ignore_dirs",
+                type: "scan_ignore_dirs",
+                al: ["忽略目录", "跳过目录"],
+              },
+              {
+                icon: "mdi-file-replace-outline",
+                key: "SCAN_REPLACE_SAME_TITLE",
+                label: "settings.scan_replace_same_title",
+                type: "checkbox",
+                tips: "settings.scan_replace_same_title_tips",
+              },
               {
                 icon: "mdi-server",
                 key: "ENABLE_SERVER_FILE_IMPORT",
@@ -2743,6 +2815,10 @@ export default {
           );
         }
         this.ensureTimezoneOptionVisible();
+        // 老配置没有 PDF_READER 时按默认 MyReader 补齐，保证 select 有值且可编辑
+        if (!this.settings["PDF_READER"]) {
+          this.$set(this.settings, "PDF_READER", "MyReader");
+        }
         if (
           !("site_icon" in this.settings) ||
           this.settings["site_icon"] === ""
@@ -3172,6 +3248,25 @@ export default {
         ? this.$t("settings.save_confirm_message_autoreload")
         : this.$t("settings.save_confirm_message_no_autoreload");
     },
+    scanIgnoreDirProblems() {
+      const invalid = [];
+      const duplicates = [];
+      const counts = {};
+      (this.settings["SCAN_IGNORE_DIRS"] || []).forEach((item) => {
+        const name = (item || "").trim();
+        if (!name) return;
+        if (isInvalidScanIgnoreDirName(name)) {
+          invalid.push(name);
+        }
+        counts[name] = (counts[name] || 0) + 1;
+      });
+      Object.keys(counts).forEach((name) => {
+        if (counts[name] > 1 && invalid.indexOf(name) < 0) {
+          duplicates.push(name);
+        }
+      });
+      return { invalid, duplicates };
+    },
     bookNavDuplicateNames() {
       const counts = {};
       this.bookNavList.forEach((cat) => {
@@ -3218,7 +3313,7 @@ export default {
     searchQuery() {
       this.$nextTick(() => this.positionSegIndicator());
     },
-    searchOpen(val) {
+    searchOpen() {
       const run = () => this.positionSegIndicator();
       this.$nextTick(() => { run(); setTimeout(run, 260); });
     },
@@ -3276,12 +3371,12 @@ export default {
   methods: {
     // 网站图标下拉的预览地址。favicon_0 表示「沿用当前图标」，要展示站点此刻真正
     // 生效的 /logo/favicon.ico（保存其它图标时它会被覆盖），因此带时间戳绕过缓存；
-    // 其余选项展示随附的 favicon_N.ico。
+    // 其余选项展示随附的 favicon_N.ico / favicon_N.png。
     siteIconSrc(item) {
       if (item && item.is_current) {
         return `${this.site_url}/logo/favicon.ico?t=${this.siteIconStamp}`;
       }
-      return `${this.site_url}/logo/${item.image_file}.ico`;
+      return `${this.site_url}/logo/${item.image_file}.${item.ext || "ico"}`;
     },
     // lockOn 指定的总开关开启后，该字段失去意义：置灰显示为未勾选且不可点选
     // （与后端一致——REQUIRE_LOGIN 下各项访客权限恒按 False 处理），
@@ -3307,6 +3402,13 @@ export default {
     onCheckboxChange(f, value) {
       if (this.isFieldDisabled(f)) return;
       this.$set(this.settings, f.key, value);
+    },
+    onSelectChange(f, value) {
+      this.$set(this.settings, f.key, value);
+      // EPUB 阅读器切到 MyReader 时，PDF 阅读器跟随切换；之后用户仍可单独改回默认
+      if (f.key === "EPUB_VIEWER" && value === "MyReader") {
+        this.$set(this.settings, "PDF_READER", "MyReader");
+      }
     },
     // 模块是否开启。未登记 / 未传 id 一律返回 true（与后端 modules.py 兜底一致），
     // 避免把 module 标签写错成未登记 id 时整块设置凭空消失且再也改不回来。
@@ -3623,6 +3725,25 @@ export default {
       this.saveSettings();
     },
     saveSettings: function () {
+      const ignoreProblems = this.scanIgnoreDirProblems;
+      if (ignoreProblems.invalid.length > 0) {
+        this.$alert(
+          "error",
+          this.$t("settings.scan_ignore_dirs_invalid_names", {
+            names: ignoreProblems.invalid.join("、"),
+          })
+        );
+        return;
+      }
+      if (ignoreProblems.duplicates.length > 0) {
+        this.$alert(
+          "error",
+          this.$t("settings.scan_ignore_dirs_duplicate", {
+            names: ignoreProblems.duplicates.join("、"),
+          })
+        );
+        return;
+      }
       if (this.bookNavDuplicateNames.length > 0) {
         this.$alert(
           "error",
@@ -3636,6 +3757,9 @@ export default {
       // 若先改写 live settings，保存失败会留下用户没动过的假 diff 且无自愈出口
       const payload = JSON.parse(JSON.stringify(this.settings));
       payload["BOOK_NAV"] = this.serializeBookNav(this.bookNavList);
+      payload["SCAN_IGNORE_DIRS"] = (payload["SCAN_IGNORE_DIRS"] || [])
+        .map((name) => (name || "").trim())
+        .filter(Boolean);
       // showToken is view state only; the server drops incomplete entries.
       payload["READER_MYDICTS"] = (payload["READER_MYDICTS"] || []).map((dict) => {
         const entry = { ...dict };
@@ -3681,6 +3805,7 @@ export default {
         this.$store.commit("refresh_sys");
         // 服务端确认后才把规范化结果落到本地状态与 localStorage
         this.settings["BOOK_NAV"] = payload["BOOK_NAV"];
+        this.settings["SCAN_IGNORE_DIRS"] = payload["SCAN_IGNORE_DIRS"];
         this.settings["READER_MYDICTS"] = payload["READER_MYDICTS"];
         this.settings["site_language"] = payload["site_language"];
         if (this.settings["site_language"] !== "") {
@@ -3745,7 +3870,7 @@ export default {
       var msg = `${this.$t("settings.sns_config_message", {
         text: s.text,
         link: s.link,
-        site_url: this.site_url,
+        site_url: siteBaseUrl(this.$store) || this.site_url,
         value: s.value,
       })}`;
       this.$alert("warning", msg);

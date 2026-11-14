@@ -170,13 +170,27 @@ class TestApp(testing.AsyncHTTPTestCase):
 
 class TestAppWithoutLogin(TestApp):
     def test_index(self):
-        d = self.json("/api/index?random=7&recent=9")
-        self.assertEqual(len(d["new_books"]), 9)
-        self.assertEqual(len(d["random_books"]), 7)
-        for book in d["new_books"] + d["random_books"]:
+        # /api/index 只返回首页布局配置，书籍区块拆到独立接口按需加载
+        d = self.json("/api/index")
+        self.assertEqual(d["err"], "ok")
+        self.assertNotIn("new_books", d)
+        self.assertNotIn("random_books", d)
+        self.assertIn("homepage", d)
+
+        d = self.json("/api/index/new?recent=9")
+        self.assertEqual(d["err"], "ok")
+        new_books = d["new_books"]
+        self.assertEqual(len(new_books), 9)
+
+        d = self.json("/api/index/random?random=7")
+        self.assertEqual(d["err"], "ok")
+        random_books = d["random_books"]
+        self.assertEqual(len(random_books), 7)
+
+        for book in new_books + random_books:
             self.assert_book_simple(book)
 
-        book = d["new_books"][0]
+        book = new_books[0]
         for author in book["authors"]:
             self.json("/api/author/" + Q(author))
 
@@ -622,7 +636,12 @@ class TestBook(TestWithUserLogin):
         with self._mock_djvu_only_book("cbz"), mock.patch.dict(webserver.handlers.book.CONF, {"EPUB_VIEWER": "MyReader"}):
             rsp = self.fetch("/read/%s?format=cbz" % BID_PDF, follow_redirects=False)
             self.assertEqual(rsp.code, 302)
-            self.assertEqual(rsp.headers["Location"], "/readerx/open?bookId=%s&format=cbz" % BID_PDF)
+            location = rsp.headers["Location"]
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(location).query)
+            self.assertEqual(urllib.parse.urlsplit(location).path, "/readerx/open")
+            self.assertEqual(query["bookId"], [str(BID_PDF)])
+            self.assertEqual(query["format"], ["cbz"])
+            self.assertIn("title", query)
             d = self.json("/api/book/%s/read" % BID_PDF, method="POST", body=json.dumps({"format": "cbz"}))
             self.assertEqual(d["err"], "ok")
             self.assertEqual(d["data"]["status"], "ready")

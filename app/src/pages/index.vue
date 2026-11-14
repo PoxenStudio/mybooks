@@ -11,27 +11,27 @@
                         <div class="stats-content">
                             <div class="stat-group">
                                 <span class="stat-label">{{ $t('index.totalBooks') }}:</span>
-                                <span class="stat-value">{{ statValue('total_books') }}</span>
+                                <span class="stat-value" :class="{ 'is-pending': statText('total_books') === null }">{{ statText('total_books') }}</span>
                             </div>
                             <div class="stat-separator">|</div>
                             <div class="stat-group">
                                 <span class="stat-label">{{ $t('index.ebookCount') }}:</span>
-                                <span class="stat-value">{{ statValue('ebook_count') }}</span>
+                                <span class="stat-value" :class="{ 'is-pending': statText('ebook_count') === null }">{{ statText('ebook_count') }}</span>
                             </div>
                             <template v-if="allowPhysicalBooks">
                                 <div class="stat-separator">|</div>
                                 <div class="stat-group">
                                     <span class="stat-label">{{ $t('index.physicalCount') }}:</span>
-                                    <span class="stat-value">{{ statValue('physical_count') }}</span>
+                                    <span class="stat-value" :class="{ 'is-pending': statText('physical_count') === null }">{{ statText('physical_count') }}</span>
                                 </div>
                             </template>
                             <div class="stat-separator">|</div>
                             <div class="stat-group">
                                 <span class="stat-label">{{ $t('index.monthNewBooks') }}:</span>
-                                <span class="stat-value month-new">
-                                    {{ $t('index.ebookCount') }} {{ stats.month_ebook_count }}
-                                    <template v-if="allowPhysicalBooks">+ {{ $t('index.physicalCount') }} {{ stats.month_physical_count }}</template>
-                                </span>
+                                <!-- 原来这里把「电子书」当标签塞进数值里：
+                                     「本月新增: 电子书 60 + 实体书 0」读起来像一条算式。
+                                     现在只给合计，细分在下面的详情面板里。 -->
+                                <span class="stat-value month-new" :class="{ 'is-pending': statText('month_new') === null }">{{ statText('month_new') }}</span>
                             </div>
                         </div>
                     </div>
@@ -178,13 +178,13 @@
             :style="{ order: sectionOrder.indexOf('index.randomRecommendation') }"
         >
             <home-section-card
-                v-if="random_books.length > 0"
-                icon="mdi-apple-keyboard-command"
+                v-if="random_books.length > 0 || homeBooksLoading"
+                icon="mdi-shuffle-variant"
                 :title="$t('index.randomRecommendation')"
                 storage-key="index.randomRecommendation"
             >
                 <template #header-extra>
-                    <v-icon color="primary" class="ml-1 refresh-icon" :class="{ 'refresh-icon--spinning': refreshing.random }" @click="refreshBooks('random')">mdi-refresh</v-icon>
+                    <v-icon color="primary" class="ml-1 refresh-icon" :class="{ 'refresh-icon--spinning': refreshing.random || pendingRefresh.random }" @click="refreshBooks('random')">mdi-refresh</v-icon>
                 </template>
                 <v-row>
                     <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="(book,idx) in get_random_books" :key="'rec'+idx+book.id" class="book-card" :style="{ '--i': idx }">
@@ -213,21 +213,37 @@
             :style="{ order: sectionOrder.indexOf('index.newRecommendation') }"
         >
             <home-section-card
-                v-if="get_recent_books.length > 0"
-                icon="mdi-hexagram-outline"
+                v-if="get_recent_books.length > 0 || homeBooksLoading"
+                icon="mdi-new-box"
                 :title="$t('index.newRecommendation')"
                 storage-key="index.newRecommendation"
             >
                 <template #header-extra>
-                    <v-icon color="primary" class="ml-1 refresh-icon" :class="{ 'refresh-icon--spinning': refreshing.new }" @click="refreshBooks('new')">mdi-refresh</v-icon>
+                    <v-icon color="primary" class="ml-1 refresh-icon" :class="{ 'refresh-icon--spinning': refreshing.new || pendingRefresh.new }" @click="refreshBooks('new')">mdi-refresh</v-icon>
                 </template>
-                <v-row>
+                <v-row v-if="get_recent_books.length > 0">
                     <v-col cols="12">
                         <book-cards :books="get_recent_books">
                             <template #introduce="{ book }">
                                 <div v-if="reasonText(book)" class="reason-line text-caption primary--text">{{ reasonText(book) }}</div>
                             </template>
                         </book-cards>
+                    </v-col>
+                </v-row>
+                <v-row v-else>
+                    <v-col cols="12" xs="12" sm="6" md="4" lg="3" xl="2" v-for="n in 8" :key="'new-ph'+n" class="book-list-card d-flex">
+                        <v-card class="flex-grow-1">
+                            <v-row>
+                                <v-col cols="4" class="col-book-img">
+                                    <div class="book-img-container">
+                                        <v-skeleton-loader type="image" class="cover-fill-img"></v-skeleton-loader>
+                                    </div>
+                                </v-col>
+                                <v-col cols="8" class="col-book-info">
+                                    <v-skeleton-loader type="text" />
+                                </v-col>
+                            </v-row>
+                        </v-card>
                     </v-col>
                 </v-row>
             </home-section-card>
@@ -360,6 +376,7 @@ export default {
             );
         },
         homeLoading() {
+            if (this.homeBooksLoading) return true;
             if (this.isSectionEnabled('libraryStats') && this.statsLoading) return true;
             if (this.isSectionEnabled('index.myReading') && this.readingLoading) return true;
             if (this.isSectionEnabled('readingStats') && this.readingStatsPending) return true;
@@ -379,9 +396,22 @@ export default {
         isAdmin() {
             return !!(this.$store.state.user && this.$store.state.user.is_admin);
         },
+        // 统计接口回填前不再塞「-」占位：未就绪的语义交给 statText() 返回 null，
+        // 模板据此出骨架条。这里只做空对象兜底，避免读到 undefined
         stats() {
-            return this.libraryStats || {
-                total_books: '-', ebook_count: '-', physical_count: '-', month_ebook_count: '-', month_physical_count: '-',
+            return this.libraryStats || {};
+        },
+        // 滚动动效的目标值。null = 数据未到。四个数字（含「本月新增」）一起滚，
+        // 免得三个在跳、一个静止，看着像漏了一个
+        statsTargets() {
+            if (!this.libraryStats) {
+                return null;
+            }
+            return {
+                total_books: Number(this.libraryStats.total_books) || 0,
+                ebook_count: Number(this.libraryStats.ebook_count) || 0,
+                physical_count: Number(this.libraryStats.physical_count) || 0,
+                month_new: this.monthNewTotal,
             };
         },
         readingStatsPending() {
@@ -407,6 +437,14 @@ export default {
         physicalModuleOn() {
             const mods = (this.$store.state.sys && this.$store.state.sys.modules) || {};
             return mods.physical !== false;
+        },
+        /** 「本月新增」只展示合计：细分（电子书/实体书）在详情面板里 */
+        monthNewTotal() {
+            const ebooks = Number(this.stats && this.stats.month_ebook_count) || 0;
+            const physicals = this.allowPhysicalBooks
+                ? (Number(this.stats && this.stats.month_physical_count) || 0)
+                : 0;
+            return ebooks + physicals;
         },
     },
     watch: {
@@ -450,6 +488,12 @@ export default {
         },
     },
     methods: {
+        /** 统计数字加千分位：33274 → 33,274 */
+        formatNum(value) {
+            const n = Number(value);
+            if (!Number.isFinite(n)) return value;
+            return n.toLocaleString();
+        },
         isSectionEnabled(section) {
             return !this.hiddenSections.has(section);
         },
@@ -461,11 +505,16 @@ export default {
             this.statsLoading = true;
             try {
                 const rsp = await this.$backend('/library/stats');
-                if (rsp.err === 'ok') {
+                if (rsp.err === 'ok' && rsp.stats) {
                     this.libraryStats = rsp.stats;
+                    this.statsFailed = false;
+                } else {
+                    // 接口通了但没给数据：算失败，别让骨架一直闪成「还在加载」
+                    this.statsFailed = true;
                 }
             } catch (error) {
                 console.warn('Failed to load library stats:', error);
+                this.statsFailed = true;
             } finally {
                 this.statsLoading = false;
             }
@@ -512,9 +561,73 @@ export default {
             }
             return this.$t('index.reason.' + reason.type, { value: reason.value });
         },
+        homeSectionEnabled(section) {
+            const keys = {
+                social: 'index.socialRecommendation',
+                random: 'index.randomRecommendation',
+                new: 'index.newRecommendation',
+            };
+            return this.isSectionEnabled(keys[section]);
+        },
+        async loadHomeSection(section, exclude) {
+            try {
+                const query = exclude ? `?exclude=${encodeURIComponent(exclude)}` : '';
+                const rsp = await this.$backend(`/index/${section}${query}`);
+                if (rsp.err !== 'ok') {
+                    return;
+                }
+                if (section === 'social') {
+                    this.social_recommend_books = rsp.social_recommend_books || [];
+                } else if (section === 'random') {
+                    this.random_books = rsp.random_books || [];
+                } else if (section === 'new') {
+                    this.new_books = rsp.new_books || [];
+                }
+            } catch (error) {
+                console.warn(`Failed to load home section ${section}:`, error);
+            }
+        },
+        async loadHomeBooks() {
+            const sections = ['social', 'new', 'random'];
+            if (!sections.some((s) => this.homeSectionEnabled(s))) {
+                return;
+            }
+            this.homeBooksLoading = true;
+            try {
+                // 社交推荐最轻，先取到；再把它的书 id 作为 exclude 传给后面两个区块。
+                // 新书先于随机推荐加载：随机推荐会把新书 id 一并排除，避免同一本书
+                // 同时出现在“新书”和“随便看看”里（推荐引擎构建的候选池会被第二个
+                // 请求复用，所以串行加载并不会多花一次全库打分的时间）。
+                if (this.homeSectionEnabled('social')) {
+                    await this.loadHomeSection('social');
+                }
+                let exclude = this.social_recommend_books.map((b) => b.id);
+                if (this.homeSectionEnabled('new')) {
+                    await this.loadHomeSection('new', exclude.join(','));
+                    exclude = exclude.concat(this.new_books.map((b) => b.id));
+                }
+                if (this.homeSectionEnabled('random')) {
+                    await this.loadHomeSection('random', exclude.join(','));
+                }
+            } finally {
+                this.homeBooksLoading = false;
+            }
+        },
         refreshBooks(section) {
             // 请求在途时忽略重复点击，图标以自旋反馈加载状态
             if (this.refreshing[section]) {
+                return;
+            }
+            // 初始加载还没落地时不接单：它挂载后才发的响应会把刷新结果盖回去
+            if (this.homeBooksLoading) {
+                return;
+            }
+            // 跨区块串行：两个刷新同时发出去会带同一份 exclude，换出来的书
+            // 可能在两个区块重复出现；先排队，等在途的落地，新请求的 exclude
+            // 就能把刚换出来的书也算上。排队态图标也转（模板里认 pendingRefresh），
+            // 否则点了没反应，用户会以为点击丢了
+            if (this.refreshing.random || this.refreshing.new) {
+                this.$set(this.pendingRefresh, section, true);
                 return;
             }
             this.$set(this.refreshing, section, true);
@@ -524,37 +637,75 @@ export default {
             const shown = this.random_books.concat(this.new_books).map(b => b.id);
             // 退场动画总时长（末张卡片 24ms x 11 + 300ms ≈ 564ms）内不切数据，
             // 否则接口快于动画时卡片会在半途被换掉，退场只播了一半
-            const minExit = new Promise(resolve => setTimeout(resolve, 580));
-            const request = this.$backend('/index?refresh=1&exclude=' + shown.join(','));
-            Promise.all([request, minExit]).then( ([rsp]) => {
+            let exitTimer = null;
+            const minExit = new Promise(resolve => { exitTimer = setTimeout(resolve, 580); });
+            // 书籍列表在拆分后的区块接口上（/index 只返回布局配置）：refresh=1 绕过
+            // LITE 缓存并换取新随机种子，exclude 让下一批尽量避开屏幕上的书
+            const request = this.$backend(`/index/${section}?refresh=1&exclude=${shown.join(',')}`);
+            // 死线：$backend 没有超时，请求挂起时退场动画已把书藏住，必须有兜底
+            // 把卡片还回来，不能让转圈无限进行。race 只认先到的结局，死线触发后
+            // 迟到的响应整个被丢弃，不会在几秒后突然把书换掉
+            let deadlineTimer = null;
+            const deadline = new Promise((_, reject) => {
+                deadlineTimer = setTimeout(() => reject(new Error('refresh deadline')), 15000);
+            });
+            Promise.race([Promise.all([request, minExit]), deadline]).then( ([rsp]) => {
+                // 失败路径也用 'in' 而不是 null：out 是 forwards，580ms 时卡片已经
+                // opacity:0，直接撤掉 data-phase 会让它们从 0 硬跳到 1；走一遍回场
+                // 动画才是「把书还回来」该有的观感
                 if (!rsp || rsp.err !== 'ok') {
-                    this.$set(this.refreshPhase, section, null);
+                    this.$set(this.refreshPhase, section, 'in');
+                    return;
+                }
+                const books = (section === 'new' ? rsp.new_books : rsp.random_books) || [];
+                // 换不出书（极小书库全被排除等）：保留旧数组、让卡片回场，
+                // 否则空数组会把整个区块卡的 v-if 打掉，卡片直接消失
+                if (books.length === 0) {
+                    this.$set(this.refreshPhase, section, 'in');
                     return;
                 }
                 // 切阶段与换数组放在同一 tick：新卡片一挂载就处在入场动画里，
                 // 不会再叠加一次常规进场（home-cover-in）
                 this.$set(this.refreshPhase, section, 'in');
                 if (section === 'new') {
-                    this.new_books = rsp.new_books || [];
+                    this.new_books = books;
                 } else {
-                    this.random_books = rsp.random_books || [];
+                    this.random_books = books;
                 }
             }).catch( error => {
                 console.error('Failed to refresh books:', error);
-                this.$set(this.refreshPhase, section, null);
+                this.$set(this.refreshPhase, section, 'in');
             }).finally( () => {
+                // 结局已定，两个定时器都没用了：不清的话死线会在成功 15s 后
+                // 空 reject 一次（被 race 吞掉，但计时器白挂）
+                clearTimeout(exitTimer);
+                clearTimeout(deadlineTimer);
                 this.$set(this.refreshing, section, false);
+                // 落地后放行排队的下一棒。这里会重新过一遍守卫——目前唯一可能拦住
+                // 它的是 homeBooksLoading（初始加载只在 mounted 跑一次，和刷新起跑
+                // 条件互斥，实际到不了），真发生则这一棒被丢弃，不会卡住队列
+                const next = ['new', 'random'].find(s => this.pendingRefresh[s]);
+                if (next) {
+                    this.$set(this.pendingRefresh, next, false);
+                    this.refreshBooks(next);
+                }
             });
         },
-        // 统计条读数：滚动中读 statsDisplay，结束后交回 stats
-        statValue(key) {
-            if (this.statsDisplay && this.statsDisplay[key] !== undefined) {
-                return this.statsDisplay[key];
+        // 统计条读数：滚动中读 statsDisplay，结束后交回目标值。
+        // 返回 null 表示统计还没回来 —— 模板此时画骨架，不留「-」这种看着像真值的东西
+        statText(key) {
+            const targets = this.statsTargets;
+            if (!targets) {
+                // 拉取失败给「—」，只有「还在路上」才是骨架
+                return this.statsFailed ? '—' : null;
             }
-            return this.stats[key];
+            const rolling = this.statsDisplay && this.statsDisplay[key] !== undefined;
+            return this.formatNum(rolling ? this.statsDisplay[key] : targets[key]);
         },
-        // 统计数字 0 → 目标值。只在首页动效开启且系统未要求减少动效时执行；
-        // 数据回填前模板显示的是占位符「-」，所以从 0 起滚不会出现数字跳变
+        // 统计数字 0 → 目标值。只在首页动效开启且系统未要求减少动效时执行。
+        // 曲线用 easeInOutQuad（起步零速、中段最快、末段缓停）而不是 easeOutCubic：
+        // 后者起始导数是平均速度的 3 倍，第一帧就吃掉 3.9%、400ms 冲到 70%，
+        // 肉眼看就是「唰一下上去再磨」。这条曲线每帧增量从 0 渐增，数字是一位一位数上去的
         rollStats() {
             if (this._statsRolled || !this.homeMotionEnabled) {
                 return;
@@ -565,22 +716,28 @@ export default {
             if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
                 return;
             }
-            const keys = ['total_books', 'ebook_count', 'physical_count'];
-            const target = {};
-            keys.forEach((k) => { target[k] = Number(this.stats[k]) || 0; });
-            // 空库（或统计接口失败）时数字太小，滚动没有意义，直接显示原值
-            if (target.total_books < 10) {
+            const targets = this.statsTargets;
+            if (!targets) {
                 return;
             }
+            // 空库（或统计接口失败）时数字太小，滚动没有意义，直接显示原值
+            if (targets.total_books < 10) {
+                return;
+            }
+            const keys = Object.keys(targets);
             this._statsRolled = true;
             const started = performance.now();
-            const duration = 1200;
-            this.statsDisplay = { total_books: 0, ebook_count: 0, physical_count: 0 };
+            const duration = 1600;
+            const zero = {};
+            keys.forEach((k) => { zero[k] = 0; });
+            this.statsDisplay = zero;
             const tick = (now) => {
                 const p = Math.min(1, (now - started) / duration);
-                const eased = 1 - Math.pow(1 - p, 3);
+                const eased = p < 0.5
+                    ? 2 * p * p
+                    : 1 - Math.pow(-2 * p + 2, 2) / 2;
                 const next = {};
-                keys.forEach((k) => { next[k] = Math.round(target[k] * eased); });
+                keys.forEach((k) => { next[k] = Math.round(targets[k] * eased); });
                 this.statsDisplay = next;
                 if (p < 1) {
                     this._statsRaf = requestAnimationFrame(tick);
@@ -668,6 +825,8 @@ export default {
     },
     mounted() {
         setTimeout(() => this.checkReleaseNotes(), 1500);
+        // 书籍区块不参与 SSR/asyncData：首屏 HTML 先出来，挂载后再按配置并行拉取。
+        this.loadHomeBooks();
         if (this.isSectionEnabled('index.myReading')) {
             this.loadReadingBooks();
         }
@@ -705,29 +864,33 @@ export default {
     created() {
         this.$store.commit('navbar', true);
         this.readingLoading = this.isLoggedIn;
+        // 初始就把加载态打开：SSR 首屏只渲染骨架，避免书籍区块加载完成前闪出"首页为空"。
+        this.homeBooksLoading = ['social', 'random', 'new'].some((s) => this.homeSectionEnabled(s));
     },
     async asyncData({ app, res }) {
         if ( res !== undefined ) {
             res.setHeader('Cache-Control', 'no-cache');
         }
-        // /api/index 的每个返回分支都带归一化后的 homepage 配置，无需再请求 /homepage。
-        // 旧后端没有该字段时 homepageConfig 为 null，computed 里回退到老站点默认可见性；
-        // 额外请求 /homepage 在旧后端会 404 并弹出全局错误框，所以不做探测。
-        const { homepage, ...indexRsp } = (await app.$backend("/index")) || {};
+        // /api/index 现在只返回首页布局配置（书籍列表已拆到 /api/index/<section> 按需加载），
+        // 配置读取是内存操作，不会阻塞首屏 HTML 的生成。旧后端没有 homepage 字段时
+        // homepageConfig 为 null，computed 里回退到老站点默认可见性。
+        const rsp = (await app.$backend("/index")) || {};
         return {
-            ...indexRsp,
-            homepageConfig: homepage || null,
+            homepageConfig: rsp.homepage || null,
         };
     },
     data: () => ({
         random_books: [],
         new_books: [],
         social_recommend_books: [],
+        homeBooksLoading: false,
         homepage_booklists: [],
         reading_books: [],
         refreshing: { random: false, new: false },
         // 「换一批」的两段过渡阶段：out=旧书抽出中，in=新书弹回中，null=静止
         refreshPhase: { random: null, new: null },
+        // 跨区块刷新排队：另一区块刷新在途时先记下意图，等它落地再发起
+        pendingRefresh: { random: false, new: false },
         // 统计数字滚动期间的显示值；null 表示直接用 stats（computed）
         statsDisplay: null,
         readingStatsHasData: false,
@@ -737,6 +900,8 @@ export default {
         booklistsLoaded: false,
         deferTimers: [],
         libraryStats: null,
+        // 统计接口失败标记：骨架只在「真的还在加载」时出现，失败改显「—」
+        statsFailed: false,
         showDetail: false,
         releaseNotesDialog: false,
         releaseNotesContent: '',
@@ -822,8 +987,37 @@ export default {
 }
 
 .stat-value.month-new {
-    background: rgba(76, 175, 80, 0.3);
-    border: 1px solid rgba(76, 175, 80, 0.5);
+    /* 原来是绿色底：绿色在这套界面里代表「成功/已完成」，用在一个中性计数上会误读 */
+    background: rgba(255, 255, 255, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+/* 数据未到时的骨架：在胶囊里放一条半透明占位条。
+   比「-」好读——「-」容易被当成真的读数，而且它换成 0 的那一帧会闪 */
+.stat-value.is-pending {
+    color: transparent;
+}
+
+.stat-value.is-pending::before {
+    content: '';
+    display: inline-block;
+    width: 2.6em;
+    height: 0.92em;
+    border-radius: 3px;
+    vertical-align: -0.12em;
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.14) 25%,
+        rgba(255, 255, 255, 0.30) 37%,
+        rgba(255, 255, 255, 0.14) 63%
+    );
+    background-size: 400% 100%;
+    animation: stat-skeleton-shimmer 1.4s ease infinite;
+}
+
+@keyframes stat-skeleton-shimmer {
+    from { background-position: 100% 0; }
+    to { background-position: 0 0; }
 }
 
 .stat-separator {
@@ -996,6 +1190,7 @@ export default {
 
 .refresh-icon {
     cursor: pointer;
+    border-radius: 50%;
     transition: transform 0.28s ease, color 0.28s ease;
 }
 
@@ -1015,6 +1210,19 @@ export default {
 .refresh-icon--spinning {
     animation: refresh-icon-spin 0.8s linear infinite;
     opacity: 0.75;
+}
+
+.refresh-icon:focus-visible {
+    outline: 2px solid var(--primary-color, #1976D2);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .refresh-icon,
+    .refresh-icon:hover {
+        transition: none;
+        transform: none;
+    }
 }
 
 .book-img-container {
@@ -1280,6 +1488,11 @@ export default {
     transition: none !important;
 }
 
+/* 占位骨架的呼吸光同理：减少动效时只留一条静态灰条 */
+.home-motion-reduced .stat-value.is-pending::before {
+    animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .home-section-slot,
     .home-section-slot .book-card,
@@ -1291,6 +1504,10 @@ export default {
 
     .home-section-slot .v-image__image.fade-transition-enter-active {
         transition: none !important;
+    }
+
+    .stat-value.is-pending::before {
+        animation: none !important;
     }
 }
 </style>

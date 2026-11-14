@@ -143,7 +143,6 @@ class MetaList(ListHandler):
             "language": _(u"全部语言"),
         }
         title = titles.get(meta, _(u"未知")) % vars()
-        # category = meta if meta in ["series", "publisher"] else meta + "s"
         items = await self.get_category_with_count_async(meta)
         # if meta == "author":
         #     # 将自定义字段#translators中的译者也作为作者处理，与真实作者按书籍去重合并统计

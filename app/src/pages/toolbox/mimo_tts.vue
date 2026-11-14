@@ -61,7 +61,7 @@
                       v-for="file in (book.files || [])"
                       :key="file.format"
                       x-small
-                      :color="file.format === 'EPUB' ? 'primary' : 'default'"
+                      :color="['EPUB', 'TXT'].includes(file.format) ? 'primary' : 'default'"
                       outlined
                       class="mr-1"
                     >{{ file.format }}</v-chip>
@@ -552,7 +552,7 @@ export default {
     canConvert() {
       return (
         this.selected &&
-        (this.selected.files || []).some((f) => f.format === 'EPUB') &&
+        (this.selected.files || []).some((f) => f.format === 'EPUB' || f.format === 'TXT') &&
         this.apiKey.trim() &&
         this.apiUrl.trim() &&
         this.modelName.trim()

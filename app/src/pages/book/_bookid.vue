@@ -343,6 +343,10 @@
                                     <v-icon>mdi-format-list-bulleted</v-icon>
                                     {{ $t('book.extractCatalog') }}
                                 </v-list-item>
+                                <v-list-item @click="extractWordCount" :disabled="!hasWordCountFormats || word_count_extracting">
+                                    <word-count-icon />
+                                    {{ $t('book.extractWordCount') }}
+                                </v-list-item>
                                 <v-list-item v-if="$store.state.user?.is_login" @click="openEmailDialog" :disabled="!hasCompatibleEmailFormats">
                                     <v-icon>mdi-email-send</v-icon>
                                     {{ $t('book.shareToEmail') }}
@@ -707,6 +711,10 @@
                                 <v-chip rounded dark color="grey" v-if="book.isbn">
                                     <v-icon>mdi-compass</v-icon>
                                     ISBN：{{ book.isbn }}
+                                </v-chip>
+                                <v-chip rounded dark color="blue-grey darken-3" v-if="book.word_count > 0">
+                                    <word-count-icon />
+                                    {{ $t('book.wordCount') }}：{{ formatWordCount(book.word_count) }}
                                 </v-chip>
                                 <template v-for="tag in book.tags">
                                     <v-chip
@@ -1262,6 +1270,7 @@ import BookSocialInfo from "~/components/BookSocialInfo.vue";
 import BookReviewList from "~/components/BookReviewList.vue";
 import BookReviewDialog from "~/components/BookReviewDialog.vue";
 import BookListQuickAddMenu from "~/components/BookListQuickAddMenu.vue";
+import WordCountIcon from "~/components/WordCountIcon.vue";
 import { downloadImage, renderBookShareCard, shareCardFileName } from "~/utils/bookShareCard";
 import { languageOptions } from "~/utils/languageCodes";
 import { toStars } from "~/utils/rating";
@@ -1279,6 +1288,7 @@ export default {
         BookReviewList,
         BookReviewDialog,
         BookListQuickAddMenu,
+        WordCountIcon,
     },
     computed: {
         folderEnabled() {
@@ -1546,6 +1556,15 @@ export default {
             });
         },
 
+        // 字数统计仅支持 EPUB/TXT
+        hasWordCountFormats() {
+            if (!this.book || !this.book.files) return false;
+            return this.book.files.some(file => {
+                const format = file.format.toLowerCase();
+                return format === 'epub' || format === 'txt';
+            });
+        },
+
         // 将 markdown 嵌套列表（"  - 标题"）解析为带缩进层级的行，用于目录面板展示
         catalogLines() {
             if (!this.book || !this.book.catalog) return [];
@@ -1747,6 +1766,7 @@ export default {
         mynexusDescriptionTab: "description",
         ai_filling: false,
         catalog_extracting: false,
+        word_count_extracting: false,
         catalogExpanded: false,
         editing_location: false,
         location_input: "",
@@ -2074,9 +2094,13 @@ export default {
         },
         async openDownloadLink(url) {
             // 与 $store.state.sys.allow.physical_books 相同的用法：功能开关关闭时不做任何检查，直接下载
-            if (this.$store.state.sys.allow.download_quota) {
+            const allow = this.$store.state.sys.allow || {};
+            if (allow.download_quota || allow.guest_download_quota) {
+                const downloadUrl = new URL(url, window.location.href);
+                const match = downloadUrl.pathname.match(/\/api\/book\/(\d+)\.([^/]+)$/);
+                const query = match ? `?book_id=${match[1]}` : '';
                 try {
-                    const rsp = await this.$backend('/book/download_quota');
+                    const rsp = await this.$backend('/book/download_quota' + query);
                     if (rsp.err !== 'ok' || !rsp.allowed) {
                         this.$alert('error', rsp.msg || this.$t('book.downloadQuotaExceeded'));
                         return;
@@ -2472,6 +2496,35 @@ export default {
             }).finally(() => {
                 this.catalog_extracting = false;
             });
+        },
+        extractWordCount() {
+            if (this.word_count_extracting) return;
+            this.word_count_extracting = true;
+            this.$backend("/book/" + this.book.id + "/word_count", {
+                method: "POST",
+            }).then((rsp) => {
+                if (rsp.err === "ok") {
+                    this.$set(this.book, "word_count", rsp.word_count || 0);
+                    this.$alert("success", rsp.msg || this.$t('book.extractWordCountSuccess'));
+                } else {
+                    this.$alert("error", rsp.msg || this.$t('book.extractWordCountFailed'));
+                }
+            }).catch(() => {
+                this.$alert("error", this.$t('book.extractWordCountFailed'));
+            }).finally(() => {
+                this.word_count_extracting = false;
+            });
+        },
+        formatWordCount(count) {
+            const value = Number(count) || 0;
+            try {
+                return new Intl.NumberFormat(this.$i18n.locale, {
+                    notation: 'compact',
+                    maximumFractionDigits: 1
+                }).format(value);
+            } catch (e) {
+                return value.toLocaleString();
+            }
         },
         convertBook() {
             // 转换书籍格式
@@ -3159,6 +3212,8 @@ export default {
                 this.categories = [];
                 return;
             }
+            // 分类列表异步加载，不阻塞设置请求与 UI
+            this.loadCategories();
             try {
                 const [settingsResponse, devicesResponse] = await Promise.all([
                     this.$backend('/admin/settings').catch(() => null),
@@ -3170,14 +3225,6 @@ export default {
                 const usedNames = new Set(personalDevices.map(d => d.name));
                 const extraGlobal = globalDevices.filter(d => !usedNames.has(d.name));
                 this.devices = [...personalDevices, ...extraGlobal];
-                if (settingsResponse?.err === 'ok' && settingsResponse.settings?.BOOK_NAV) {
-                    this.categories = settingsResponse.settings.BOOK_NAV.split('\n').map(line => {
-                        const parts = line.split('=');
-                        return parts[0].trim();
-                    }).filter(c => c);
-                    // 添加国际化的"清除"选项
-                    this.categories.push(this.$t('book.clearCategory'));
-                }
                 // 获取图章默认位置
                 if (settingsResponse?.err === 'ok') {
                     this.stamp_default_position = settingsResponse.settings.STAMP_POSITION || 'bottom-right';
@@ -3185,6 +3232,20 @@ export default {
                 }
             } catch (error) {
                 console.error('Failed to get settings:', error);
+            }
+        },
+
+        // 异步加载分类列表（只取自定义字段 #category，不需要数量）
+        async loadCategories() {
+            try {
+                const response = await this.$backend('/categories?simple=1');
+                if (response.err === 'ok') {
+                    this.categories = (response.categories || []).map(c => c.name).filter(c => c);
+                    // 添加国际化的"清除"选项
+                    this.categories.push(this.$t('book.clearCategory'));
+                }
+            } catch (error) {
+                console.error('Failed to load categories:', error);
             }
         },
 

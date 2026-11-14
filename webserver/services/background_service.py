@@ -21,6 +21,7 @@ class BackgroundTask:
     SERVICE_TYPE_COVER_UPDATE = "cover_update"  # 更新图书封面
     SERVICE_TYPE_SAVE_META = "save_meta"  # 将图书元数据保存到文件中
     SERVICE_TYPE_CATALOG_EXTRACT = "catalog_extract"  # 目录提取
+    SERVICE_TYPE_WORD_COUNT = "word_count"  # 字数统计
     SERVICE_TYPE_BULK_DELETE = "bulk_delete"  # 批量删除导入记录
     SERVICE_TYPE_OTHER = "other"  # 其他任务类型
 

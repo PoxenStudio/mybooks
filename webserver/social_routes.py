@@ -3,6 +3,7 @@ from tornado.web import url
 from social_tornado.handlers import AuthHandler, CompleteHandler, DisconnectHandler
 
 from webserver.base.modules import MODULE_MULTIUSER, module_enabled
+from webserver.social_pipeline import RegistrationClosed
 
 
 class SocialLoginGateMixin:
@@ -19,7 +20,11 @@ class GatedAuthHandler(SocialLoginGateMixin, AuthHandler):
 
 
 class GatedCompleteHandler(SocialLoginGateMixin, CompleteHandler):
-    pass
+    def _complete(self, backend):
+        try:
+            super(GatedCompleteHandler, self)._complete(backend)
+        except RegistrationClosed:
+            self.redirect('/login?social_error=register_closed')
 
 
 class GatedDisconnectHandler(SocialLoginGateMixin, DisconnectHandler):

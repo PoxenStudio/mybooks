@@ -144,13 +144,16 @@ class ScanP0TestBase(unittest.TestCase):
         self.svc.scoped_session = self.session
         self._conf_backup = {}
         for key in ("SEND_MAIL_FOR_NEW_BOOKS", "USE_DYNAMIC_COVER", "IMPORT_CATEGORY_WITH_FOLDER",
-                    "REMOVE_IMPORTED_FILE", "UPLOAD_IGNORE_TITLE_CHECKING", "scan_upload_path"):
+                    "REMOVE_IMPORTED_FILE", "UPLOAD_IGNORE_TITLE_CHECKING", "scan_upload_path",
+                    "SCAN_IGNORE_DIRS", "SCAN_REPLACE_SAME_TITLE"):
             self._conf_backup[key] = scan_service.CONF.get(key)
         scan_service.CONF["SEND_MAIL_FOR_NEW_BOOKS"] = False
         scan_service.CONF["USE_DYNAMIC_COVER"] = False
         scan_service.CONF["REMOVE_IMPORTED_FILE"] = False
         scan_service.CONF["UPLOAD_IGNORE_TITLE_CHECKING"] = False
         scan_service.CONF["scan_upload_path"] = self.tmpdir
+        scan_service.CONF["SCAN_IGNORE_DIRS"] = []
+        scan_service.CONF["SCAN_REPLACE_SAME_TITLE"] = False
         self._patch(mock.patch.object(scan_service, "AutoFillService", mock.MagicMock()))
         self._patch(mock.patch.object(scan_service, "CatalogExtractService", mock.MagicMock()))
 
@@ -1319,6 +1322,53 @@ class TestPutWork(ScanP0TestBase):
                 ScanService._put_work(q, live, "y", timeout=0.05)
         finally:
             ScanService.static_abort_flag = False
+
+
+class TestScanIgnoreDirsAndReplace(ScanP0TestBase):
+    def test_collect_files_skips_ignored_dirs(self):
+        scan_service.CONF["SCAN_IGNORE_DIRS"] = ["skipme"]
+        self._touch(os.path.join("skipme", "a.epub"), b"ignored")
+        kept = self._touch(os.path.join("keep", "b.epub"), b"kept")
+        files, _, _ = self.svc._collect_files(paths="all")
+        self.assertEqual(files, [kept])
+
+    def test_imported_unchanged_signature_is_skipped(self):
+        scan_service.CONF["SCAN_REPLACE_SAME_TITLE"] = True
+        fpath = self._touch("same.epub", b"content-1")
+        row = ScanFile(fpath, "sha256:old", 1)
+        row.status = ScanFile.IMPORTED
+        row.book_id = 7
+        row.data = {
+            scan_service.FILE_SIG_KEY: ScanService.file_signature(fpath)
+        }
+        self.session.add(row)
+        self.session.commit()
+        self.svc.db = FakeCalibreDB(existing={7})
+        rid, state = self.svc._scan_one_file(fpath, self.session, 1, set(), set(), False)
+        self.assertEqual((rid, state), (None, None))
+
+    def test_imported_changed_signature_is_reevaluated(self):
+        scan_service.CONF["SCAN_REPLACE_SAME_TITLE"] = True
+        fpath = self._touch("changed.epub", b"content-2")
+        row = ScanFile(fpath, "sha256:old", 1)
+        row.status = ScanFile.IMPORTED
+        row.book_id = 7
+        row.data = {scan_service.FILE_SIG_KEY: [1, 1, 1, 1]}
+        self.session.add(row)
+        self.session.commit()
+        self.svc.db = FakeCalibreDB(existing={7})
+        rid, state = self.svc._scan_one_file(fpath, self.session, 1, set(), set(), False)
+        self.assertIsNotNone(rid)
+        self.assertEqual(state, ScanFile.READY)
+
+    def test_file_content_compare_attr_then_hash(self):
+        a = self._touch("a.bin", b"abc")
+        b = self._touch("b.bin", b"abc")
+        c = self._touch("c.bin", b"abd")
+        hash_a, _ = self.svc._compute_hash(a)
+        hash_c, _ = self.svc._compute_hash(c)
+        self.assertTrue(self.svc._scan_files_same_content(a, b, hash_a))
+        self.assertFalse(self.svc._scan_files_same_content(a, c, hash_c))
 
 
 if __name__ == "__main__":

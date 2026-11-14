@@ -25,6 +25,17 @@ def get_content_encoding(byte):
     return chardet.detect(byte)['encoding'] or 'GB2312'
 
 
+# 与 calibre.utils.wordcount 一致的“字数”口径：ord > 0x3000 的字符逐字计，
+# 其余按空白分词。用于 EPUB/TXT 共用，避免两种格式给出不同口径的数字。
+ASIAN_CHARS_RE = re.compile(r'[^\u0000-\u3000]')
+
+
+def count_words(text):
+    asian = len(ASIAN_CHARS_RE.findall(text))
+    non_asian = ASIAN_CHARS_RE.sub(' ', text)
+    return asian + len(non_asian.split())
+
+
 class TxtParser:
     # 目录解析规则
     TXT_CONTENT_RULES = [
@@ -90,6 +101,19 @@ class TxtParser:
             toc = self.parse_txt_book_toc(fileobj)
             return {"encoding": encoding, "toc": toc}
 
+    def count_file(self, filepath):
+        """只统计整本字数，不做目录正则扫描；供独立字数统计使用。"""
+        encoding = get_file_encoding(filepath)
+        total = 0
+        scanned = 0
+        with open(filepath, 'r', encoding=encoding, errors='ignore', newline='\n') as fileobj:
+            for line in fileobj:
+                total += count_words(line)
+                scanned += 1
+                if scanned % GIL_YIELD_EVERY_LINES == 0:
+                    time.sleep(0)
+        return {"encoding": encoding, "word_count": total}
+
     def parse_txt_book_toc(self, fileobj):
         # table of content
         toc = []
@@ -145,6 +169,9 @@ if __name__ == '__main__':
 
     if len(sys.argv) == 1:
         print("%s FILE.TXT" % sys.argv[0])
+    elif len(sys.argv) >= 3 and sys.argv[1] == '--count':
+        result = TxtParser().count_file(sys.argv[2])
+        print(json.dumps(result, ensure_ascii=False))
     else:
         toc = TxtParser().parse(sys.argv[1])
         print(json.dumps(toc, ensure_ascii=False, indent=2))

@@ -35,7 +35,10 @@ READ_ENDPOINTS = (
     ("user/info", "/api/user/info"),
     ("tasks/running", "/api/admin/tasks/running"),
     ("user/messages", "/api/user/messages"),
-    ("index", "/api/index?refresh=1"),
+    ("index", "/api/index"),
+    ("index/random", "/api/index/random?refresh=1"),
+    ("index/new", "/api/index/new?refresh=1"),
+    ("index/social", "/api/index/social"),
     ("categories", "/api/categories"),
     ("all", "/api/all"),
 )

@@ -105,9 +105,9 @@ export default {
 
     computed: {
         currentCategoryLabel() {
-            if (!this.categories || this.categories.length === 0) return 'appHeader.searchAll';
+            if (!this.categories || this.categories.length === 0) return 'appHeader.searchTitle';
             const found = this.categories.find(c => c.value === this.searchCategory);
-            return found ? found.label : 'appHeader.searchAll';
+            return found ? found.label : 'appHeader.searchTitle';
         },
     },
 

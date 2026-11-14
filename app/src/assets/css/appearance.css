@@ -39,6 +39,9 @@
     --app-nav-bg: #003153;
     --app-nav-fg: rgba(255, 255, 255, 0.87);
     --app-radius: 4px;
+    /* 对话框圆角：跟随 --app-radius 再放大 4px —— 模态框比按钮/输入框需要更大的圆角，
+       用户把圆角设为 0px 时也不至于变成直角方块。用 calc 而不是 max()，兼容性更好。 */
+    --app-dialog-radius: calc(var(--app-radius, 4px) + 4px);
 }
 
 /* ── Fundamental ──────────────────────────────────── */

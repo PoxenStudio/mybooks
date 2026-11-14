@@ -17,6 +17,7 @@
 import os
 import shutil
 import sys
+import threading
 import tempfile
 import types
 import unittest
@@ -92,6 +93,44 @@ class TestCoreAPINamespaces(unittest.TestCase):
         result = self.api.calibre.get_field_map("tags", [1, 2])
         self.owner.db.new_api.all_field_for.assert_called_once_with("tags", [1, 2])
         self.assertEqual(result, {1: ("a",), 2: ()})
+
+    def test_calibre_get_category_with_count_queries_database(self):
+        self.owner.db.new_api.backend.conn.get.return_value = [
+            (7, "小说", 42),
+            (8, "冷门", 0),
+        ]
+        with patch("webserver.handlers.base.BaseHandler.db_lock", threading.RLock()):
+            result = self.api.calibre.get_category_with_count("tag")
+
+        sql = self.owner.db.new_api.backend.conn.get.call_args.args[0]
+        self.assertIn("FROM tags AS A", sql)
+        self.assertIn("LEFT JOIN books_tags_link AS B ON A.id = B.tag", sql)
+        self.assertIn("count(distinct B.book)", sql)
+        self.assertIn("ORDER BY count DESC", sql)
+        self.assertEqual(result, [
+            {"id": 7, "name": "小说", "count": 42},
+            {"id": 8, "name": "冷门", "count": 0},
+        ])
+
+    def test_calibre_get_category_with_count_supports_meta_fields(self):
+        expected_joins = {
+            "author": "books_authors_link AS B ON A.id = B.author",
+            "publisher": "books_publishers_link AS B ON A.id = B.publisher",
+            "series": "books_series_link AS B ON A.id = B.series",
+            "rating": "books_ratings_link AS B ON A.id = B.rating",
+            "language": "books_languages_link AS B ON A.id = B.lang_code",
+        }
+        with patch("webserver.handlers.base.BaseHandler.db_lock", threading.RLock()):
+            for meta, join in expected_joins.items():
+                with self.subTest(meta=meta):
+                    self.api.calibre.get_category_with_count(meta)
+                    sql = self.owner.db.new_api.backend.conn.get.call_args.args[0]
+                    self.assertIn(join, sql)
+
+    def test_calibre_get_category_with_count_rejects_unsupported_meta(self):
+        with self.assertRaises(ValueError):
+            self.api.calibre.get_category_with_count("unknown")
+        self.owner.db.new_api.backend.conn.get.assert_not_called()
 
     def test_calibre_set_language_forwards(self):
         self.api.calibre.set_language(5, "zh")

@@ -1,4 +1,4 @@
-.PHONY: all build push test plugin
+.PHONY: all build push test plugin codeql
 
 VER := $(shell git branch --show-current)
 IMAGE := poxenstudio/mybooks:$(VER)
@@ -65,6 +65,26 @@ lint:
 
 pytest: lint
 	pytest tests
+
+# CodeQL 静态检查（复现 GitHub Code Scanning 的告警，如 py/path-injection）
+# 依赖 CodeQL CLI：https://github.com/github/codeql-action/releases
+# 非 PATH 安装时用 `make codeql CODEQL=/path/to/codeql` 指定
+CODEQL ?= codeql
+CODEQL_DIR ?= build/codeql
+CODEQL_DB ?= $(CODEQL_DIR)/db
+CODEQL_SARIF ?= $(CODEQL_DIR)/results.sarif
+CODEQL_THREADS ?= 0
+CODEQL_SUITE ?= codeql/python-queries:codeql-suites/python-security-extended.qls
+
+codeql:
+	@command -v $(CODEQL) >/dev/null 2>&1 || { \
+		echo "codeql not found, download from https://github.com/github/codeql-action/releases"; exit 1; }
+	@mkdir -p $(CODEQL_DIR)
+	$(CODEQL) database create $(CODEQL_DB) --language=python --build-mode=none \
+		--source-root=$(CURDIR) --overwrite
+	$(CODEQL) database analyze $(CODEQL_DB) $(CODEQL_SUITE) \
+		--format=sarif-latest --output=$(CODEQL_SARIF) --threads=$(CODEQL_THREADS)
+	@echo "CodeQL SARIF report: $(CODEQL_SARIF)"
 
 PLUGIN_DIR := koreader_plugin/mybooks.koplugin
 PLUGIN_OUT := koreader_plugin/dist/mybooks_koplugin.zip

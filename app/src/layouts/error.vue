@@ -1,6 +1,6 @@
 <template>
   <v-app>
-      <div class="error-page" :style="{ backgroundColor: pageBackground }">
+      <div class="error-page">
         <img src="/static/images/error_page.svg" class="error-image" alt="">
         <div class="error-code">
           {{ statusCode }}
@@ -51,9 +51,6 @@ export default {
     backHome() {
       return this.$t ? this.$t("common.backToHome") : "返回首页";
     },
-    pageBackground() {
-      return this.$vuetify.theme.dark ? "#363636" : "#E7EAE7";
-    },
   },
   head() {
     return {
@@ -72,24 +69,22 @@ export default {
   padding: 24px;
   padding-top: 5vh;
   text-align: center;
-  border-radius: 16px !important;
 }
 
 .error-image {
-  width: 32px;
-  max-width: 60%;
-  margin-bottom: 10px;
+  width: 56px;
+  max-width: 40%;
+  margin-bottom: 4px;
+  opacity: 0.9;
 }
 
+/* 状态码用品牌强调色，不再用黄→红渐变：全站唯一一处渐变文字，
+   既不用品牌色，也和「红色=删除/错误操作」的语义打架。 */
 .error-code {
-  font-size: 80px;
+  font-size: 72px;
   font-weight: 700;
   line-height: 1;
-  background: linear-gradient(135deg, #f6ea0f 0%, #f00404 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
+  color: var(--primary-color, #1976D2);
 }
 
 .error-divider {

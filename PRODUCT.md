@@ -38,7 +38,7 @@ Depth of reading data and management tools, not just catalog browsing. MyBooks b
 
 ## Brand Commitments
 
-- Name: MyBooks (formerly Talebook); open source and free, MIT-licensed.
+- Name: MyBooks; open source and free, MIT-licensed.
 - Voice: friendly, practical, Chinese-first, aimed at book lovers rather than enterprises.
 - Existing identity assets: `document/example.jpg` screenshots, architecture diagram, WeChat public account imagery; dark mode and theme switching are established expectations.
 

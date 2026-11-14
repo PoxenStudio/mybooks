@@ -56,6 +56,7 @@ LOGIN_GATE_ALLOW_EXACT = frozenset({
     "/install",
     "/starting",
     "/api/user/info",
+    "/api/book/download_quota",  # 分享访客下载前的配额预检查，handler 内再校验分享授权
     "/api/user/sign_in",
     "/api/user/sign_up",
     "/api/user/reset",
@@ -475,6 +476,7 @@ class BaseHandler(web.RequestHandler):
             "physical_books": physical_books,
             "folder": CONF.get("ENABLE_FOLDER_BROWSE", False),
             "download_quota": CONF.get("ENABLE_DOWNLOAD_QUOTA", False),
+            "guest_download_quota": bool(CONF.get("ENABLE_GUEST_DOWNLOAD_QUOTA", False)) and not self.current_user,
             "server_import": CONF.get("ENABLE_SERVER_FILE_IMPORT", False),
             "sync": CONF.get("ENABLE_DATA_SYNC", False),
             "book_review": book_review,
