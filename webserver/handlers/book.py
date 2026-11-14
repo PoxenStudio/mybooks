@@ -3826,16 +3826,23 @@ class BookUploadBatch(BaseHandler):
             first_seg = self._sanitize_relative_path(next(p for p in norm_rel_paths if "/" in p)).split("/", 1)[0]
             top_folder = first_seg or None
 
+        scan_upload_root = scan_upload_path.rstrip(os.sep) + os.sep
+
         if top_folder:
             candidate, suffix = top_folder, 1
-            while os.path.exists(os.path.join(scan_upload_path, candidate)):
+            while True:
+                batch_dir = os.path.realpath(os.path.join(scan_upload_path, candidate))
+                # realpath 归一后做前缀校验：用户提供的目录名不得把暂存目录带出扫描导入目录
+                if not batch_dir.startswith(scan_upload_root):
+                    return {"err": "server.error", "msg": _("非法的暂存路径")}
+                if not os.path.exists(batch_dir):
+                    break
                 candidate = f"{top_folder}_{import_id}_{suffix}"
                 suffix += 1
-            batch_dir = os.path.realpath(os.path.join(scan_upload_path, candidate))
         else:
             batch_dir = os.path.realpath(os.path.join(scan_upload_path, f"_upload_{self.user_id() or 0}_{import_id}"))
 
-        if os.path.commonpath([scan_upload_path, batch_dir]) != scan_upload_path:
+        if not batch_dir.startswith(scan_upload_root):
             return {"err": "server.error", "msg": _("非法的暂存路径")}
 
         saved = 0
@@ -3858,7 +3865,7 @@ class BookUploadBatch(BaseHandler):
                 if fmt not in SCAN_EXT:
                     continue
                 target_path = os.path.realpath(os.path.join(batch_dir, rel_path))
-                if os.path.commonpath([batch_dir, target_path]) != batch_dir:
+                if not target_path.startswith(batch_dir + os.sep):
                     continue
                 os.makedirs(os.path.dirname(target_path), exist_ok=True)
                 with open(target_path, "wb") as f:
