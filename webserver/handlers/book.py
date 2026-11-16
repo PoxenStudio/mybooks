@@ -1399,11 +1399,11 @@ class BookCover(BaseHandler):
         if not ext and 'content_type' in fileinfo:
             ext = fileinfo['content_type'].split('/')[-1]
         if ext == 'webp' or img_data[:4] == b'RIFF' and img_data[8:12] == b'WEBP':
-            # Calibre/Qt 不一定带 webp 插件，统一转成 jpeg 再保存
-            from calibre.utils.img import image_from_data, image_to_data
+            # Calibre/Qt 不带 webp 插件，改用 Pillow 解码后统一转成 jpeg 再保存
             try:
-                img_data = image_to_data(image_from_data(img_data), fmt='jpeg')
+                img_data = ImageHelper.convert_to_jpeg(img_data)
             except Exception:
+                logging.error(f"Failed to convert webp cover for book {book_id}: {traceback.format_exc()}")
                 return {"err": "params.cover.invalid", "msg": _("封面图片格式无效")}
             ext = 'jpeg'
         mi.cover_data = (ext or None, img_data)
