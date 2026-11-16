@@ -165,7 +165,7 @@ def _persist_status(scoped_session, book_id, response):
         scoped_session.remove()
 
 
-REMOTE_MISSING_ERROR = "MyNexus has no book matching this MyBooks ID"
+REMOTE_MISSING_ERROR = "MyNexus 中未找到与该 MyBooks ID 对应的图书"
 
 
 async def _refresh_remote_analysis(session, analysis, book_id):
@@ -218,7 +218,7 @@ async def _poll_analysis(book_id, scoped_session):
             if exc.status_code == 404:
                 await asyncio.get_running_loop().run_in_executor(
                     None, _persist_failure, scoped_session, book_id,
-                    "MyNexus has no book matching this MyBooks ID",
+                    REMOTE_MISSING_ERROR,
                 )
                 return
             logging.error("MyNexus background status lookup for book %s failed: %s", book_id, exc.message)
@@ -355,7 +355,7 @@ class MyNexusBookHandler(feature_modules.ModuleGateMixin, BaseHandler):
                 if exc.status_code == 404:
                     _mark_analysis_failed(
                         self.sqlite_session, analysis,
-                        "MyNexus has no book matching this MyBooks ID",
+                        REMOTE_MISSING_ERROR,
                         clear_remote=True,
                     )
                 elif exc.status_code != 404:

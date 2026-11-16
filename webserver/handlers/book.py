@@ -873,6 +873,7 @@ class AuthorSearch(BaseHandler):
         sql = """SELECT authors.name, count(distinct book) as count
         FROM authors left join books_authors_link on authors.id = books_authors_link.author
         WHERE authors.name LIKE ? ESCAPE '\\'
+        AND LOWER(authors.name) NOT IN ('佚名', 'unknown', '未知')
         GROUP BY authors.id ORDER BY count DESC LIMIT ?"""
         try:
             rows = await self.run_calibre_sql(sql, (q + "%", limit))
