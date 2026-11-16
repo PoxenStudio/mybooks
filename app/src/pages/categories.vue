@@ -55,9 +55,14 @@ export default {
   methods: {
     async fetchCategories() {
       try {
-        const response = await this.$backend("/categories");
+        // 分类以 /categories 返回的为准（只含有书籍的分类）；BOOK_NAV 仅用于排序
+        const [response, settingsResponse] = await Promise.all([
+          this.$backend("/categories"),
+          this.$backend("/admin/settings").catch(() => null),
+        ]);
         if (response.err === "ok") {
-          this.categories = response.categories || [];
+          const bookNav = settingsResponse?.err === "ok" ? settingsResponse.settings?.BOOK_NAV || "" : "";
+          this.categories = this.sortByBookNav(response.categories || [], bookNav);
           if (this.categories.length > 0) {
             this.fetchBooks();
           }
@@ -82,6 +87,26 @@ export default {
           });
         }
       }
+    },
+    // BOOK_NAV 每行形如「分组=标签1/标签2」：按分组名在配置中的顺序排序，
+    // 未配置的分类保持 /categories 原顺序排在后面。
+    sortByBookNav(categories, bookNav) {
+      const order = new Map();
+      bookNav.split("\n").forEach((line) => {
+        const name = line.split("=")[0].trim();
+        if (name && !order.has(name)) {
+          order.set(name, order.size);
+        }
+      });
+      return categories
+        .map((category, index) => ({ category, index }))
+        .sort((a, b) => {
+          const orderA = order.has(a.category.name) ? order.get(a.category.name) : Infinity;
+          const orderB = order.has(b.category.name) ? order.get(b.category.name) : Infinity;
+          if (orderA !== orderB) return orderA - orderB;
+          return a.index - b.index;
+        })
+        .map((item) => item.category);
     },
     async fetchBooks() {
       if (this.categories.length === 0) return;
