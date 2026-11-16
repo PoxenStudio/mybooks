@@ -3212,8 +3212,6 @@ export default {
                 this.categories = [];
                 return;
             }
-            // 分类列表异步加载，不阻塞设置请求与 UI
-            this.loadCategories();
             try {
                 const [settingsResponse, devicesResponse] = await Promise.all([
                     this.$backend('/admin/settings').catch(() => null),
@@ -3230,17 +3228,26 @@ export default {
                     this.stamp_default_position = settingsResponse.settings.STAMP_POSITION || 'bottom-right';
                     this.stamp_enabled = settingsResponse.settings?.ENABLE_STAMP_FEATURE;
                 }
+                // 分类列表异步加载，不阻塞设置请求与 UI
+                this.loadCategories(settingsResponse?.settings?.BOOK_NAV || '');
             } catch (error) {
                 console.error('Failed to get settings:', error);
             }
         },
 
-        // 异步加载分类列表（只取自定义字段 #category，不需要数量）
-        async loadCategories() {
+        // 异步加载分类列表（BOOK_NAV 配置优先，数据库里的分类补充在后面）
+        async loadCategories(bookNav) {
+            // BOOK_NAV 每行形如「分组=标签1/标签2」，分类下拉只取分组名
+            const navCategories = bookNav.split('\n').map(line => {
+                const parts = line.split('=');
+                return parts[0].trim();
+            }).filter(c => c);
             try {
                 const response = await this.$backend('/categories?simple=1');
                 if (response.err === 'ok') {
-                    this.categories = (response.categories || []).map(c => c.name).filter(c => c);
+                    const seen = new Set(navCategories);
+                    const dbCategories = (response.categories || []).map(c => c.name).filter(c => c && !seen.has(c));
+                    this.categories = [...navCategories, ...dbCategories];
                     // 添加国际化的"清除"选项
                     this.categories.push(this.$t('book.clearCategory'));
                 }
