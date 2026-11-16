@@ -2,13 +2,18 @@
   <v-card outlined class="mb-2">
     <v-card-title
       class="py-1 pr-2 clickable"
+      role="button"
+      tabindex="0"
+      :aria-expanded="expanded"
       @click="expanded = !expanded"
+      @keydown.enter.prevent="expanded = !expanded"
+      @keydown.space.prevent="expanded = !expanded"
     >
       <v-icon class="mr-2">mdi-folder-off-outline</v-icon>
       <span class="subtitle-1">{{ $t("settings.scan_ignore_dirs") }}</span>
       <v-chip v-if="names.length" x-small class="ml-2">{{ names.length }}</v-chip>
       <v-spacer></v-spacer>
-      <v-btn icon small @click.stop="expanded = !expanded">
+      <v-btn icon small aria-hidden="true" tabindex="-1" @click.stop="expanded = !expanded">
         <v-icon>{{
           expanded ? "mdi-chevron-up" : "mdi-chevron-down"
         }}</v-icon>
@@ -39,7 +44,7 @@
             ></v-text-field>
           </v-col>
           <v-col cols="auto" class="ml-1">
-            <v-btn icon small @click="removeAt(idx)">
+            <v-btn :aria-label="$t('common.delete')" icon small @click="removeAt(idx)">
               <v-icon small>mdi-delete</v-icon>
             </v-btn>
           </v-col>

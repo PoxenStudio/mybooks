@@ -3,6 +3,10 @@
         class="resource-card"
         :class="{ 'resource-card--dark': $vuetify.theme.dark }"
         @click="openLink"
+        role="button"
+        tabindex="0"
+        @keydown.enter.prevent="openLink"
+        @keydown.space.prevent="openLink"
         style="cursor: pointer;"
     >
         <v-card-text class="d-flex align-center pa-4">

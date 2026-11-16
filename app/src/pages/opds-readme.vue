@@ -7,7 +7,7 @@
       <p>
         {{ $t('opds.linkDescription') }}
         <code>{{ opdsUrl }}</code>
-        <v-btn icon @click="copyOpdsUrl($event)" :data-copy-text="opdsUrl" class="copy-btn">
+        <v-btn icon :aria-label="$t('common.copy')" @click="copyOpdsUrl($event)" :data-copy-text="opdsUrl" class="copy-btn">
           <v-icon :color="copied ? 'green' : ''">{{ copied ? 'mdi-check' : 'mdi-content-copy' }}</v-icon>
         </v-btn>
       </p>

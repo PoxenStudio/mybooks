@@ -1268,6 +1268,8 @@
     "ok": "OK",
     "delete": "Delete",
     "backToHome": "Back to Home",
+    "back": "Back",
+    "more": "More",
     "edit": "Edit",
     "save": "Save",
     "loadMore": "Load more",
@@ -1410,6 +1412,10 @@
       "viewYear": "Year",
       "viewAll": "All",
       "allTime": "All time",
+      "editLayout": "Edit card layout",
+      "removeCard": "Remove card",
+      "prevRange": "Previous period",
+      "nextRange": "Next period",
       "weekTitle": "Week {w}",
       "monthTitle": "{y}/{m}",
       "yearTitle": "{y}",
@@ -2562,6 +2568,7 @@
     "batchFail": "Book {id} failed: {err}"
   },
   "booklist": {
+    "like": "Like",
     "color": {
       "marine": "Marine",
       "velvet": "Velvet",

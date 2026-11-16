@@ -60,7 +60,7 @@
                                 @click="link.action ? handleLinkAction(link.action) : undefined"
                             >
                                 <v-list-item-action class="mt-1 mb-1 mr-2" dense>
-                                    <img v-if="link.favicon" :src="link.favicon" class="friend-favicon" @error="$event.target.style.display='none'" />
+                                    <img v-if="link.favicon" :src="link.favicon" alt="" class="friend-favicon" @error="$event.target.style.display='none'" />
                                     <v-icon v-else class="pa-0 ma-0" :class="iconClass(link)" :color="iconColor(link)">{{ link.icon }}</v-icon>
                                 </v-list-item-action>
                                 <v-list-item-content>
@@ -1156,8 +1156,8 @@ export default {
 }
 
 .app-navigation-drawer {
-    border-right: 2px solid rgba(0, 0, 0, 0.08) !important;
-    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.08) !important;
+    border-right: 1px solid var(--ds-hairline, rgba(0, 0, 0, 0.08)) !important;
+    box-shadow: none !important;
     transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
     top: 56px !important;
     height: calc(100vh - 60px) !important;
@@ -1171,15 +1171,15 @@ export default {
 /* 抽屉背景由 <html data-appearance-dark> 驱动（app.html 首帧同步写入，applyAppearance 后续维护），
    不依赖组件挂载时 $vuetify.theme.dark 的取值时机，刷新后不会停在浅色 */
 html[data-appearance-dark="0"] .v-application .v-navigation-drawer.app-navigation-drawer {
-    background-color: #F7FAF7 !important;
+    background-color: var(--ds-surface, #f6f5f4) !important;
 }
 html[data-appearance-dark="1"] .v-application .v-navigation-drawer.app-navigation-drawer {
-    background-color: #1e1e1e !important;
+    background-color: var(--ds-surface, #202020) !important;
 }
 
 .theme--dark .app-navigation-drawer {
-    border-right-color: rgba(255, 255, 255, 0.08) !important;
-    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.3) !important;
+    border-right-color: var(--ds-hairline, rgba(255, 255, 255, 0.08)) !important;
+    box-shadow: none !important;
 }
 
 @media (max-width: 1024px) {
@@ -1222,17 +1222,17 @@ html[data-appearance-dark="1"] .v-application .v-navigation-drawer.app-navigatio
 }
 
 .login-button {
-    background-color: #01847f !important;
+    background-color: var(--primary-color, #1976D2) !important;
     border-radius: 0 12px 12px 0 !important;
     margin: 3px 0 !important;
     padding: 3px !important;
-    color: white !important;
+    color: var(--ds-on-primary, #ffffff) !important;
 }
 
 .login-button .v-list-item-title {
     font-size: 16px !important;
-    font-weight: bold !important;
-    color: white !important;
+    font-weight: 600 !important;
+    color: var(--ds-on-primary, #ffffff) !important;
 }
 
 .login-button .v-icon {
@@ -1241,7 +1241,7 @@ html[data-appearance-dark="1"] .v-application .v-navigation-drawer.app-navigatio
 
 .app-navigation-drawer .v-list-item--icon-only.login-button .v-icon {
     margin-left: 0 !important;
-    color: white !important;
+    color: var(--ds-on-primary, #ffffff) !important;
 }
 
 .app-navigation-drawer .v-subheader {
@@ -1259,23 +1259,23 @@ html[data-appearance-dark="1"] .v-application .v-navigation-drawer.app-navigatio
 }
 
 .app-navigation-drawer .v-list-item-action {
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05));
-    border-radius: 12px;
+    background: transparent;
+    border-radius: var(--ds-radius-sm, 6px);
     padding: 8px !important;
-    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(255, 255, 255, 0.1);
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-shadow: none;
+    transition: background-color 0.2s ease !important;
 }
 
 .app-navigation-drawer .v-list-item:hover .v-list-item-action {
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.1));
-    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(255, 255, 255, 0.15);
-    transform: translateY(-1px);
+    background: color-mix(in srgb, var(--primary-color, #1976D2) 8%, transparent);
+    box-shadow: none;
+    transform: none;
 }
 
 .app-navigation-drawer .v-list-item--active .v-list-item-action {
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.15));
-    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.15), 0 3px 6px rgba(255, 255, 255, 0.2);
-    transform: translateY(-1px);
+    background: color-mix(in srgb, var(--primary-color, #1976D2) 14%, transparent);
+    box-shadow: none;
+    transform: none;
 }
 
 .app-navigation-drawer .v-list-item--icon-only {
@@ -1350,22 +1350,22 @@ html[data-appearance-dark="1"] .v-application .v-navigation-drawer.app-navigatio
 }
 
 .app-navigation-drawer .v-list-item:not(.v-list-item--icon-only):hover {
-    background: linear-gradient(90deg, rgba(102, 126, 234, 0.08) 0%, rgba(102, 126, 234, 0.02) 100%);
+    background: color-mix(in srgb, var(--primary-color, #1976D2) 7%, transparent);
     border-radius: 0 12px 12px 0;
 }
 
 .app-navigation-drawer .v-list-item:not(.v-list-item--icon-only).v-list-item--active {
-    background: linear-gradient(90deg, rgba(102, 126, 234, 0.15) 0%, rgba(102, 126, 234, 0.05) 100%);
+    background: color-mix(in srgb, var(--primary-color, #1976D2) 13%, transparent);
     border-radius: 0 12px 12px 0;
 }
 
 .app-navigation-drawer .v-list-group__items > .v-list-item--group-child:hover {
-    background: linear-gradient(90deg, rgba(102, 126, 234, 0.08) 0%, rgba(102, 126, 234, 0.02) 100%);
+    background: color-mix(in srgb, var(--primary-color, #1976D2) 7%, transparent);
     border-radius: 0 12px 12px 0;
 }
 
 .app-navigation-drawer .v-list-group__items > .v-list-item--active {
-    background: linear-gradient(90deg, rgba(102, 126, 234, 0.15) 0%, rgba(102, 126, 234, 0.05) 100%);
+    background: color-mix(in srgb, var(--primary-color, #1976D2) 13%, transparent);
     border-radius: 0 12px 12px 0;
 }
 

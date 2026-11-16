@@ -10,8 +10,16 @@
         <!-- Batch Set Category Card -->
         <v-col cols="12">
           <v-card outlined class="mb-4">
-            <v-card-title class="py-2" @click="showBatch = !showBatch">
-              <v-btn icon>
+            <v-card-title
+              class="py-2"
+              role="button"
+              tabindex="0"
+              :aria-expanded="showBatch"
+              @click="showBatch = !showBatch"
+              @keydown.enter.prevent="showBatch = !showBatch"
+              @keydown.space.prevent="showBatch = !showBatch"
+            >
+              <v-btn icon aria-hidden="true" tabindex="-1">
                 <v-icon>{{ showBatch ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
               </v-btn>
               <span class="text-subtitle-1 font-weight-bold">{{ $t('listBook.batchSetCategory') }}</span>

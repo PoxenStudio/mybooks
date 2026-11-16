@@ -173,6 +173,23 @@ export function navForeground(color) {
 }
 
 /**
+ * 深色画布上的「主色文字」：把强调色与白色按 58:42 混合。
+ *
+ * #1976D2 直接作为文字落在 #191919 上只有 3.6:1，正文要求 4.5:1；
+ * 混合后约 7:1。只用于文字/图标/链接，填充按钮仍用原色（白字 5.9:1）。
+ * design-system.css 里有等价的 color-mix 兜底，这里给不支持 color-mix 的浏览器和
+ * Vuetify 的 `anchor`（链接默认色）提供同一条亮色。
+ */
+export function primaryTextColor(color) {
+    const hex = isHexColor(color) ? color : DEFAULT_ACCENT;
+    const mixed = [1, 3, 5].map((index) => {
+        const channel = parseInt(hex.substr(index, 2), 16);
+        return Math.round(channel * 0.58 + 255 * 0.42).toString(16).padStart(2, '0');
+    });
+    return '#' + mixed.join('');
+}
+
+/**
  * 站点默认深浅色（sys.theme / localStorage['site_theme']）→ 布尔。
  *
  * 判据是「不等于 'light' 就算深色」，即站点没设置过时回落到内置默认（深色）。
@@ -237,6 +254,8 @@ export function applyAppearance(settings, vuetify) {
     root.style.setProperty('--app-nav-fg', navForeground(brand));
     // 主色沿用既有变量名（appearance.css 的背景渐变已经在消费它，不引入同义别名）
     root.style.setProperty('--primary-color', s.accent);
+    // 文字版主色：深色下用同色系亮版，浅色下就是主色本身
+    root.style.setProperty('--ds-primary-text', dark ? primaryTextColor(s.accent) : s.accent);
     root.style.setProperty('--app-radius', s.radius);
     root.style.setProperty('--dot-color', dark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)');
 
@@ -248,11 +267,18 @@ export function applyAppearance(settings, vuetify) {
     root.setAttribute('data-bg-pattern', s.background);
     root.setAttribute('data-appearance-dark', dark ? '1' : '0');
     // 深色时给 <html> 铺底色，避免首帧（.theme--dark 由 JS 设置）白闪；浅色时清掉
-    root.style.backgroundColor = dark ? '#121212' : '';
+    root.style.backgroundColor = dark ? '#191919' : '';
 
     if (vuetify && vuetify.theme && vuetify.theme.themes) {
         vuetify.theme.dark = dark;
-        if (vuetify.theme.themes.light) vuetify.theme.themes.light.primary = s.accent;
-        if (vuetify.theme.themes.dark) vuetify.theme.themes.dark.primary = s.accent;
+        if (vuetify.theme.themes.light) {
+            vuetify.theme.themes.light.primary = s.accent;
+            vuetify.theme.themes.light.anchor = s.accent;
+        }
+        if (vuetify.theme.themes.dark) {
+            vuetify.theme.themes.dark.primary = s.accent;
+            // Vuetify 用 anchor 生成 `.v-application a` 的默认链接色
+            vuetify.theme.themes.dark.anchor = primaryTextColor(s.accent);
+        }
     }
 }

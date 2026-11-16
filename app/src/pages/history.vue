@@ -10,7 +10,7 @@
                             {{ firstReadingDate }} {{ $t('history.dashboard.since') }}
                         </div>
                     </div>
-                    <v-btn icon small class="dash-edit-btn" :color="editMode ? 'primary' : ''" @click="editMode = !editMode">
+                    <v-btn icon small class="dash-edit-btn" :color="editMode ? 'primary' : ''" :aria-label="$t('history.dashboard.editLayout')" :aria-pressed="editMode" @click="editMode = !editMode">
                         <v-icon>mdi-pencil</v-icon>
                     </v-btn>
                 </div>
@@ -35,6 +35,7 @@
                                 icon
                                 x-small
                                 class="card-remove"
+                                :aria-label="$t('history.dashboard.removeCard')"
                                 @click.stop="removeCard(cardId)"
                             ><v-icon small>mdi-close-circle</v-icon></v-btn>
 
@@ -200,9 +201,9 @@
                     </v-btn-toggle>
                     <div class="range-nav">
                         <template v-if="rangeView !== 'all'">
-                            <v-btn icon small @click="navRange(-1)"><v-icon>mdi-chevron-left</v-icon></v-btn>
+                            <v-btn icon small :aria-label="$t('history.dashboard.prevRange')" @click="navRange(-1)"><v-icon>mdi-chevron-left</v-icon></v-btn>
                             <span class="range-title">{{ rangeTitle }}</span>
-                            <v-btn icon small :disabled="!canGoNext" @click="navRange(1)"><v-icon>mdi-chevron-right</v-icon></v-btn>
+                            <v-btn icon small :disabled="!canGoNext" :aria-label="$t('history.dashboard.nextRange')" @click="navRange(1)"><v-icon>mdi-chevron-right</v-icon></v-btn>
                         </template>
                         <span v-else class="range-title range-title-single">{{ $t('history.dashboard.allTime') }}</span>
                     </div>

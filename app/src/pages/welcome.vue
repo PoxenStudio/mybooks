@@ -15,7 +15,7 @@
 
             <v-card-actions>
                 <v-spacer></v-spacer>
-                <v-btn @click="access_login" color="blue">{{ $t('welcome.loginButton') }}</v-btn>
+                <v-btn dark @click="access_login" color="blue darken-2">{{ $t('welcome.loginButton') }}</v-btn>
                 <v-spacer></v-spacer>
             </v-card-actions>
 

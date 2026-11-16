@@ -8,7 +8,7 @@
                     <v-spacer></v-spacer>
                     <v-tooltip bottom v-if="!loading && !hasOwnReview && canSubmit">
                         <template v-slot:activator="{ on, attrs }">
-                            <v-btn icon color="primary" class="ml-2" v-bind="attrs" v-on="on" @click="$emit('add')">
+                            <v-btn icon color="primary" class="ml-2" :aria-label="$t('book.reviewAddHint')" v-bind="attrs" v-on="on" @click="$emit('add')">
                                 <v-icon>mdi-plus-circle-outline</v-icon>
                             </v-btn>
                         </template>

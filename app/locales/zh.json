@@ -832,6 +832,8 @@
     "delete": "删除",
     "ok": "确定",
     "backToHome": "返回首页",
+    "back": "返回",
+    "more": "更多",
     "edit": "编辑",
     "save": "保存",
     "loadMore": "加载更多",
@@ -1409,6 +1411,10 @@
       "viewYear": "年",
       "viewAll": "总",
       "allTime": "全部",
+      "editLayout": "编辑卡片布局",
+      "removeCard": "移除卡片",
+      "prevRange": "上一个周期",
+      "nextRange": "下一个周期",
       "weekTitle": "第 {w} 周",
       "monthTitle": "{y}年{m}月",
       "yearTitle": "{y}年",
@@ -2562,6 +2568,7 @@
     "batchFail": "书籍 {id} 失败：{err}"
   },
   "booklist": {
+    "like": "点赞",
     "color": {
       "marine": "Marine 海蓝",
       "velvet": "Velvet 绒红",

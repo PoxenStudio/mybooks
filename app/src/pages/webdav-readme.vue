@@ -7,7 +7,7 @@
       <p>
         {{ $t('webdav.linkDescription') }}
         <code>{{ webdavUrl }}</code>
-        <v-btn icon @click="copyWebdavUrl($event)" :data-copy-text="webdavUrl" class="copy-btn">
+        <v-btn icon :aria-label="$t('common.copy')" @click="copyWebdavUrl($event)" :data-copy-text="webdavUrl" class="copy-btn">
           <v-icon :color="copied ? 'green' : ''">{{ copied ? 'mdi-check' : 'mdi-content-copy' }}</v-icon>
         </v-btn>
       </p>

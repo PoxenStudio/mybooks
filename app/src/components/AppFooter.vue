@@ -131,7 +131,8 @@ export default {
     font-family: 'Times New Roman', serif;
     font-size: clamp(2rem, 5vw, 3rem);    /* 在 2rem–3rem 之间，按屏幕宽度自适应 */
     font-weight: bold;
-    color: rgba(200, 200, 200, 0.2); /* 浅灰色，半透明 */
+    color: var(--ds-muted);
+    opacity: 0.35;
     pointer-events: none;
     z-index: 0;
     white-space: nowrap;
@@ -139,14 +140,10 @@ export default {
 }
 
 .version-info {
-    color: #666;
+    color: var(--ds-tertiary);
     font-size: 12px;
     margin-top: 8px;
     margin-bottom: 8px;
-}
-
-.theme--dark .version-info {
-    color: #fff;
 }
 
 .cursor-pointer {
@@ -155,11 +152,7 @@ export default {
 }
 
 .cursor-pointer:hover {
-    color: #333;
-}
-
-.theme--dark .cursor-pointer:hover {
-    color: #ccc;
+    color: var(--ds-ink);
 }
 
 /* Release Notes Dialog card font size */

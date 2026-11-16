@@ -33,7 +33,17 @@
             <div class="d-flex align-center mt-2 booklist-stats">
                 <span class="mr-4"><v-icon x-small class="mr-1">mdi-bookmark-outline</v-icon>{{ booklist.book_count }}</span>
                 <span class="mr-4"><v-icon x-small class="mr-1">mdi-eye-outline</v-icon>{{ booklist.view_count }}</span>
-                <span class="mr-4 booklist-like" :class="{ 'booklist-like--active': booklist.liked_by_me }" @click.stop.prevent="$emit('toggle-like', booklist)">
+                <span
+                    class="mr-4 booklist-like"
+                    :class="{ 'booklist-like--active': booklist.liked_by_me }"
+                    role="button"
+                    tabindex="0"
+                    :aria-label="$t('booklist.like')"
+                    :aria-pressed="!!booklist.liked_by_me"
+                    @click.stop.prevent="$emit('toggle-like', booklist)"
+                    @keydown.enter.prevent.stop="$emit('toggle-like', booklist)"
+                    @keydown.space.prevent.stop="$emit('toggle-like', booklist)"
+                >
                     <v-icon x-small class="mr-1" :color="booklist.liked_by_me ? 'red' : undefined">{{ booklist.liked_by_me ? 'mdi-heart' : 'mdi-heart-outline' }}</v-icon>{{ booklist.like_count }}
                 </span>
 
@@ -45,7 +55,7 @@
 
                 <v-menu v-if="showManage" offset-y @click.stop.prevent>
                     <template v-slot:activator="{ on, attrs }">
-                        <v-btn icon x-small v-bind="attrs" v-on="on" @click.stop.prevent>
+                        <v-btn icon x-small v-bind="attrs" v-on="on" :aria-label="$t('common.more')" @click.stop.prevent>
                             <v-icon small>mdi-dots-vertical</v-icon>
                         </v-btn>
                     </template>

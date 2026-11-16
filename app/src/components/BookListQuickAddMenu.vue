@@ -3,7 +3,7 @@
         <v-menu v-model="menu" :close-on-content-click="false" offset-y @input="onMenuToggle">
             <template v-slot:activator="{ on, attrs }">
                 <slot name="activator" :on="on" :attrs="attrs">
-                    <v-btn icon v-bind="attrs" v-on="on">
+                    <v-btn icon v-bind="attrs" v-on="on" :aria-label="$t('booklist.addToBooklist')">
                         <v-icon>mdi-playlist-plus</v-icon>
                     </v-btn>
                 </slot>

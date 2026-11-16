@@ -273,7 +273,7 @@
                 >
                   <template v-slot:label>
                     <v-avatar tile size="24" class="mr-2">
-                      <img :src="book.thumb" :alt="book.title" />
+                      <img :src="book.thumb" :alt="book.title" loading="lazy" decoding="async" />
                     </v-avatar>
                     <span>{{ book.title }}</span>
                   </template>

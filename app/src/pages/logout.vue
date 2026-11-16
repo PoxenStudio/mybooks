@@ -2,7 +2,7 @@
     <v-row justify=center class='fill-center'>
       <v-col xs=12 sm=8 md=4>
         <v-card class="elevation-12">
-            <v-toolbar dark color="blue-grey">
+            <v-toolbar dark color="blue-grey" class="logout-toolbar">
                 <v-toolbar-title></v-toolbar-title>
             </v-toolbar>
             <v-card-text>
@@ -53,4 +53,13 @@ export default {
     },
 }
 </script>
+
+<style>
+.v-application .v-toolbar.logout-toolbar,
+.v-application .v-toolbar.logout-toolbar > .v-toolbar__content {
+    border-bottom-left-radius: 0px !important;
+    border-bottom-right-radius: 0px !important;
+    overflow: hidden;
+}
+</style>
 

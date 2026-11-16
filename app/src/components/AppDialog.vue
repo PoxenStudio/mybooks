@@ -16,7 +16,7 @@
                     <v-icon v-if="icon" class="mr-2">{{ icon }}</v-icon>
                     <v-toolbar-title>{{ title }}</v-toolbar-title>
                     <v-spacer></v-spacer>
-                    <v-btn v-if="dismissIcon" icon :dark="!lightHeader" :light="lightHeader" :disabled="dismissDisabled" @click="onDismiss">
+                    <v-btn v-if="dismissIcon" icon :aria-label="$t('common.close')" :dark="!lightHeader" :light="lightHeader" :disabled="dismissDisabled" @click="onDismiss">
                         <v-icon>mdi-close</v-icon>
                     </v-btn>
                     <v-btn v-else text :disabled="dismissDisabled" @click="onDismiss">

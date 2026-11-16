@@ -413,7 +413,7 @@ export default {
     outline-offset: 2px;
 }
 .selected-swatch {
-    box-shadow: 0 0 0 2px var(--v-background-base, #fff), 0 0 0 4px currentColor;
+    box-shadow: 0 0 0 2px var(--ds-canvas, #fff), 0 0 0 4px currentColor;
 }
 
 .custom-color-field {

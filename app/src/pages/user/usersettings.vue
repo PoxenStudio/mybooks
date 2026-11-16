@@ -55,6 +55,7 @@
                   <img
                     :src="avatarUrl"
                     ref="cropperImage"
+                    alt=""
                     style="max-width: 100%"
                   />
                   <!-- 加载状态 -->
@@ -352,7 +353,7 @@
                   </v-col>
                 </template>
                 <v-col class="py-1" cols="auto" align-self="center">
-                  <v-btn icon small @click="userDevices.splice(idx, 1)">
+                  <v-btn icon small :aria-label="$t('common.delete')" @click="userDevices.splice(idx, 1)">
                     <v-icon>mdi-delete</v-icon>
                   </v-btn>
                 </v-col>

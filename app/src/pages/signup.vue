@@ -14,7 +14,7 @@
                     <v-text-field required prepend-icon="mdi-email"  v-model="email"     :label="$t('signup.email')"      type="text"     autocomplete="new-email"     :rules="[rules.email]"            ></v-text-field>
                 </v-form>
                 <div align="center">
-                    <v-btn dark large rounded color="red" @click="signup">{{ $t('signup.registerButton') }}</v-btn>
+                    <v-btn dark large rounded color="red darken-2" @click="signup">{{ $t('signup.registerButton') }}</v-btn>
                 </div>
             </v-card-text>
 

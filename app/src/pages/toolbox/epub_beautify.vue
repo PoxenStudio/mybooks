@@ -181,7 +181,7 @@
         </v-card>
 
         <!-- ─── ③ 微调选项（默认收起） ─── -->
-        <v-expansion-panels flat class="eb-panels" style="border:1px solid #e0e0e0">
+        <v-expansion-panels flat class="eb-panels" style="border:1px solid var(--ds-hairline, #e0e0e0)">
           <v-expansion-panel>
             <v-expansion-panel-header class="eb-tune-head">
               <div class="d-flex align-center min-width-0">
@@ -1350,7 +1350,7 @@ export default {
   cursor: pointer;
   font-size: 12.5px;
   font-weight: 600;
-  color: #888;
+  color: var(--ds-tertiary);
   display: flex;
   align-items: center;
   user-select: none;
@@ -1370,17 +1370,17 @@ export default {
   gap: 10px;
 }
 .eb-pcard {
-  border: 1.5px solid #e0e0e0;
+  border: 1px solid var(--ds-hairline, #e0e0e0);
   border-radius: 10px;
   padding: 10px;
   cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
-  background: #fff;
+  background: var(--ds-surface-card, #fff);
 }
 .eb-pcard:hover {
-  border-color: #b0bec5;
+  border-color: var(--ds-hairline-strong, #b0bec5);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(23, 42, 79, 0.08);
+  box-shadow: var(--ds-shadow-2);
 }
 .eb-pcard-selected {
   border-color: var(--pa, #1976d2);
@@ -1447,11 +1447,12 @@ export default {
   height: 100%;
 }
 .eb-preset:hover {
-  border-color: #90caf9;
+  border-color: var(--primary-color, #1976d2);
 }
 .eb-preset-selected {
-  border-color: #1976d2 !important;
+  border-color: var(--primary-color, #1976d2) !important;
   background: #e3f2fd !important;
+  background: color-mix(in srgb, var(--primary-color, #1976d2) 10%, var(--ds-surface-card)) !important;
 }
 /* ─── ③ 微调抽屉 ─── */
 .eb-panels {
@@ -1503,19 +1504,21 @@ export default {
 }
 .eb-fpill {
   font-size: 12px;
-  border: 1.5px solid #ddd;
+  border: 1.5px solid var(--ds-hairline-strong);
   border-radius: 999px;
   padding: 3px 12px;
-  color: #888;
+  color: var(--ds-tertiary);
   cursor: pointer;
   user-select: none;
   margin: 2px 6px 2px 0;
   transition: all 0.15s;
 }
 .eb-fpill.on {
-  border-color: #1976d2;
-  color: #1976d2;
+  border-color: var(--primary-color, #1976d2);
+  /* 文字保持正文色：主色落在淡色选中底上只有约 4.1:1，不达正文对比度 */
+  color: var(--ds-body);
   background: #eaf2fd;
+  background: color-mix(in srgb, var(--primary-color, #1976d2) 12%, var(--ds-surface-card));
   font-weight: 600;
 }
 /* ─── 右栏实时预览 ─── */
@@ -1557,7 +1560,7 @@ export default {
 }
 .eb-empty-tip {
   text-align: center;
-  color: #999;
+  color: var(--ds-tertiary);
   padding: 120px 10px 0;
   font-size: 14px;
 }

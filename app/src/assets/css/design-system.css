@@ -1,0 +1,425 @@
+/* ==========================================================================
+   MyBooks 设计系统 —— 对齐 document/DESIGN.md（Notion 风格）
+   只负责视觉令牌与 Vuetify 组件外观，不改变任何布局结构。
+
+   说明：
+   - 颜色/圆角/阴影令牌全部来自 DESIGN.md；深色模式取同一套令牌的深色变体
+     （DESIGN.md 的 Known Gaps 里没有给出深色令牌，这里按 Notion 深色界面的
+      中性面取值，保持两套模式对比度一致）。
+   - 主色（primary）与圆角（radius）仍由「外观设置」在运行时写入
+     --primary-color / --app-radius，本文件只负责消费，不覆盖用户选择。
+   - 品牌色顶栏（--app-nav-bg）同理，保持用户可配置。
+   ========================================================================== */
+
+/* 浅色令牌同时挂在 :root 与 .theme--light 上：
+   前者给页面/body 提供默认值，后者保证「深色站点里被强制成浅色的局部」
+   （例如品牌色为浅色时的顶栏、登录卡片）能拿回浅色令牌。 */
+:root,
+.theme--light {
+    /* ── Surface / Canvas ─────────────────────────── */
+    --ds-canvas: #ffffff;
+    --ds-surface: #f6f5f4;
+    --ds-surface-soft: #fafaf9;
+    --ds-surface-card: #ffffff;
+    --ds-surface-strong: #f0eeec;
+    --ds-hairline: #e5e3df;
+    --ds-hairline-soft: #ede9e4;
+    --ds-hairline-strong: #c8c4be;
+
+    /* ── Text ─────────────────────────────────────── */
+    --ds-ink: #1a1a1a;
+    --ds-body: #37352f;
+    --ds-secondary: #5d5b54;
+    --ds-tertiary: #787671;
+    --ds-muted: #a4a097;
+    --ds-on-primary: #ffffff;
+    --ds-on-dark: #ffffff;
+    --ds-on-dark-muted: #a4a097;
+
+    /* ── Accent / semantic ────────────────────────── */
+    --ds-link: #0075de;
+    --ds-link-pressed: #005bab;
+    /* 主色的「文字版」：浅色直接用主色，深色由下方覆盖为同色系亮版 */
+    --ds-primary-text: var(--primary-color, #1976d2);
+    --ds-success: #1aae39;
+    --ds-warning: #dd5b00;
+    --ds-error: #e03131;
+
+    /* ── Radius（组件几何；按钮/卡片受 --app-radius 控制） ── */
+    --ds-radius-xs: 4px;
+    --ds-radius-sm: 6px;
+    --ds-radius-md: 8px;
+    --ds-radius-lg: 12px;
+    --ds-radius-xl: 16px;
+    --ds-radius-xxl: 20px;
+    --ds-radius-pill: 9999px;
+
+    /* ── Elevation ────────────────────────────────── */
+    --ds-shadow-1: rgba(15, 15, 15, 0.04) 0px 1px 2px 0px;
+    --ds-shadow-2: rgba(15, 15, 15, 0.08) 0px 4px 12px 0px;
+    --ds-shadow-3: rgba(15, 15, 15, 0.2) 0px 24px 48px -8px;
+    --ds-shadow-4: rgba(15, 15, 15, 0.16) 0px 16px 48px -8px;
+
+    /* ── Spacing ──────────────────────────────────── */
+    --ds-space-xxs: 4px;
+    --ds-space-xs: 8px;
+    --ds-space-sm: 12px;
+    --ds-space-md: 16px;
+    --ds-space-lg: 20px;
+    --ds-space-xl: 24px;
+    --ds-space-xxl: 32px;
+}
+
+/* 深色：同一套令牌的深色变体。
+   html[data-appearance-dark] 由 app/src/app.html 首帧脚本写入；
+   .theme--dark 兜底覆盖 teleport 到 body 的浮层（菜单/对话框/提示）。 */
+html[data-appearance-dark="1"],
+.theme--dark {
+    --ds-canvas: #191919;
+    --ds-surface: #202020;
+    --ds-surface-soft: #1c1c1c;
+    --ds-surface-card: #202020;
+    --ds-surface-strong: #2a2a2a;
+    --ds-hairline: rgba(255, 255, 255, 0.11);
+    --ds-hairline-soft: rgba(255, 255, 255, 0.06);
+    --ds-hairline-strong: rgba(255, 255, 255, 0.2);
+
+    --ds-ink: #ededed;
+    --ds-body: #d4d4d4;
+    --ds-secondary: #b5b2ab;
+    --ds-tertiary: #9d9a93;
+    --ds-muted: #7d7a72;
+    --ds-on-dark: #ffffff;
+    --ds-on-dark-muted: #a4a097;
+
+    --ds-link: #5aa9f0;
+    --ds-link-pressed: #86c2f7;
+    /* 深色画布上主色文字需提亮；填充按钮的背景不受影响 */
+    --ds-primary-text: #82b4e8;
+    --ds-primary-text: color-mix(in srgb, var(--primary-color, #1976d2) 58%, #ffffff);
+    --ds-success: #46c25f;
+    --ds-warning: #e8833a;
+    --ds-error: #ff6b6b;
+
+    --ds-shadow-1: rgba(0, 0, 0, 0.3) 0px 1px 2px 0px;
+    --ds-shadow-2: rgba(0, 0, 0, 0.4) 0px 4px 12px 0px;
+    --ds-shadow-3: rgba(0, 0, 0, 0.55) 0px 24px 48px -8px;
+    --ds-shadow-4: rgba(0, 0, 0, 0.5) 0px 16px 48px -8px;
+}
+
+/* ── Page canvas ───────────────────────────────────── */
+.v-application,
+.v-application.theme--light,
+.v-application.theme--dark {
+    background-color: var(--ds-canvas) !important;
+    color: var(--ds-body);
+}
+
+/* ── Typography ────────────────────────────────────── */
+.v-application h1,
+.v-application h2,
+.v-application h3,
+.v-application h4,
+.v-application .text-h1,
+.v-application .text-h2,
+.v-application .text-h3,
+.v-application .text-h4 {
+    font-weight: 600 !important;
+    letter-spacing: -0.02em !important;
+    line-height: 1.2 !important;
+}
+
+.v-application h5,
+.v-application h6,
+.v-application .text-h5,
+.v-application .text-h6,
+.v-application .v-card-title,
+.v-application .v-toolbar-title {
+    font-weight: 600 !important;
+    letter-spacing: -0.01em !important;
+}
+
+.v-application .text--secondary {
+    color: var(--ds-secondary) !important;
+}
+
+.v-application .text--disabled,
+.v-application .v-input--is-disabled {
+    color: var(--ds-muted) !important;
+}
+
+/* 正文链接色不做全局覆盖：应用内的链接大多由 Vuetify 组件或页面自身样式控制，
+   贸然统一会压掉页面已有的强调色。需要时直接使用 var(--ds-link)。 */
+
+/* ── Buttons ───────────────────────────────────────── */
+.v-application .v-btn {
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+    font-weight: 500 !important;
+    box-shadow: none !important;
+}
+
+/* DESIGN.md：按钮是 8px 矩形，不是胶囊。rounded 按钮跟随用户的圆角设置。 */
+.v-application .v-btn--rounded {
+    border-radius: var(--app-radius, var(--ds-radius-md)) !important;
+}
+
+.v-application .v-btn:not(.v-btn--round):not(.v-btn--icon):not(.v-btn--fab) {
+    border-radius: var(--app-radius, var(--ds-radius-md)) !important;
+}
+
+.v-application .v-btn--text,
+.v-application .v-btn--flat {
+    box-shadow: none !important;
+}
+
+/* 次要操作：描边按钮走毛发线，不用主色填充 */
+.v-application .v-btn--outlined {
+    border-color: var(--ds-hairline-strong) !important;
+}
+
+/* 深色下主色按钮的对比度由 Vuetify 主题保证；这里只统一禁用态 */
+.v-application .v-btn.v-btn--disabled:not(.v-btn--text):not(.v-btn--flat):not(.v-btn--outlined) {
+    background-color: var(--ds-hairline) !important;
+    color: var(--ds-muted) !important;
+}
+
+/* ── Cards & surfaces ──────────────────────────────── */
+/* 圆角统一由 appearance.css 的 --app-radius / --app-dialog-radius 控制，
+   这里只负责层级：DESIGN.md 的 Level 0 = 无阴影 + 1px 毛发线。 */
+.v-application .v-card:not(.v-card--flat) {
+    border: 1px solid var(--ds-hairline);
+    box-shadow: none;
+}
+
+/* 显式 flat 的卡片不描边（很多页面把它当纯容器用） */
+.v-application .v-card--flat {
+    border: none;
+}
+
+/* 对话框/菜单/提示需要明确层级：Level 4 */
+.v-application .v-dialog .v-card,
+.v-application .v-menu__content,
+.v-application .v-tooltip__content {
+    box-shadow: var(--ds-shadow-4) !important;
+}
+
+.v-application .v-divider {
+    border-color: var(--ds-hairline) !important;
+}
+
+.v-application .v-sheet.v-sheet--outlined {
+    border-color: var(--ds-hairline) !important;
+}
+
+/* ── Navigation drawer ────────────────────────────── */
+.v-application .v-navigation-drawer {
+    box-shadow: none !important;
+    border-right: 1px solid var(--ds-hairline) !important;
+}
+
+/* 抽屉内的列表项外观由 AppHeader 的 .app-navigation-drawer 规则统一控制，
+   这里只处理毛边与阴影，避免两处样式互相覆盖。 */
+
+.v-application .v-subheader {
+    color: var(--ds-secondary) !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.02em !important;
+}
+
+/* ── Top app bar ───────────────────────────────────── */
+/* 顶栏是品牌深色面，本身与内容区已有足够对比，不再加阴影/毛边 */
+.v-application .v-app-bar {
+    box-shadow: none !important;
+}
+
+/* ── Inputs ────────────────────────────────────────── */
+.v-application .v-input__slot,
+.v-application .v-text-field--outlined fieldset,
+.v-application .v-select__selections,
+.v-application .v-autocomplete__selection {
+    border-radius: var(--app-radius, var(--ds-radius-md)) !important;
+}
+
+.v-application .v-text-field--outlined fieldset,
+.v-application .v-input--outline .v-input__slot {
+    border-color: var(--ds-hairline-strong) !important;
+}
+
+.v-application .v-input--is-focused .v-input__slot,
+.v-application .v-text-field--outlined.v-input--is-focused fieldset {
+    border-color: var(--primary-color, var(--ds-ink)) !important;
+    box-shadow: none !important;
+}
+
+.v-application .v-text-field--filled.v-text-field--is-booted .v-input__slot,
+.v-application .v-text-field--full-width.v-text-field--is-booted .v-input__slot {
+    background-color: var(--ds-surface-soft) !important;
+}
+
+.theme--dark.v-application .v-text-field--filled .v-input__slot {
+    background-color: var(--ds-surface-strong) !important;
+}
+
+.v-application .v-messages__message {
+    color: var(--ds-secondary);
+}
+
+/* ── Chips / badges ────────────────────────────────── */
+/* 圆角沿用 Vuetify 自身（chip 默认胶囊、label 变体为小圆角），只统一字重 */
+.v-application .v-chip {
+    font-weight: 500 !important;
+    letter-spacing: 0 !important;
+}
+
+.v-application .v-chip--outlined {
+    border-color: var(--ds-hairline) !important;
+}
+
+/* ── Tables ────────────────────────────────────────── */
+.v-application .v-data-table {
+    border-radius: var(--ds-radius-lg);
+}
+
+.v-application .v-data-table > .v-data-table__wrapper > table > thead > tr > th {
+    color: var(--ds-secondary) !important;
+    font-weight: 600 !important;
+    letter-spacing: 0 !important;
+    background-color: var(--ds-surface-soft);
+}
+
+.v-application .v-data-table > .v-data-table__wrapper > table > tbody > tr > td,
+.v-application .v-data-table > .v-data-table__wrapper > table > thead > tr > th {
+    border-bottom-color: var(--ds-hairline) !important;
+}
+
+.v-application .v-data-table > .v-data-table__wrapper > table > tbody > tr:hover {
+    background-color: var(--ds-surface-soft) !important;
+}
+
+/* ── Tabs / pagination / alerts ────────────────────── */
+.v-application .v-tab {
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+    font-weight: 500 !important;
+}
+
+.v-application .v-tabs-slider {
+    height: 2px;
+}
+
+.v-application .v-pagination .v-btn {
+    border-radius: var(--app-radius, var(--ds-radius-md)) !important;
+}
+
+.v-application .v-alert {
+    border-radius: var(--ds-radius-md) !important;
+    box-shadow: none !important;
+}
+
+.v-application .v-snack__wrapper {
+    border-radius: var(--ds-radius-md) !important;
+    box-shadow: var(--ds-shadow-4) !important;
+}
+
+.v-application .v-snack__content {
+    font-weight: 500;
+    letter-spacing: 0;
+}
+
+/* ── Tooltip ───────────────────────────────────────── */
+.v-application .v-tooltip__content {
+    background-color: #2f2f2f !important;
+    color: var(--ds-on-dark) !important;
+    border-radius: var(--ds-radius-sm) !important;
+    font-size: 12px;
+    letter-spacing: 0;
+}
+
+/* ── Bottom navigation ─────────────────────────────── */
+.v-application .v-item-group.v-bottom-navigation {
+    box-shadow: 0 -1px 0 var(--ds-hairline) !important;
+}
+
+/* ── Dark-mode primary text ────────────────────────── */
+/* 主色 #1976D2 作为「文字」用在深色画布上只有 3.6:1，不达正文对比度；
+   这里只提亮文字与图标，填充按钮的背景仍用原始主色（白字，5.9:1）。
+   与主色混合白色得到同色系亮版，用户自定义强调色时同样成立。 */
+/* 注：Vuetify 的颜色类由 JS 运行时注入到 <head> 末尾，选择器是
+   `.v-application .primary--text`（0,2,0）。这里必须提高一级特异性，
+   否则同为 !important 时后注入的浅色主色会赢。 */
+html[data-appearance-dark="1"] .v-application .primary--text,
+.theme--dark .v-application .primary--text,
+.v-application.theme--dark .primary--text,
+.theme--dark .primary--text {
+    color: var(--ds-primary-text) !important;
+}
+
+/* ── Focus ring ────────────────────────────────────── */
+/* 统一键盘焦点环；鼠标点击不触发（:focus-visible）。
+   描边用主色（深色下取同色系亮版），outline-offset 让底色把环和组件隔开。 */
+.v-application :focus-visible {
+    outline: 2px solid var(--ds-primary-text) !important;
+    outline-offset: 2px !important;
+}
+
+/* 输入框自身已经用焦点边框/下划线表达焦点，不再叠加外框 */
+.v-application .v-input input:focus-visible,
+.v-application .v-input textarea:focus-visible {
+    outline: none !important;
+}
+
+/* ── Reduced motion ────────────────────────────────── */
+/* 尊重系统「减少动态效果」：保留 120ms 的状态过渡（不整体抹成 0，
+   避免依赖 transitionend 的组件失序），循环动画放慢到不刺眼的节奏。 */
+@media (prefers-reduced-motion: reduce) {
+    .v-application *,
+    .v-application *::before,
+    .v-application *::after {
+        animation-duration: 120ms !important;
+        animation-delay: 0ms !important;
+        transition-duration: 120ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    /* 加载指示器靠旋转传达「还在进行」，压到 120ms 会变成急促闪烁，
+       单独放慢但保持循环。 */
+    .v-application .v-progress-circular--indeterminate,
+    .v-application .v-progress-circular__overlay,
+    .v-application .v-progress-linear__indeterminate,
+    .v-application .v-progress-linear__determinate {
+        animation-duration: 1.4s !important;
+        animation-iteration-count: infinite !important;
+    }
+}
+
+/* ── Scrollbar ─────────────────────────────────────── */
+.theme--light * {
+    scrollbar-color: rgba(55, 53, 47, 0.24) transparent;
+}
+
+.theme--dark *,
+html[data-appearance-dark="1"] * {
+    scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(55, 53, 47, 0.24) !important;
+    border-radius: 6px !important;
+    box-shadow: none !important;
+}
+
+.theme--dark ::-webkit-scrollbar-thumb,
+html[data-appearance-dark="1"] ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.22) !important;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(55, 53, 47, 0.38) !important;
+    box-shadow: none !important;
+}
+
+.theme--dark ::-webkit-scrollbar-thumb:hover,
+html[data-appearance-dark="1"] ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.34) !important;
+}

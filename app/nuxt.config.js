@@ -41,7 +41,10 @@ export default {
     '~/assets/css/fonts.css',
     '~/assets/css/background.css',
     '~/assets/css/scrollbar.css',
-    '~/assets/css/appearance.css'
+    '~/assets/css/appearance.css',
+    // 设计系统令牌与组件外观（document/DESIGN.md）。
+    // 必须排在 Vuetify 与上面几个文件之后，才能覆盖组件默认外观。
+    '~/assets/css/design-system.css'
   ],
 
   // Plugins to run before rendering page: https://go.nuxtjs.dev/config-plugins
@@ -79,6 +82,34 @@ export default {
     // treeShake: true,
     defaultAssets: false,
     iconfont: 'mdi',
+    // 调色板对齐 document/DESIGN.md。primary 只是首帧兜底：
+    // 运行时由 utils/appearance.js 按用户的强调色写入（浅/深两套都会更新）。
+    theme: {
+      themes: {
+        light: {
+          primary: '#1976D2',
+          anchor: '#1976D2',
+          secondary: '#5d5b54',
+          accent: '#5645d4',
+          error: '#e03131',
+          info: '#0075de',
+          success: '#1aae39',
+          warning: '#dd5b00',
+        },
+        dark: {
+          primary: '#1976D2',
+          // 链接（.v-application a）在深色画布上的主色文字：由 #1976D2 与白色 58:42 混合，
+          // 保证 ≥4.5:1；填充按钮仍用 primary
+          anchor: '#82b4e8',
+          secondary: '#a4a097',
+          accent: '#d6b6f6',
+          error: '#ff6b6b',
+          info: '#5aa9f0',
+          success: '#46c25f',
+          warning: '#e8833a',
+        },
+      },
+    },
     lang: {
       locales: {
         zhHans: require('vuetify/lib/locale/zh-Hans').default,

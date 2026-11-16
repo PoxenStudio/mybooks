@@ -38,10 +38,10 @@
           @focus="cat.expanded = true"
         ></v-text-field>
         <v-spacer></v-spacer>
-        <v-btn icon small @click="removeCategory(idx)">
+        <v-btn icon small :aria-label="$t('common.delete')" @click="removeCategory(idx)">
           <v-icon small>mdi-delete</v-icon>
         </v-btn>
-        <v-btn icon @click="cat.expanded = !cat.expanded">
+        <v-btn icon :aria-label="cat.expanded ? $t('common.collapse') : $t('common.expand')" :aria-expanded="cat.expanded" @click="cat.expanded = !cat.expanded">
           <v-icon>{{
             cat.expanded ? "mdi-chevron-up" : "mdi-chevron-down"
           }}</v-icon>

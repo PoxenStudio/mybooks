@@ -634,7 +634,7 @@
                       </v-col>
                     </template>
                     <v-col class="py-1" cols="auto" align-self="center">
-                      <v-btn icon small @click="settings.DEVICES.splice(idx, 1)">
+                      <v-btn icon small :aria-label="$t('common.delete')" @click="settings.DEVICES.splice(idx, 1)">
                         <v-icon>mdi-delete</v-icon>
                       </v-btn>
                     </v-col>
@@ -798,7 +798,7 @@
                 @click="testAISettings"
               >
                 <span v-if="testingAI" class="flex items-center gap-2">
-                  <img :src="site_url + '/icons/loading.svg'" width="20" height="20" />
+                  <img :src="site_url + '/icons/loading.svg'" width="20" height="20" alt="" />
                   {{ $t('settings.testing') }}
                 </span>
                 <span v-else>{{ $t('settings.test_ai_settings') }}</span>
@@ -1096,8 +1096,15 @@
       class="my-2 elevation-4"
       v-if="!searchQuery && activeGroup === 'ops' && thanksToNames.length > 0"
     >
-      <v-card-title @click="thanksToShow = !thanksToShow">
-        <v-btn @click.once="thanksToShow = !thanksToShow" icon>
+      <v-card-title
+        role="button"
+        tabindex="0"
+        :aria-expanded="thanksToShow"
+        @click="thanksToShow = !thanksToShow"
+        @keydown.enter.prevent="thanksToShow = !thanksToShow"
+        @keydown.space.prevent="thanksToShow = !thanksToShow"
+      >
+        <v-btn @click.once="thanksToShow = !thanksToShow" icon aria-hidden="true" tabindex="-1">
           <v-icon>{{
             thanksToShow ? "mdi-chevron-down" : "mdi-chevron-up"
           }}</v-icon>
@@ -4128,7 +4135,7 @@ export default {
   left: 0;
   z-index: 0;
   height: 100%;
-  background: #fff;
+  background: var(--ds-surface-card, #fff);
   border-radius: var(--app-radius, 4px);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
   transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1),
@@ -4323,7 +4330,7 @@ export default {
 }
 @keyframes field-flash {
   0% {
-    background: #fff59d;
+    background: color-mix(in srgb, var(--primary-color, #1976D2) 18%, transparent);
   }
   100% {
     background: transparent;
@@ -4343,8 +4350,8 @@ export default {
   flex-wrap: wrap;
   min-height: 56px;
   padding: 8px 24px;
-  background: #fff;
-  border-top: 1px solid #e0e0e0;
+  background: var(--ds-canvas, #fff);
+  border-top: 1px solid var(--ds-hairline, #e0e0e0);
 }
 .settings-savebar-status {
   display: inline-flex;

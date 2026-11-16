@@ -25,7 +25,16 @@
                                 </div>
                                 <span><v-icon x-small class="mr-1">mdi-bookmark-outline</v-icon>{{ booklist.book_count }}</span>
                                 <span><v-icon x-small class="mr-1">mdi-eye-outline</v-icon>{{ booklist.view_count }}</span>
-                                <span class="booklist-like" @click="toggleLike">
+                                <span
+                                    class="booklist-like"
+                                    role="button"
+                                    tabindex="0"
+                                    :aria-label="$t('booklist.like')"
+                                    :aria-pressed="!!booklist.liked_by_me"
+                                    @click="toggleLike"
+                                    @keydown.enter.prevent="toggleLike"
+                                    @keydown.space.prevent="toggleLike"
+                                >
                                     <v-icon x-small class="mr-1" :color="booklist.liked_by_me ? 'red' : undefined">{{ booklist.liked_by_me ? 'mdi-heart' : 'mdi-heart-outline' }}</v-icon>{{ booklist.like_count }}
                                 </span>
                             </div>
@@ -36,7 +45,7 @@
                 <div v-if="booklist.is_owner" class="booklist-header-actions d-flex align-center">
                     <v-menu offset-y>
                         <template v-slot:activator="{ on, attrs }">
-                            <v-btn icon small v-bind="attrs" v-on="on">
+                            <v-btn icon small v-bind="attrs" v-on="on" :aria-label="$t('common.more')">
                                 <v-icon small>mdi-dots-vertical</v-icon>
                             </v-btn>
                         </template>
@@ -63,6 +72,8 @@
                                         icon
                                         small
                                         class="ma-1"
+                                        :aria-label="$t(c.labelKey)"
+                                        :aria-pressed="booklist.color === c.key"
                                         :style="{ backgroundColor: $vuetify.theme.dark ? c.dark : c.light }"
                                         @click="changeColor(c.key)"
                                     >
@@ -77,7 +88,7 @@
                             </v-list-item>
                         </v-list>
                     </v-menu>
-                    <v-btn icon small :disabled="!booklist.is_public" @click="generateShareCard">
+                    <v-btn icon small :disabled="!booklist.is_public" :aria-label="$t('booklist.generateShareCard')" @click="generateShareCard">
                         <v-icon small>mdi-share-variant</v-icon>
                     </v-btn>
                 </div>

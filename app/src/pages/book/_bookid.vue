@@ -179,15 +179,15 @@
             <v-card v-if="!dialog_refer">
                 <v-toolbar flat dense>
                     <!-- back -->
-                    <v-btn v-if="!tiny && canGoBack" icon small fab @click="$router.back()">
+                    <v-btn v-if="!tiny && canGoBack" icon small fab :aria-label="$t('common.back')" @click="$router.back()">
                         <v-icon>mdi-arrow-left-circle</v-icon>
                     </v-btn>
                     <!-- download -->
                     <div class="book-action-btns">
-                        <v-btn icon small fab @click="downloadBook" :disabled="!hasDownloadableFiles">
+                        <v-btn icon small fab :aria-label="$t('book.downloadBook')" @click="downloadBook" :disabled="!hasDownloadableFiles">
                             <v-icon>mdi-download</v-icon>
                         </v-btn>
-                        <v-btn icon small fab :to="'/book/' + book.id + '/edit'">
+                        <v-btn icon small fab :to="'/book/' + book.id + '/edit'" :aria-label="$t('common.edit')">
                             <v-icon>mdi-pencil-circle-outline</v-icon>
                         </v-btn>
                     </div>
@@ -484,6 +484,7 @@
                                             <v-tooltip bottom>
                                                 <template v-slot:activator="{ on: onTooltip, attrs: attrsTooltip }">
                                                     <v-btn icon small class="ml-1" color="grey"
+                                                        :aria-label="$t('booklist.addToBooklist')"
                                                         v-bind="{ ...attrs, ...attrsTooltip }"
                                                         v-on="{ ...on, ...onTooltip }"
                                                     >
@@ -496,7 +497,7 @@
                                     </BookListQuickAddMenu>
                                     <v-tooltip bottom v-if="book.sole">
                                         <template v-slot:activator="{ on, attrs }">
-                                            <v-btn icon small class="ml-1" v-bind="attrs" v-on="on">
+                                            <v-btn icon small class="ml-1" :aria-label="$t('book.soledBooks')" v-bind="attrs" v-on="on">
                                                 <v-icon :color="book.sole ? 'red' : 'green'" class="mr-2">
                                                     {{ book.sole ? 'mdi-earth-off' : 'mdi-earth' }}
                                                 </v-icon>
@@ -811,7 +812,7 @@
                         <v-list-item-action>
                             <v-menu v-if="needsReadFormatChoice" offset-y left>
                                 <template v-slot:activator="{ on, attrs }">
-                                    <v-btn icon v-bind="attrs" v-on="on" @click.stop.prevent>
+                                    <v-btn icon v-bind="attrs" v-on="on" :aria-label="$t('book.read')" @click.stop.prevent>
                                         <v-icon>mdi-menu-down</v-icon>
                                     </v-btn>
                                 </template>
