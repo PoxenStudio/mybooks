@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 import logging
+import re
 import time
 from webserver.i18n import _
 
@@ -50,6 +51,35 @@ class AIFillInfoService(AsyncService):
     def _make_client(self) -> BookAIClient:
         return BookAIClient()
 
+    @staticmethod
+    def _language_hint(mi) -> str:
+        try:
+            languages = getattr(mi, "languages", None) or []
+            if isinstance(languages, str):
+                languages = [languages]
+            if isinstance(languages, (list, tuple)) and languages:
+                code = str(languages[0]).strip()
+            else:
+                code = ""
+            if not code:
+                # 与导入/扫描逻辑一致：书没有语言时使用站点默认语言，避免输出语言随机
+                code = str(CONF.get("DEFAULT_LANGUAGE", "zho") or "").strip()
+            if not code or not re.fullmatch(r"[A-Za-z0-9-]{2,20}", code):
+                return ""
+            name = code
+            try:
+                from webserver.handlers.meta import LanguageNameUtil
+                name = LanguageNameUtil.get_language_name(code)
+            except Exception:
+                name = code
+            if code == "zha":
+                name = "繁體中文"
+            if name and name != code:
+                return f"{name} ({code})"
+            return code
+        except Exception:
+            return ""
+
     def _missing_api_key_msg(self) -> str:
         # 模块关闭时直接拒绝：入口虽已隐藏，队列里的旧任务/脚本调用也不应继续跑
         if self._module_disabled():
@@ -70,9 +100,11 @@ class AIFillInfoService(AsyncService):
             if info.category and allow_category:
                 mi.set(CALIBRE_COLUMN_CATEGORY, info.category)
             if info.authors:
-                mi.authors = mi.authors = [utils.super_strip(a) for a in info.authors]
+                mi.authors = [utils.super_strip(a) for a in info.authors]
             if info.pubdate:
-                mi.pubdate = str2date(info.pubdate)
+                parsed_pubdate = str2date(info.pubdate)
+                if parsed_pubdate:
+                    mi.pubdate = parsed_pubdate
 
             self.db.set_metadata(book_id, mi, ignore_errors=True, force_changes=True)
             if info.category and allow_category:
@@ -127,7 +159,9 @@ class AIFillInfoService(AsyncService):
         info = client.get_book_info(
             title=mi.title,
             authors=authors,
-            isbn=mi.isbn or ""
+            isbn=mi.isbn or "",
+            language=self._language_hint(mi),
+            search_mode="deep",
         )
 
         if info is None or not info.is_valid():
@@ -247,7 +281,9 @@ class AIFillInfoService(AsyncService):
                     info = client.get_book_info(
                         title=mi.title,
                         authors=authors,
-                        isbn=mi.isbn or ""
+                        isbn=mi.isbn or "",
+                        language=self._language_hint(mi),
+                        search_mode="fast",
                     )
                     if info and info.is_valid():
                         updates.append((book_id, mi, info))

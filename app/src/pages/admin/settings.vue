@@ -859,6 +859,36 @@
                 prepend-icon="mdi-scatter-plot-outline"
               ></v-checkbox>
               </div>
+              <v-divider class="my-4"></v-divider>
+              <div v-if="aiPromptDefault" id="f-AI_FILL_PROMPT">
+              <p class="text-caption mb-2">{{ $t("settings.ai_fill_prompt_description") }}</p>
+              <v-textarea
+                :value="settings['AI_FILL_PROMPT'] || aiPromptDefault"
+                :disabled="!settings['AI_ENABLED']"
+                :label="$t('settings.ai_fill_prompt')"
+                :rows="12"
+                auto-grow
+                outlined
+                hide-details
+                :maxlength="20000"
+                class="mt-2"
+                @input="settings['AI_FILL_PROMPT'] = $event"
+              ></v-textarea>
+              <div class="d-flex align-center mt-2">
+                <v-btn
+                  small
+                  text
+                  color="primary"
+                  :disabled="!settings['AI_ENABLED']"
+                  @click="resetAIFillPrompt"
+                >
+                  <v-icon left>mdi-refresh</v-icon>{{ $t("settings.ai_fill_prompt_reset") }}
+                </v-btn>
+                <span class="text-caption grey--text ml-3">
+                  {{ settings['AI_FILL_PROMPT'] ? $t("settings.ai_fill_prompt_custom") : $t("settings.ai_fill_prompt_effective") }}
+                </span>
+              </div>
+              </div>
               </div>
             </template>
 
@@ -1273,6 +1303,7 @@ const SPECIAL_BLOCKS = [
   { key: "MYNEXUS_URL", label: "settings.mynexus_url", icon: "mdi-link", gid: "services", sid: "svc-ai", al: ["mynexus", "nexus"] },
   { key: "MYNEXUS_TOKEN", label: "settings.mynexus_token", icon: "mdi-key", gid: "services", sid: "svc-ai", al: ["mynexus", "nexus"] },
   { key: "AI_ALLOW_SET_CATEGORY", label: "settings.ai_allow_set_category", icon: "mdi-scatter-plot-outline", gid: "services", sid: "svc-ai" },
+  { key: "AI_FILL_PROMPT", label: "settings.ai_fill_prompt", icon: "mdi-function", gid: "services", sid: "svc-ai", al: ["提示词", "prompt", "简介", "元信息"] },
   { key: "SSL", label: "settings.ssl_certificate_management", icon: "mdi-lock", gid: "protocols", sid: "proto-net", al: ["证书", "https"] },
   { key: "PERFORMANCE_MODE", label: "settings.perf_mode_lite", icon: "mdi-speedometer", gid: "ops", sid: "ops-perf", al: ["性能", "速度"] },
   { key: "LITE_GROUP_LISTING", label: "settings.lite_group_listing", icon: "mdi-speedometer", gid: "ops", sid: "ops-perf" },
@@ -2797,12 +2828,16 @@ export default {
     this.$backend("/admin/settings").then((rsp) => {
       this.sns_items = rsp.sns;
       this.settings = rsp.settings;
+      this.aiPromptDefault = rsp.ai_prompt_default || "";
       this.site_url = rsp.site_url;
       this.moduleSwitches = rsp.module_switches || { off: {}, on: {} };
       // 当前图标的预览要绕过浏览器缓存，否则保存过新图标后仍显示旧图
       this.siteIconStamp = Date.now();
 
       if (this.settings) {
+        if (!Object.prototype.hasOwnProperty.call(this.settings, "AI_FILL_PROMPT")) {
+          this.$set(this.settings, "AI_FILL_PROMPT", "");
+        }
         this.$set(
           this.settings,
           "HOMEPAGE_CONFIG",
@@ -2898,6 +2933,7 @@ export default {
     sns: {},
     sns_items: [],
     settings: {},
+    aiPromptDefault: "",
     settingsLoaded: false,
     moduleDialog: false,
     moduleSwitches: { off: {}, on: {} },
@@ -4039,6 +4075,10 @@ export default {
           element.click();
         }
       }
+    },
+    resetAIFillPrompt() {
+      this.$set(this.settings, "AI_FILL_PROMPT", "");
+      this.$alert("success", this.$t("settings.ai_fill_prompt_reset_done"));
     },
     testAISettings() {
       const data = {
