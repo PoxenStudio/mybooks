@@ -531,6 +531,7 @@ class AdminSettings(BaseHandler):
         return {
             "err": "ok",
             "settings": settings,
+            "ai_prompt_default": BookAIClient.SYSTEM_PROMPT,
             "sns": sns,
             "site_url": self.site_url,
             # 模块弹窗的「将写入/将恢复」预览清单，与后端归一化共用同一份真值。
@@ -591,6 +592,14 @@ class AdminSettings(BaseHandler):
             "PDF_READER",
             CONF.get("PDF_READER", "MyReader"),
         )
+        # 旧版缓存页不带这个键时，dumpfile() 不能把管理员自定义的提示词抹掉。
+        args.setdefault(
+            "AI_FILL_PROMPT",
+            CONF.get("AI_FILL_PROMPT", ""),
+        )
+        if "AI_FILL_PROMPT" in args:
+            _prompt = args["AI_FILL_PROMPT"]
+            args["AI_FILL_PROMPT"] = _prompt[:20000] if isinstance(_prompt, str) else ""
         # 模块开关变化时同步主开关：关闭写安全默认值，开启恢复主功能开关；
         # 只动 MODULE_OFF_SWITCHES / MODULE_ON_SWITCHES 里的键，不碰数据与密钥。
         feature_modules.apply_module_switch_effects(args, CONF)
@@ -1026,7 +1035,8 @@ class AdminBookAIFill(feature_modules.ModuleGateMixin, BaseHandler):
         if not idlist:
             return {"err": "params.error", "msg": _("参数错误")}
 
-        filling_status = AIFillInfoService().status()
+        service = AIFillInfoService()
+        filling_status = service.status()
         if filling_status["is_running"]:
             return {"err": "task.running", "msg": _("有 AI 任务正在运行中，请稍后再试")}
 
@@ -1039,7 +1049,8 @@ class AdminBookAIFill(feature_modules.ModuleGateMixin, BaseHandler):
         else:
             return {"err": "params.error.idlist", "msg": _("参数错误")}
 
-        AIFillInfoService().fill_all(idlist)
+        if not service.start_batch(idlist):
+            return {"err": "task.running", "msg": _("有 AI 任务正在运行中，请稍后再试")}
         return {"err": "ok", "msg": _("AI 更新任务已启动，请耐心等待")}
 
 

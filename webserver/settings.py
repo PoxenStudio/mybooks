@@ -96,6 +96,7 @@ settings = {
     "ALLOW_GUEST_UPLOAD": False,
     "AI_ENABLED": False,
     "AI_MODEL": "deepseek-chat",
+    "AI_FILL_PROMPT": "",
     "AI_MCP_TOKEN": "",
     "AI_DEEPSEEK_API_KEY": "",
     "AI_API_URL": "https://api.deepseek.com",

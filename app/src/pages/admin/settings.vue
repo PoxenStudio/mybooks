@@ -859,6 +859,36 @@
                 prepend-icon="mdi-scatter-plot-outline"
               ></v-checkbox>
               </div>
+              <v-divider class="my-4"></v-divider>
+              <div v-if="aiPromptDefault" id="f-AI_FILL_PROMPT">
+              <p class="text-caption mb-2">{{ $t("settings.ai_fill_prompt_description") }}</p>
+              <v-textarea
+                :value="settings['AI_FILL_PROMPT'] || aiPromptDefault"
+                :disabled="!settings['AI_ENABLED']"
+                :label="$t('settings.ai_fill_prompt')"
+                :rows="12"
+                auto-grow
+                outlined
+                hide-details
+                :maxlength="20000"
+                class="mt-2"
+                @input="settings['AI_FILL_PROMPT'] = $event"
+              ></v-textarea>
+              <div class="d-flex align-center mt-2">
+                <v-btn
+                  small
+                  text
+                  color="primary"
+                  :disabled="!settings['AI_ENABLED']"
+                  @click="resetAIFillPrompt"
+                >
+                  <v-icon left>mdi-refresh</v-icon>{{ $t("settings.ai_fill_prompt_reset") }}
+                </v-btn>
+                <span class="text-caption grey--text ml-3">
+                  {{ settings['AI_FILL_PROMPT'] ? $t("settings.ai_fill_prompt_custom") : $t("settings.ai_fill_prompt_effective") }}
+                </span>
+              </div>
+              </div>
               </div>
             </template>
 
@@ -1273,6 +1303,7 @@ const SPECIAL_BLOCKS = [
   { key: "MYNEXUS_URL", label: "settings.mynexus_url", icon: "mdi-link", gid: "services", sid: "svc-ai", al: ["mynexus", "nexus"] },
   { key: "MYNEXUS_TOKEN", label: "settings.mynexus_token", icon: "mdi-key", gid: "services", sid: "svc-ai", al: ["mynexus", "nexus"] },
   { key: "AI_ALLOW_SET_CATEGORY", label: "settings.ai_allow_set_category", icon: "mdi-scatter-plot-outline", gid: "services", sid: "svc-ai" },
+  { key: "AI_FILL_PROMPT", label: "settings.ai_fill_prompt", icon: "mdi-function", gid: "services", sid: "svc-ai", al: ["提示词", "prompt", "简介", "元信息"] },
   { key: "SSL", label: "settings.ssl_certificate_management", icon: "mdi-lock", gid: "protocols", sid: "proto-net", al: ["证书", "https"] },
   { key: "PERFORMANCE_MODE", label: "settings.perf_mode_lite", icon: "mdi-speedometer", gid: "ops", sid: "ops-perf", al: ["性能", "速度"] },
   { key: "LITE_GROUP_LISTING", label: "settings.lite_group_listing", icon: "mdi-speedometer", gid: "ops", sid: "ops-perf" },
@@ -1455,9 +1486,10 @@ const SEARCH_ALIASES = {
     数量: ["douban_max_count", "MAIN_PAGE_RANDOM_COUNT", "MAIN_PAGE_RECENT_COUNT"],
     // 外部服务 · 书栈 / AI
     书栈: ["ENABLE_BOOKBARN", "BOOKBARN_TOKEN"], barn: ["ENABLE_BOOKBARN"], token: ["BOOKBARN_TOKEN", "AI_MCP_TOKEN"], 令牌: ["BOOKBARN_TOKEN", "AI_MCP_TOKEN"], 授权: ["BOOKBARN_TOKEN", "AI_MCP_TOKEN"],
-    ai: ["AI_ENABLED", "AI_DEEPSEEK_API_KEY", "AI_API_URL", "AI_MODEL", "AI_MCP_TOKEN", "AI_ALLOW_SET_CATEGORY"],
+    ai: ["AI_ENABLED", "AI_DEEPSEEK_API_KEY", "AI_API_URL", "AI_MODEL", "AI_MCP_TOKEN", "AI_ALLOW_SET_CATEGORY", "AI_FILL_PROMPT"],
     人工智能: ["AI_ENABLED"], 助手: ["AI_ENABLED"], deepseek: ["AI_ENABLED", "AI_DEEPSEEK_API_KEY", "AI_MODEL"],
     模型: ["AI_MODEL"], 接口: ["AI_API_URL"], url: ["AI_API_URL", "douban_baseurl"],
+    提示词: ["AI_FILL_PROMPT"], 元信息: ["AI_FILL_PROMPT"],
     mcp: ["AI_MCP_TOKEN"], 自动分类: ["AI_ALLOW_SET_CATEGORY"], 生成分类: ["AI_ALLOW_SET_CATEGORY"],
     // 服务与协议
     webdav: ["ENABLE_WEBDAV_SERVICE", "WEBDAV_SYNC_FOLDER"], 挂载: ["ENABLE_WEBDAV_SERVICE"], 可写: ["WEBDAV_SYNC_FOLDER"], 可写目录: ["WEBDAV_SYNC_FOLDER"], 读写: ["ENABLE_WEBDAV_SERVICE", "WEBDAV_SYNC_FOLDER"],
@@ -1605,9 +1637,10 @@ const SEARCH_ALIASES = {
     數量: ["douban_max_count", "MAIN_PAGE_RANDOM_COUNT", "MAIN_PAGE_RECENT_COUNT"],
     // 外部服務 · 書棧 / AI
     書棧: ["ENABLE_BOOKBARN", "BOOKBARN_TOKEN"], barn: ["ENABLE_BOOKBARN"], token: ["BOOKBARN_TOKEN", "AI_MCP_TOKEN"], 權杖: ["BOOKBARN_TOKEN", "AI_MCP_TOKEN"], 授權: ["BOOKBARN_TOKEN", "AI_MCP_TOKEN"],
-    ai: ["AI_ENABLED", "AI_DEEPSEEK_API_KEY", "AI_API_URL", "AI_MODEL", "AI_MCP_TOKEN", "AI_ALLOW_SET_CATEGORY"],
+    ai: ["AI_ENABLED", "AI_DEEPSEEK_API_KEY", "AI_API_URL", "AI_MODEL", "AI_MCP_TOKEN", "AI_ALLOW_SET_CATEGORY", "AI_FILL_PROMPT"],
     人工智慧: ["AI_ENABLED"], 助手: ["AI_ENABLED"], deepseek: ["AI_ENABLED", "AI_DEEPSEEK_API_KEY", "AI_MODEL"],
     模型: ["AI_MODEL"], 介面: ["AI_API_URL"], url: ["AI_API_URL", "douban_baseurl"], 鏈接: ["AI_API_URL", "douban_baseurl", "static_host", "FRIENDS"],
+    提示詞: ["AI_FILL_PROMPT"], 元資訊: ["AI_FILL_PROMPT"],
     mcp: ["AI_MCP_TOKEN"], 自動分類: ["AI_ALLOW_SET_CATEGORY"], 產生分類: ["AI_ALLOW_SET_CATEGORY"],
     // 服務與協議
     webdav: ["ENABLE_WEBDAV_SERVICE", "WEBDAV_SYNC_FOLDER"], 掛載: ["ENABLE_WEBDAV_SERVICE"], 可寫: ["WEBDAV_SYNC_FOLDER"], 可寫目錄: ["WEBDAV_SYNC_FOLDER"], 讀寫: ["ENABLE_WEBDAV_SERVICE", "WEBDAV_SYNC_FOLDER"],
@@ -1738,7 +1771,7 @@ const SEARCH_ALIASES = {
     api: ["AI_API_URL", "AI_DEEPSEEK_API_KEY", "douban_apikey", "douban_baseurl"], "api key": ["douban_apikey", "AI_DEEPSEEK_API_KEY", "AI_MCP_TOKEN", "BOOKBARN_TOKEN"], key: ["douban_apikey", "AI_DEEPSEEK_API_KEY", "cookie_secret", "AI_MCP_TOKEN", "BOOKBARN_TOKEN"], count: ["douban_max_count", "MAIN_PAGE_RANDOM_COUNT", "MAIN_PAGE_RECENT_COUNT"], results: ["douban_max_count"],
     // External Services · bookbarn & AI
     bookbarn: ["ENABLE_BOOKBARN", "BOOKBARN_TOKEN"], token: ["BOOKBARN_TOKEN", "AI_MCP_TOKEN"], "auth token": ["BOOKBARN_TOKEN", "AI_MCP_TOKEN"],
-    ai: ["AI_ENABLED", "AI_DEEPSEEK_API_KEY", "AI_API_URL", "AI_MODEL", "AI_MCP_TOKEN", "AI_ALLOW_SET_CATEGORY"], assistant: ["AI_ENABLED"], "artificial intelligence": ["AI_ENABLED"], deepseek: ["AI_ENABLED", "AI_DEEPSEEK_API_KEY", "AI_MODEL"], model: ["AI_MODEL"], mcp: ["AI_MCP_TOKEN"], "auto category": ["AI_ALLOW_SET_CATEGORY"], generate: ["AI_ALLOW_SET_CATEGORY"],
+    ai: ["AI_ENABLED", "AI_DEEPSEEK_API_KEY", "AI_API_URL", "AI_MODEL", "AI_MCP_TOKEN", "AI_ALLOW_SET_CATEGORY", "AI_FILL_PROMPT"], assistant: ["AI_ENABLED"], "artificial intelligence": ["AI_ENABLED"], deepseek: ["AI_ENABLED", "AI_DEEPSEEK_API_KEY", "AI_MODEL"], model: ["AI_MODEL"], prompt: ["AI_FILL_PROMPT"], synopsis: ["AI_FILL_PROMPT"], "metadata prompt": ["AI_FILL_PROMPT"], mcp: ["AI_MCP_TOKEN"], "auto category": ["AI_ALLOW_SET_CATEGORY"], generate: ["AI_ALLOW_SET_CATEGORY"],
     // Services & Protocols
     webdav: ["ENABLE_WEBDAV_SERVICE", "WEBDAV_SYNC_FOLDER"], mount: ["ENABLE_WEBDAV_SERVICE"], writable: ["WEBDAV_SYNC_FOLDER"], "read write": ["ENABLE_WEBDAV_SERVICE", "WEBDAV_SYNC_FOLDER"],
     opds: ["ENABLE_OPDS_SERVICE", "ENABLE_OPDS_AUTH"], auth: ["ENABLE_OPDS_AUTH"], authentication: ["ENABLE_OPDS_AUTH"], catalog: ["ENABLE_OPDS_SERVICE", "ENABLE_OPDS_AUTH"],
@@ -2797,12 +2830,16 @@ export default {
     this.$backend("/admin/settings").then((rsp) => {
       this.sns_items = rsp.sns;
       this.settings = rsp.settings;
+      this.aiPromptDefault = rsp.ai_prompt_default || "";
       this.site_url = rsp.site_url;
       this.moduleSwitches = rsp.module_switches || { off: {}, on: {} };
       // 当前图标的预览要绕过浏览器缓存，否则保存过新图标后仍显示旧图
       this.siteIconStamp = Date.now();
 
       if (this.settings) {
+        if (!Object.prototype.hasOwnProperty.call(this.settings, "AI_FILL_PROMPT")) {
+          this.$set(this.settings, "AI_FILL_PROMPT", "");
+        }
         this.$set(
           this.settings,
           "HOMEPAGE_CONFIG",
@@ -2898,6 +2935,7 @@ export default {
     sns: {},
     sns_items: [],
     settings: {},
+    aiPromptDefault: "",
     settingsLoaded: false,
     moduleDialog: false,
     moduleSwitches: { off: {}, on: {} },
@@ -4039,6 +4077,10 @@ export default {
           element.click();
         }
       }
+    },
+    resetAIFillPrompt() {
+      this.$set(this.settings, "AI_FILL_PROMPT", "");
+      this.$alert("success", this.$t("settings.ai_fill_prompt_reset_done"));
     },
     testAISettings() {
       const data = {
