@@ -84,7 +84,8 @@ COPY webserver/ /var/www/mybooks/webserver/
 COPY third-party/foliate-js/ /var/www/mybooks/third-party/foliate-js/
 COPY third-party/edge-tts/ /var/www/mybooks/third-party/edge-tts/
 # edge-tts 已作为 git submodule 放入 third-party/edge-tts，避免 docker build 时依赖网络拉取
-RUN pip install --no-cache-dir --no-compile -e /var/www/mybooks/third-party/edge-tts --break-system-packages
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/; \
+    pip install --no-cache-dir --no-compile -e /var/www/mybooks/third-party/edge-tts --break-system-packages
 RUN cd /var/www/mybooks/webserver/services/cfi_gen && npm ci --omit=dev
 COPY conf/nginx/ssl.* /data/books/ssl/
 COPY conf/nginx/mybooks.conf /etc/nginx/conf.d/
