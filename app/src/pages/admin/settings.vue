@@ -804,49 +804,6 @@
                 <span v-else>{{ $t('settings.test_ai_settings') }}</span>
               </v-btn>
               <v-divider class="my-4"></v-divider>
-              <h3 class="text-subtitle-1 mb-2">{{ $t("settings.mynexus_title") }}</h3>
-              <p class="text-caption">{{ $t("settings.mynexus_description") }}</p>
-              <div id="f-ENABLE_MYNEXUS">
-              <v-checkbox
-                small
-                hide-details
-                v-model="settings['ENABLE_MYNEXUS']"
-                :key="'ENABLE_MYNEXUS'"
-                :label="$t('settings.mynexus_enabled')"
-                class="mb-2"
-              ></v-checkbox>
-              </div>
-              <div id="f-MYNEXUS_URL">
-              <v-text-field
-                :disabled="!settings['ENABLE_MYNEXUS']"
-                v-model="settings['MYNEXUS_URL']"
-                prepend-icon="mdi-link"
-                :label="$t('settings.mynexus_url')"
-                :placeholder="$t('settings.mynexus_url_hint')"
-                type="url"
-              ></v-text-field>
-              </div>
-              <div id="f-MYNEXUS_TOKEN">
-              <v-text-field
-                :disabled="!settings['ENABLE_MYNEXUS']"
-                v-model="settings['MYNEXUS_TOKEN']"
-                prepend-icon="mdi-key"
-                :label="$t('settings.mynexus_token')"
-                :placeholder="$t('settings.mynexus_token_hint')"
-                type="text"
-                autocomplete="new-password"
-              ></v-text-field>
-              </div>
-              <v-btn
-                :disabled="!settings['ENABLE_MYNEXUS'] || testingMynexus"
-                color="primary"
-                class="mt-2"
-                @click="testMyNexusConnection"
-              >
-                <span v-if="testingMynexus">{{ $t("settings.testing") }}</span>
-                <span v-else>{{ $t("settings.mynexus_test") }}</span>
-              </v-btn>
-              <v-divider class="my-2"></v-divider>
               <div id="f-AI_ALLOW_SET_CATEGORY">
               <v-checkbox
                 small
@@ -889,6 +846,49 @@
                 </span>
               </div>
               </div>
+              <v-divider class="my-4"></v-divider>
+              <h3 class="text-subtitle-1 mb-2">{{ $t("settings.mynexus_title") }}</h3>
+              <p class="text-caption">{{ $t("settings.mynexus_description") }}</p>
+              <div id="f-ENABLE_MYNEXUS">
+              <v-checkbox
+                small
+                hide-details
+                v-model="settings['ENABLE_MYNEXUS']"
+                :key="'ENABLE_MYNEXUS'"
+                :label="$t('settings.mynexus_enabled')"
+                class="mb-2"
+              ></v-checkbox>
+              </div>
+              <div id="f-MYNEXUS_URL">
+              <v-text-field
+                :disabled="!settings['ENABLE_MYNEXUS']"
+                v-model="settings['MYNEXUS_URL']"
+                prepend-icon="mdi-link"
+                :label="$t('settings.mynexus_url')"
+                :placeholder="$t('settings.mynexus_url_hint')"
+                type="url"
+              ></v-text-field>
+              </div>
+              <div id="f-MYNEXUS_TOKEN">
+              <v-text-field
+                :disabled="!settings['ENABLE_MYNEXUS']"
+                v-model="settings['MYNEXUS_TOKEN']"
+                prepend-icon="mdi-key"
+                :label="$t('settings.mynexus_token')"
+                :placeholder="$t('settings.mynexus_token_hint')"
+                type="text"
+                autocomplete="new-password"
+              ></v-text-field>
+              </div>
+              <v-btn
+                :disabled="!settings['ENABLE_MYNEXUS'] || testingMynexus"
+                color="primary"
+                class="mt-2"
+                @click="testMyNexusConnection"
+              >
+                <span v-if="testingMynexus">{{ $t("settings.testing") }}</span>
+                <span v-else>{{ $t("settings.mynexus_test") }}</span>
+              </v-btn>
               </div>
             </template>
 
