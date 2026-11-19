@@ -1035,7 +1035,8 @@ class AdminBookAIFill(feature_modules.ModuleGateMixin, BaseHandler):
         if not idlist:
             return {"err": "params.error", "msg": _("参数错误")}
 
-        filling_status = AIFillInfoService().status()
+        service = AIFillInfoService()
+        filling_status = service.status()
         if filling_status["is_running"]:
             return {"err": "task.running", "msg": _("有 AI 任务正在运行中，请稍后再试")}
 
@@ -1048,7 +1049,8 @@ class AdminBookAIFill(feature_modules.ModuleGateMixin, BaseHandler):
         else:
             return {"err": "params.error.idlist", "msg": _("参数错误")}
 
-        AIFillInfoService().fill_all(idlist)
+        if not service.start_batch(idlist):
+            return {"err": "task.running", "msg": _("有 AI 任务正在运行中，请稍后再试")}
         return {"err": "ok", "msg": _("AI 更新任务已启动，请耐心等待")}
 
 

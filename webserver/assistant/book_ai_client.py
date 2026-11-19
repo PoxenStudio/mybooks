@@ -41,7 +41,7 @@ class AIBookInfo:
         return "\n".join(parts)
 
     def is_valid(self) -> bool:
-        return bool(self.category or self.tags)
+        return bool(self.category or self.tags or self.summary or self.author_intro)
 
 
 class BookAIClient:
@@ -378,8 +378,8 @@ class BookAIClient:
             if not cls._as_text_list(merged.get(key)) and cls._as_text_list(first.get(key)):
                 merged[key] = first[key]
         first_summary = cls._as_text(first.get("summary"))
-        second_summary = cls._as_text(merged.get("summary"))
-        if first_summary and len(first_summary) > len(second_summary):
+        if first_summary:
+            # 首段是联网搜索直接提取的结果，优先保留，避免被二段的生成摘要替换
             merged["summary"] = first["summary"]
         return merged
 
@@ -562,6 +562,7 @@ class BookAIClient:
         else:
             messages = base_messages
 
+        tool_fallback_used = False
         try:
             try:
                 response = self._call_model(messages, mode, use_search=search_used)
@@ -573,6 +574,7 @@ class BookAIClient:
                         e,
                     )
                     search_used = False
+                    tool_fallback_used = True
                     response = self._call_model(base_messages, mode, use_search=False)
                 else:
                     raise
@@ -600,10 +602,11 @@ class BookAIClient:
                 retry_json = True
             if finish_reason == "length":
                 retry_json = True
+            can_retry_json = search_used or tool_fallback_used
             second_attempted = False
             second_data = None
             data = first_data
-            if retry_json and search_used:
+            if retry_json and can_retry_json:
                 second_attempted = True
                 logging.warning(
                     "[BookAI] retrying JSON-only extraction for '%s' (finish=%s)",
@@ -618,7 +621,7 @@ class BookAIClient:
                 return None
 
             info = self._build_book_info(data)
-            if info is None and search_used and not second_attempted:
+            if info is None and can_retry_json and not second_attempted:
                 logging.warning("[BookAI] Unexpected JSON payload, retrying JSON-only for '%s'", title)
                 second_attempted = True
                 second_data = self._json_second_pass(base_lines_with_reminder, content)

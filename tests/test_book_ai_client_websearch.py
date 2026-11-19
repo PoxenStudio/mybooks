@@ -167,8 +167,10 @@ class BookAIClientWebSearchTest(unittest.TestCase):
             }],
         }]
         client, _fake = make_client([FakeResponse(BOOK_JSON, search_calls=search_calls)])
-        info = client.get_book_info("书名", ["作者"], search_mode="fast")
+        with self.assertLogs(level="INFO") as logs:
+            info = client.get_book_info("书名", ["作者"], search_mode="fast")
         self.assertIsNotNone(info)
+        self.assertTrue(any("web search" in line for line in logs.output))
 
     def test_deep_400_keeps_thinking(self, _mock_search):
         client, fake = make_client([
@@ -246,7 +248,11 @@ class BookAIClientWebSearchTest(unittest.TestCase):
 
         call = fake.chat.completions.calls[0]
         self.assertNotIn("tools", call)
+        self.assertNotIn("extra_body", call)
         self.assertEqual(call["response_format"], {"type": "json_object"})
+        self.assertEqual(call["max_tokens"], 1500)
+        self.assertEqual(call["temperature"], 0.2)
+        self.assertEqual(call["timeout"], 60)
 
     def test_invalid_search_mode_defaults_to_auto(self, _mock_search):
         client, fake = make_client([FakeResponse(BOOK_JSON)])
@@ -254,6 +260,9 @@ class BookAIClientWebSearchTest(unittest.TestCase):
 
         call = fake.chat.completions.calls[0]
         self.assertIn("tools", call)
+        self.assertEqual(call["extra_body"], {"thinking": {"type": "disabled"}})
+        self.assertEqual(call["max_tokens"], 4000)
+        self.assertNotIn("reasoning_effort", call)
 
     def test_nested_payload_types_are_dropped(self, _mock_search):
         payload = (
@@ -312,9 +321,9 @@ class BookAIClientWebSearchTest(unittest.TestCase):
         self.assertEqual(info.category, "小说")
         self.assertEqual(info.tags, ["历史", "文学"])
 
-    def test_summary_only_payload_triggers_second_pass(self, _mock_search):
+    def test_pubdate_only_payload_triggers_second_pass(self, _mock_search):
         client, fake = make_client([
-            FakeResponse('{"summary": "只有简介"}'),
+            FakeResponse('{"pubdate": "2026"}'),
             FakeResponse(BOOK_JSON),
         ])
         info = client.get_book_info("书名", ["作者"], search_mode="fast")
@@ -344,6 +353,41 @@ class BookAIClientWebSearchTest(unittest.TestCase):
         call = fake.chat.completions.calls[0]
         self.assertEqual(call["extra_body"], {"thinking": {"type": "disabled"}})
         self.assertEqual(call["temperature"], 0.0)
+
+    def test_info_valid_with_synopsis_only(self, _mock_search):
+        self.assertTrue(AIBookInfo(summary="原书简介").is_valid())
+        self.assertTrue(AIBookInfo(author_intro="作者介绍").is_valid())
+        self.assertFalse(AIBookInfo().is_valid())
+
+    def test_tool_fallback_malformed_runs_second_pass(self, _mock_search):
+        client, fake = make_client([
+            FakeBadRequest("deepseek_web_search is not supported"),
+            FakeResponse("这不是 JSON"),
+            FakeResponse(BOOK_JSON),
+        ])
+        info = client.get_book_info("书名", ["作者"], search_mode="fast")
+
+        self.assertIsNotNone(info)
+        self.assertEqual(len(fake.chat.completions.calls), 3)
+        self.assertNotIn("tools", fake.chat.completions.calls[1])
+        self.assertNotIn("tools", fake.chat.completions.calls[2])
+        self.assertEqual(
+            fake.chat.completions.calls[2]["response_format"],
+            {"type": "json_object"},
+        )
+
+    def test_merge_prefers_first_summary(self, _mock_search):
+        first = '{"summary": "原书简介原文"}'
+        second = '{"summary": "这段是一段更长的模型生成摘要", "category": "小说"}'
+        client, fake = make_client([
+            FakeResponse(first, finish_reason="length"),
+            FakeResponse(second),
+        ])
+        info = client.get_book_info("书名", ["作者"], search_mode="fast")
+
+        self.assertEqual(len(fake.chat.completions.calls), 2)
+        self.assertEqual(info.summary, "原书简介原文")
+        self.assertEqual(info.category, "小说")
 
     def test_prompt_requires_original_synopsis_text(self, _mock_search):
         client, fake = make_client([FakeResponse(BOOK_JSON)])
@@ -387,7 +431,10 @@ class BookAIClientWebSearchTest(unittest.TestCase):
     def test_second_pass_merge_keeps_first_summary(self, _mock_search):
         first = '{"summary": "这是完整的原书简介"}'
         second = '{"category": "小说", "tags": ["文学"]}'
-        client, fake = make_client([FakeResponse(first), FakeResponse(second)])
+        client, fake = make_client([
+            FakeResponse(first, finish_reason="length"),
+            FakeResponse(second),
+        ])
         info = client.get_book_info("书名", ["作者"], search_mode="fast")
 
         self.assertEqual(len(fake.chat.completions.calls), 2)

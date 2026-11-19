@@ -90,12 +90,17 @@ class AIFillInfoService(AsyncService):
             return _("请先在系统管理中设置 DeepSeek API 密钥")
         return ""
 
-    def _apply_ai_info(self, book_id: int, mi, info: AIBookInfo) -> bool:
+    def _apply_ai_info(self, book_id: int, info: AIBookInfo) -> bool:
         allow_category = CONF.get("AI_ALLOW_SET_CATEGORY", True)
         try:
+            # 搜索可能持续数分钟，写库前重新读取，避免用旧快照覆盖这期间的其他编辑
+            mi = self.db.get_metadata(book_id, index_is_id=True)
             if info.tags:
                 mi.tags = info.tags
-            if info.comments:
+            if info.summary:
+                mi.comments = info.comments
+            elif info.author_intro and not (mi.comments or "").strip():
+                # 只有作者简介时，不用它覆盖已有的原书简介
                 mi.comments = info.comments
             if info.category and allow_category:
                 mi.set(CALIBRE_COLUMN_CATEGORY, info.category)
@@ -131,6 +136,26 @@ class AIFillInfoService(AsyncService):
 
     def _should_skip(self, mi) -> bool:
         return False
+
+    def start_batch(self, idlist: list) -> bool:
+        """同步抢占运行状态，避免两个请求同时入队。"""
+        if self.is_running:
+            return False
+        self.is_running = True
+        self.cancel_requested = False
+        self.start_time = time.time()
+        self.count_total = 0
+        self.count_skip = 0
+        self.count_done = 0
+        self.count_fail = 0
+        self.current_book_id = None
+        self.task_id = None
+        try:
+            self.fill_all(idlist)
+        except Exception:
+            self.is_running = False
+            raise
+        return True
 
     @AsyncService.register_function
     def fill_one(self, book_id: int, force: bool = False) -> dict:
@@ -169,7 +194,12 @@ class AIFillInfoService(AsyncService):
             logging.warning("[AIFill] %s", msg)
             return {"status": "fail", "msg": msg}
 
-        ok = self._apply_ai_info(book_id, mi, info)
+        if self._module_disabled() or not CONF.get("AI_ENABLED"):
+            msg = _("AI 功能已关闭")
+            logging.warning("[AIFill] %s", msg)
+            return {"status": "fail", "msg": msg}
+
+        ok = self._apply_ai_info(book_id, info)
         if ok:
             return {
                 "status": "ok",
@@ -184,6 +214,16 @@ class AIFillInfoService(AsyncService):
 
     @AsyncService.register_service
     def fill_all(self, idlist: list, force: bool = False):
+        # worker 内任何异常都不能让 is_running 永久卡在 True
+        self.is_running = True
+        try:
+            self._run_fill_all(idlist, force)
+        finally:
+            self.is_running = False
+            self.current_book_id = None
+            self.task_id = None
+
+    def _run_fill_all(self, idlist: list, force: bool = False):
         missing_msg = self._missing_api_key_msg()
         if missing_msg:
             logging.warning("[AIFill] %s", missing_msg)
@@ -208,8 +248,6 @@ class AIFillInfoService(AsyncService):
                 self.task_id = None
             return
 
-        self.is_running = True
-        self.cancel_requested = False
         self.start_time = time.time()
         self.count_total = len(idlist)
         self.count_skip = 0
@@ -247,7 +285,7 @@ class AIFillInfoService(AsyncService):
             if self.cancel_requested:
                 break
             # 运行期间管理员关闭 AI 模块：在批次边界停下，避免继续产生外部调用与元数据写入
-            if self._module_disabled():
+            if self._module_disabled() or not CONF.get("AI_ENABLED"):
                 logging.warning("[AIFill] AI module disabled while task running, stop")
                 self._finish_task(failed=True, error_msg=_("AI 功能已关闭"))
                 return
@@ -272,7 +310,7 @@ class AIFillInfoService(AsyncService):
             for book_id, mi in pending:
                 if self.cancel_requested:
                     break
-                if self._module_disabled():
+                if self._module_disabled() or not CONF.get("AI_ENABLED"):
                     logging.warning("[AIFill] AI module disabled while task running, stop")
                     self._finish_task(failed=True, error_msg=_("AI 功能已关闭"))
                     return
@@ -283,10 +321,10 @@ class AIFillInfoService(AsyncService):
                         authors=authors,
                         isbn=mi.isbn or "",
                         language=self._language_hint(mi),
-                        search_mode="fast",
+                        search_mode="deep",
                     )
                     if info and info.is_valid():
-                        updates.append((book_id, mi, info))
+                        updates.append((book_id, info))
                     else:
                         logging.warning(
                             "[AIFill] AI returned no valid info for id=%d title=%s",
@@ -298,12 +336,12 @@ class AIFillInfoService(AsyncService):
                     logging.error("[AIFill] AI call failed for id=%d: %s", book_id, e)
                     self.count_fail += 1
 
-            for book_id, mi, info in updates:
-                if self._module_disabled():
+            for book_id, info in updates:
+                if self._module_disabled() or not CONF.get("AI_ENABLED"):
                     logging.warning("[AIFill] AI module disabled before apply, stop")
                     self._finish_task(failed=True, error_msg=_("AI 功能已关闭"))
                     return
-                ok = self._apply_ai_info(book_id, mi, info)
+                ok = self._apply_ai_info(book_id, info)
                 if ok:
                     self.count_done += 1
                 else:

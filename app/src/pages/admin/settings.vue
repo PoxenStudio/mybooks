@@ -1486,9 +1486,10 @@ const SEARCH_ALIASES = {
     数量: ["douban_max_count", "MAIN_PAGE_RANDOM_COUNT", "MAIN_PAGE_RECENT_COUNT"],
     // 外部服务 · 书栈 / AI
     书栈: ["ENABLE_BOOKBARN", "BOOKBARN_TOKEN"], barn: ["ENABLE_BOOKBARN"], token: ["BOOKBARN_TOKEN", "AI_MCP_TOKEN"], 令牌: ["BOOKBARN_TOKEN", "AI_MCP_TOKEN"], 授权: ["BOOKBARN_TOKEN", "AI_MCP_TOKEN"],
-    ai: ["AI_ENABLED", "AI_DEEPSEEK_API_KEY", "AI_API_URL", "AI_MODEL", "AI_MCP_TOKEN", "AI_ALLOW_SET_CATEGORY"],
+    ai: ["AI_ENABLED", "AI_DEEPSEEK_API_KEY", "AI_API_URL", "AI_MODEL", "AI_MCP_TOKEN", "AI_ALLOW_SET_CATEGORY", "AI_FILL_PROMPT"],
     人工智能: ["AI_ENABLED"], 助手: ["AI_ENABLED"], deepseek: ["AI_ENABLED", "AI_DEEPSEEK_API_KEY", "AI_MODEL"],
     模型: ["AI_MODEL"], 接口: ["AI_API_URL"], url: ["AI_API_URL", "douban_baseurl"],
+    提示词: ["AI_FILL_PROMPT"], 元信息: ["AI_FILL_PROMPT"],
     mcp: ["AI_MCP_TOKEN"], 自动分类: ["AI_ALLOW_SET_CATEGORY"], 生成分类: ["AI_ALLOW_SET_CATEGORY"],
     // 服务与协议
     webdav: ["ENABLE_WEBDAV_SERVICE", "WEBDAV_SYNC_FOLDER"], 挂载: ["ENABLE_WEBDAV_SERVICE"], 可写: ["WEBDAV_SYNC_FOLDER"], 可写目录: ["WEBDAV_SYNC_FOLDER"], 读写: ["ENABLE_WEBDAV_SERVICE", "WEBDAV_SYNC_FOLDER"],
@@ -1636,9 +1637,10 @@ const SEARCH_ALIASES = {
     數量: ["douban_max_count", "MAIN_PAGE_RANDOM_COUNT", "MAIN_PAGE_RECENT_COUNT"],
     // 外部服務 · 書棧 / AI
     書棧: ["ENABLE_BOOKBARN", "BOOKBARN_TOKEN"], barn: ["ENABLE_BOOKBARN"], token: ["BOOKBARN_TOKEN", "AI_MCP_TOKEN"], 權杖: ["BOOKBARN_TOKEN", "AI_MCP_TOKEN"], 授權: ["BOOKBARN_TOKEN", "AI_MCP_TOKEN"],
-    ai: ["AI_ENABLED", "AI_DEEPSEEK_API_KEY", "AI_API_URL", "AI_MODEL", "AI_MCP_TOKEN", "AI_ALLOW_SET_CATEGORY"],
+    ai: ["AI_ENABLED", "AI_DEEPSEEK_API_KEY", "AI_API_URL", "AI_MODEL", "AI_MCP_TOKEN", "AI_ALLOW_SET_CATEGORY", "AI_FILL_PROMPT"],
     人工智慧: ["AI_ENABLED"], 助手: ["AI_ENABLED"], deepseek: ["AI_ENABLED", "AI_DEEPSEEK_API_KEY", "AI_MODEL"],
     模型: ["AI_MODEL"], 介面: ["AI_API_URL"], url: ["AI_API_URL", "douban_baseurl"], 鏈接: ["AI_API_URL", "douban_baseurl", "static_host", "FRIENDS"],
+    提示詞: ["AI_FILL_PROMPT"], 元資訊: ["AI_FILL_PROMPT"],
     mcp: ["AI_MCP_TOKEN"], 自動分類: ["AI_ALLOW_SET_CATEGORY"], 產生分類: ["AI_ALLOW_SET_CATEGORY"],
     // 服務與協議
     webdav: ["ENABLE_WEBDAV_SERVICE", "WEBDAV_SYNC_FOLDER"], 掛載: ["ENABLE_WEBDAV_SERVICE"], 可寫: ["WEBDAV_SYNC_FOLDER"], 可寫目錄: ["WEBDAV_SYNC_FOLDER"], 讀寫: ["ENABLE_WEBDAV_SERVICE", "WEBDAV_SYNC_FOLDER"],
@@ -1769,7 +1771,7 @@ const SEARCH_ALIASES = {
     api: ["AI_API_URL", "AI_DEEPSEEK_API_KEY", "douban_apikey", "douban_baseurl"], "api key": ["douban_apikey", "AI_DEEPSEEK_API_KEY", "AI_MCP_TOKEN", "BOOKBARN_TOKEN"], key: ["douban_apikey", "AI_DEEPSEEK_API_KEY", "cookie_secret", "AI_MCP_TOKEN", "BOOKBARN_TOKEN"], count: ["douban_max_count", "MAIN_PAGE_RANDOM_COUNT", "MAIN_PAGE_RECENT_COUNT"], results: ["douban_max_count"],
     // External Services · bookbarn & AI
     bookbarn: ["ENABLE_BOOKBARN", "BOOKBARN_TOKEN"], token: ["BOOKBARN_TOKEN", "AI_MCP_TOKEN"], "auth token": ["BOOKBARN_TOKEN", "AI_MCP_TOKEN"],
-    ai: ["AI_ENABLED", "AI_DEEPSEEK_API_KEY", "AI_API_URL", "AI_MODEL", "AI_MCP_TOKEN", "AI_ALLOW_SET_CATEGORY"], assistant: ["AI_ENABLED"], "artificial intelligence": ["AI_ENABLED"], deepseek: ["AI_ENABLED", "AI_DEEPSEEK_API_KEY", "AI_MODEL"], model: ["AI_MODEL"], mcp: ["AI_MCP_TOKEN"], "auto category": ["AI_ALLOW_SET_CATEGORY"], generate: ["AI_ALLOW_SET_CATEGORY"],
+    ai: ["AI_ENABLED", "AI_DEEPSEEK_API_KEY", "AI_API_URL", "AI_MODEL", "AI_MCP_TOKEN", "AI_ALLOW_SET_CATEGORY", "AI_FILL_PROMPT"], assistant: ["AI_ENABLED"], "artificial intelligence": ["AI_ENABLED"], deepseek: ["AI_ENABLED", "AI_DEEPSEEK_API_KEY", "AI_MODEL"], model: ["AI_MODEL"], prompt: ["AI_FILL_PROMPT"], synopsis: ["AI_FILL_PROMPT"], "metadata prompt": ["AI_FILL_PROMPT"], mcp: ["AI_MCP_TOKEN"], "auto category": ["AI_ALLOW_SET_CATEGORY"], generate: ["AI_ALLOW_SET_CATEGORY"],
     // Services & Protocols
     webdav: ["ENABLE_WEBDAV_SERVICE", "WEBDAV_SYNC_FOLDER"], mount: ["ENABLE_WEBDAV_SERVICE"], writable: ["WEBDAV_SYNC_FOLDER"], "read write": ["ENABLE_WEBDAV_SERVICE", "WEBDAV_SYNC_FOLDER"],
     opds: ["ENABLE_OPDS_SERVICE", "ENABLE_OPDS_AUTH"], auth: ["ENABLE_OPDS_AUTH"], authentication: ["ENABLE_OPDS_AUTH"], catalog: ["ENABLE_OPDS_SERVICE", "ENABLE_OPDS_AUTH"],
