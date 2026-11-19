@@ -9,6 +9,8 @@ import logging
 import zipfile
 from pathlib import Path
 
+from webserver.base.image_helper import ImageHelper
+
 
 class EpubHelper:
     """EPUB 文件处理辅助类"""
@@ -35,6 +37,15 @@ class EpubHelper:
                 if not image_data:
                     logging.warning(
                         "EpubHelper: 读取到的封面数据为空: %s", cover_filename
+                    )
+                    return None
+
+                # 部分 EPUB 的封面文件只是占位/损坏图片，或 Qt 不支持的 webp，
+                # 直接交给 calibre 写封面会失败并留下 0 字节 cover.jpg
+                image_data = ImageHelper.sanitize_cover_data((None, image_data))[1]
+                if not image_data:
+                    logging.warning(
+                        "EpubHelper: 封面图片无法解码，已忽略: %s", cover_filename
                     )
                     return None
 
