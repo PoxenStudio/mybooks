@@ -15,6 +15,7 @@ import zipfile
 from webserver.constants import CALIBRE_ERROR_FLAG, SCANNED_DOCUMENT_FORMATS
 from webserver.i18n import _
 from webserver import utils
+from webserver.base.image_helper import ImageHelper
 
 # 与 ZIP 容器类工具一致的条目预算：防御性上限，防炸卷/炸内存
 MAX_ARCHIVE_ENTRIES = 10000
@@ -141,11 +142,14 @@ def read_book_metadata(fpath, fmt, name):
     fmt = (fmt or "").lower().lstrip(".")
     if fmt not in SCANNED_DOCUMENT_FORMATS:
         with open(fpath, "rb") as stream:
-            return get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
-    mi = filename_metadata(name)
-    file_mi = _read_file_metadata(fpath, fmt)
-    if file_mi is not None:
-        mi.smart_update(file_mi)
+            mi = get_metadata(stream, stream_type=fmt, use_libprs_metadata=True)
+    else:
+        mi = filename_metadata(name)
+        file_mi = _read_file_metadata(fpath, fmt)
+        if file_mi is not None:
+            mi.smart_update(file_mi)
+    # 书内封面可能是损坏/截断/calibre 无法解码的图片，入库前统一校验
+    mi.cover_data = ImageHelper.sanitize_cover_data(mi.cover_data)
     return mi
 
 

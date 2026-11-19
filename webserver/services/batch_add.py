@@ -11,6 +11,7 @@ import traceback
 
 from webserver import loader
 from webserver.base import modules as feature_modules
+from webserver.base.image_helper import ImageHelper
 from webserver.constants import CALIBRE_COLUMN_BOOK_TYPE, CALIBRE_COLUMN_PHY_COUNT
 from webserver.constants import CALIBRE_COLUMN_LOCATION
 from webserver.constants import BOOK_TYPE_PHYSICAL, AUTO_FILL_META
@@ -316,7 +317,7 @@ class BatchAddService(AsyncService):
                             fmt = 'png'
                         else:
                             fmt = 'jpg'
-                        mi.cover_data = (fmt, cover_data)
+                        mi.cover_data = ImageHelper.sanitize_cover_data((fmt, cover_data))
                 except Exception as e:
                     logging.error("Failed to download cover from %s: %s", cover_url, e)
 

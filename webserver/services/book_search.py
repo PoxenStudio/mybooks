@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from webserver.i18n import _
 
 from webserver import loader
+from webserver.base.image_helper import ImageHelper
 from webserver.constants import META_SELECTED_SOURCES
 from webserver.plugins.meta.douban import DoubanMetaPlugin, has_proper_book
 from webserver.plugins.meta.douban_v2 import DoubanV2MetaPlugin
@@ -166,6 +167,8 @@ class BookSearch:
             try:
                 book = plugin.search_best(search_mi)
                 if book:
+                    # 信息源可能返回防盗链 HTML/损坏图片，写库前统一校验
+                    book.cover_data = ImageHelper.sanitize_cover_data(book.cover_data)
                     logging.info("[Meta]search_best 采用信息源[%s]的结果：%s", plugin.name, title)
                     return book
                 logging.info("[Meta]信息源[%s]未找到 %s，尝试下一个信息源", plugin.name, title)
@@ -180,7 +183,7 @@ class BookSearch:
         plugin = BookSearch._find_plugin_by_provider_key(provider_key)
         if not plugin:
             logging.debug("[Meta]Not found the plugin")
-        return plugin.get_cover(cover_url) if plugin else None
+        return ImageHelper.sanitize_cover_data(plugin.get_cover(cover_url) if plugin else None)
 
     @staticmethod
     def get_metadata_by_provider(provider_key, provider_value, mi):
@@ -188,7 +191,10 @@ class BookSearch:
         if plugin is None:
             return mi
         metadata = plugin.get_metadata_by_provider(provider_value, mi)
-        return metadata if metadata is not None else mi
+        if metadata is None:
+            return mi
+        metadata.cover_data = ImageHelper.sanitize_cover_data(metadata.cover_data)
+        return metadata
 
     @staticmethod
     def find_physical_book_by_isbn(isbn):

@@ -86,6 +86,42 @@ class ImageHelper:
         img.save(output, format='JPEG', quality=quality)
         return output.getvalue()
 
+    # calibre(Qt 核心插件) 可直接解码的封面格式；webp/tiff 等先转成 JPEG 再入库
+    _CALIBRE_COVER_FORMATS = frozenset(("JPEG", "PNG", "GIF", "BMP"))
+
+    @staticmethod
+    def sanitize_cover_data(cover_data):
+        """校验并规范化封面数据，返回可安全写入 calibre 的 (fmt, bytes)。
+
+        calibre 写封面时会先截断 cover.jpg 再编码，一旦传入非图片数据（如信息源
+        返回的防盗链 HTML、被截断的图片），编码失败就会在书库目录留下 0 字节
+        cover.jpg。因此封面数据入库前必须完整解码一次，无法解码时返回
+        (None, None)（calibre 会跳过封面写入）。
+        """
+        if not cover_data:
+            return (None, None)
+        try:
+            fmt, data = cover_data
+        except (TypeError, ValueError):
+            return (None, None)
+        if not data:
+            return (None, None)
+        try:
+            with Image.open(io.BytesIO(data)) as img:
+                img.load()
+                actual_fmt = (img.format or "").upper()
+        except Exception as e:
+            logging.warning("忽略无法解码的封面数据(%d字节): %s", len(data), e)
+            return (None, None)
+        if actual_fmt not in ImageHelper._CALIBRE_COVER_FORMATS:
+            try:
+                data = ImageHelper.convert_to_jpeg(data)
+            except Exception as e:
+                logging.warning("封面格式 %s 转换失败，已忽略: %s", actual_fmt, e)
+                return (None, None)
+            return ("jpeg", data)
+        return (fmt or actual_fmt.lower(), data)
+
     @staticmethod
     def _get_white_border_thickness(img, tolerance=200):
         """
