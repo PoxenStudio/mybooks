@@ -102,9 +102,9 @@ COPY thanks_to.txt /var/www/mybooks/app/dist/static/
 
 
 # 相对于base镜像，如果有临时增加的一两个库，可以使用这个方法更新
-COPY requirements_release.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir --no-compile -r /tmp/requirements.txt --break-system-packages && \
-    rm -rf /root/.cache /root/.config/pip /tmp/requirements.txt /tmp/pip-* /var/tmp/*
+# COPY requirements_release.txt /tmp/requirements.txt
+# RUN pip install --no-cache-dir --no-compile -r /tmp/requirements.txt --break-system-packages && \
+#     rm -rf /root/.cache /root/.config/pip /tmp/requirements.txt /tmp/pip-* /var/tmp/*
 
 # MyBooks 自带的 calibre 插件（DjVu/CBZ/UVZ 元数据）
 COPY calibre/plugins/ /tmp/calibre-plugins/
