@@ -25,6 +25,21 @@
       frameborder="0"
       scrolling="no"
     ></iframe>
+
+    <!-- 工具通过 bridge.confirm() 请求的确认框：直接复用 AppDialog（type="confirm"），
+         和站内其它确认操作的外壳、滚动、主题完全一致；文案由工具传入。 -->
+    <AppDialog
+      v-model="confirmDialog"
+      type="confirm"
+      :title="confirmRequest.title"
+      :confirm-text="confirmRequest.confirmText"
+      :dismiss-label="confirmRequest.cancelText"
+      :color="confirmRequest.color || 'primary'"
+      @confirm="finishConfirm(true)"
+      @dismiss="finishConfirm(false)"
+    >
+      {{ confirmRequest.message }}
+    </AppDialog>
   </v-container>
 </template>
 
@@ -47,6 +62,11 @@ export default {
     // iframe 塌成一条缝。之后随内容高度增长，交给宿主页面自己的滚动条，不再让工具页面在
     // 自己的 iframe 里出现内部滚动条。
     iframeHeight: 'calc(100vh - 64px)',
+    // bridge.confirm() 的确认框状态：工具可能连着发多个请求，用队列串行展示，
+    // 每弹一个就把队首移到 confirmRequest 上。
+    confirmDialog: false,
+    confirmRequest: { requestId: '', title: '', message: '', confirmText: '', cancelText: '', color: '' },
+    confirmQueue: [],
   }),
   head() {
     return {
@@ -119,12 +139,46 @@ export default {
       if (this.tool && data.toolId && data.toolId !== this.tool.id) return;
       if (data.type === 'notify') {
         this.$alert(data.level || 'info', data.message || '');
+      } else if (data.type === 'confirm') {
+        this.enqueueConfirm(data);
       } else if (data.type === 'resize' && typeof data.height === 'number' && data.height > 0) {
         // 给个下限：内容比视口矮的工具页面依然撑满可视区，不会因为"自动贴合内容"反而缩成
         // 一小条，视觉上和之前保持一致；只有内容更高时才让 iframe（进而是宿主页面）变高。
         const minHeight = window.innerHeight - 64;
         this.iframeHeight = Math.max(data.height, minHeight) + 'px';
       }
+    },
+    // 把工具发来的 confirm 请求排进队列；空闲时立即展示。
+    enqueueConfirm(data) {
+      // 同一条消息被重复投递时只处理一次，避免弹出多个相同的确认框
+      if (!data.requestId) return;
+      if (this.confirmRequest.requestId === data.requestId) return;
+      if (this.confirmQueue.some((req) => req.requestId === data.requestId)) return;
+      this.confirmQueue.push({
+        requestId: data.requestId,
+        title: data.title || '',
+        message: data.message || '',
+        // 按钮文案优先用工具自己传的（翻译字串归工具所有），没传才回落到宿主语言
+        confirmText: data.confirmText || this.$t('common.ok'),
+        cancelText: data.cancelText || '',
+        color: data.color || '',
+      });
+      if (!this.confirmDialog) this.showNextConfirm();
+    },
+    showNextConfirm() {
+      const next = this.confirmQueue.shift();
+      if (!next) return;
+      this.confirmRequest = next;
+      this.confirmDialog = true;
+    },
+    // 关闭当前确认框并把结果回传给工具；队列里还有请求就等对话框收起动画结束后再弹下一个。
+    finishConfirm(confirmed) {
+      const requestId = this.confirmRequest.requestId;
+      if (!requestId) return;
+      this.confirmDialog = false;
+      this.confirmRequest = { requestId: '', title: '', message: '', confirmText: '', cancelText: '', color: '' };
+      this.postToFrame('confirm-result', { requestId, confirmed });
+      if (this.confirmQueue.length) setTimeout(() => this.showNextConfirm(), 300);
     },
   },
 };

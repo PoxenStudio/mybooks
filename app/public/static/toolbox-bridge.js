@@ -63,6 +63,12 @@
           // 同上
         }
       });
+    } else if (data.type === 'confirm-result' && data.requestId) {
+      var resolveConfirm = confirmRequests[data.requestId];
+      if (resolveConfirm) {
+        delete confirmRequests[data.requestId];
+        resolveConfirm(!!data.confirmed);
+      }
     }
   }
   window.addEventListener('message', onHostMessage);
@@ -109,6 +115,44 @@
       },
       window.location.origin
     );
+  }
+
+  var confirmRequests = {};
+  var confirmSeq = 0;
+
+  /**
+   * 请求宿主用 MyBooks 自己的 AppDialog（type="confirm"，与站内其它确认操作完全一致）弹一个
+   * 确认框，返回 Promise：点确认 resolve(true)，点取消/右上角关闭 resolve(false)。
+   *
+   * 文案由工具自己提供（翻译字串归工具所有，见 4.6 节的边界原则）；不传 confirmText /
+   * cancelText 时回落到宿主当前语言的默认按钮文案。
+   *
+   * @param {{title?: string, message?: string, confirmText?: string, cancelText?: string, color?: string}} [options]
+   * @returns {Promise<boolean>}
+   */
+  function bridgeConfirm(options) {
+    if (!toolId) {
+      return Promise.reject(new Error('MyBooksToolBridge: 无法从当前页面 URL 解析出 tool_id'));
+    }
+    var opts = options || {};
+    var requestId = 'confirm-' + ++confirmSeq;
+    return new Promise(function (resolve) {
+      confirmRequests[requestId] = resolve;
+      window.parent.postMessage(
+        {
+          source: 'mybooks-toolbox-bridge',
+          type: 'confirm',
+          toolId: toolId,
+          requestId: requestId,
+          title: opts.title || '',
+          message: opts.message || '',
+          confirmText: opts.confirmText || '',
+          cancelText: opts.cancelText || '',
+          color: opts.color || '',
+        },
+        window.location.origin
+      );
+    });
   }
 
   /**
@@ -181,6 +225,7 @@
     toolId: toolId,
     fetch: bridgeFetch,
     notify: bridgeNotify,
+    confirm: bridgeConfirm,
     onLocaleChange: onLocaleChange,
     onThemeChange: onThemeChange,
   };

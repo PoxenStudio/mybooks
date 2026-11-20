@@ -837,8 +837,10 @@ class BaseHandler(web.RequestHandler):
             login_time = self.get_secure_cookie_timestamp("user_id")
             if not login_time or int(login_time) < int(time.time()) - COOKIE_EXPIRE_SECONDS:
                 logging.info(
-                    "Login time cookie is missing or expired. login_time: %s",
-                    login_time,
+                    "Login time cookie is missing or expired. login_time: %s, expire_time: %d" % (
+                        login_time,
+                        COOKIE_EXPIRE_SECONDS,
+                    ),
                 )
                 return None
         uid = self.get_secure_cookie("user_id")
