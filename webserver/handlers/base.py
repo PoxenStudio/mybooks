@@ -61,6 +61,7 @@ LOGIN_GATE_ALLOW_EXACT = frozenset({
     "/api/user/sign_up",
     "/api/user/reset",
     "/api/user/sign_out",
+    "/api/user/refresh",
     "/api/done",           # 社交登录 OAuth 回调（回调里才建立会话，必须先放行）
     "/api/access",
     "/api/admin/install",
@@ -99,6 +100,15 @@ LOGIN_GATE_ALLOW_SUFFIX = (
 # 会把有声书的书名/作者/简介匿名暴露，必须按普通页面拦掉。
 _PODCAST_PUBLIC_SEGMENTS = frozenset({"all", "book", "category", "tag", "author"})
 _PODCAST_TOKEN_RE = re.compile(r"^[A-Za-z0-9]+$")
+
+# 登录Cookies7天过期
+COOKIE_EXPIRE_SECONDS = max(24 * 3600, CONF.get("cookie_expire", 7 * 86400))
+
+# 长效 refresh cookie
+REFRESH_COOKIE_NAME = "rt"
+COOKIE_REFRESH_EXPIRE_DAYS = max(
+    1, int(CONF.get("cookie_refresh_expire", 30 * 86400)) // 86400
+)
 
 
 def _podcast_token_path(path):
@@ -403,9 +413,9 @@ class BaseHandler(web.RequestHandler):
                     return None
         return None
 
-    def set_secure_cookie(self, key, val):
+    def set_secure_cookie(self, key, val, **kwargs):
         self.cookies_cache[key] = val
-        super(BaseHandler, self).set_secure_cookie(key, val)
+        super(BaseHandler, self).set_secure_cookie(key, val, **kwargs)
         return None
 
     def head(self, *args, **kwargs):
@@ -498,7 +508,7 @@ class BaseHandler(web.RequestHandler):
 
     def invited_code_is_ok(self):
         t = self.get_secure_cookie("invited")
-        if t and int(float(t)) > int(time.time()) - 7 * 86400:
+        if t and int(float(t)) > int(time.time()) - COOKIE_EXPIRE_SECONDS:
             return True
         return False
 
@@ -822,10 +832,10 @@ class BaseHandler(web.RequestHandler):
         login_time = self.get_secure_cookie("lt")
         if not login_time:
             login_time = self.get_secure_cookie_timestamp("user_id")
-        if not login_time or int(login_time) < int(time.time()) - 7 * 86400:
+        if not login_time or int(login_time) < int(time.time()) - COOKIE_EXPIRE_SECONDS:
             # Double check with user_id cookie, 飞牛应用中Docker登录会使用旧的lt cookie
             login_time = self.get_secure_cookie_timestamp("user_id")
-            if not login_time or int(login_time) < int(time.time()) - 7 * 86400:
+            if not login_time or int(login_time) < int(time.time()) - COOKIE_EXPIRE_SECONDS:
                 logging.info(
                     "Login time cookie is missing or expired. login_time: %s",
                     login_time,
@@ -872,12 +882,60 @@ class BaseHandler(web.RequestHandler):
             return False
         return self.current_user.is_admin()
 
+    def _refresh_token_value(self, user):
+        # 把密码哈希的指纹绑进 token：用户改密码后，旧的 refresh cookie 自动失效，
+        # 不需要在库里维护吊销列表；无状态，多设备各自持有互不影响。
+        fingerprint = hashlib.sha256(utf8(user.password or "")).hexdigest()[:16]
+        return "%d:%s" % (user.id, fingerprint)
+
+    def set_refresh_cookie(self, user):
+        self.set_secure_cookie(
+            REFRESH_COOKIE_NAME,
+            self._refresh_token_value(user),
+            expires_days=COOKIE_REFRESH_EXPIRE_DAYS,
+            httponly=True,
+            samesite="Lax",
+        )
+
+    def clear_refresh_cookie(self):
+        self.clear_cookie(REFRESH_COOKIE_NAME)
+
+    def user_from_refresh_cookie(self):
+        """只用 refresh cookie 解析用户（不依赖 user_id/lt 会话）。"""
+        # 直接调 Tornado 实现：本类覆写不接受 max_age_days。
+        raw = web.RequestHandler.get_secure_cookie(
+            self, REFRESH_COOKIE_NAME, max_age_days=COOKIE_REFRESH_EXPIRE_DAYS
+        )
+        if not raw:
+            return None
+        try:
+            value = utf8(raw).decode("utf-8")
+            uid = int(value.split(":", 1)[0])
+        except (ValueError, TypeError, UnicodeDecodeError):
+            return None
+        user = self.sqlite_session.get(Reader, uid)
+        if not user:
+            return None
+        if not hmac.compare_digest(self._refresh_token_value(user), value):
+            return None
+        return user
+
+    def refresh_login_user(self):
+        """用 refresh cookie 续期会话并轮换 refresh cookie，失败返回 None。"""
+        user = self.user_from_refresh_cookie()
+        if not user or not user.is_active() or not user.can_login():
+            return None
+        # persist=False：续期不该被当作一次新登录写 access_time / login_ip。
+        self.login_user(user, persist=False)
+        return user
+
     def login_user(self, user, persist=True, set_cookie=True):
         # set_cookie=False 用于 ?token= 这类"凭据即身份"的场景：token 会出现在 RSS URL、
         # 日志、Referer 里，绝不能因为它给客户端种下 7 天有效的整站会话 cookie。
         if set_cookie:
             self.set_secure_cookie("user_id", str(user.id))
             self.set_secure_cookie("lt", str(int(time.time())))
+            self.set_refresh_cookie(user)
         if not persist:
             return
         logging.info(

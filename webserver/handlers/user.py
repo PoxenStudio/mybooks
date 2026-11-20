@@ -480,12 +480,35 @@ class SignOut(BaseHandler):
     def get(self):
         self.set_secure_cookie("user_id", "")
         self.set_secure_cookie("admin_id", "")
+        self.clear_refresh_cookie()
         return {"err": "ok", "msg": _("你已成功退出登录。")}
 
     @js
     @auth
     def post(self):
         return self.get()
+
+
+class RefreshSession(BaseHandler):
+    """refresh cookie 换新会话；缺失、过期或密码已变更时回 user.need_login。"""
+
+    @js
+    def post(self):
+        user = self.refresh_login_user()
+        if not user:
+            return {"err": "user.need_login", "msg": _("登录已过期，请重新登录")}
+        return {
+            "err": "ok",
+            "msg": _("ok"),
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "nickname": user.name or "",
+                "is_login": True,
+                "is_guest": False,
+                "is_admin": user.is_admin(),
+            },
+        }
 
 
 class UserMessages(BaseHandler):
@@ -1721,6 +1744,7 @@ def routes():
         (r"/api/user/sign_up", SignUp),
         (r"/api/user/new", UserNew),
         (r"/api/user/sign_out", SignOut),
+        (r"/api/user/refresh", RefreshSession),
         (r"/api/user/update", UserUpdate),
         (r"/api/user/reset", UserReset),
         (r"/api/user/avatar", UserAvatar),

@@ -163,6 +163,31 @@
 }
 ```
 
+### 1.4.1 刷新登录会话（MyBooks v4.8.0 起）
+
+- **路径**：`/api/user/refresh`
+- **方法**：POST
+- **认证**：不需要会话 cookie；读取登录时下发的长效 refresh cookie（`rt`，HttpOnly，默认 30 天）
+- **说明**：会话 cookie（`user_id`/`lt`）过期后，用 `rt` 静默换一份新会话并轮换 `rt`。
+  `rt` 缺失、过期或用户密码已变更时返回 `user.need_login`，客户端应回登录页。
+  登录（`sign_in`）与登出（`sign_out`）都会同步设置/清除该 cookie。
+- **响应示例**：
+
+```json
+{
+  "err": "ok",
+  "msg": "ok",
+  "user": {
+    "id": 1,
+    "username": "alice",
+    "nickname": "Alice",
+    "is_login": true,
+    "is_guest": false,
+    "is_admin": false
+  }
+}
+```
+
 ### 1.5 获取当前用户信息，包含系统信息
 
 - **路径**：`/api/user/info`
