@@ -34,6 +34,12 @@
                             </v-btn>
                         </template>
                         <v-list>
+                            <v-list-item @click="showNovelFormatDialog" :disabled="books_selected.length === 0">
+                                <v-list-item-icon>
+                                    <v-icon>mdi-text-box-edit-outline</v-icon>
+                                </v-list-item-icon>
+                                <v-list-item-title>{{ $t('admin.books.novelFormat') }}</v-list-item-title>
+                            </v-list-item>
                             <v-list-item @click="showClearRareTagsDialog">
                                 <v-list-item-icon>
                                     <v-icon>mdi-tag-remove-outline</v-icon>
@@ -733,6 +739,13 @@
             <p>{{ $t('admin.books.deleteSelectedBooksConfirm', { count: books_selected.length }) }}</p>
         </AppDialog>
 
+        <!-- 批量小说排版整理 -->
+        <NovelFormatDialog
+            v-model="novel_format_dialog"
+            :books="novel_format_books"
+            @finished="getDataFromApi"
+        />
+
 </v-card>
 </template>
 
@@ -742,9 +755,10 @@ import { toStars, fromStars } from "~/utils/rating";
 import SearchBar from "~/components/SearchBar.vue";
 import WordCountIcon from "~/components/WordCountIcon.vue";
 import AdminBookCard from "~/components/AdminBookCard.vue";
+import NovelFormatDialog from "~/components/NovelFormatDialog.vue";
 
 export default {
-    components: { SearchBar, WordCountIcon, AdminBookCard },
+    components: { SearchBar, WordCountIcon, AdminBookCard, NovelFormatDialog },
     data: () => ({
         snack: false,
         snackColor: "",
@@ -760,6 +774,8 @@ export default {
         clear_invalid_items_dialog: false,
         delete_book_dialog: false,
         delete_selected_books_dialog: false,
+        novel_format_dialog: false,
+        novel_format_books: [],
         folder_batch_dialog: false,
         folder_batch_value: '',
         folder_batch_valid: true,
@@ -1082,6 +1098,20 @@ export default {
 
         showClearRareTagsDialog() {
             this.clear_rare_tags_dialog = true;
+        },
+
+        showNovelFormatDialog() {
+            if (this.books_selected.length === 0) {
+                return;
+            }
+            // 快照一份：处理期间列表可能被刷新，批次顺序以点击时的勾选为准
+            this.novel_format_books = this.books_selected.map((b) => ({
+                id: b.id,
+                title: b.title,
+                formats: (b.files || []).map((f) => f.format),
+                tags: b.tags || [],
+            }));
+            this.novel_format_dialog = true;
         },
 
         showEpubConvertDialog() {

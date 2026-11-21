@@ -458,6 +458,10 @@
   content: "\F0193";
 }
 
+.mdi-content-save-outline::before {
+  content: "\F0818";
+}
+
 .mdi-copyright::before {
   content: "\F05E6";
 }
@@ -580,6 +584,10 @@
 
 .mdi-file-document::before {
   content: "\F0219";
+}
+
+.mdi-file-document-edit-outline::before {
+  content: "\F0DC9";
 }
 
 .mdi-file-document-outline::before {
@@ -760,6 +768,10 @@
 
 .mdi-information::before {
   content: "\F02FC";
+}
+
+.mdi-information-outline::before {
+  content: "\F02FD";
 }
 
 .mdi-key::before {
@@ -954,6 +966,10 @@
   content: "\F040A";
 }
 
+.mdi-play-circle-outline::before {
+  content: "\F040D";
+}
+
 .mdi-playlist-music::before {
   content: "\F0CB8";
 }
@@ -1090,6 +1106,10 @@
   content: "\F05BD";
 }
 
+.mdi-sort-numeric-ascending::before {
+  content: "\F1389";
+}
+
 .mdi-source-branch::before {
   content: "\F062C";
 }
@@ -1182,6 +1202,10 @@
   content: "\F1223";
 }
 
+.mdi-text-box-edit-outline::before {
+  content: "\F1A7D";
+}
+
 .mdi-text-recognition::before {
   content: "\F113D";
 }
@@ -1228,6 +1252,10 @@
 
 .mdi-trophy-outline::before {
   content: "\F053A";
+}
+
+.mdi-tune::before {
+  content: "\F062E";
 }
 
 .mdi-unfold-more-horizontal::before {
