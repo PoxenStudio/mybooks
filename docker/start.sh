@@ -166,5 +166,6 @@ run_as_mybooks "$PYTHON_BIN" /var/www/mybooks/server.py --update-config
 
 echo
 echo "[MyBooks] All done, launch the service..."
+ulimit -c unlimited
 exec /usr/bin/supervisord --nodaemon -u root -c /etc/supervisor/supervisord.conf
 

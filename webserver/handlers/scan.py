@@ -167,7 +167,10 @@ def _load_import_list_data(session, calibre_db, ScopedSession, filter, sort, des
             "update_time": scan_file.update_time.strftime("%Y-%m-%d %H:%M:%S") if scan_file.update_time else "N/A",
         })
     scanner = Scanner(calibre_db, ScopedSession, session=session)
-    return total, response, scanner.summary()
+    try:
+        return total, response, scanner.summary()
+    finally:
+        scanner.close()
 
 
 class ImportList(BaseHandler):
