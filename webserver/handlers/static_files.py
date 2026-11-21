@@ -544,8 +544,15 @@ class AuthorAvatarUploadHandler(BaseHandler):
 
 class SpaStaticHandler(web.StaticFileHandler):
     def set_extra_headers(self, path):
-        if path.startswith("_nuxt/"):
+        # Windows 下 path 可能带反斜杠（_nuxt\xxx.js），统一成正斜杠再判断，
+        # 否则 hash 化的 chunk 会落到下面的 no-cache 分支，白白丢掉长缓存。
+        normalized = path.replace("\\", "/")
+        if normalized.startswith("_nuxt/"):
             self.set_header("Cache-Control", "public, max-age=31536000, immutable")
+        else:
+            # index.html 等入口文件必须每次回源校验：前端重新构建后 chunk 文件名会变，
+            # 浏览器若拿缓存里的旧 index.html，会去请求已不存在的旧 chunk，整页白屏。
+            self.set_header("Cache-Control", "no-cache")
 
 
 def routes():
