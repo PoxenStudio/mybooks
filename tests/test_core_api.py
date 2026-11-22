@@ -353,9 +353,16 @@ class TestCoreAPINamespaces(unittest.TestCase):
             os.makedirs(tool_dir, exist_ok=True)
             config_path = os.path.join(tool_dir, "config.json")
             for i in range(StorageAPI.CORRUPT_BACKUP_KEEP + 2):
+                payload = ("{\"broken\": %d" % i).encode("utf-8")
                 with open(config_path, "wb") as f:
-                    f.write(("{\"broken\": %d" % i).encode("utf-8"))
+                    f.write(payload)
                 self.assertEqual(self.api.storage.get_config(), {})
+
+            # 刚写入的那份备份不能被 prune 删掉（mtime 相同也不能）。
+            newest = StorageAPI._corrupt_backup_path(config_path, payload)
+            self.assertTrue(os.path.exists(newest))
+            with open(newest, "rb") as f:
+                self.assertEqual(f.read(), payload)
 
             backups = [
                 name for name in os.listdir(tool_dir)

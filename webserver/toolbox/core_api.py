@@ -651,29 +651,43 @@ class StorageAPI(_NamespaceBase):
         return "%s.corrupt-%s" % (path, digest)
 
     @staticmethod
-    def _prune_corrupt_backups(path: str) -> None:
-        """最多保留 `CORRUPT_BACKUP_KEEP` 份备份，超出时删最旧的。"""
+    def _prune_corrupt_backups(path: str, keep_path: str) -> None:
+        """最多保留 `CORRUPT_BACKUP_KEEP` 份备份，且刚写入的那份永不删除。"""
         tool_dir = os.path.dirname(path)
         prefix = StorageAPI.CONFIG_FILENAME + ".corrupt-"
         try:
             names = [n for n in os.listdir(tool_dir) if n.startswith(prefix)]
-        except OSError:
-            return
-        if len(names) <= StorageAPI.CORRUPT_BACKUP_KEEP:
+        except OSError as err:
+            logging.warning(
+                "[CoreAPI.storage] Failed to list corrupt backups: %s", err)
             return
         entries = []
         for name in names:
             full = os.path.join(tool_dir, name)
+            if full == keep_path:
+                continue
             try:
                 entries.append((os.stat(full).st_mtime_ns, full))
             except OSError:
                 continue
+        keep_others = StorageAPI.CORRUPT_BACKUP_KEEP - 1
+        excess = len(entries) - keep_others
+        if excess <= 0:
+            return
         entries.sort()
-        for _mtime_ns, full in entries[:-StorageAPI.CORRUPT_BACKUP_KEEP]:
+        deleted = False
+        for _mtime_ns, full in entries[:excess]:
             try:
                 os.unlink(full)
+                deleted = True
             except OSError:
                 pass
+        if deleted:
+            try:
+                StorageAPI._fsync_dir(tool_dir)
+            except OSError as err:
+                logging.warning(
+                    "[CoreAPI.storage] Failed to sync backup dir: %s", err)
 
     @classmethod
     def _archive_corrupt_config(cls, path: str, raw: bytes) -> str:
@@ -707,7 +721,7 @@ class StorageAPI(_NamespaceBase):
                 pass
             raise
         cls._fsync_dir(os.path.dirname(path))
-        cls._prune_corrupt_backups(path)
+        cls._prune_corrupt_backups(path, backup)
         logging.warning("[CoreAPI.storage] Corrupt config archived to %s", backup)
         return backup
 
