@@ -207,27 +207,39 @@ begin
   SaveStringToFile(BatchFile, BatchContent, False);
 end;
 
-// 安装前检查 WSL 是否可用
+// 安装前检查系统版本与 WSL2 是否可用
 function InitializeSetup(): Boolean;
 var
   ResultCode: Integer;
+  WinVer: TWindowsVersion;
 begin
   Result := True;
-  // 简单检查 wsl.exe 是否存在且能执行
-  if not Exec('wsl.exe', '--status', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+
+  // WSL2 需要 Windows 10 2004 (build 19041) 及以上或 Windows 11；
+  // LTSC 2019 / 1809 等系统仅有 WSL1，无法导入 --version 2 的实例
+  GetWindowsVersionEx(WinVer);
+  if (WinVer.Major < 10) or ((WinVer.Major = 10) and (WinVer.Build < 19041)) then
   begin
-    if MsgBox('未检测到 Windows 子系统 for Linux (WSL)。' + #13#10 +
+    MsgBox('本安装程序依赖 WSL2，需要 Windows 10 2004（build 19041）及以上或 Windows 11。' + #13#10 +
+           '当前系统为 Windows ' + IntToStr(WinVer.Major) + '.' + IntToStr(WinVer.Minor) +
+           '（build ' + IntToStr(WinVer.Build) + '），不支持 WSL2。' + #13#10 +
+           'Windows 10 LTSC 2019 / 1809 等系统仅支持 WSL1，请升级系统后再安装。',
+           mbCriticalError, MB_OK);
+    Result := False;
+    Exit;
+  end;
+
+  // 检查 wsl.exe 能正常执行 --status（旧版 WSL1 的 wsl.exe 不认识该参数，退出码非 0）
+  if (not Exec('wsl.exe', '--status', '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+  begin
+    if MsgBox('未检测到可用的 WSL2 环境。' + #13#10 +
               '本程序依赖 WSL2 运行。是否现在尝试通过 Windows 功能启用它？' + #13#10 +
               '(可能需要重启电脑)', mbConfirmation, MB_YESNO) = IDYES then
     begin
       Exec('wsl.exe', '--install', '', SW_SHOW, ewWaitUntilTerminated, ResultCode);
       MsgBox('WSL 安装已触发。请重启电脑后，再次运行本安装程序。', mbInformation, MB_OK);
-      Result := False;
-    end
-    else
-    begin
-      Result := False;
     end;
+    Result := False;
   end;
 end;
 
