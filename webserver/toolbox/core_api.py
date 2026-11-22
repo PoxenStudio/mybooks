@@ -22,11 +22,13 @@ Calibre / SQLAlchemy 的内部实现细节解耦。设计背景见
 `from webserver.toolbox.core_api import BookMetadata` 做类型标注，不需要
 `import calibre`。详见该类的 docstring。
 """
+import errno
 import json
 import logging
 import os
 import datetime
 import tempfile
+import threading
 from typing import Any, Callable, Dict, List, Optional, Protocol, runtime_checkable
 
 from webserver import loader
@@ -581,6 +583,14 @@ class StorageAPI(_NamespaceBase):
     """工具专属数据目录 + 持久配置。"""
 
     CONFIG_FILENAME = "config.json"
+    # 目录 fsync 不可用时返回的 errno；不同平台不一定都有这些常量。
+    _DIR_FSYNC_UNSUPPORTED_ERRNOS = frozenset(
+        getattr(errno, name) for name in ("EINVAL", "ENOTSUP", "EOPNOTSUPP")
+        if hasattr(errno, name)
+    )
+    # get_config 的归档与 set_config 的覆盖必须互斥：身份校验和 unlink 之间
+    # 一旦插入一次写入，刚保存的有效配置就会被误删。
+    _CONFIG_IO_LOCK = threading.RLock()
 
     def get_work_dir(self, unique_key: Optional[str] = None) -> str:
         """获取（并按需创建）该工具专属的临时工作目录。
@@ -610,34 +620,51 @@ class StorageAPI(_NamespaceBase):
 
     @staticmethod
     def _fsync_dir(directory: str) -> None:
-        """把目录项（rename/unlink）刷盘；Windows 等不支持的平台静默跳过。"""
+        """把目录项（rename/unlink）刷盘。
+
+        只跳过明确不支持目录 fsync 的平台/文件系统；真实 I/O 错误向上抛，
+        避免调用方以为目录项已经持久化。
+        """
         try:
             fd = os.open(directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
-        except OSError:
-            return
+        except OSError as err:
+            if err.errno in StorageAPI._DIR_FSYNC_UNSUPPORTED_ERRNOS:
+                return
+            if os.name == "nt" and err.errno in (errno.EACCES, errno.EPERM):
+                return
+            raise
         try:
             os.fsync(fd)
-        except OSError:
-            pass
+        except OSError as err:
+            if err.errno not in StorageAPI._DIR_FSYNC_UNSUPPORTED_ERRNOS:
+                raise
         finally:
             os.close(fd)
 
     @staticmethod
     def _write_corrupt_backup(path: str, raw: bytes) -> str:
-        """把损坏配置的原始字节写成唯一备份，绝不覆盖已有备份。"""
+        """把损坏配置的原始字节写成唯一备份（0600），绝不覆盖已有备份。"""
         stamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S-%f")
         base = "%s.corrupt-%s" % (path, stamp)
         for attempt in range(100):
             backup = base if attempt == 0 else "%s-%d" % (base, attempt)
             try:
-                out = open(backup, "xb")
+                fd = os.open(
+                    backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             except FileExistsError:
                 continue
             try:
-                with out:
+                with os.fdopen(fd, "wb") as out:
                     out.write(raw)
                     out.flush()
                     os.fsync(out.fileno())
+                try:
+                    # umask 可能削掉 0o600 的位，显式收紧到仅属主可读写。
+                    os.chmod(backup, 0o600)
+                except OSError as chmod_err:
+                    logging.warning(
+                        "[CoreAPI.storage] Failed to restrict mode of %s: %s",
+                        backup, chmod_err)
             except OSError:
                 try:
                     os.unlink(backup)
@@ -672,7 +699,18 @@ class StorageAPI(_NamespaceBase):
                 "[CoreAPI.storage] Config %s changed while archiving; left in place",
                 path)
             return backup
-        os.unlink(path)
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            # 已被并发方删除：备份就是唯一副本，保留。
+            pass
+        except OSError:
+            # 原文件还在，刚写的备份是重复的；删掉它，避免每次读取都堆一份。
+            try:
+                os.unlink(backup)
+            except OSError:
+                pass
+            raise
         cls._fsync_dir(os.path.dirname(path))
         logging.warning("[CoreAPI.storage] Corrupt config archived to %s", backup)
         return backup
@@ -688,7 +726,7 @@ class StorageAPI(_NamespaceBase):
             return
         try:
             json.loads(raw.decode("utf-8"))
-        except (json.JSONDecodeError, UnicodeDecodeError):
+        except (ValueError, RecursionError):
             cls._archive_corrupt_config(path, raw, st)
 
     def get_config(self) -> dict:
@@ -702,29 +740,33 @@ class StorageAPI(_NamespaceBase):
             配置内容。
         """
         path = self._config_path()
-        try:
-            with open(path, "rb") as f:
-                st = os.fstat(f.fileno())
-                raw = f.read()
-        except FileNotFoundError:
-            return {}
-        except OSError as err:
-            # 权限/IO 错误不应被当成损坏文件搬走；保留原文件等下次重试。
-            logging.warning("[CoreAPI.storage] Failed to read config %s: %s", path, err)
-            return {}
-        try:
-            return json.loads(raw.decode("utf-8"))
-        except (json.JSONDecodeError, UnicodeDecodeError) as err:
-            logging.warning("[CoreAPI.storage] Corrupt config %s: %s", path, err)
+        with self._CONFIG_IO_LOCK:
             try:
-                self._archive_corrupt_config(path, raw, st)
-            except OSError as archive_err:
-                # 内容没安全落盘前不删原文件；set_config 覆盖前会再试一次，
-                # 仍失败则拒绝覆盖。
+                with open(path, "rb") as f:
+                    st = os.fstat(f.fileno())
+                    raw = f.read()
+            except FileNotFoundError:
+                return {}
+            except OSError as err:
+                # 权限/IO 错误不应被当成损坏文件搬走；保留原文件等下次重试。
                 logging.warning(
-                    "[CoreAPI.storage] Failed to archive corrupt config %s: %s",
-                    path, archive_err)
-            return {}
+                    "[CoreAPI.storage] Failed to read config %s: %s", path, err)
+                return {}
+            try:
+                return json.loads(raw.decode("utf-8"))
+            except (ValueError, RecursionError) as err:
+                # 递归层数/整数位数超限等解析器限制也按损坏处理。
+                logging.warning(
+                    "[CoreAPI.storage] Corrupt config %s: %s", path, err)
+                try:
+                    self._archive_corrupt_config(path, raw, st)
+                except OSError as archive_err:
+                    # 内容没安全落盘前不删原文件；set_config 覆盖前会再试一次，
+                    # 仍失败则拒绝覆盖。
+                    logging.warning(
+                        "[CoreAPI.storage] Failed to archive corrupt config %s: %s",
+                        path, archive_err)
+                return {}
 
     def set_config(self, data: dict) -> None:
         """整份覆盖写入该工具的持久配置（`config.json`）。
@@ -741,26 +783,28 @@ class StorageAPI(_NamespaceBase):
         """
         path = self._config_path()
         tmp_path = None
-        try:
-            self._preserve_corrupt_config(path)
-            fd, tmp_path = tempfile.mkstemp(
-                prefix=".config-", suffix=".tmp", dir=os.path.dirname(path))
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp_path, path)
-            tmp_path = None
-            self._fsync_dir(os.path.dirname(path))
-        except Exception as err:
-            logging.error("[CoreAPI.storage] Failed to write config %s: %s", path, err)
-            raise RuntimeError(_("保存工具配置失败")) from err
-        finally:
-            if tmp_path:
-                try:
-                    os.unlink(tmp_path)
-                except OSError:
-                    pass
+        with self._CONFIG_IO_LOCK:
+            try:
+                self._preserve_corrupt_config(path)
+                fd, tmp_path = tempfile.mkstemp(
+                    prefix=".config-", suffix=".tmp", dir=os.path.dirname(path))
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp_path, path)
+                tmp_path = None
+                self._fsync_dir(os.path.dirname(path))
+            except Exception as err:
+                logging.error(
+                    "[CoreAPI.storage] Failed to write config %s: %s", path, err)
+                raise RuntimeError(_("保存工具配置失败")) from err
+            finally:
+                if tmp_path:
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
 
 
 class SettingsAPI(_NamespaceBase):

@@ -222,6 +222,9 @@ class TestCoreAPINamespaces(unittest.TestCase):
             self.assertFalse(os.path.exists(config_path))
             with open(os.path.join(tool_dir, backups[0]), "rb") as f:
                 self.assertEqual(f.read(), corrupt)
+            if os.name != "nt":
+                mode = os.stat(os.path.join(tool_dir, backups[0])).st_mode & 0o777
+                self.assertEqual(mode, 0o600)
         finally:
             shutil.rmtree(tmp_root, ignore_errors=True)
 
@@ -263,10 +266,12 @@ class TestCoreAPINamespaces(unittest.TestCase):
             with patch(
                 "webserver.toolbox.core_api.StorageAPI._archive_corrupt_config",
                 side_effect=OSError("disk full"),
-            ):
+            ) as archive_mock:
                 with self.assertRaises(RuntimeError):
                     self.api.storage.set_config({"n": 1})
 
+            archive_mock.assert_called_once()
+            self.assertEqual(archive_mock.call_args.args[0], config_path)
             with open(config_path, "rb") as f:
                 self.assertEqual(f.read(), corrupt)
             self.assertEqual(
@@ -300,6 +305,29 @@ class TestCoreAPINamespaces(unittest.TestCase):
                 with open(os.path.join(tool_dir, name), "rb") as f:
                     contents.append(f.read())
             self.assertEqual(sorted(contents), sorted(payloads))
+        finally:
+            shutil.rmtree(tmp_root, ignore_errors=True)
+
+    def test_storage_get_config_treats_parser_limit_failure_as_corrupt(self):
+        tmp_root = tempfile.mkdtemp(prefix="mybooks_toolbox_test_")
+        try:
+            self.owner.TOOL_DATA_ROOT = tmp_root
+            tool_dir = os.path.join(tmp_root, "fake_tool")
+            os.makedirs(tool_dir, exist_ok=True)
+            config_path = os.path.join(tool_dir, "config.json")
+            # 嵌套超过递归上限，json.loads 会抛 RecursionError（不是 JSONDecodeError）。
+            corrupt = b"[" * 10000 + b"]" * 10000
+            with open(config_path, "wb") as f:
+                f.write(corrupt)
+
+            self.assertEqual(self.api.storage.get_config(), {})
+            backups = [
+                name for name in os.listdir(tool_dir)
+                if name.startswith("config.json.corrupt-")
+            ]
+            self.assertEqual(len(backups), 1)
+            with open(os.path.join(tool_dir, backups[0]), "rb") as f:
+                self.assertEqual(f.read(), corrupt)
         finally:
             shutil.rmtree(tmp_root, ignore_errors=True)
 
