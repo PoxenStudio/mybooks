@@ -2131,7 +2131,7 @@
   "epubMerge": {
     "title": "EPUB合并",
     "close": "关闭",
-    "hint": "从书库中选择 2 本以上（最多 {max} 本）EPUB 书籍，按指定顺序合并为一个合集。原书默认保留。",
+    "hint": "从书库中选择 2 本以上（最多 {max} 本）EPUB 书籍，按指定顺序合并为一个合集；已合并过的合集会按内部子书自动展开（展开后总卷数不得超过 {maxExpanded}）。原书默认保留。",
     "searchPlaceholder": "搜索书名",
     "noResults": "未找到相关书籍",
     "addBtn": "加入",
@@ -2179,7 +2179,10 @@
     "stageSaving": "入库中",
     "cancelBtn": "取消合并",
     "cancelRequested": "已请求取消...",
-    "descTruncated": "简介过长，预览仅展示前 20 万字符，服务端将截断至 5 万字符"
+    "descTruncated": "简介过长，预览仅展示前 20 万字符，服务端将截断至 5 万字符",
+    "mergedExpandNotice": "检测到 {sources} 本合集，将自动展开为 {total} 本合并",
+    "mergedExpandOverflow": "展开后共 {total} 本，超过单次合并上限 {max} 本，请减少选择",
+    "mergedExpandMetaNote": "作者 / ISBN / 标签 / 封面仍按所选源书并集处理"
   },
   "textProcessor": {
     "title": "文本处理工具",

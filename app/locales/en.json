@@ -2131,7 +2131,7 @@
   "epubMerge": {
     "title": "EPUB Merge",
     "close": "Close",
-    "hint": "Pick 2 or more EPUB books (up to {max}) from the library and merge them into one collection in the specified order. Source books are kept by default.",
+    "hint": "Pick 2 or more EPUB books (up to {max}) from the library and merge them into one collection in the specified order; existing collections are auto-expanded into their inner books (expanded total cannot exceed {maxExpanded}). Source books are kept by default.",
     "searchPlaceholder": "Search by title",
     "noResults": "No books found",
     "addBtn": "Add",
@@ -2179,7 +2179,10 @@
     "stageSaving": "Saving to library",
     "cancelBtn": "Cancel merge",
     "cancelRequested": "Cancelling...",
-    "descTruncated": "Description too long: preview limited to 200,000 characters; the server will truncate it to 50,000"
+    "descTruncated": "Description too long: preview limited to 200,000 characters; the server will truncate it to 50,000",
+    "mergedExpandNotice": "{sources} collection(s) detected; will auto-expand to {total} books",
+    "mergedExpandOverflow": "Expanding would produce {total} books, over the {max}-book limit. Please select fewer books",
+    "mergedExpandMetaNote": "Authors / ISBN / tags / cover are still merged from the selected source books"
   },
   "textProcessor": {
     "title": "Text Processor",

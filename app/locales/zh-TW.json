@@ -2124,7 +2124,7 @@
   "epubMerge": {
     "title": "EPUB合併",
     "close": "關閉",
-    "hint": "從書庫中選擇 2 本以上（最多 {max} 本）EPUB 書籍，按指定順序合併為一個合集。原書默認保留。",
+    "hint": "從書庫中選擇 2 本以上（最多 {max} 本）EPUB 書籍，按指定順序合併為一個合集；已合併過的合集會按內部子書自動展開（展開後總卷數不得超過 {maxExpanded}）。原書默認保留。",
     "searchPlaceholder": "搜尋書名",
     "noResults": "未找到相關書籍",
     "addBtn": "加入",
@@ -2172,7 +2172,10 @@
     "stageSaving": "入庫中",
     "cancelBtn": "取消合併",
     "cancelRequested": "已請求取消...",
-    "descTruncated": "簡介過長，預覽僅顯示前 20 萬字符，伺服器將截斷至 5 萬字符"
+    "descTruncated": "簡介過長，預覽僅顯示前 20 萬字符，伺服器將截斷至 5 萬字符",
+    "mergedExpandNotice": "偵測到 {sources} 本合集，將自動展開為 {total} 本合併",
+    "mergedExpandOverflow": "展開後共 {total} 本，超過單次合併上限 {max} 本，請減少選擇",
+    "mergedExpandMetaNote": "作者 / ISBN / 標籤 / 封面仍按所選源書並集處理"
   },
   "textProcessor": {
     "title": "文字處理工具",
