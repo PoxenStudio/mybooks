@@ -608,54 +608,141 @@ class StorageAPI(_NamespaceBase):
         os.makedirs(tool_dir, exist_ok=True)
         return os.path.join(tool_dir, self.CONFIG_FILENAME)
 
-    def get_config(self) -> dict:
-        """读取该工具的持久配置（`config.json`），文件不存在或读取失败时返回空 dict。
+    @staticmethod
+    def _fsync_dir(directory: str) -> None:
+        """把目录项（rename/unlink）刷盘；Windows 等不支持的平台静默跳过。"""
+        try:
+            fd = os.open(directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        except OSError:
+            return
+        try:
+            os.fsync(fd)
+        except OSError:
+            pass
+        finally:
+            os.close(fd)
 
-        读取失败时先把损坏文件改名留档，避免后续一次默认配置写回把原账号数据
-        无可恢复地覆盖掉。
+    @staticmethod
+    def _write_corrupt_backup(path: str, raw: bytes) -> str:
+        """把损坏配置的原始字节写成唯一备份，绝不覆盖已有备份。"""
+        stamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S-%f")
+        base = "%s.corrupt-%s" % (path, stamp)
+        for attempt in range(100):
+            backup = base if attempt == 0 else "%s-%d" % (base, attempt)
+            try:
+                out = open(backup, "xb")
+            except FileExistsError:
+                continue
+            try:
+                with out:
+                    out.write(raw)
+                    out.flush()
+                    os.fsync(out.fileno())
+            except OSError:
+                try:
+                    os.unlink(backup)
+                except OSError:
+                    pass
+                raise
+            StorageAPI._fsync_dir(os.path.dirname(path))
+            return backup
+        raise OSError("无法创建唯一的损坏配置备份: %s" % base)
+
+    @classmethod
+    def _archive_corrupt_config(cls, path: str, raw: bytes, st: os.stat_result) -> str:
+        """备份损坏配置，并仅在原路径仍是同一份文件时删除它。
+
+        返回备份路径。若读完之后已被并发写入替换成新的文件，保留原路径不动，
+        避免把刚写入的有效配置搬走。
+        """
+        backup = cls._write_corrupt_backup(path, raw)
+        try:
+            current = os.stat(path)
+        except FileNotFoundError:
+            current = None
+        if current is None:
+            logging.warning(
+                "[CoreAPI.storage] Corrupt config %s already replaced", path)
+            return backup
+        current_key = (
+            current.st_dev, current.st_ino, current.st_size, current.st_mtime_ns)
+        read_key = (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns)
+        if current_key != read_key:
+            logging.warning(
+                "[CoreAPI.storage] Config %s changed while archiving; left in place",
+                path)
+            return backup
+        os.unlink(path)
+        cls._fsync_dir(os.path.dirname(path))
+        logging.warning("[CoreAPI.storage] Corrupt config archived to %s", backup)
+        return backup
+
+    @classmethod
+    def _preserve_corrupt_config(cls, path: str) -> None:
+        """覆盖前确认现存配置可解析；损坏则先归档，归档失败直接抛出。"""
+        try:
+            with open(path, "rb") as f:
+                st = os.fstat(f.fileno())
+                raw = f.read()
+        except FileNotFoundError:
+            return
+        try:
+            json.loads(raw.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            cls._archive_corrupt_config(path, raw, st)
+
+    def get_config(self) -> dict:
+        """读取该工具的持久配置（`config.json`），不存在或读取失败时返回空 dict。
+
+        内容损坏（JSON/编码错误）时先把原始字节备份到
+        `config.json.corrupt-<时间戳>`，避免后续一次默认配置写回把原账号数据
+        无可恢复地覆盖掉；权限/IO 错误不归档，保留原文件等下次重试。
 
         Returns:
             配置内容。
         """
         path = self._config_path()
-        if not os.path.exists(path):
-            return {}
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except (json.JSONDecodeError, UnicodeDecodeError) as err:
-            logging.warning("[CoreAPI.storage] Corrupt config %s: %s", path, err)
-            stamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-            backup = "%s.corrupt-%s" % (path, stamp)
-            try:
-                os.replace(path, backup)
-                logging.warning(
-                    "[CoreAPI.storage] Corrupt config moved to %s", backup)
-            except OSError as move_err:
-                logging.warning(
-                    "[CoreAPI.storage] Failed to archive corrupt config %s: %s",
-                    path, move_err)
+            with open(path, "rb") as f:
+                st = os.fstat(f.fileno())
+                raw = f.read()
+        except FileNotFoundError:
             return {}
-        except Exception as err:
+        except OSError as err:
             # 权限/IO 错误不应被当成损坏文件搬走；保留原文件等下次重试。
             logging.warning("[CoreAPI.storage] Failed to read config %s: %s", path, err)
+            return {}
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as err:
+            logging.warning("[CoreAPI.storage] Corrupt config %s: %s", path, err)
+            try:
+                self._archive_corrupt_config(path, raw, st)
+            except OSError as archive_err:
+                # 内容没安全落盘前不删原文件；set_config 覆盖前会再试一次，
+                # 仍失败则拒绝覆盖。
+                logging.warning(
+                    "[CoreAPI.storage] Failed to archive corrupt config %s: %s",
+                    path, archive_err)
             return {}
 
     def set_config(self, data: dict) -> None:
         """整份覆盖写入该工具的持久配置（`config.json`）。
 
-        先写同目录临时文件并 fsync，再用 `os.replace` 原子替换；避免进程崩溃/
+        覆盖前若发现现存配置已损坏，会先归档原始文件；归档失败则拒绝覆盖。
+        写入走同目录临时文件 + fsync + `os.replace` 原子替换，避免进程崩溃/
         磁盘中断把 config.json 截断成半截。
 
         Args:
             data: 要保存的配置内容，会以 JSON（UTF-8，缩进 2）整体覆盖旧文件。
 
         Raises:
-            RuntimeError: 写入失败时抛出（原始异常作为 `__cause__`）。
+            RuntimeError: 写入失败，或现存配置损坏且无法归档时抛出。
         """
         path = self._config_path()
         tmp_path = None
         try:
+            self._preserve_corrupt_config(path)
             fd, tmp_path = tempfile.mkstemp(
                 prefix=".config-", suffix=".tmp", dir=os.path.dirname(path))
             with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -664,6 +751,7 @@ class StorageAPI(_NamespaceBase):
                 os.fsync(f.fileno())
             os.replace(tmp_path, path)
             tmp_path = None
+            self._fsync_dir(os.path.dirname(path))
         except Exception as err:
             logging.error("[CoreAPI.storage] Failed to write config %s: %s", path, err)
             raise RuntimeError(_("保存工具配置失败")) from err

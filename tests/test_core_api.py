@@ -23,7 +23,7 @@ import types
 import unittest
 from unittest.mock import MagicMock, patch
 
-from webserver.toolbox.core_api import CORE_API_VERSION, CoreAPI
+from webserver.toolbox.core_api import CORE_API_VERSION, CoreAPI, StorageAPI
 
 
 class FakeOwner:
@@ -209,14 +209,135 @@ class TestCoreAPINamespaces(unittest.TestCase):
             self.owner.TOOL_DATA_ROOT = tmp_root
             tool_dir = os.path.join(tmp_root, "fake_tool")
             os.makedirs(tool_dir, exist_ok=True)
-            with open(os.path.join(tool_dir, "config.json"), "w") as f:
-                f.write("{not valid json")
+            config_path = os.path.join(tool_dir, "config.json")
+            corrupt = b"{not valid json"
+            with open(config_path, "wb") as f:
+                f.write(corrupt)
             self.assertEqual(self.api.storage.get_config(), {})
             backups = [
                 name for name in os.listdir(tool_dir)
                 if name.startswith("config.json.corrupt-")
             ]
             self.assertEqual(len(backups), 1)
+            self.assertFalse(os.path.exists(config_path))
+            with open(os.path.join(tool_dir, backups[0]), "rb") as f:
+                self.assertEqual(f.read(), corrupt)
+        finally:
+            shutil.rmtree(tmp_root, ignore_errors=True)
+
+    def test_storage_set_config_archives_corrupt_file_first(self):
+        tmp_root = tempfile.mkdtemp(prefix="mybooks_toolbox_test_")
+        try:
+            self.owner.TOOL_DATA_ROOT = tmp_root
+            tool_dir = os.path.join(tmp_root, "fake_tool")
+            os.makedirs(tool_dir, exist_ok=True)
+            config_path = os.path.join(tool_dir, "config.json")
+            corrupt = b"{broken"
+            with open(config_path, "wb") as f:
+                f.write(corrupt)
+
+            self.api.storage.set_config({"n": 1})
+
+            self.assertEqual(self.api.storage.get_config(), {"n": 1})
+            backups = [
+                name for name in os.listdir(tool_dir)
+                if name.startswith("config.json.corrupt-")
+            ]
+            self.assertEqual(len(backups), 1)
+            with open(os.path.join(tool_dir, backups[0]), "rb") as f:
+                self.assertEqual(f.read(), corrupt)
+        finally:
+            shutil.rmtree(tmp_root, ignore_errors=True)
+
+    def test_storage_set_config_refuses_to_overwrite_when_archive_fails(self):
+        tmp_root = tempfile.mkdtemp(prefix="mybooks_toolbox_test_")
+        try:
+            self.owner.TOOL_DATA_ROOT = tmp_root
+            tool_dir = os.path.join(tmp_root, "fake_tool")
+            os.makedirs(tool_dir, exist_ok=True)
+            config_path = os.path.join(tool_dir, "config.json")
+            corrupt = b"{broken"
+            with open(config_path, "wb") as f:
+                f.write(corrupt)
+
+            with patch(
+                "webserver.toolbox.core_api.StorageAPI._archive_corrupt_config",
+                side_effect=OSError("disk full"),
+            ):
+                with self.assertRaises(RuntimeError):
+                    self.api.storage.set_config({"n": 1})
+
+            with open(config_path, "rb") as f:
+                self.assertEqual(f.read(), corrupt)
+            self.assertEqual(
+                [n for n in os.listdir(tool_dir)
+                 if n.startswith("config.json.corrupt-")],
+                [],
+            )
+        finally:
+            shutil.rmtree(tmp_root, ignore_errors=True)
+
+    def test_storage_corrupt_backups_are_unique(self):
+        tmp_root = tempfile.mkdtemp(prefix="mybooks_toolbox_test_")
+        try:
+            self.owner.TOOL_DATA_ROOT = tmp_root
+            tool_dir = os.path.join(tmp_root, "fake_tool")
+            os.makedirs(tool_dir, exist_ok=True)
+            config_path = os.path.join(tool_dir, "config.json")
+            payloads = [b"{first", b"{second"]
+            for payload in payloads:
+                with open(config_path, "wb") as f:
+                    f.write(payload)
+                self.assertEqual(self.api.storage.get_config(), {})
+
+            backups = sorted(
+                name for name in os.listdir(tool_dir)
+                if name.startswith("config.json.corrupt-")
+            )
+            self.assertEqual(len(backups), 2)
+            contents = []
+            for name in backups:
+                with open(os.path.join(tool_dir, name), "rb") as f:
+                    contents.append(f.read())
+            self.assertEqual(sorted(contents), sorted(payloads))
+        finally:
+            shutil.rmtree(tmp_root, ignore_errors=True)
+
+    def test_storage_get_config_keeps_file_replaced_while_archiving(self):
+        tmp_root = tempfile.mkdtemp(prefix="mybooks_toolbox_test_")
+        try:
+            self.owner.TOOL_DATA_ROOT = tmp_root
+            tool_dir = os.path.join(tmp_root, "fake_tool")
+            os.makedirs(tool_dir, exist_ok=True)
+            config_path = os.path.join(tool_dir, "config.json")
+            corrupt = b"{not valid json"
+            valid = b'{"n": 2}'
+            with open(config_path, "wb") as f:
+                f.write(corrupt)
+
+            real_write_backup = StorageAPI._write_corrupt_backup
+
+            def replace_then_write_backup(path, raw):
+                # 模拟并发 set_config：归档开始前把路径换成一份新的有效配置。
+                with open(config_path, "wb") as f:
+                    f.write(valid)
+                return real_write_backup(path, raw)
+
+            with patch(
+                "webserver.toolbox.core_api.StorageAPI._write_corrupt_backup",
+                side_effect=replace_then_write_backup,
+            ):
+                self.assertEqual(self.api.storage.get_config(), {})
+
+            with open(config_path, "rb") as f:
+                self.assertEqual(f.read(), valid)
+            backups = [
+                name for name in os.listdir(tool_dir)
+                if name.startswith("config.json.corrupt-")
+            ]
+            self.assertEqual(len(backups), 1)
+            with open(os.path.join(tool_dir, backups[0]), "rb") as f:
+                self.assertEqual(f.read(), corrupt)
         finally:
             shutil.rmtree(tmp_root, ignore_errors=True)
 
