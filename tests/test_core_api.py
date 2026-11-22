@@ -212,6 +212,11 @@ class TestCoreAPINamespaces(unittest.TestCase):
             with open(os.path.join(tool_dir, "config.json"), "w") as f:
                 f.write("{not valid json")
             self.assertEqual(self.api.storage.get_config(), {})
+            backups = [
+                name for name in os.listdir(tool_dir)
+                if name.startswith("config.json.corrupt-")
+            ]
+            self.assertEqual(len(backups), 1)
         finally:
             shutil.rmtree(tmp_root, ignore_errors=True)
 

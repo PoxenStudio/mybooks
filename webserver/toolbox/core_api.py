@@ -26,6 +26,7 @@ import json
 import logging
 import os
 import datetime
+import tempfile
 from typing import Any, Callable, Dict, List, Optional, Protocol, runtime_checkable
 
 from webserver import loader
@@ -610,6 +611,9 @@ class StorageAPI(_NamespaceBase):
     def get_config(self) -> dict:
         """读取该工具的持久配置（`config.json`），文件不存在或读取失败时返回空 dict。
 
+        读取失败时先把损坏文件改名留档，避免后续一次默认配置写回把原账号数据
+        无可恢复地覆盖掉。
+
         Returns:
             配置内容。
         """
@@ -619,12 +623,29 @@ class StorageAPI(_NamespaceBase):
         try:
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
+        except (json.JSONDecodeError, UnicodeDecodeError) as err:
+            logging.warning("[CoreAPI.storage] Corrupt config %s: %s", path, err)
+            stamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            backup = "%s.corrupt-%s" % (path, stamp)
+            try:
+                os.replace(path, backup)
+                logging.warning(
+                    "[CoreAPI.storage] Corrupt config moved to %s", backup)
+            except OSError as move_err:
+                logging.warning(
+                    "[CoreAPI.storage] Failed to archive corrupt config %s: %s",
+                    path, move_err)
+            return {}
         except Exception as err:
+            # 权限/IO 错误不应被当成损坏文件搬走；保留原文件等下次重试。
             logging.warning("[CoreAPI.storage] Failed to read config %s: %s", path, err)
             return {}
 
     def set_config(self, data: dict) -> None:
         """整份覆盖写入该工具的持久配置（`config.json`）。
+
+        先写同目录临时文件并 fsync，再用 `os.replace` 原子替换；避免进程崩溃/
+        磁盘中断把 config.json 截断成半截。
 
         Args:
             data: 要保存的配置内容，会以 JSON（UTF-8，缩进 2）整体覆盖旧文件。
@@ -633,12 +654,25 @@ class StorageAPI(_NamespaceBase):
             RuntimeError: 写入失败时抛出（原始异常作为 `__cause__`）。
         """
         path = self._config_path()
+        tmp_path = None
         try:
-            with open(path, "w", encoding="utf-8") as f:
+            fd, tmp_path = tempfile.mkstemp(
+                prefix=".config-", suffix=".tmp", dir=os.path.dirname(path))
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, path)
+            tmp_path = None
         except Exception as err:
             logging.error("[CoreAPI.storage] Failed to write config %s: %s", path, err)
             raise RuntimeError(_("保存工具配置失败")) from err
+        finally:
+            if tmp_path:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
 
 
 class SettingsAPI(_NamespaceBase):
