@@ -2116,19 +2116,9 @@ def _build_merge_job(item: dict, expand_merged: bool = True) -> dict:
     """把一个选中输入变成 job：source + 一个或多个输出卷（segment）。"""
     source, size = _input_source(item)
     title = _xml_safe_text(item.get("title"), _MERGE_MARKER_TITLE_MAX)
-    if not expand_merged:
-        merged = None
-    elif "merged" in item:
-        # 工具层已分析过：None 表示普通书，免二次打开 ZIP；合集仍要读
-        # 详细 NCX 子树，二次识别一次。识别失败按单本合并。
-        merged = item.get("merged")
-        if merged:
-            merged = _inspect_merged_source(source)
-            if merged is None:
-                logger.warning(
-                    "[epub_merge] 合集二次识别失败，按单本合并：%s", title)
-    else:
-        merged = _inspect_merged_source(source)
+    # 不相信调用方的缓存识别结果：加载期分析后源文件可能被替换（甚至同
+    # 尺寸/同 mtime），必须以合并时实际文件重新识别，否则会被当单本漏展开。
+    merged = _inspect_merged_source(source) if expand_merged else None
     segments = []
     if merged:
         for book in merged["books"]:

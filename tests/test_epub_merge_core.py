@@ -2170,6 +2170,14 @@ class TestLegacyMergedDetection(unittest.TestCase):
         merged = lib.analyze_epub(out)["merged"]
         self.assertEqual([b["title"] for b in merged["books"]],
                          ["A", "B", "C"])
+        # analyze 会递归识别嵌套结构；必须同时校验物理产物已按叶子拆分
+        marker = lib.parse_merge_marker(
+            _zip_entries(out)["content.opf"].decode("utf-8"))
+        self.assertEqual([b["title"] for b in marker["books"]],
+                         ["A", "B", "C"])
+        spine = lib.analyze_epub(out)["spine_files"]
+        for idx in range(3):
+            self.assertIn("b%d_divider.xhtml" % idx, spine)
         self.assertEqual(lib.validate_output(out), [])
 
     def test_legacy_nested_divider_off_one_level(self):
@@ -2228,6 +2236,15 @@ class TestMergeExpand(unittest.TestCase):
     def _three_plus_one(self, **options):
         inputs, meta = self._three_plus_one_inputs()
         return lib.merge_epubs(inputs, meta, options or None)
+
+    def test_expand_ignores_stale_merged_none(self):
+        """调用方缓存的 merged=None 不可信：源文件可能已被替换成合集。"""
+        inputs, _meta = self._three_plus_one_inputs()
+        jobs = lib.expand_merge_inputs([
+            {"data": inputs[0]["data"], "title": "ABC合集", "merged": None},
+            {"data": inputs[1]["data"], "title": "D"},
+        ])
+        self.assertEqual(sum(len(job["segments"]) for job in jobs), 4)
 
     def test_three_plus_one(self):
         out = self._three_plus_one()
@@ -2331,6 +2348,12 @@ class TestMergeExpand(unittest.TestCase):
              {"data": self._book("C"), "title": "C"}],
             {"title": "ABC合集", "authors": []})
         self.assertIn("b0/OEBPS/b1_divider.xhtml", _zip_entries(out))
+        # 不只看 ZIP 里有没有：必须仍在 spine 阅读顺序里（A 卷内，B 卷之前）
+        spine = lib.analyze_epub(out)["spine_files"]
+        chapter = "b0/OEBPS/b1_divider.xhtml"
+        self.assertIn(chapter, spine)
+        self.assertLess(spine.index("b0_divider.xhtml"), spine.index(chapter))
+        self.assertLess(spine.index(chapter), spine.index("b1_divider.xhtml"))
         self.assertEqual(lib.validate_output(out), [])
 
     def test_mixed_sources_order(self):
@@ -2589,7 +2612,9 @@ class TestExpandPreviewBooks(unittest.TestCase):
         self.assertEqual(count, 4)
         self.assertEqual(sources[0]["books"], ["A", "B", "C"])
         rebuilt = lib.compose_description(items)
-        self.assertIn("<p>【A】</p>简介A", rebuilt)
+        # 每个展开卷的简介都必须保留，不能只验首尾
+        for title in ("A", "B", "C"):
+            self.assertIn("<p>【%s】</p>简介%s" % (title, title), rebuilt)
         self.assertIn("<p>【D】</p>简介D", rebuilt)
         self.assertNotIn("ABC合集", rebuilt)
 

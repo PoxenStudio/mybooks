@@ -64,6 +64,10 @@ class EpubMergeTool(BaseTool):
     service_item_name = "EPUB合并"
 
     _run_lock = threading.Lock()
+    # 任务/取消状态锁：request_cancel 的“判断当前任务 + 置位”与 merge 的
+    # “登记新任务 + 清事件”必须原子，否则迟到的取消会误伤下一个任务
+    _state_lock = threading.Lock()
+    _active_task_id: Optional[int] = None
     _last_task_id: Optional[int] = None
     # 取消信号：handler 置位、合并线程每本开始前检查
     _cancel_event = threading.Event()
@@ -75,11 +79,16 @@ class EpubMergeTool(BaseTool):
 
     @classmethod
     def request_cancel(cls) -> bool:
-        """请求取消当前合并任务（无任务时返回 False）。"""
-        if not cls.is_running():
-            return False
-        cls._cancel_event.set()
-        return True
+        """请求取消当前合并任务（无任务时返回 False）。
+
+        用 _state_lock 把“读取当前任务 + 置位”与 merge 的任务切换串行化：
+        旧任务收尾时迟到的取消不会落到下一个任务上。
+        """
+        with cls._state_lock:
+            if cls._active_task_id is None:
+                return False
+            cls._cancel_event.set()
+            return True
 
     @staticmethod
     def info() -> dict:
@@ -489,7 +498,6 @@ class EpubMergeTool(BaseTool):
             if not EpubMergeTool.is_running():
                 EpubMergeTool._last_task_id = skip_task_id
             return
-        EpubMergeTool._cancel_event.clear()
 
         task_id = None
         error_message = None
@@ -502,6 +510,11 @@ class EpubMergeTool(BaseTool):
             # 不会读到上一个任务的 completed 而误报「合并成功」
             task_id = self.create_task(progress_data={"status": "starting"})
             EpubMergeTool._last_task_id = task_id
+            # 与 request_cancel 串行：登记本任务后才清旧取消信号，
+            # 旧任务收尾时迟到的取消不会带进本任务
+            with EpubMergeTool._state_lock:
+                EpubMergeTool._active_task_id = task_id
+                EpubMergeTool._cancel_event.clear()
 
             ids = self._normalize_ids(book_ids)
             title = utils.super_strip(title or "")[:_TITLE_MAX]
@@ -561,8 +574,7 @@ class EpubMergeTool(BaseTool):
                 merged = info.get("merged")
                 expanded_total += (len(merged["books"])
                                    if merged and merged.get("books") else 1)
-                inputs.append({"path": epub_path, "title": book_title,
-                               "merged": merged})
+                inputs.append({"path": epub_path, "title": book_title})
                 self.update_task_progress(
                     task_id, int(base + seg * 0.9),
                     {"status": "running", "stage": "loading",
@@ -653,12 +665,14 @@ class EpubMergeTool(BaseTool):
         finally:
             if work_dir is not None:
                 self.cleanup_work_dir(work_dir)
-            EpubMergeTool._cancel_event.clear()
             if task_id is not None:
                 if error_message is None:
                     self.update_task_progress(
                         task_id, 100,
                         {"status": "completed", "new_book_id": new_book_id})
                 self.complete_task(task_id, error_message=error_message)
+            with EpubMergeTool._state_lock:
+                EpubMergeTool._cancel_event.clear()
+                EpubMergeTool._active_task_id = None
             if acquired:
                 EpubMergeTool._run_lock.release()
