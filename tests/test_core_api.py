@@ -23,7 +23,7 @@ import types
 import unittest
 from unittest.mock import MagicMock, patch
 
-from webserver.toolbox.core_api import CORE_API_VERSION, CoreAPI
+from webserver.toolbox.core_api import CORE_API_VERSION, CoreAPI, StorageAPI
 
 
 class FakeOwner:
@@ -209,9 +209,184 @@ class TestCoreAPINamespaces(unittest.TestCase):
             self.owner.TOOL_DATA_ROOT = tmp_root
             tool_dir = os.path.join(tmp_root, "fake_tool")
             os.makedirs(tool_dir, exist_ok=True)
-            with open(os.path.join(tool_dir, "config.json"), "w") as f:
-                f.write("{not valid json")
+            config_path = os.path.join(tool_dir, "config.json")
+            corrupt = b"{not valid json"
+            with open(config_path, "wb") as f:
+                f.write(corrupt)
             self.assertEqual(self.api.storage.get_config(), {})
+            backups = [
+                name for name in os.listdir(tool_dir)
+                if name.startswith("config.json.corrupt-")
+            ]
+            self.assertEqual(len(backups), 1)
+            # 读路径只做归档，不删除/改写原文件。
+            with open(config_path, "rb") as f:
+                self.assertEqual(f.read(), corrupt)
+            with open(os.path.join(tool_dir, backups[0]), "rb") as f:
+                self.assertEqual(f.read(), corrupt)
+            if os.name != "nt":
+                mode = os.stat(os.path.join(tool_dir, backups[0])).st_mode & 0o777
+                self.assertEqual(mode, 0o600)
+        finally:
+            shutil.rmtree(tmp_root, ignore_errors=True)
+
+    def test_storage_set_config_archives_corrupt_file_first(self):
+        tmp_root = tempfile.mkdtemp(prefix="mybooks_toolbox_test_")
+        try:
+            self.owner.TOOL_DATA_ROOT = tmp_root
+            tool_dir = os.path.join(tmp_root, "fake_tool")
+            os.makedirs(tool_dir, exist_ok=True)
+            config_path = os.path.join(tool_dir, "config.json")
+            corrupt = b"{broken"
+            with open(config_path, "wb") as f:
+                f.write(corrupt)
+
+            self.api.storage.set_config({"n": 1})
+
+            self.assertEqual(self.api.storage.get_config(), {"n": 1})
+            backups = [
+                name for name in os.listdir(tool_dir)
+                if name.startswith("config.json.corrupt-")
+            ]
+            self.assertEqual(len(backups), 1)
+            with open(os.path.join(tool_dir, backups[0]), "rb") as f:
+                self.assertEqual(f.read(), corrupt)
+        finally:
+            shutil.rmtree(tmp_root, ignore_errors=True)
+
+    def test_storage_set_config_refuses_to_overwrite_when_archive_fails(self):
+        tmp_root = tempfile.mkdtemp(prefix="mybooks_toolbox_test_")
+        try:
+            self.owner.TOOL_DATA_ROOT = tmp_root
+            tool_dir = os.path.join(tmp_root, "fake_tool")
+            os.makedirs(tool_dir, exist_ok=True)
+            config_path = os.path.join(tool_dir, "config.json")
+            corrupt = b"{broken"
+            with open(config_path, "wb") as f:
+                f.write(corrupt)
+
+            with patch(
+                "webserver.toolbox.core_api.StorageAPI._archive_corrupt_config",
+                side_effect=OSError("disk full"),
+            ) as archive_mock:
+                with self.assertRaises(RuntimeError):
+                    self.api.storage.set_config({"n": 1})
+
+            archive_mock.assert_called_once()
+            self.assertEqual(archive_mock.call_args.args[0], config_path)
+            with open(config_path, "rb") as f:
+                self.assertEqual(f.read(), corrupt)
+            self.assertEqual(
+                [n for n in os.listdir(tool_dir)
+                 if n.startswith("config.json.corrupt-")],
+                [],
+            )
+        finally:
+            shutil.rmtree(tmp_root, ignore_errors=True)
+
+    def test_storage_corrupt_backups_are_content_addressed(self):
+        tmp_root = tempfile.mkdtemp(prefix="mybooks_toolbox_test_")
+        try:
+            self.owner.TOOL_DATA_ROOT = tmp_root
+            tool_dir = os.path.join(tmp_root, "fake_tool")
+            os.makedirs(tool_dir, exist_ok=True)
+            config_path = os.path.join(tool_dir, "config.json")
+            payloads = [b"{first", b"{second"]
+
+            # 同一份损坏内容重复读取只留一份备份。
+            for _ in range(2):
+                with open(config_path, "wb") as f:
+                    f.write(payloads[0])
+                self.assertEqual(self.api.storage.get_config(), {})
+
+            backups = [
+                name for name in os.listdir(tool_dir)
+                if name.startswith("config.json.corrupt-")
+            ]
+            self.assertEqual(len(backups), 1)
+
+            with open(config_path, "wb") as f:
+                f.write(payloads[1])
+            self.assertEqual(self.api.storage.get_config(), {})
+
+            backups = sorted(
+                name for name in os.listdir(tool_dir)
+                if name.startswith("config.json.corrupt-")
+            )
+            self.assertEqual(len(backups), 2)
+            contents = []
+            for name in backups:
+                with open(os.path.join(tool_dir, name), "rb") as f:
+                    contents.append(f.read())
+            self.assertEqual(sorted(contents), sorted(payloads))
+        finally:
+            shutil.rmtree(tmp_root, ignore_errors=True)
+
+    def test_storage_get_config_treats_parser_limit_failure_as_corrupt(self):
+        tmp_root = tempfile.mkdtemp(prefix="mybooks_toolbox_test_")
+        try:
+            self.owner.TOOL_DATA_ROOT = tmp_root
+            tool_dir = os.path.join(tmp_root, "fake_tool")
+            os.makedirs(tool_dir, exist_ok=True)
+            config_path = os.path.join(tool_dir, "config.json")
+            # 嵌套超过递归上限，json.loads 会抛 RecursionError（不是 JSONDecodeError）。
+            corrupt = b"[" * 10000 + b"]" * 10000
+            with open(config_path, "wb") as f:
+                f.write(corrupt)
+
+            self.assertEqual(self.api.storage.get_config(), {})
+            backups = [
+                name for name in os.listdir(tool_dir)
+                if name.startswith("config.json.corrupt-")
+            ]
+            self.assertEqual(len(backups), 1)
+            with open(os.path.join(tool_dir, backups[0]), "rb") as f:
+                self.assertEqual(f.read(), corrupt)
+        finally:
+            shutil.rmtree(tmp_root, ignore_errors=True)
+
+    def test_storage_corrupt_backups_are_bounded(self):
+        tmp_root = tempfile.mkdtemp(prefix="mybooks_toolbox_test_")
+        try:
+            self.owner.TOOL_DATA_ROOT = tmp_root
+            tool_dir = os.path.join(tmp_root, "fake_tool")
+            os.makedirs(tool_dir, exist_ok=True)
+            config_path = os.path.join(tool_dir, "config.json")
+            for i in range(StorageAPI.CORRUPT_BACKUP_KEEP + 2):
+                payload = ("{\"broken\": %d" % i).encode("utf-8")
+                with open(config_path, "wb") as f:
+                    f.write(payload)
+                self.assertEqual(self.api.storage.get_config(), {})
+
+            # 刚写入的那份备份不能被 prune 删掉（mtime 相同也不能）。
+            newest = StorageAPI._corrupt_backup_path(config_path, payload)
+            self.assertTrue(os.path.exists(newest))
+            with open(newest, "rb") as f:
+                self.assertEqual(f.read(), payload)
+
+            backups = [
+                name for name in os.listdir(tool_dir)
+                if name.startswith("config.json.corrupt-")
+            ]
+            self.assertEqual(len(backups), StorageAPI.CORRUPT_BACKUP_KEEP)
+        finally:
+            shutil.rmtree(tmp_root, ignore_errors=True)
+
+    def test_storage_set_config_keeps_success_when_dir_fsync_fails(self):
+        tmp_root = tempfile.mkdtemp(prefix="mybooks_toolbox_test_")
+        try:
+            self.owner.TOOL_DATA_ROOT = tmp_root
+            tool_dir = os.path.join(tmp_root, "fake_tool")
+            os.makedirs(tool_dir, exist_ok=True)
+            self.api.storage.set_config({"n": 0})
+
+            # os.replace 成功后目录 fsync 失败：配置已可见，不能报保存失败。
+            with patch.object(
+                StorageAPI, "_fsync_dir", side_effect=OSError("boom")
+            ):
+                self.api.storage.set_config({"n": 1})
+
+            self.assertEqual(self.api.storage.get_config(), {"n": 1})
         finally:
             shutil.rmtree(tmp_root, ignore_errors=True)
 
