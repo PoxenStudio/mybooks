@@ -13,12 +13,12 @@
                                 <span class="stat-label">{{ $t('index.totalBooks') }}:</span>
                                 <span class="stat-value" :class="{ 'is-pending': statText('total_books') === null }">{{ statText('total_books') }}</span>
                             </div>
-                            <div class="stat-separator">|</div>
-                            <div class="stat-group">
-                                <span class="stat-label">{{ $t('index.ebookCount') }}:</span>
-                                <span class="stat-value" :class="{ 'is-pending': statText('ebook_count') === null }">{{ statText('ebook_count') }}</span>
-                            </div>
                             <template v-if="allowPhysicalBooks">
+                                <div class="stat-separator">|</div>
+                                <div class="stat-group">
+                                    <span class="stat-label">{{ $t('index.ebookCount') }}:</span>
+                                    <span class="stat-value" :class="{ 'is-pending': statText('ebook_count') === null }">{{ statText('ebook_count') }}</span>
+                                </div>
                                 <div class="stat-separator">|</div>
                                 <div class="stat-group">
                                     <span class="stat-label">{{ $t('index.physicalCount') }}:</span>
