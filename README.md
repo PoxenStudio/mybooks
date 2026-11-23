@@ -83,7 +83,14 @@ docker-compose -f docker-compose.yml  up -d
 `docker run -d --name mybooks -p 8080:80 -v /tmp/demo:/data poxenstudio/mybooks`
 
 ## Windows安装
-自v3.47起提供在Windows 10之后版本上独立的安装程序，不依赖Docker。可以在各个release的附件中下载。
+
+> **系统要求：Windows 10 2004（build 19041）及以上，或 Windows 11，并支持启用 WSL2（需在 BIOS 中开启 CPU 虚拟化）。**
+>
+> - Windows 10 LTSC 2019（1809 / build 17763）等仅支持 WSL1 的系统**无法运行**本安装包：安装程序需要导入 WSL2 实例，WSL1 不支持。
+> - 安装前可在 PowerShell 用 `wsl -l -v` 确认（能正常执行即可，已有发行版的 `VERSION` 列应为 2）；仅支持 WSL1 的旧系统会提示「命令行选项无效」。
+> - 未启用 WSL 时，Windows 10 2004+ / Windows 11 可执行 `wsl --install` 后重启。
+
+自 v3.47 起提供独立的 Windows 安装程序，不依赖 Docker。可以在各个 release 的附件中下载。
 ![Wins Installer](document/win_installer.png)
 
 安装后可以会出现```MyBooks Service```程序, 提供停止、重启和卸载操作。
