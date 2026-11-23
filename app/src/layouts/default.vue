@@ -36,19 +36,17 @@
 
 <script>
 import AppHeader from "~/components/AppHeader.vue"
-import AppFooter from "~/components/AppFooter.vue"
-import AppPress from "~/components/AppPress.vue"
 import Loading from "~/components/Loading.vue"
-import Upload from "~/components/Upload.vue"
 
 export default {
     name: 'DefaultLayout',
     components: {
         AppHeader,
-        AppFooter,
-        AppPress,
         Loading,
-        Upload,
+        // 首屏不需要，按需加载，避免上传/公告逻辑进入初始 chunk
+        AppFooter: () => import("~/components/AppFooter.vue"),
+        AppPress: () => import("~/components/AppPress.vue"),
+        Upload: () => import("~/components/Upload.vue"),
     },
     data: () => ({}),
     head() {

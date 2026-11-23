@@ -172,7 +172,7 @@ class Index(BaseHandler):
         ids = [int(p) for p in self.get_argument("exclude", "").split(",") if p.strip().isdigit()]
         return frozenset(ids[:MAX_SHOWN_IDS])
 
-    def _recommend_home_ids(self, cnt_random, cnt_recent, exclude_ids, seed, reader_id):
+    def _recommend_home_ids(self, cnt_random, cnt_recent, exclude_ids, seed, reader_id, avoid_ids=frozenset()):
         if not feature_modules.module_enabled(feature_modules.MODULE_SHARED_READING):
             return None
         if not CONF.get("RECOMMEND_ENABLE", True):
@@ -189,7 +189,7 @@ class Index(BaseHandler):
             is_visible=self.is_features_visible,
             exclude_ids=frozenset(exclude_ids),
             rng=random.Random(seed),
-            avoid_ids=self._shown_ids(),
+            avoid_ids=self._shown_ids() | frozenset(avoid_ids),
             shuffle=not self._stable_home(),
         )
         try:
@@ -338,6 +338,76 @@ class IndexNew(IndexSection):
 
 class IndexSocial(IndexSection):
     SECTION = "social"
+
+
+class IndexHome(IndexSection):
+    """首页首屏一次取回 social/new/random，避免三个请求串行等待。
+
+    服务端 new/random 本来就共用同一候选池，合并后同时省掉一次候选池计算。
+    “换一批”仍走原来的单区块接口。
+    """
+
+    SECTION = "home"
+
+    @js
+    @throttle()
+    async def get(self):
+        homepage_config = get_homepage_config()
+        hidden = set(homepage_config.get("hidden") or [])
+        social_visible = "index.socialRecommendation" not in hidden
+        random_visible = "index.randomRecommendation" not in hidden
+        new_visible = "index.newRecommendation" not in hidden
+        cnt_random, cnt_recent = self._canonical_counts(hidden)
+
+        result = {
+            "err": "ok",
+            "social_recommend_books": [],
+            "random_books": [],
+            "random_books_count": 0,
+            "new_books": [],
+            "new_books_count": 0,
+            "seed": "",
+        }
+        if social_visible:
+            result["social_recommend_books"] = await self._social_recommend_books()
+
+        if not ((random_visible and cnt_random > 0) or (new_visible and cnt_recent > 0)):
+            return result
+
+        t0 = time.perf_counter()
+        ids = await self.run_calibre_read_async(self._all_book_ids)
+        t_ids = time.perf_counter()
+        if not ids:
+            result["err"] = "nobooks"
+            return result
+
+        cnt_recent = min(cnt_recent, len(ids))
+        cnt_random = min(cnt_random, len(ids))
+        reader_id = self.user_id() or None
+        seed = self._home_seed(reader_id)
+        social_ids = frozenset(b.get("id") for b in result["social_recommend_books"] if b.get("id"))
+        home_ids = self._recommend_home_ids(cnt_random, cnt_recent, [], seed, reader_id, avoid_ids=social_ids)
+        random_ids, new_ids, reasons = home_ids or (
+            *self._legacy_home_ids(ids, cnt_random, cnt_recent, self._shown_ids() | social_ids),
+            {},
+        )
+        result["seed"] = seed if home_ids else ""
+
+        if random_visible and cnt_random > 0:
+            books = await self._section_books(random_ids[:cnt_random], reasons, cover_only=True)
+            result["random_books"] = books
+            result["random_books_count"] = len(books)
+        if new_visible and cnt_recent > 0:
+            books = await self._section_books(new_ids[:cnt_recent], reasons, cover_only=False)
+            result["new_books"] = books
+            result["new_books_count"] = len(books)
+
+        logging.info(
+            "[index/home timing] ids=%.0fms total=%.0fms social=%d new=%d random=%d",
+            (t_ids - t0) * 1000, (time.perf_counter() - t0) * 1000,
+            len(result["social_recommend_books"]), len(result["new_books"]), len(result["random_books"]),
+        )
+        return result
 
 
 class HomepageConfig(BaseHandler):
@@ -5071,6 +5141,7 @@ def routes():
         (r"/api/index/random", IndexRandom),
         (r"/api/index/new", IndexNew),
         (r"/api/index/social", IndexSocial),
+        (r"/api/index/home", IndexHome),
         (r"/api/homepage", HomepageConfig),
         (r"/api/search", SearchBook),
         (r"/api/recent", RecentBook),

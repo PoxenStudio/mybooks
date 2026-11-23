@@ -452,17 +452,20 @@
             ></v-textarea>
         </AppDialog>
 
-        <ai-chat-dialog v-if="moduleOn('ai')" v-model="ai_enabled" :title-dark="navIsDark" @thinking="ai_thinking = $event" />
+        <ai-chat-dialog v-if="moduleOn('ai') && aiLoaded" v-model="ai_enabled" :title-dark="navIsDark" @thinking="ai_thinking = $event" />
     </div>
 </template>
 
 <script>
 import AppearanceMenu from "~/components/AppearanceMenu.vue";
-import AiChatDialog from "~/components/AiChatDialog.vue";
 import { isLightBackground, resolveBrandColor, unifiedIconColor } from "~/utils/appearance";
 
 export default {
-    components: { AppearanceMenu, AiChatDialog },
+    components: {
+        AppearanceMenu,
+        // AI 弹窗会带上 markdown 解析器，首次打开时再加载
+        AiChatDialog: () => import("~/components/AiChatDialog.vue"),
+    },
     data() {
         let sidebar = false;
         let miniVariant = false;
@@ -505,6 +508,7 @@ export default {
         isFocused: false,
         isMobileFocused: false,
         ai_enabled: false,
+        aiLoaded: false,
         ai_thinking: false,
         user: { is_login: false },
         sys: {
@@ -724,8 +728,12 @@ export default {
             }
         }
 
-        this.$backend("/user/info").then((rsp) => {
-            this.err = rsp.err;
+        // 复用路由守卫的会话请求，避免首屏再打一次 /user/info
+        this.$ensureSession().then((rsp) => {
+            this.err = rsp && rsp.err;
+            if (!rsp || !rsp.sys || !rsp.user) {
+                return;
+            }
             this.sys = rsp.sys;
             // 迟到的"匿名快照"不能覆盖已建立的登录会话（登录成功后 header 的响应才回来）
             const storeUser = this.$store.state.user;
@@ -883,6 +891,7 @@ export default {
                 this.$alert('info', this.$t('appHeader.aiLoginRequired'), '/login');
                 return;
             }
+            this.aiLoaded = true;
             this.ai_enabled = !this.ai_enabled;
         },
         chunk: function (arr, len) {

@@ -104,6 +104,15 @@ export default {
     transition: box-shadow 200ms ease;
 }
 
+/* backdrop-filter 会让卡片在每一帧重新采样,低端移动端滚动抖动*/
+@media (max-width: 960px), (hover: none) {
+    .home-section-card {
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        background: rgb(245, 255, 248);
+    }
+}
+
 /* 悬停整块卡片时只加深一层阴影，不做位移：区块卡片很大，位移会带着内部封面一起抖 */
 @media (hover: hover) and (pointer: fine) {
     .home-section-card:hover {

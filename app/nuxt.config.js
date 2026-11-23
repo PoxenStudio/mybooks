@@ -79,7 +79,7 @@ export default {
 
   // Vuetify module configuration: https://go.nuxtjs.dev/config-vuetify
   vuetify: {
-    // treeShake: true,
+    treeShake: true,
     defaultAssets: false,
     iconfont: 'mdi',
     // 调色板对齐 document/DESIGN.md。primary 只是首帧兜底：

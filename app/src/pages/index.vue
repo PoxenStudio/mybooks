@@ -91,6 +91,7 @@
                             <div class="book-img-container reading-book-cover" :title="book.title">
                                 <v-img
                                     :src="book.thumb"
+                                    :aspect-ratio="11 / 15"
                                     class="cover-fill-img book-img-hover"
                                 ></v-img>
                                 <a
@@ -126,6 +127,7 @@
                             <div class="book-img-container" :title="book.title">
                                 <v-img
                                     :src="book.thumb"
+                                    :aspect-ratio="11 / 15"
                                     class="cover-fill-img book-img-hover"
                                 ></v-img>
                                 <div v-if="physicalModuleOn && book.book_type === 1" class="physical-book-badge">
@@ -192,6 +194,7 @@
                             <div class="book-img-container" :title="reasonText(book) || book.title">
                                 <v-img
                                     :src="book.thumb"
+                                    :aspect-ratio="11 / 15"
                                     class="cover-fill-img book-img-hover"
                                 ></v-img>
                                 <!-- 实体书角标（模块关闭时隐藏） -->
@@ -594,21 +597,23 @@ export default {
             }
             this.homeBooksLoading = true;
             try {
-                // 社交推荐最轻，先取到；再把它的书 id 作为 exclude 传给后面两个区块。
-                // 新书先于随机推荐加载：随机推荐会把新书 id 一并排除，避免同一本书
-                // 同时出现在“新书”和“随便看看”里（推荐引擎构建的候选池会被第二个
-                // 请求复用，所以串行加载并不会多花一次全库打分的时间）。
-                if (this.homeSectionEnabled('social')) {
-                    await this.loadHomeSection('social');
+                // 首屏一次取回三个区块：服务端 new/random 本来就复用同一候选池，
+                // 合并后既少两次 RTT，也避免串行等待。
+                const rsp = await this.$backend('/index/home');
+                if (!rsp || (rsp.err !== 'ok' && rsp.err !== 'nobooks')) {
+                    return;
                 }
-                let exclude = this.social_recommend_books.map((b) => b.id);
+                if (this.homeSectionEnabled('social')) {
+                    this.social_recommend_books = rsp.social_recommend_books || [];
+                }
                 if (this.homeSectionEnabled('new')) {
-                    await this.loadHomeSection('new', exclude.join(','));
-                    exclude = exclude.concat(this.new_books.map((b) => b.id));
+                    this.new_books = rsp.new_books || [];
                 }
                 if (this.homeSectionEnabled('random')) {
-                    await this.loadHomeSection('random', exclude.join(','));
+                    this.random_books = rsp.random_books || [];
                 }
+            } catch (error) {
+                console.warn('Failed to load home books:', error);
             } finally {
                 this.homeBooksLoading = false;
             }
@@ -631,6 +636,9 @@ export default {
                 return;
             }
             this.$set(this.refreshing, section, true);
+            // 作废上一轮尚未落地的 settled 定时器
+            clearTimeout(this.refreshSettleTimers[section]);
+            this.refreshSettleTimers[section] = null;
             // 旧书先依次抽出（phase=out），数据回来后再依次弹回（phase=in）。
             // 两段都只靠 data-phase 驱动，不依赖 v-if 重挂载，所以书没变时也不会闪
             this.$set(this.refreshPhase, section, 'out');
@@ -655,6 +663,7 @@ export default {
                 // 动画才是「把书还回来」该有的观感
                 if (!rsp || rsp.err !== 'ok') {
                     this.$set(this.refreshPhase, section, 'in');
+                    this.settleRefreshPhase(section);
                     return;
                 }
                 const books = (section === 'new' ? rsp.new_books : rsp.random_books) || [];
@@ -662,11 +671,13 @@ export default {
                 // 否则空数组会把整个区块卡的 v-if 打掉，卡片直接消失
                 if (books.length === 0) {
                     this.$set(this.refreshPhase, section, 'in');
+                    this.settleRefreshPhase(section);
                     return;
                 }
                 // 切阶段与换数组放在同一 tick：新卡片一挂载就处在入场动画里，
                 // 不会再叠加一次常规进场（home-cover-in）
                 this.$set(this.refreshPhase, section, 'in');
+                this.settleRefreshPhase(section);
                 if (section === 'new') {
                     this.new_books = books;
                 } else {
@@ -675,6 +686,7 @@ export default {
             }).catch( error => {
                 console.error('Failed to refresh books:', error);
                 this.$set(this.refreshPhase, section, 'in');
+                this.settleRefreshPhase(section);
             }).finally( () => {
                 // 结局已定，两个定时器都没用了：不清的话死线会在成功 15s 后
                 // 空 reject 一次（被 race 吞掉，但计时器白挂）
@@ -690,6 +702,16 @@ export default {
                     this.refreshBooks(next);
                 }
             });
+        },
+        // 回场动画结束后落到 settled，撤掉常驻的 !important 动画声明
+        settleRefreshPhase(section) {
+            clearTimeout(this.refreshSettleTimers[section]);
+            this.refreshSettleTimers[section] = setTimeout(() => {
+                this.refreshSettleTimers[section] = null;
+                if (this.refreshPhase[section] === 'in') {
+                    this.$set(this.refreshPhase, section, 'settled');
+                }
+            }, 1300);
         },
         // 统计条读数：滚动中读 statsDisplay，结束后交回目标值。
         // 返回 null 表示统计还没回来 —— 模板此时画骨架，不留「-」这种看着像真值的东西
@@ -840,10 +862,7 @@ export default {
         if (this.isSectionEnabled('index.booklistRecommendation') && !(this.sysReady && this.lazyHome)) {
             this.loadBooklists();
         }
-        // 强制重新渲染图片，修复从其他页面返回时的布局问题
-        this.$nextTick(() => {
-            window.dispatchEvent(new Event('resize'));
-        });
+        // 不再 dispatch resize 强制重排：封面尺寸已由 aspect-ratio 预先确定
     },
     activated() {
         // 当使用 keep-alive 缓存时，激活页面时强制重新计算布局
@@ -853,6 +872,10 @@ export default {
     },
     beforeDestroy() {
         this.deferTimers.forEach((id) => clearTimeout(id));
+        Object.keys(this.refreshSettleTimers).forEach((key) => {
+            clearTimeout(this.refreshSettleTimers[key]);
+            this.refreshSettleTimers[key] = null;
+        });
         if (this._statsRaf) {
             cancelAnimationFrame(this._statsRaf);
             this._statsRaf = null;
@@ -887,8 +910,9 @@ export default {
         homepage_booklists: [],
         reading_books: [],
         refreshing: { random: false, new: false },
-        // 「换一批」的两段过渡阶段：out=旧书抽出中，in=新书弹回中，null=静止
+        // 「换一批」的两段过渡阶段：out=旧书抽出中，in=新书弹回中，null=静止，settled=回场已结束
         refreshPhase: { random: null, new: null },
+        refreshSettleTimers: { random: null, new: null },
         // 跨区块刷新排队：另一区块刷新在途时先记下意图，等它落地再发起
         pendingRefresh: { random: false, new: false },
         // 统计数字滚动期间的显示值；null 表示直接用 stats（computed）
@@ -1188,6 +1212,12 @@ export default {
     }
 }
 
+/* settled 用 animation:none 压住基础进场规则（置 null 会重播 780ms 展开） */
+.home-section-slot[data-phase="settled"] .book-card,
+.home-section-slot[data-phase="settled"] .book-list-card {
+    animation: none !important;
+}
+
 .refresh-icon {
     cursor: pointer;
     border-radius: 50%;
@@ -1298,7 +1328,6 @@ export default {
 
 .book-img-hover {
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    will-change: transform;
 }
 
 .reading-book-cover {
@@ -1441,6 +1470,11 @@ export default {
 
 /* 只在真正有鼠标指针的设备上启用悬停位移，避免触屏上点完一直"粘"着 */
 @media (hover: hover) and (pointer: fine) {
+    /* will-change 只给悬停设备：触屏上几百张封面建层会耗尽低端机显存 */
+    .home-section-slot .book-img-hover {
+        will-change: transform;
+    }
+
     .home-section-slot .book-card .v-card:hover {
         transform: translateY(var(--card-hover-lift));
         box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);

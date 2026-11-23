@@ -3,8 +3,18 @@
 </template>
 
 <script>
-import DOMPurify from "dompurify";
-import { marked } from "marked";
+// marked / DOMPurify 只在 AI 回答真正需要渲染时才加载，
+// 避免它们被 AppHeader 的初始 chunk 带进首页首屏。
+let markdownLibs = null;
+const loadMarkdownLibs = () => {
+    if (!markdownLibs) {
+        markdownLibs = Promise.all([import("dompurify"), import("marked")]).then(([dompurify, marked]) => ({
+            DOMPurify: dompurify.default || dompurify,
+            marked: marked.marked || marked.default || marked,
+        }));
+    }
+    return markdownLibs;
+};
 
 export default {
     props: {
@@ -13,9 +23,30 @@ export default {
             default: "",
         },
     },
-    computed: {
-        renderedContent() {
-            return DOMPurify.sanitize(marked.parse(this.content || "", { breaks: true, gfm: true }));
+    data() {
+        return {
+            renderedContent: "",
+        };
+    },
+    watch: {
+        content: {
+            immediate: true,
+            handler: "renderContent",
+        },
+    },
+    methods: {
+        async renderContent() {
+            const content = this.content || "";
+            if (!content) {
+                this.renderedContent = "";
+                return;
+            }
+            const { DOMPurify, marked } = await loadMarkdownLibs();
+            // 内容在异步加载期间又变了，丢弃旧结果
+            if (content !== (this.content || "")) {
+                return;
+            }
+            this.renderedContent = DOMPurify.sanitize(marked.parse(content, { breaks: true, gfm: true }));
         },
     },
 };

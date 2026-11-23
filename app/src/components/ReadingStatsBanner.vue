@@ -55,14 +55,18 @@
 </template>
 
 <script>
-import BarChart from '~/components/charts/BarChart.vue';
-import LineChart from '~/components/charts/LineChart.vue';
-import DoughnutChart from '~/components/charts/DoughnutChart.vue';
 import ReadingHeatmap from '~/components/ReadingHeatmap.vue';
 
+// 图表依赖 chart.js，体积较大且只在有统计数据后才需要。
+// 保持异步组件，避免 chart.js 被打进首页首屏 chunk。
 export default {
     name: 'ReadingStatsBanner',
-    components: { BarChart, LineChart, DoughnutChart, ReadingHeatmap },
+    components: {
+        BarChart: () => import('~/components/charts/BarChart.vue'),
+        LineChart: () => import('~/components/charts/LineChart.vue'),
+        DoughnutChart: () => import('~/components/charts/DoughnutChart.vue'),
+        ReadingHeatmap,
+    },
     props: {
         uid: { type: [Number, String], default: null },
         showTitle: { type: Boolean, default: true },
