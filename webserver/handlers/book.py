@@ -2755,6 +2755,8 @@ class SearchBook(ListHandler):
         "pubdate", "published", "publisher", "rating", "series", "series_index", "series_sort", "size", "tag", "tags", "template", "timestamp", "title", "title_sort", "uuid", "vl", "py",
     }
     CALIBRE_EXPR_RE = re.compile(r"(?:^|[\s(])(#?[A-Za-z_][A-Za-z0-9_]*):", re.UNICODE)
+    CUSTOM_EXACT_RE = re.compile(r"^#([A-Za-z_][A-Za-z0-9_]*):=(?!=)(.*)$", re.UNICODE)
+    COMPOUND_EXPR_RE = re.compile(r"#?[A-Za-z_][A-Za-z0-9_]*:|\b(?:AND|OR|NOT)\b", re.IGNORECASE)
     ISBN_RE = re.compile(r"^(?:97[89])?\d{9}[\dXx]$")
     # 组合条件搜索的参数 -> (Calibre 字段, 描述)
     FIELD_ARGS = (
@@ -2771,6 +2773,20 @@ class SearchBook(ListHandler):
             if key.startswith("#") or key.lower() in cls.CALIBRE_SEARCH_TERMS:
                 return True
         return False
+
+    @classmethod
+    def _normalize_custom_exact(cls, query):
+        """为单个自定义列精确匹配表达式中未加引号的值补引号，避免空格/& 被 Calibre 拆成多个条件。"""
+        if not query or '"' in query:
+            return query
+        match = cls.CUSTOM_EXACT_RE.match(query.strip())
+        if not match:
+            return query
+        value = match.group(2).strip()
+        needs_quoting = bool(re.search(r"[\s&]", value))
+        if not needs_quoting or cls.COMPOUND_EXPR_RE.search(value):
+            return query
+        return f"#{match.group(1)}:={cls._quote(value)}"
 
     @staticmethod
     def _quote(value):
@@ -2808,7 +2824,7 @@ class SearchBook(ListHandler):
         clauses, descs = [], []
         if name:
             if self._is_calibre_expr(name):
-                clauses.append("( " + name + " )")
+                clauses.append("( " + self._normalize_custom_exact(name) + " )")
             else:
                 clauses.append("(" + " OR ".join(self._quote(v) for v in self._variants(self._clear(name))) + ")")
             descs.append(name)
@@ -2909,6 +2925,7 @@ class SearchBook(ListHandler):
             name = book_title
         calibre_query = False
         title_name = name
+        name = self._normalize_custom_exact(name)
         for idx, key in enumerate(self.CALIBRE_KEYS):
             if name.startswith(key):
                 calibre_query = True
