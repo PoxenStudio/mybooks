@@ -15,7 +15,7 @@ BUILTIN_SECTIONS = (
     "index.newRecommendation",
 )
 
-CUSTOM_TYPES = ("author", "tag", "series", "language", "rating")
+CUSTOM_TYPES = ("author", "tag", "series", "keyword", "language", "rating")
 CUSTOM_SORTS = ("new", "title", "rating", "series", "random")
 CUSTOM_LIMITS = (6, 12, 24, 48)
 MAX_CUSTOM_CARDS = 30
@@ -79,15 +79,17 @@ def normalize_homepage(raw):
                 limit = 12
             if limit not in CUSTOM_LIMITS:
                 limit = 12
-            custom.append(
-                {
-                    "id": card_id,
-                    "type": card_type,
-                    "value": value,
-                    "sort": sort,
-                    "limit": limit,
-                }
-            )
+            card = {
+                "id": card_id,
+                "type": card_type,
+                "value": value,
+                "sort": sort,
+                "limit": limit,
+            }
+            if card_type == "keyword":
+                match = _clean_text(item.get("match"), 10).lower()
+                card["match"] = match if match in ("any", "all") else "any"
+            custom.append(card)
             used_ids.add(card_id)
 
     known = set(BUILTIN_SECTIONS)

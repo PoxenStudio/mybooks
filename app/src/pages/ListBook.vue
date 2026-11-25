@@ -209,13 +209,18 @@ export default {
 
         default:
           if (this.$route.params.meta !== undefined) {
-            var name = decodeURIComponent(this.$route.params.name);
+            // vue-router 已把 :name 解码过一次（其内部 decode 自带 try/catch，
+            // 非法百分号序列原样保留），这里不能再 decodeURIComponent：
+            // 二次解码会把 "100%41" 变成 "100A"（与后端按 fullPath 实际检索的值不一致），
+            // 遇到裸 "%"（如 "100%"）还会抛 URIError 弄挂整个标题
+            var name = this.$route.params.name || '';
             var titles = {
               tag: this.$t('listBook.tagBooks', { name }),
               series: this.$t('listBook.seriesBooks', { name }),
               rating: this.$t('listBook.ratingBooks', { name }),
               author: this.$t('listBook.authorBooks', { name }),
               publisher: this.$t('listBook.publisherBooks', { name }),
+              keyword: this.$t('meta.keyword', { name }),
               favorites: this.$t('listBook.favoritesBooks', { name }),
               wants: this.$t('listBook.wantsBooks', { name }),
               reading: this.$t('listBook.readingBooks', { name }),

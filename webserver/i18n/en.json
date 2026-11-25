@@ -155,6 +155,7 @@
   "同步元数据时发生错误: %s": "Error syncing metadata: %s",
   "后台正在推送，稍后可以刷新页面，在通知消息中查看结果。": "Push task is running in the background. Refresh later and check notifications for results.",
   "含有\"%(name)s\"标签的书籍": "Books with tag \"%(name)s\"",
+  "书名含有\"%(name)s\"的书籍": "Books with \"%(name)s\" in the title",
   "图书信息刮削": "Metadata scraping",
   "图书添加成功": "Book added successfully",
   "在读书籍": "Currently reading",
