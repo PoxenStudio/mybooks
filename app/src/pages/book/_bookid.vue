@@ -382,7 +382,7 @@
                     <v-col class="mx-auto" cols="8" sm="4">
                         <div style="position: relative; display: inline-block; width: 100%;">
                             <v-img class="book-img" :src="book.img" :aspect-ratio="11 / 15" max-height="500px"
-                                   contain style="border-radius: 14px;"></v-img>
+                                   contain style="border-radius: 4px;"></v-img>
                             <div v-if="book.state && book.state.read_state === READING_STATE.FINISHED" class="finished-mark">
                                 <img src="/icons/done.svg" :alt="$t('readingState.finished')" :title="$t('readingState.finished')" />
                             </div>

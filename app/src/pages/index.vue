@@ -85,7 +85,7 @@
                 :title="$t('index.myReading')"
                 storage-key="index.myReading"
             >
-                <v-row>
+                <v-row class="home-cover-grid">
                     <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="(book,idx) in get_reading_books" :key="'reading'+idx+book.id" class="book-card" :style="{ '--i': idx }">
                         <v-card :to="book.href" class="ma-1">
                             <div class="book-img-container reading-book-cover" :title="book.title">
@@ -188,7 +188,7 @@
                 <template #header-extra>
                     <v-icon color="primary" class="ml-1 refresh-icon" :class="{ 'refresh-icon--spinning': refreshing.random || pendingRefresh.random }" @click="refreshBooks('random')">mdi-refresh</v-icon>
                 </template>
-                <v-row>
+                <v-row class="home-cover-grid">
                     <v-col cols="4" xs="4" sm="3" md="2" lg="1" v-for="(book,idx) in get_random_books" :key="'rec'+idx+book.id" class="book-card" :style="{ '--i': idx }">
                         <v-card :to="book.href" class="ma-1">
                             <div class="book-img-container" :title="reasonText(book) || book.title">
@@ -1438,6 +1438,20 @@ export default {
 .book-card .v-card {
     overflow: hidden;
 }
+
+/* 在读/随机推荐：收窄网格间距，相邻封面间距 32px → 8px */
+.home-cover-grid.row {
+    margin: -4px;
+}
+
+.home-cover-grid > .book-card {
+    padding: 4px;
+}
+
+.home-cover-grid .book-card > .v-card {
+    margin: 0 !important;
+}
+
 /* Release Notes Dialog card font size */
 .release-notes-card {
     font-size: 16px;

@@ -353,10 +353,8 @@ export default {
     display: flex;
     width: 100%;
     aspect-ratio: 3/4;
-    /* 圆角必须同时写在容器上：封面（v-img）带 12px 内联圆角，hover 放大 1.06 后会
-       溢出这一层；容器若仍是直角，overflow:hidden 的裁切边界也就是直角，四角被
-       削平，看起来像「圆角被卡掉了」。把裁切边界做成同半径圆角即可 */
-    border-radius: 12px;
+    /* 半径跟随 --app-radius：容器写死更大会成为封面的最小圆角 */
+    border-radius: var(--app-radius, 4px);
     overflow: hidden;
 }
 .book-img-container .v-image {
