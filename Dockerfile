@@ -107,12 +107,6 @@ COPY thanks_to.txt /var/www/mybooks/app/dist/static/
 # RUN pip install --no-cache-dir --no-compile -r /tmp/requirements.txt --break-system-packages && \
 #     rm -rf /root/.cache /root/.config/pip /tmp/requirements.txt /tmp/pip-* /var/tmp/*
 
-# MyBooks 自带的 calibre 插件（DjVu/CBZ/UVZ 元数据）
-COPY calibre/plugins/ /tmp/calibre-plugins/
-RUN python3 /tmp/calibre-plugins/build.py --out /usr/lib/calibre/mybooks-plugins && \
-    rm -rf /tmp/calibre-plugins
-
-
 # logrotate 会忽略 group/other 可写的配置文件，构建机 umask 为 002 时 COPY 进来是 0664
 RUN chmod 644 /etc/logrotate.d/mybooks-nginx && \
     rm -f /etc/nginx/conf.d/default.conf /var/www/html -rf && \

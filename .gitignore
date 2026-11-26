@@ -106,3 +106,8 @@ package-lock.json
 .impeccable
 plan/
 document/design/**
+!document/design/PDF_Scan_Compression_Explained.md
+!document/design/images/
+document/design/images/**
+!document/design/images/pdf-color-modes-comparison.png
+!document/design/images/pdf-text-repair-comparison.png
