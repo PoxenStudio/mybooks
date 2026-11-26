@@ -226,14 +226,14 @@
                 </template>
                 <v-row v-if="get_recent_books.length > 0">
                     <v-col cols="12">
-                        <book-cards :books="get_recent_books">
+                        <book-cards :books="get_recent_books" class="home-cover-grid">
                             <template #introduce="{ book }">
                                 <div v-if="reasonText(book)" class="reason-line text-caption primary--text">{{ reasonText(book) }}</div>
                             </template>
                         </book-cards>
                     </v-col>
                 </v-row>
-                <v-row v-else>
+                <v-row v-else class="home-cover-grid">
                     <v-col cols="12" xs="12" sm="6" md="4" lg="3" xl="2" v-for="n in 8" :key="'new-ph'+n" class="book-list-card d-flex">
                         <v-card class="flex-grow-1">
                             <v-row>
@@ -1439,16 +1439,18 @@ export default {
     overflow: hidden;
 }
 
-/* 在读/随机推荐：收窄网格间距，相邻封面间距 32px → 8px */
+/* 在读/随机推荐/新书推荐：收窄网格间距，相邻卡片间距 32px → 8px */
 .home-cover-grid.row {
     margin: -4px;
 }
 
-.home-cover-grid > .book-card {
+.home-cover-grid > .book-card,
+.home-cover-grid > .book-list-card {
     padding: 4px;
 }
 
-.home-cover-grid .book-card > .v-card {
+.home-cover-grid .book-card > .v-card,
+.home-cover-grid .book-list-card > .v-card {
     margin: 0 !important;
 }
 
