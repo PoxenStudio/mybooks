@@ -11,6 +11,7 @@ from tools.pdf.minify_pdf import (
     _apply_closing,
     _apply_dct_denoise,
     _apply_dilation,
+    _apply_opening,
     _bilevel_encoding_candidates,
     _encode_jbig2,
     _format_file_size,
@@ -42,6 +43,26 @@ def test_dilation_expands_dark_text_strokes():
     assert sum(dilated.getpixel((x, 4)) == 0 for x in range(9)) == 5
 
 
+def test_half_pixel_dilation_uses_supersampling_and_is_weaker():
+    image = Image.new("L", (9, 9), 255)
+    for y in range(9):
+        for x in range(3, 6):
+            image.putpixel((x, y), 0)
+
+    half_dilated = _apply_dilation(image, dilate=0.5)
+    fully_dilated = _apply_dilation(image, dilate=1)
+    source_ink = sum(255 - value for value in image.getdata())
+    half_ink = sum(255 - value for value in half_dilated.getdata())
+    full_ink = sum(255 - value for value in fully_dilated.getdata())
+
+    assert source_ink < half_ink < full_ink
+
+
+def test_dilation_rejects_unsupported_fractional_steps():
+    with pytest.raises(ValueError, match="0.25-pixel increments"):
+        _apply_dilation(Image.new("L", (9, 9), 255), dilate=0.1)
+
+
 def test_closing_fills_a_small_gap_in_dark_text_stroke():
     image = Image.new("L", (11, 11), 255)
     for x in range(1, 10):
@@ -50,8 +71,17 @@ def test_closing_fills_a_small_gap_in_dark_text_stroke():
 
     closed = _apply_closing(image)
 
-    assert closed.getpixel((5, 5)) == 0
+    assert 0 < closed.getpixel((5, 5)) < 255
     assert closed.getpixel((5, 3)) == 255
+
+
+def test_opening_reduces_an_isolated_dark_speck():
+    image = Image.new("L", (9, 9), 255)
+    image.putpixel((4, 4), 0)
+
+    opened = _apply_opening(image)
+
+    assert opened.getpixel((4, 4)) > image.getpixel((4, 4))
 
 
 @pytest.mark.skipif(not features.check_codec("jpg_2000"), reason="Pillow has no JPEG 2000 support")
@@ -243,6 +273,8 @@ def test_gray_cli_output_is_grayscale_pdf(tmp_path, monkeypatch, capsys):
             "--auto",
             "--gray",
             "--closing",
+            "--dilate",
+            "0.5",
             "--blur",
             "0.1",
         ],
@@ -266,6 +298,38 @@ def test_gray_cli_output_is_grayscale_pdf(tmp_path, monkeypatch, capsys):
         assert doc.metadata["creator"] == "MyBooks(https://mybooks.top)"
         if features.check_codec("jpg_2000"):
             assert doc.xref_get_key(doc.pdf_catalog(), "Version") == ("name", "/1.5")
+
+
+def test_dry_run_skips_full_image_format_summary(tmp_path, monkeypatch, capsys):
+    source_pdf = tmp_path / "source.pdf"
+    source_doc = fitz.open()
+    page = source_doc.new_page(width=200, height=300)
+    page.insert_text((20, 30), "Dry run preview.")
+    source_doc.save(source_pdf)
+    source_doc.close()
+
+    output_dir = tmp_path / "output"
+    monkeypatch.setattr("tools.pdf.minify_pdf.shutil.which", lambda _: None)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "minify_pdf.py",
+            str(source_pdf),
+            "--dry-run-pages",
+            "1",
+            "--output-dir",
+            str(output_dir),
+        ],
+    )
+
+    assert main() == 0
+
+    output = capsys.readouterr().out
+    assert "Dry run completed: 1 page(s)" in output
+    assert "No embedded images found." not in output
+    assert "Image 1:" not in output
+    assert (output_dir / "source_preview_0001.png").exists()
 
 
 def test_inspect_cli_reports_at_most_five_distinct_image_info_items(tmp_path, monkeypatch, capsys):

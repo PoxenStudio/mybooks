@@ -28,15 +28,16 @@ PDF 页面渲染、图像处理与压缩工具。
     --blur 半径
         二值化或灰度转换前应用高斯模糊；默认 0（关闭），不能小于 0。
     --dilate 半径
-        模糊或二值化前加粗文字笔画；默认 0（关闭），必须是非负整数。
+        模糊或二值化前加粗文字笔画；默认 0（关闭）。支持 0.25 像素步进的小数半径，
+        小数半径会先按分母放大处理再缩回（例如 0.5 对应 2 倍放大）。
     --closing
-        在模糊或二值化前应用 3x3 闭运算，连接小断笔并填补细小缺口。
+        在模糊或二值化前以 2 倍超采样应用 3x3 闭运算，连接小断笔并填补细小缺口。
     --dct-denoise 强度
         对含 DCTDecode（JPEG）图片的页面应用 3x3 中值滤波；1–3 表示滤波次数，
         默认 0（关闭）。即使页面列在 --skip-pages 中仍会应用。
     --skip-pages 页码
         逗号分隔的页码（从 1 开始；支持负数表示从末尾倒数），跳过这些页的
-        黑白/灰度/自动对比度/闭运算/膨胀/模糊处理，例如 1,3,-1。页面仍会渲染、
+        黑白/灰度/自动对比度/闭运算/开运算/膨胀/模糊处理，例如 1,3,-1。页面仍会渲染、
         缩放和重新编码；此参数不跳过 --dct-denoise。
     --drop-pages 页码
         逗号分隔的页码，从输出中完全删除；支持负数页码，例如 2,5,-1。
@@ -50,6 +51,7 @@ PDF 页面渲染、图像处理与压缩工具。
         仅在 --gray 下使用。将高于此亮度值的像素设为白色，范围 0–255。
 
 注意：
+    ENABLE_OPENING 常量控制是否执行 2 倍超采样开运算，默认关闭；启用可能削弱细小笔画。
     对最终为 1-bit 的黑白页，程序会比较无损 JBIG2Decode（若系统装有 jbig2enc）、
     JPXDecode 与 FlateDecode 的图像流大小，自动选用较小者。
     --skip-pages 只跳过页面图像处理，不会保留原始页面数据或原始编码。
@@ -65,6 +67,7 @@ import subprocess
 import tempfile
 import zlib
 from collections import Counter
+from fractions import Fraction
 from pathlib import Path
 from typing import Optional
 
@@ -77,6 +80,8 @@ from tqdm import tqdm
 
 # Resolution used when rendering pages and storing them in the output PDF.
 DEFAULT_RENDER_DPI = 150
+MORPHOLOGY_SUPERSAMPLE_FACTOR = 2
+ENABLE_OPENING = False
 
 
 def _otsu_threshold(gray_img: Image.Image) -> int:
@@ -360,22 +365,54 @@ def _save_pdf(
     return filter_counts
 
 
-def _apply_dilation(img: Image.Image, dilate: int) -> Image.Image:
+def _dilation_scale_and_radius(dilate: float) -> tuple[int, int]:
+    """Return bounded supersampling scale and the corresponding pixel radius."""
+    fraction = Fraction(str(dilate)).limit_denominator(4)
+    if fraction.denominator not in (1, 2, 4) or not math.isclose(float(fraction), dilate, rel_tol=0, abs_tol=1e-6):
+        raise ValueError("--dilate must use 0.25-pixel increments")
+    return fraction.denominator, fraction.numerator
+
+
+def _apply_dilation(img: Image.Image, dilate: float) -> Image.Image:
     """Apply dilation to thicken text strokes before blur or binarization."""
     if dilate <= 0:
         return img
 
-    size = dilate * 2 + 1
+    scale, radius = _dilation_scale_and_radius(dilate)
+    original_size = img.size
+    if scale > 1:
+        img = img.resize((img.width * scale, img.height * scale), resample=Image.Resampling.LANCZOS)
+
+    size = radius * 2 + 1
     inverted = ImageOps.invert(img)
-    return ImageOps.invert(inverted.filter(ImageFilter.MaxFilter(size=size)))
+    dilated = ImageOps.invert(inverted.filter(ImageFilter.MaxFilter(size=size)))
+    if scale > 1:
+        dilated = dilated.resize(original_size, resample=Image.Resampling.LANCZOS)
+    return dilated
 
 
 def _apply_closing(img: Image.Image) -> Image.Image:
-    """Apply a 3x3 morphological closing to join small gaps in dark strokes."""
-    inverted = ImageOps.invert(img)
-    dilated = inverted.filter(ImageFilter.MaxFilter(size=3))
-    closed = dilated.filter(ImageFilter.MinFilter(size=3))
-    return ImageOps.invert(closed)
+    """Apply a supersampled 3x3 morphological closing to dark strokes."""
+    return _apply_morphology(img, closing=True)
+
+
+def _apply_opening(img: Image.Image) -> Image.Image:
+    """Apply a supersampled 3x3 morphological opening to dark strokes."""
+    return _apply_morphology(img, closing=False)
+
+
+def _apply_morphology(img: Image.Image, closing: bool) -> Image.Image:
+    """Apply a 3x3 morphology operation on dark foreground at higher resolution."""
+    original_size = img.size
+    scale = MORPHOLOGY_SUPERSAMPLE_FACTOR
+    enlarged = img.resize((img.width * scale, img.height * scale), resample=Image.Resampling.LANCZOS)
+    foreground = ImageOps.invert(enlarged)
+    if closing:
+        processed = foreground.filter(ImageFilter.MaxFilter(size=3)).filter(ImageFilter.MinFilter(size=3))
+    else:
+        processed = foreground.filter(ImageFilter.MinFilter(size=3)).filter(ImageFilter.MaxFilter(size=3))
+    result = ImageOps.invert(processed)
+    return result.resize(original_size, resample=Image.Resampling.LANCZOS)
 
 
 def _parse_page_selection(page_spec: str, total_pages: int, option_name: str) -> set[int]:
@@ -414,10 +451,11 @@ def _render_page(
     to_gray: bool,
     auto_correct: bool,
     max_brightness: Optional[int],
-    dilate: int,
+    dilate: float,
     blur: float,
     dct_denoise: int = 0,
     closing: bool = False,
+    opening: bool = False,
 ) -> Image.Image:
     src_width = float(page.rect.width)
     if max_width and src_width > 0:
@@ -441,6 +479,9 @@ def _render_page(
 
     if closing:
         img = _apply_closing(img)
+
+    if opening:
+        img = _apply_opening(img)
 
     if dilate and dilate > 0:
         img = _apply_dilation(img, dilate)
@@ -509,14 +550,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--dilate",
-        type=int,
+        type=float,
         default=0,
-        help="Dilation radius applied to each page image before blur, to thicken text strokes. Must be an integer.",
+        help="Dilation radius in pixels; supports 0.25-pixel increments with up to 4x supersampling.",
     )
     parser.add_argument(
         "--closing",
         action="store_true",
-        help="Apply a 3x3 morphological closing before blur or binarization to repair small gaps in text strokes.",
+        help="Apply a supersampled 3x3 morphological closing before blur or binarization.",
     )
     parser.add_argument(
         "--dct-denoise",
@@ -578,6 +619,7 @@ def main() -> int:
         raise ValueError("--blur must be >= 0")
     if args.dilate < 0:
         raise ValueError("--dilate must be >= 0")
+    _dilation_scale_and_radius(args.dilate)
     if args.dct_denoise < 0 or args.dct_denoise > 3:
         raise ValueError("--dct-denoise must be in range 0-3")
     if args.max_brightness is not None and (args.max_brightness < 0 or args.max_brightness > 255):
@@ -631,11 +673,11 @@ def main() -> int:
                 args.blur if not skip_filters else 0.0,
                 args.dct_denoise,
                 args.closing and not skip_filters,
+                ENABLE_OPENING and not skip_filters,
             )
             preview_path = output_dir / f"{input_path.stem}_preview_{output_index:04d}.png"
             img.save(preview_path, format="PNG")
             tqdm.write(f"[dry-run] saved: {preview_path}")
-        _print_distinct_image_info(doc)
         doc.close()
         print(f"Dry run completed: {dry_run_pages} page(s)")
         return 0
@@ -657,6 +699,7 @@ def main() -> int:
             args.blur if not skip_filters else 0.0,
             args.dct_denoise,
             args.closing and not skip_filters,
+            ENABLE_OPENING and not skip_filters,
         )
         # Normalize uncommon modes before encoding.
         if img.mode not in ("RGB", "L", "1"):
