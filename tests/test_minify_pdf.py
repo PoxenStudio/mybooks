@@ -8,10 +8,6 @@ import pytest
 from PIL import Image, features
 
 from tools.pdf.minify_pdf import (
-    _apply_closing,
-    _apply_dct_denoise,
-    _apply_dilation,
-    _apply_opening,
     _bilevel_encoding_candidates,
     _encode_jbig2,
     _format_file_size,
@@ -21,6 +17,15 @@ from tools.pdf.minify_pdf import (
     _quality_to_db,
     _save_pdf,
     main,
+)
+from tools.pdf.pdf_image_processor import (
+    ImageProcessOptions,
+    PdfImageProcessor,
+    _apply_closing,
+    _apply_dct_denoise,
+    _apply_dilation,
+    _apply_inpaint,
+    _apply_opening,
 )
 
 
@@ -82,6 +87,30 @@ def test_opening_reduces_an_isolated_dark_speck():
     opened = _apply_opening(image)
 
     assert opened.getpixel((4, 4)) > image.getpixel((4, 4))
+
+
+def test_inpaint_repairs_a_gap_without_filling_an_enclosed_counter():
+    pytest.importorskip("cv2")
+
+    line = Image.new("L", (21, 21), 255)
+    for x in range(3, 18):
+        if x != 10:
+            line.putpixel((x, 2), 0)
+
+    repaired_line = _apply_inpaint(line)
+    assert repaired_line.getpixel((10, 2)) < 255
+
+    ring = Image.new("L", (21, 21), 255)
+    for x in range(7, 14):
+        ring.putpixel((x, 4), 0)
+        ring.putpixel((x, 16), 0)
+    for y in range(4, 17):
+        ring.putpixel((7, y), 0)
+        ring.putpixel((13, y), 0)
+
+    repaired_ring = _apply_inpaint(ring)
+
+    assert repaired_ring.getpixel((10, 10)) == 255
 
 
 @pytest.mark.skipif(not features.check_codec("jpg_2000"), reason="Pillow has no JPEG 2000 support")
@@ -330,6 +359,58 @@ def test_dry_run_skips_full_image_format_summary(tmp_path, monkeypatch, capsys):
     assert "No embedded images found." not in output
     assert "Image 1:" not in output
     assert (output_dir / "source_preview_0001.png").exists()
+
+
+def test_dry_run_skips_dropped_pages_before_rendering(tmp_path, monkeypatch):
+    source_pdf = tmp_path / "source.pdf"
+    source_doc = fitz.open()
+    for page_number in range(3):
+        source_doc.new_page(width=200, height=300).insert_text((20, 30), f"Page {page_number + 1}")
+    source_doc.save(source_pdf)
+    source_doc.close()
+
+    rendered_page_numbers = []
+
+    def fake_render_page(page, *_args):
+        rendered_page_numbers.append(page.number)
+        return Image.new("RGB", (4, 4), "white")
+
+    output_dir = tmp_path / "output"
+    monkeypatch.setattr("tools.pdf.minify_pdf._render_page", fake_render_page)
+    monkeypatch.setattr("tools.pdf.minify_pdf.shutil.which", lambda _: None)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "minify_pdf.py",
+            str(source_pdf),
+            "--dry-run-pages",
+            "2",
+            "--drop-pages",
+            "1,3",
+            "--output-dir",
+            str(output_dir),
+        ],
+    )
+
+    assert main() == 0
+
+    assert rendered_page_numbers == [1]
+    assert (output_dir / "source_preview_0001.png").exists()
+    assert not (output_dir / "source_preview_0002.png").exists()
+
+
+def test_processor_saves_processed_image_to_output_dir(tmp_path):
+    source_path = tmp_path / "page.png"
+    Image.new("RGB", (40, 20), "white").save(source_path, format="PNG")
+    output_dir = tmp_path / "processed"
+
+    output_path = PdfImageProcessor(ImageProcessOptions(to_gray=True)).process_file(source_path, output_dir)
+
+    assert output_path == output_dir / "page_processed.png"
+    with Image.open(output_path) as saved:
+        assert saved.mode == "L"
+        assert saved.size == (40, 20)
 
 
 def test_inspect_cli_reports_at_most_five_distinct_image_info_items(tmp_path, monkeypatch, capsys):

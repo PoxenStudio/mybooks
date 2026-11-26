@@ -32,12 +32,14 @@ PDF 页面渲染、图像处理与压缩工具。
         小数半径会先按分母放大处理再缩回（例如 0.5 对应 2 倍放大）。
     --closing
         在模糊或二值化前以 2 倍超采样应用 3x3 闭运算，连接小断笔并填补细小缺口。
+    --inpaint
+        使用 OpenCV 根据局部闭运算检测并补全文字断口；需要安装 opencv-python。
     --dct-denoise 强度
         对含 DCTDecode（JPEG）图片的页面应用 3x3 中值滤波；1–3 表示滤波次数，
         默认 0（关闭）。即使页面列在 --skip-pages 中仍会应用。
     --skip-pages 页码
         逗号分隔的页码（从 1 开始；支持负数表示从末尾倒数），跳过这些页的
-        黑白/灰度/自动对比度/闭运算/开运算/膨胀/模糊处理，例如 1,3,-1。页面仍会渲染、
+        黑白/灰度/自动对比度/闭运算/inpaint/开运算/膨胀/模糊处理，例如 1,3,-1。页面仍会渲染、
         缩放和重新编码；此参数不跳过 --dct-denoise。
     --drop-pages 页码
         逗号分隔的页码，从输出中完全删除；支持负数页码，例如 2,5,-1。
@@ -51,7 +53,8 @@ PDF 页面渲染、图像处理与压缩工具。
         仅在 --gray 下使用。将高于此亮度值的像素设为白色，范围 0–255。
 
 注意：
-    ENABLE_OPENING 常量控制是否执行 2 倍超采样开运算，默认关闭；启用可能削弱细小笔画。
+    ENABLE_OPENING（pdf_image_processor.py）控制是否执行 2 倍超采样开运算，默认关闭；启用可能削弱细小笔画。
+    页面图像处理集中在 pdf_image_processor.PdfImageProcessor，可单独用该脚本处理单张图片进行调试。
     对最终为 1-bit 的黑白页，程序会比较无损 JBIG2Decode（若系统装有 jbig2enc）、
     JPXDecode 与 FlateDecode 的图像流大小，自动选用较小者。
     --skip-pages 只跳过页面图像处理，不会保留原始页面数据或原始编码。
@@ -67,65 +70,21 @@ import subprocess
 import tempfile
 import zlib
 from collections import Counter
-from fractions import Fraction
 from pathlib import Path
 from typing import Optional
 
 import fitz
 from PIL import Image
 from PIL import features
-from PIL import ImageFilter
-from PIL import ImageOps
 from tqdm import tqdm
+
+try:
+    from .pdf_image_processor import ENABLE_OPENING, ImageProcessOptions, PdfImageProcessor
+except ImportError:
+    from pdf_image_processor import ENABLE_OPENING, ImageProcessOptions, PdfImageProcessor
 
 # Resolution used when rendering pages and storing them in the output PDF.
 DEFAULT_RENDER_DPI = 150
-MORPHOLOGY_SUPERSAMPLE_FACTOR = 2
-ENABLE_OPENING = False
-
-
-def _otsu_threshold(gray_img: Image.Image) -> int:
-    """Compute Otsu threshold from a grayscale image."""
-    hist = gray_img.histogram()
-    total = sum(hist)
-    if total == 0:
-        return 127
-
-    sum_total = 0
-    for i, count in enumerate(hist):
-        sum_total += i * count
-
-    sum_bg = 0
-    weight_bg = 0
-    var_max = -1.0
-    threshold = 127
-
-    for i, count in enumerate(hist):
-        weight_bg += count
-        if weight_bg == 0:
-            continue
-
-        weight_fg = total - weight_bg
-        if weight_fg == 0:
-            break
-
-        sum_bg += i * count
-        mean_bg = sum_bg / weight_bg
-        mean_fg = (sum_total - sum_bg) / weight_fg
-
-        var_between = weight_bg * weight_fg * (mean_bg - mean_fg) ** 2
-        if var_between > var_max:
-            var_max = var_between
-            threshold = i
-
-    return threshold
-
-
-def _to_binary(img: Image.Image) -> Image.Image:
-    """Convert image to black/white with Otsu threshold."""
-    gray = img.convert("L")
-    threshold = _otsu_threshold(gray)
-    return gray.point(lambda x: 255 if x > threshold else 0, mode="1")
 
 
 def _is_bilevel_page(page: fitz.Page) -> bool:
@@ -150,25 +109,6 @@ def _format_file_size(size_bytes: int) -> str:
     if size_kb >= 1024:
         return f"{size_kb / 1024:.2f} MB"
     return f"{size_kb:.2f} KB"
-
-
-def _apply_dct_denoise(img: Image.Image, strength: int) -> Image.Image:
-    """Suppress small DCT ringing and speckles with repeated 3x3 median filtering."""
-    for _ in range(strength):
-        img = img.filter(ImageFilter.MedianFilter(size=3))
-    return img
-
-
-def _auto_correct_by_histogram(img: Image.Image) -> Image.Image:
-    """Auto-correct image contrast based on page histogram."""
-    # Use a small cutoff to avoid extreme outliers dominating the stretch.
-    return ImageOps.autocontrast(img, cutoff=1)
-
-
-def _cleanup_gray_background(img: Image.Image, max_brightness: int) -> Image.Image:
-    """Whiten brighter grayscale pixels to reduce background noise."""
-    gray = img.convert("L")
-    return gray.point(lambda value: 255 if value > max_brightness else value)
 
 
 def _pdf_filter_name(use_jpeg2000: bool) -> str:
@@ -365,56 +305,6 @@ def _save_pdf(
     return filter_counts
 
 
-def _dilation_scale_and_radius(dilate: float) -> tuple[int, int]:
-    """Return bounded supersampling scale and the corresponding pixel radius."""
-    fraction = Fraction(str(dilate)).limit_denominator(4)
-    if fraction.denominator not in (1, 2, 4) or not math.isclose(float(fraction), dilate, rel_tol=0, abs_tol=1e-6):
-        raise ValueError("--dilate must use 0.25-pixel increments")
-    return fraction.denominator, fraction.numerator
-
-
-def _apply_dilation(img: Image.Image, dilate: float) -> Image.Image:
-    """Apply dilation to thicken text strokes before blur or binarization."""
-    if dilate <= 0:
-        return img
-
-    scale, radius = _dilation_scale_and_radius(dilate)
-    original_size = img.size
-    if scale > 1:
-        img = img.resize((img.width * scale, img.height * scale), resample=Image.Resampling.LANCZOS)
-
-    size = radius * 2 + 1
-    inverted = ImageOps.invert(img)
-    dilated = ImageOps.invert(inverted.filter(ImageFilter.MaxFilter(size=size)))
-    if scale > 1:
-        dilated = dilated.resize(original_size, resample=Image.Resampling.LANCZOS)
-    return dilated
-
-
-def _apply_closing(img: Image.Image) -> Image.Image:
-    """Apply a supersampled 3x3 morphological closing to dark strokes."""
-    return _apply_morphology(img, closing=True)
-
-
-def _apply_opening(img: Image.Image) -> Image.Image:
-    """Apply a supersampled 3x3 morphological opening to dark strokes."""
-    return _apply_morphology(img, closing=False)
-
-
-def _apply_morphology(img: Image.Image, closing: bool) -> Image.Image:
-    """Apply a 3x3 morphology operation on dark foreground at higher resolution."""
-    original_size = img.size
-    scale = MORPHOLOGY_SUPERSAMPLE_FACTOR
-    enlarged = img.resize((img.width * scale, img.height * scale), resample=Image.Resampling.LANCZOS)
-    foreground = ImageOps.invert(enlarged)
-    if closing:
-        processed = foreground.filter(ImageFilter.MaxFilter(size=3)).filter(ImageFilter.MinFilter(size=3))
-    else:
-        processed = foreground.filter(ImageFilter.MinFilter(size=3)).filter(ImageFilter.MaxFilter(size=3))
-    result = ImageOps.invert(processed)
-    return result.resize(original_size, resample=Image.Resampling.LANCZOS)
-
-
 def _parse_page_selection(page_spec: str, total_pages: int, option_name: str) -> set[int]:
     """Parse comma-separated page numbers (1-based, supports negative reverse index)."""
     if not page_spec.strip():
@@ -444,19 +334,25 @@ def _parse_page_selection(page_spec: str, total_pages: int, option_name: str) ->
     return parsed
 
 
-def _render_page(
-    page: fitz.Page,
-    max_width: Optional[int],
-    to_bw: bool,
-    to_gray: bool,
-    auto_correct: bool,
-    max_brightness: Optional[int],
-    dilate: float,
-    blur: float,
-    dct_denoise: int = 0,
-    closing: bool = False,
-    opening: bool = False,
-) -> Image.Image:
+def _page_options(args: argparse.Namespace, page: fitz.Page, skip_filters: bool) -> ImageProcessOptions:
+    """Build the image processing options for one page."""
+    to_bw = (args.bw or _is_bilevel_page(page)) and not skip_filters
+    to_gray = args.gray and not skip_filters and not to_bw
+    return ImageProcessOptions(
+        to_bw=to_bw,
+        to_gray=to_gray,
+        auto_correct=args.auto and not skip_filters,
+        max_brightness=args.max_brightness if to_gray else None,
+        dilate=args.dilate if not skip_filters else 0.0,
+        blur=args.blur if not skip_filters else 0.0,
+        closing=args.closing and not skip_filters,
+        opening=ENABLE_OPENING and not skip_filters,
+        inpaint=args.inpaint and not skip_filters,
+        dct_denoise=args.dct_denoise,
+    )
+
+
+def _render_page(page: fitz.Page, options: ImageProcessOptions, max_width: Optional[int]) -> Image.Image:
     src_width = float(page.rect.width)
     if max_width and src_width > 0:
         scale = max_width / src_width
@@ -469,36 +365,7 @@ def _render_page(
     mode = "RGB" if pix.n >= 3 else "L"
     img = Image.frombytes(mode, (pix.width, pix.height), pix.samples)
 
-    if dct_denoise and _page_has_dct_image(page):
-        img = _apply_dct_denoise(img, dct_denoise)
-
-    # print(f"Rendering page {page.number} at scale {scale:.2f}, original width {src_width:.2f}, target width {pix.width:.2f}")
-
-    if auto_correct:
-        img = _auto_correct_by_histogram(img)
-
-    if closing:
-        img = _apply_closing(img)
-
-    if opening:
-        img = _apply_opening(img)
-
-    if dilate and dilate > 0:
-        img = _apply_dilation(img, dilate)
-
-    if blur and blur > 0:
-        img = img.filter(ImageFilter.GaussianBlur(radius=blur))
-
-    if to_bw:
-        img = _to_binary(img)
-    elif to_gray:
-        img = img.convert("L")
-        if max_brightness is not None:
-            img = _cleanup_gray_background(img, max_brightness)
-    elif mode != "RGB":
-        img = img.convert("RGB")
-
-    return img
+    return PdfImageProcessor(options).process(img, has_dct_image=_page_has_dct_image(page))
 
 
 def parse_args() -> argparse.Namespace:
@@ -560,6 +427,11 @@ def parse_args() -> argparse.Namespace:
         help="Apply a supersampled 3x3 morphological closing before blur or binarization.",
     )
     parser.add_argument(
+        "--inpaint",
+        action="store_true",
+        help="Use OpenCV to repair small gaps in dark text strokes. Requires opencv-python.",
+    )
+    parser.add_argument(
         "--dct-denoise",
         type=int,
         default=0,
@@ -568,7 +440,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--skip-pages",
         default="",
-        help="Comma-separated pages to skip bw/gray/auto/closing/dilation/blur (supports negative, e.g. 1,3,-1).",
+        help="Comma-separated pages to skip bw/gray/auto/closing/inpaint/opening/dilation/blur (supports negative, e.g. 1,3,-1).",
     )
     parser.add_argument(
         "--drop-pages",
@@ -615,17 +487,14 @@ def main() -> int:
         raise ValueError("--dry-run-pages must be >= 0")
     if args.quality < 1 or args.quality > 100:
         raise ValueError("--quality must be in range 1-100")
-    if args.blur < 0:
-        raise ValueError("--blur must be >= 0")
-    if args.dilate < 0:
-        raise ValueError("--dilate must be >= 0")
-    _dilation_scale_and_radius(args.dilate)
-    if args.dct_denoise < 0 or args.dct_denoise > 3:
-        raise ValueError("--dct-denoise must be in range 0-3")
-    if args.max_brightness is not None and (args.max_brightness < 0 or args.max_brightness > 255):
-        raise ValueError("--max-brightness must be in range 0-255")
-    if args.max_brightness is not None and not args.gray:
-        raise ValueError("--max-brightness requires --gray")
+    ImageProcessOptions(
+        to_gray=args.gray,
+        max_brightness=args.max_brightness,
+        dilate=args.dilate,
+        blur=args.blur,
+        dct_denoise=args.dct_denoise,
+        inpaint=args.inpaint,
+    )
 
     doc = fitz.open(str(input_path))
     total_pages = len(doc)
@@ -660,21 +529,7 @@ def main() -> int:
             tqdm(kept_page_indices[:dry_run_pages], desc="Rendering pages", unit="page"), start=1
         ):
             page = doc.load_page(page_index)
-            skip_filters = page_index in skip_page_indices
-            to_bw = (args.bw or _is_bilevel_page(page)) and not skip_filters
-            img = _render_page(
-                page,
-                args.max_width,
-                to_bw,
-                args.gray and not skip_filters,
-                args.auto and not skip_filters,
-                args.max_brightness if args.gray and not skip_filters else None,
-                args.dilate if not skip_filters else 0,
-                args.blur if not skip_filters else 0.0,
-                args.dct_denoise,
-                args.closing and not skip_filters,
-                ENABLE_OPENING and not skip_filters,
-            )
+            img = _render_page(page, _page_options(args, page, page_index in skip_page_indices), args.max_width)
             preview_path = output_dir / f"{input_path.stem}_preview_{output_index:04d}.png"
             img.save(preview_path, format="PNG")
             tqdm.write(f"[dry-run] saved: {preview_path}")
@@ -686,24 +541,7 @@ def main() -> int:
     page_sizes = []
     for page_index in tqdm(kept_page_indices, desc="Rendering pages", unit="page"):
         page = doc.load_page(page_index)
-        skip_filters = page_index in skip_page_indices
-        to_bw = (args.bw or _is_bilevel_page(page)) and not skip_filters
-        img = _render_page(
-            page,
-            args.max_width,
-            to_bw,
-            args.gray and not skip_filters,
-            args.auto and not skip_filters,
-            args.max_brightness if args.gray and not skip_filters else None,
-            args.dilate if not skip_filters else 0,
-            args.blur if not skip_filters else 0.0,
-            args.dct_denoise,
-            args.closing and not skip_filters,
-            ENABLE_OPENING and not skip_filters,
-        )
-        # Normalize uncommon modes before encoding.
-        if img.mode not in ("RGB", "L", "1"):
-            img = img.convert("RGB")
+        img = _render_page(page, _page_options(args, page, page_index in skip_page_indices), args.max_width)
         images.append(img)
         page_sizes.append((page.rect.width, page.rect.height))
 
