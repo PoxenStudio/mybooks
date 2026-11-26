@@ -10,7 +10,7 @@ PDF 页面渲染、图像处理与压缩工具。
     input_pdf
         必填。待处理的 PDF 文件路径。
     --inspect
-        只检查前 5 页，输出不同的页面尺寸、图片编码、有效 DPI 和颜色通道，不生成压缩文件。
+        输出最多 5 项嵌入图片信息（编码、DPI、像素尺寸和颜色模式），不生成压缩文件。
     --max-width 像素
         指定每页渲染的目标宽度，按比例缩放。设置后优先使用此宽度；
         未设置时通常按 150 DPI 渲染。若页面是单张全页图像且其分辨率低于
@@ -29,12 +29,14 @@ PDF 页面渲染、图像处理与压缩工具。
         二值化或灰度转换前应用高斯模糊；默认 0（关闭），不能小于 0。
     --dilate 半径
         模糊或二值化前加粗文字笔画；默认 0（关闭），必须是非负整数。
+    --closing
+        在模糊或二值化前应用 3x3 闭运算，连接小断笔并填补细小缺口。
     --dct-denoise 强度
         对含 DCTDecode（JPEG）图片的页面应用 3x3 中值滤波；1–3 表示滤波次数，
         默认 0（关闭）。即使页面列在 --skip-pages 中仍会应用。
     --skip-pages 页码
         逗号分隔的页码（从 1 开始；支持负数表示从末尾倒数），跳过这些页的
-        黑白/灰度/自动对比度/膨胀/模糊处理，例如 1,3,-1。页面仍会渲染、
+        黑白/灰度/自动对比度/闭运算/膨胀/模糊处理，例如 1,3,-1。页面仍会渲染、
         缩放和重新编码；此参数不跳过 --dct-denoise。
     --drop-pages 页码
         逗号分隔的页码，从输出中完全删除；支持负数页码，例如 2,5,-1。
@@ -48,6 +50,8 @@ PDF 页面渲染、图像处理与压缩工具。
         仅在 --gray 下使用。将高于此亮度值的像素设为白色，范围 0–255。
 
 注意：
+    对最终为 1-bit 的黑白页，程序会比较无损 JBIG2Decode（若系统装有 jbig2enc）、
+    JPXDecode 与 FlateDecode 的图像流大小，自动选用较小者。
     --skip-pages 只跳过页面图像处理，不会保留原始页面数据或原始编码。
     --bw 与 --gray 不能同时使用；--max-brightness 必须与 --gray 同时使用。
 """
@@ -55,6 +59,11 @@ PDF 页面渲染、图像处理与压缩工具。
 import argparse
 import io
 import math
+import shutil
+import struct
+import subprocess
+import tempfile
+import zlib
 from collections import Counter
 from pathlib import Path
 from typing import Optional
@@ -125,6 +134,19 @@ def _page_has_dct_image(page: fitz.Page) -> bool:
     return any("DCTDecode" in (image[8] or "") for image in page.get_images(full=True))
 
 
+def _jbig2_encoder_path() -> Optional[str]:
+    """Return the path to the jbig2enc executable when it is available."""
+    return shutil.which("jbig2")
+
+
+def _format_file_size(size_bytes: int) -> str:
+    """Format a file size in KB or MB, switching to MB at 1024 KB."""
+    size_kb = size_bytes / 1024
+    if size_kb >= 1024:
+        return f"{size_kb / 1024:.2f} MB"
+    return f"{size_kb:.2f} KB"
+
+
 def _apply_dct_denoise(img: Image.Image, strength: int) -> Image.Image:
     """Suppress small DCT ringing and speckles with repeated 3x3 median filtering."""
     for _ in range(strength):
@@ -144,12 +166,8 @@ def _cleanup_gray_background(img: Image.Image, max_brightness: int) -> Image.Ima
     return gray.point(lambda value: 255 if value > max_brightness else value)
 
 
-def _pdf_filter_name(mode: str, use_jpeg2000: bool, lossless: bool = False) -> str:
+def _pdf_filter_name(use_jpeg2000: bool) -> str:
     """Return the PDF filter used for an image of the given mode."""
-    if use_jpeg2000 and (mode != "1" or lossless):
-        return "JPXDecode"
-    if mode == "1":
-        return "CCITTFaxDecode" if features.check("libtiff") else "DCTDecode"
     return "JPXDecode" if use_jpeg2000 else "DCTDecode"
 
 
@@ -189,19 +207,12 @@ def _image_color_info(colorspace: str, alternate_colorspace: str, bits_per_compo
 
 
 def _print_distinct_image_info(doc: fitz.Document) -> None:
-    """Print distinct page sizes, image encodings, and effective resolutions."""
-    distinct: dict[tuple[str, float, float, str, Optional[int]], set[int]] = {}
-    page_sizes: dict[tuple[float, float], set[int]] = {}
-    for page_index in range(min(5, len(doc))):
+    """Print up to five distinct embedded image encodings and resolutions."""
+    distinct: dict[tuple[str, float, float, int, int, str, Optional[int]], None] = {}
+    for page_index in range(len(doc)):
         page = doc.load_page(page_index)
-        page_size = (round(page.rect.width / 72, 2), round(page.rect.height / 72, 2))
-        page_sizes.setdefault(page_size, set()).add(page_index + 1)
-        seen_xrefs = set()
         for image in page.get_images(full=True):
             xref, width, height, bits_per_component = image[0], image[2], image[3], image[4]
-            if xref in seen_xrefs:
-                continue
-            seen_xrefs.add(xref)
 
             filter_type, filter_value = doc.xref_get_key(xref, "Filter")
             encoding = " + ".join(filter_value.strip("[]").replace("/", "").split()) if filter_type != "null" else "Unfiltered"
@@ -213,26 +224,70 @@ def _print_distinct_image_info(doc: fitz.Document) -> None:
                     continue
                 dpi_x = round(width * 72 / width_pt, 1)
                 dpi_y = round(height * 72 / height_pt, 1)
-                distinct.setdefault((encoding, dpi_x, dpi_y, color_mode, channels), set()).add(page_index + 1)
-
-    for (width_in, height_in), pages in sorted(page_sizes.items()):
-        page_list = ", ".join(str(page) for page in sorted(pages))
-        print(f"Page size: {width_in:g} x {height_in:g} in | Pages: {page_list}")
+                distinct.setdefault((encoding, dpi_x, dpi_y, width, height, color_mode, channels), None)
+                if len(distinct) >= 5:
+                    break
+            if len(distinct) >= 5:
+                break
+        if len(distinct) >= 5:
+            break
 
     if not distinct:
-        print("No embedded images found in the first 5 pages.")
+        print("No embedded images found.")
         return
 
-    for (encoding, dpi_x, dpi_y, color_mode, channels), pages in sorted(distinct.items()):
-        page_list = ", ".join(str(page) for page in sorted(pages))
+    for index, (encoding, dpi_x, dpi_y, width, height, color_mode, channels) in enumerate(distinct, start=1):
         resolution = f"{dpi_x:g} DPI" if dpi_x == dpi_y else f"{dpi_x:g} x {dpi_y:g} DPI"
-        channel_info = f"{color_mode} ({channels} channel{'s' if channels != 1 else ''})" if channels else color_mode
-        print(f"{encoding} | {resolution} | {channel_info} | Pages: {page_list}")
+        channel_info = str(channels) if channels is not None else "unknown"
+        print(
+            f"Image {index}: decoder={encoding} | dpi={resolution} | size={width} x {height} px "
+            f"| color={color_mode} | channels={channel_info}"
+        )
 
 
 def _quality_to_db(quality: int) -> float:
     """Map the 1-100 quality option to a JPEG 2000 target quality of 20-40 dB."""
     return 20.0 + quality * 0.2
+
+
+def _encode_jbig2(img: Image.Image, encoder_path: str) -> bytes:
+    """Encode a bilevel image as a lossless, PDF-ready JBIG2 generic region."""
+    with tempfile.TemporaryDirectory(prefix="minify-pdf-jbig2-") as temp_dir:
+        input_path = Path(temp_dir) / "page.png"
+        img.save(input_path, format="PNG")
+        result = subprocess.run(
+            [encoder_path, "-p", str(input_path)],
+            capture_output=True,
+            check=False,
+        )
+
+    if result.returncode != 0:
+        detail = result.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"jbig2 encoder failed with exit code {result.returncode}: {detail}")
+
+    encoded = result.stdout
+    if len(encoded) < 27:
+        raise RuntimeError("jbig2 encoder returned an incomplete PDF-mode stream")
+    width, height, _, _ = struct.unpack(">IIII", encoded[11:27])
+    if (width, height) != img.size:
+        raise RuntimeError(f"jbig2 encoder returned unexpected dimensions: {width} x {height}")
+    return encoded
+
+
+def _bilevel_encoding_candidates(
+    img: Image.Image,
+    use_jpeg2000: bool,
+    jbig2_encoder: Optional[str],
+) -> dict[str, bytes]:
+    """Return lossless encoded streams for a bilevel page, keyed by PDF filter."""
+    candidates = {"FlateDecode": zlib.compress(img.tobytes(), level=9)}
+    if use_jpeg2000:
+        buffer = io.BytesIO()
+        img.convert("L").save(buffer, format="JPEG2000", irreversible=False)
+        candidates["JPXDecode"] = buffer.getvalue()
+    if jbig2_encoder is not None:
+        candidates["JBIG2Decode"] = _encode_jbig2(img, jbig2_encoder)
+    return candidates
 
 
 def _save_pdf(
@@ -242,9 +297,17 @@ def _save_pdf(
     use_jpeg2000: bool,
     page_sizes: Optional[list[tuple[float, float]]] = None,
     lossless: bool = False,
-) -> None:
+) -> Counter[str]:
     # Encode one page at a time so progress can be reported.
     merged = fitz.open()
+    filter_counts: Counter[str] = Counter()
+    has_bilevel_pages = any(img.mode == "1" for img in images)
+    jbig2_encoder = _jbig2_encoder_path() if has_bilevel_pages else None
+    if has_bilevel_pages and jbig2_encoder is None:
+        encoders = ["FlateDecode"]
+        if use_jpeg2000:
+            encoders.insert(0, "JPXDecode")
+        tqdm.write(f"JBIG2 encoder not found; comparing {' and '.join(encoders)} only.")
     try:
         for index, img in enumerate(tqdm(images, desc="Encoding pages", unit="page")):
             buffer = io.BytesIO()
@@ -253,15 +316,26 @@ def _save_pdf(
                 if page_sizes is not None
                 else (img.width * 72 / DEFAULT_RENDER_DPI, img.height * 72 / DEFAULT_RENDER_DPI)
             )
-            if use_jpeg2000 and (img.mode != "1" or lossless):
+            if img.mode == "1":
+                candidates = _bilevel_encoding_candidates(img, use_jpeg2000, jbig2_encoder)
+                filter_name, stream_data = min(candidates.items(), key=lambda candidate: len(candidate[1]))
+                page = merged.new_page(width=page_width, height=page_height)
+                if filter_name == "JPXDecode":
+                    page.insert_image(page.rect, stream=stream_data)
+                else:
+                    img.save(buffer, format="PNG", optimize=True)
+                    xref = page.insert_image(page.rect, stream=buffer.getvalue())
+                    merged.update_stream(xref, stream_data, compress=False)
+                    merged.xref_set_key(xref, "Filter", f"/{filter_name}")
+                filter_counts[filter_name] += 1
+            elif use_jpeg2000:
                 # Embed a plain (opaque) JPEG 2000 stream. Pillow's PDF writer
                 # only emits JPEG 2000 for LA/RGBA and adds SMaskInData, which
                 # some readers mis-handle; MuPDF embeds the stream as-is instead.
-                encoded_img = img.convert("L") if img.mode == "1" else img
                 if lossless:
-                    encoded_img.save(buffer, format="JPEG2000", irreversible=False)
+                    img.save(buffer, format="JPEG2000", irreversible=False)
                 else:
-                    encoded_img.save(
+                    img.save(
                         buffer,
                         format="JPEG2000",
                         quality_mode="dB",
@@ -270,18 +344,20 @@ def _save_pdf(
                     )
                 page = merged.new_page(width=page_width, height=page_height)
                 page.insert_image(page.rect, stream=buffer.getvalue())
+                filter_counts["JPXDecode"] += 1
             else:
-                # 1-bit pages use CCITT; other modes fall back to PIL's JPEG writer.
                 save_options = {"optimize": True, "resolution": img.width * 72 / page_width}
-                if img.mode != "1":
-                    save_options["quality"] = quality
+                save_options["quality"] = quality
                 img.save(buffer, format="PDF", **save_options)
                 page_doc = fitz.open(stream=buffer.getvalue(), filetype="pdf")
+                filter_name = _pdf_filter_name(use_jpeg2000)
                 merged.insert_pdf(page_doc)
                 page_doc.close()
+                filter_counts[filter_name] += 1
         merged.save(str(output_pdf))
     finally:
         merged.close()
+    return filter_counts
 
 
 def _apply_dilation(img: Image.Image, dilate: int) -> Image.Image:
@@ -290,12 +366,16 @@ def _apply_dilation(img: Image.Image, dilate: int) -> Image.Image:
         return img
 
     size = dilate * 2 + 1
-    if size < 3:
-        size = 3
-    if size % 2 == 0:
-        size += 1
+    inverted = ImageOps.invert(img)
+    return ImageOps.invert(inverted.filter(ImageFilter.MaxFilter(size=size)))
 
-    return img.filter(ImageFilter.MaxFilter(size=size))
+
+def _apply_closing(img: Image.Image) -> Image.Image:
+    """Apply a 3x3 morphological closing to join small gaps in dark strokes."""
+    inverted = ImageOps.invert(img)
+    dilated = inverted.filter(ImageFilter.MaxFilter(size=3))
+    closed = dilated.filter(ImageFilter.MinFilter(size=3))
+    return ImageOps.invert(closed)
 
 
 def _parse_page_selection(page_spec: str, total_pages: int, option_name: str) -> set[int]:
@@ -337,6 +417,7 @@ def _render_page(
     dilate: int,
     blur: float,
     dct_denoise: int = 0,
+    closing: bool = False,
 ) -> Image.Image:
     src_width = float(page.rect.width)
     if max_width and src_width > 0:
@@ -357,6 +438,9 @@ def _render_page(
 
     if auto_correct:
         img = _auto_correct_by_histogram(img)
+
+    if closing:
+        img = _apply_closing(img)
 
     if dilate and dilate > 0:
         img = _apply_dilation(img, dilate)
@@ -382,7 +466,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--inspect",
         action="store_true",
-        help="Show distinct image encodings and resolutions in the first 5 pages, then exit.",
+        help="Show up to 5 distinct embedded image encodings and resolutions, then exit.",
     )
     parser.add_argument(
         "--max-width",
@@ -430,6 +514,11 @@ def parse_args() -> argparse.Namespace:
         help="Dilation radius applied to each page image before blur, to thicken text strokes. Must be an integer.",
     )
     parser.add_argument(
+        "--closing",
+        action="store_true",
+        help="Apply a 3x3 morphological closing before blur or binarization to repair small gaps in text strokes.",
+    )
+    parser.add_argument(
         "--dct-denoise",
         type=int,
         default=0,
@@ -438,7 +527,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--skip-pages",
         default="",
-        help="Comma-separated pages to skip bw/gray/auto (supports negative, e.g. 1,3,-1).",
+        help="Comma-separated pages to skip bw/gray/auto/closing/dilation/blur (supports negative, e.g. 1,3,-1).",
     )
     parser.add_argument(
         "--drop-pages",
@@ -473,6 +562,12 @@ def main() -> int:
         raise FileNotFoundError(f"Input PDF not found: {input_path}")
     if input_path.suffix.lower() != ".pdf":
         raise ValueError(f"Input file must be a PDF: {input_path}")
+    print(f"Source file size: {input_path.stat().st_size / 1024:.2f} KB")
+    jbig2_encoder = _jbig2_encoder_path()
+    if jbig2_encoder:
+        print(f"JBIG2Enc: available ({jbig2_encoder})")
+    else:
+        print("JBIG2Enc: not available")
     if args.max_width is not None and args.max_width <= 0:
         raise ValueError("--max-width must be a positive integer")
     if args.dry_run_pages < 0:
@@ -535,10 +630,12 @@ def main() -> int:
                 args.dilate if not skip_filters else 0,
                 args.blur if not skip_filters else 0.0,
                 args.dct_denoise,
+                args.closing and not skip_filters,
             )
             preview_path = output_dir / f"{input_path.stem}_preview_{output_index:04d}.png"
             img.save(preview_path, format="PNG")
             tqdm.write(f"[dry-run] saved: {preview_path}")
+        _print_distinct_image_info(doc)
         doc.close()
         print(f"Dry run completed: {dry_run_pages} page(s)")
         return 0
@@ -559,6 +656,7 @@ def main() -> int:
             args.dilate if not skip_filters else 0,
             args.blur if not skip_filters else 0.0,
             args.dct_denoise,
+            args.closing and not skip_filters,
         )
         # Normalize uncommon modes before encoding.
         if img.mode not in ("RGB", "L", "1"):
@@ -566,15 +664,14 @@ def main() -> int:
         images.append(img)
         page_sizes.append((page.rect.width, page.rect.height))
 
-    filter_counts = Counter(_pdf_filter_name(img.mode, use_jpeg2000, args.lossless) for img in images)
-    summary = ", ".join(f"{name} x{count}" for name, count in sorted(filter_counts.items()))
-    print(f"PDF image encoding ({len(images)} pages): {summary}")
-    if "JPXDecode" in filter_counts and not args.lossless:
-        print(f"JPEG 2000 target quality: {_quality_to_db(args.quality):.1f} dB")
-
+    _print_distinct_image_info(doc)
     doc.close()
 
-    _save_pdf(images, output_pdf, args.quality, use_jpeg2000, page_sizes, args.lossless)
+    filter_counts = _save_pdf(images, output_pdf, args.quality, use_jpeg2000, page_sizes, args.lossless)
+    summary = ", ".join(f"{name} x{count}" for name, count in sorted(filter_counts.items()))
+    print(f"PDF image encoding ({len(images)} pages): {summary}")
+    if "JPXDecode" in filter_counts and not args.lossless and any(img.mode != "1" for img in images):
+        print(f"JPEG 2000 target quality: {_quality_to_db(args.quality):.1f} dB")
 
     # Ensure creator metadata is written in the final PDF.
     meta_doc = fitz.open(str(output_pdf))
@@ -589,6 +686,7 @@ def main() -> int:
     meta_doc.close()
 
     print(f"Saved minified PDF: {output_pdf}")
+    print(f"Output file size: {_format_file_size(output_pdf.stat().st_size)}")
     return 0
 
 
