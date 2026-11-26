@@ -99,15 +99,15 @@ def _page_render_dpi(page: "fitz.Page") -> float:
     return min(DEFAULT_RENDER_DPI, image_dpi) if image_dpi > 0 else DEFAULT_RENDER_DPI
 
 
-def _quality_to_db(qualify: int) -> float:
+def _quality_to_db(quality: int) -> float:
     """Map the 1-100 quality factor to a JPEG 2000 target quality of 20-40 dB."""
-    return 20.0 + qualify * 0.2
+    return 20.0 + quality * 0.2
 
 
 def _save_pdf(
     images: list[Image.Image],
     output_pdf: Path,
-    qualify: int,
+    quality: int,
     use_jpeg2000: bool,
     page_sizes: Optional[list[tuple[float, float]]] = None,
 ) -> None:
@@ -130,7 +130,7 @@ def _save_pdf(
                     buffer,
                     format="JPEG2000",
                     quality_mode="dB",
-                    quality_layers=[_quality_to_db(qualify)],
+                    quality_layers=[_quality_to_db(quality)],
                     irreversible=True,
                 )
                 page = merged.new_page(width=page_width, height=page_height)
@@ -139,7 +139,7 @@ def _save_pdf(
                 # 1-bit pages use CCITT; other modes fall back to PIL's JPEG writer.
                 save_options = {"optimize": True, "resolution": img.width * 72 / page_width}
                 if img.mode != "1":
-                    save_options["quality"] = qualify
+                    save_options["quality"] = quality
                 img.save(buffer, format="PDF", **save_options)
                 page_doc = fitz.open(stream=buffer.getvalue(), filetype="pdf")
                 merged.insert_pdf(page_doc)
@@ -323,7 +323,7 @@ class MinifyPdfTool(BaseTool):
         """异步处理PDF文件并导入。
 
         :param input_pdf: 原 PDF 路径
-        :param params: 参数字典，包含 max_width, bw, gray, auto, skip_pages, drop_pages, qualify, max_brightness 等
+        :param params: 参数字典，包含 max_width, bw, gray, auto, skip_pages, drop_pages, quality, max_brightness 等
         :param user_id: 入库操作关联的用户 ID
         :param callback: 进度回调，参数为 0-100 的整数进度值
         :return: {"title": str, "pdf_path": str, "book_id": int}；异步模式下返回 None
@@ -349,10 +349,10 @@ class MinifyPdfTool(BaseTool):
             auto_correct = params.get("auto", False)
             skip_pages_str = params.get("skip_pages", "")
             drop_pages_str = params.get("drop_pages", "")
-            qualify = params.get("qualify", 75)
+            quality = params.get("quality", 85)
             max_brightness = params.get("max_brightness", None)
-            if not isinstance(qualify, int) or qualify < 1 or qualify > 100:
-                raise ValueError("qualify must be in range 1-100")
+            if not isinstance(quality, int) or quality < 1 or quality > 100:
+                raise ValueError("quality must be in range 1-100")
 
             work_dir = self.get_work_dir("")
             processed_dir = os.path.join(work_dir, "processed")
@@ -408,7 +408,7 @@ class MinifyPdfTool(BaseTool):
             doc.close()
 
             # 保存处理后的 PDF
-            _save_pdf(images, output_pdf, qualify, use_jpeg2000, page_sizes)
+            _save_pdf(images, output_pdf, quality, use_jpeg2000, page_sizes)
 
             # 写回 metadata
             meta_doc = fitz.open(str(output_pdf))

@@ -98,8 +98,8 @@
 
             <!-- Quality -->
             <v-slider
-              v-model="qualify"
-              :label="$t('minifyPdf.qualifyLabel')"
+              v-model="quality"
+              :label="$t('minifyPdf.qualityLabel')"
               min="60"
               max="95"
               thumb-label
@@ -107,7 +107,7 @@
               class="mt-4"
             ></v-slider>
             <div class="text-caption text-grey mb-3">
-              {{ $t('minifyPdf.qualifyDesc') }}
+              {{ $t('minifyPdf.qualityDesc') }}
             </div>
 
             <!-- Skip Pages -->
@@ -206,11 +206,11 @@ export default {
     mode: 'gray', // 'gray' or 'bw'
     maxBrightness: 200,
 
-    maxWidth: 1200,
+    maxWidth: 1024,
     autoContrast: true,
     skipPages: '',
     dropPages: '',
-    qualify: 75,
+    quality: 85,
 
     processing: false,
     progress: 0,
@@ -285,7 +285,7 @@ export default {
         gray: this.mode === 'gray',
         max_width: this.maxWidth,
         auto: this.autoContrast,
-        qualify: this.qualify,
+        quality: this.quality,
       };
 
       if (this.skipPages) params.skip_pages = this.skipPages;
