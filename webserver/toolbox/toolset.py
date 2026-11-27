@@ -104,7 +104,6 @@ class ToolSet:
         from .rare_book_downloader import RareBookDownloader
         from .merge_formats_tool import MergeFormatsTool
         from .review_book_language_tool import ReviewBookLanguageTool
-        from .minify_pdf import MinifyPdfTool
         from .text_processor import TextProcessor
         from .formats_pruning import FormatsPruningTool
         from .epub_fixer import EpubFixerTool
@@ -132,7 +131,6 @@ class ToolSet:
         if TextReplaceTool is not None:
             ToolSet.register(TextReplaceTool.info())
         ToolSet.register(TextProcessor.info())
-        ToolSet.register(MinifyPdfTool.info())
         ToolSet.register(MimoTTSTool.info())
         ToolSet.register(AuthorCleanTool.info())
         ToolSet.register(ReviewBookLanguageTool.info())
@@ -140,8 +138,6 @@ class ToolSet:
         ToolSet.register(FormatsPruningTool.info())
         ToolSet.register(RareBookDownloader.info())
         ToolSet.register(BookBarnAcceptorTool.info())
-
-        MinifyPdfTool.cleanup_old_files()
 
     @staticmethod
     def register(info: dict):

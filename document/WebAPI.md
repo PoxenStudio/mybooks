@@ -4695,13 +4695,6 @@ EPUB 转有声书（WAV），支持 MiMo TTS / OpenAI TTS 兼容接口。公共 
   - `err` 可能为 `params.direction.invalid` / `params.mode.invalid` / `task.running`
 - `GET /api/toolbox/chinese_converter/progress`：进度
 
-### 16.10 PDF 瘦身（minify_pdf）
-
-- `POST /api/toolbox/minify_pdf/upload`：表单文件 `file`，返回 `data`: `filename`（服务器暂存名）、`page_count`、`file_size`、`page_width`、`page_height`
-- `POST /api/toolbox/minify_pdf/process`：JSON `filename` (必填)、`params` (object)：`max_width`（默认 800）、`bw`、`gray`、`auto`（bool）、`skip_pages`、`drop_pages`（逗号分隔页码，支持负数）、`qualify`（JPEG 质量 1~100，默认 75）、`max_brightness`（0~255）；`err` 可能为 `file.not_found` / `task.running`
-- `GET /api/toolbox/minify_pdf/progress?filename=<name>`：`data`: `status`（`running`/`completed`）、`progress`、`download_url`（完成时）；`err` 可能为 `task.failed` / `task.interrupted`
-- `GET /api/toolbox/minify_pdf/download?filename=<name>`：下载处理后的 PDF（二进制）
-
 ### 16.11 格式精简（formats_pruning）
 
 - `POST /api/toolbox/formats_pruning/start`：JSON `delete` (array, 必填): 要删除的格式组，取值 `pdf` / `epub` / `azw3_mobi` / `txt` / `docx`，不能全选
