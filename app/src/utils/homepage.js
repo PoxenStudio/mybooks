@@ -27,7 +27,7 @@ export const SECTION_MODULE = {
   "index.booklistRecommendation": "shared_reading",
 };
 
-export const CUSTOM_TYPES = ["author", "tag", "series", "language", "rating"];
+export const CUSTOM_TYPES = ["author", "tag", "series", "keyword", "language", "rating"];
 export const CUSTOM_SORTS = ["new", "title", "rating", "series", "random"];
 export const CUSTOM_LIMITS = [6, 12, 24, 48];
 export const MAX_CUSTOM_CARDS = 30;
@@ -80,13 +80,18 @@ export function normalizeHomepageConfig(raw) {
     if (!CUSTOM_SORTS.includes(sort)) sort = defaultSortFor(type);
     let limit = Number(item.limit);
     if (!CUSTOM_LIMITS.includes(limit)) limit = 12;
-    custom.push({
+    const card = {
       id,
       type,
       value,
       sort,
       limit,
-    });
+    };
+    if (type === "keyword") {
+      const match = cleanText(item.match, 10).toLowerCase();
+      card.match = match === "all" ? "all" : "any";
+    }
+    custom.push(card);
     usedIds.add(id);
   });
 
@@ -126,12 +131,19 @@ export function sectionLabel(card, t) {
     value = t("settings.homepage_rating_value", { n: value });
   }
   if (!value) value = t("settings.homepage_card_no_value");
+  const typeKey = card.type === "keyword" && card.match === "all"
+    ? "settings.homepage_type_keyword_all"
+    : "settings.homepage_type_" + card.type;
   return t("settings.homepage_card_auto_title", {
-    type: t("settings.homepage_type_" + card.type),
+    type: t(typeKey),
     value,
   });
 }
 
 export function customCardViewAll(card) {
-  return `/${card.type}/${encodeURIComponent(card.value || "")}`;
+  const path = `/${card.type}/${encodeURIComponent(card.value || "")}`;
+  if (card.type === "keyword") {
+    return `${path}?match=${card.match === "all" ? "all" : "any"}`;
+  }
+  return path;
 }

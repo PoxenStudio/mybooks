@@ -90,6 +90,36 @@ class TestHomepageConfig(unittest.TestCase):
         self.assertEqual(config["custom"][1]["limit"], 24)
         self.assertEqual(config["custom"][2]["value"], "")
 
+    def test_keyword_card_normalization(self):
+        config = normalize_homepage(
+            {
+                "custom": [
+                    {
+                        "id": "k1",
+                        "type": "keyword",
+                        "value": "  三体 黑暗  ",
+                        "match": "ALL",
+                        "sort": "new",
+                        "limit": 24,
+                    },
+                    {"id": "k2", "type": "keyword", "value": "x", "match": "weird"},
+                    {"id": "a1", "type": "author", "value": "x", "match": "all"},
+                ]
+            }
+        )
+        cards = config["custom"]
+        self.assertEqual(cards[0]["type"], "keyword")
+        self.assertEqual(cards[0]["value"], "三体 黑暗")
+        self.assertEqual(cards[0]["match"], "all")
+        self.assertEqual(cards[1]["match"], "any")
+        self.assertNotIn("match", cards[2])
+
+    def test_keyword_default_sort(self):
+        config = normalize_homepage(
+            {"custom": [{"id": "k1", "type": "keyword", "value": "三体"}]}
+        )
+        self.assertEqual(config["custom"][0]["sort"], "new")
+
     def test_custom_card_limit(self):
         cards = [
             {"id": "c%d" % i, "type": "author", "value": "a%d" % i}

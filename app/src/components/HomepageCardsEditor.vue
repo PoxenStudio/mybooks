@@ -87,7 +87,7 @@
               @change="onTypeChange"
             ></v-select>
           </v-col>
-          <v-col cols="12" sm="4">
+          <v-col cols="12" :sm="draft.type === 'keyword' ? 4 : 6">
             <v-combobox
               v-if="valueFromList"
               v-model="draft.value"
@@ -100,6 +100,16 @@
               @focus="onValueFocus"
               @update:search-input="onDraftSearch"
             ></v-combobox>
+            <v-text-field
+              v-else-if="draft.type === 'keyword'"
+              v-model="draft.value"
+              :label="$t('settings.homepage_card_value')"
+              :placeholder="$t('settings.homepage_card_keyword_placeholder')"
+              dense
+              outlined
+              hide-details
+              clearable
+            ></v-text-field>
             <v-select
               v-else-if="draft.type === 'language'"
               v-model="draft.value"
@@ -119,7 +129,17 @@
               hide-details
             ></v-select>
           </v-col>
-          <v-col cols="6" sm="3">
+          <v-col v-if="draft.type === 'keyword'" cols="6" sm="2">
+            <v-select
+              v-model="draft.match"
+              :items="matchOptions"
+              :label="$t('settings.homepage_card_match')"
+              dense
+              outlined
+              hide-details
+            ></v-select>
+          </v-col>
+          <v-col cols="6" sm="2">
             <v-select
               v-model="draft.sort"
               :items="sortOptions"
@@ -129,7 +149,7 @@
               hide-details
             ></v-select>
           </v-col>
-          <v-col cols="6" sm="3">
+          <v-col cols="6" sm="2">
             <v-select
               v-model="draft.limit"
               :items="limitOptions"
@@ -140,6 +160,9 @@
             ></v-select>
           </v-col>
         </v-row>
+        <p v-if="draft.type === 'keyword'" class="caption grey--text mt-2 mb-0">
+          {{ $t("settings.homepage_card_keyword_hint") }}
+        </p>
       </v-card-text>
     </v-card>
   </div>
@@ -165,6 +188,7 @@ const TYPE_ICONS = {
   author: "mdi-account-outline",
   tag: "mdi-tag-outline",
   series: "mdi-bookshelf",
+  keyword: "mdi-magnify",
   language: "mdi-translate",
   rating: "mdi-star-outline",
 };
@@ -194,6 +218,7 @@ export default {
       draft: {
         type: "author",
         value: "",
+        match: "any",
         sort: "new",
         limit: 12,
       },
@@ -236,6 +261,12 @@ export default {
     },
     limitOptions() {
       return CUSTOM_LIMITS.map((value) => ({ value, text: String(value) }));
+    },
+    matchOptions() {
+      return [
+        { value: "any", text: this.$t("settings.homepage_match_any") },
+        { value: "all", text: this.$t("settings.homepage_match_all") },
+      ];
     },
     ratingItems() {
       return [1, 2, 3, 4, 5].map((value) => ({
@@ -370,6 +401,7 @@ export default {
     onTypeChange() {
       // 换类型后原来的取值没有意义，排序也回到该类型的默认值
       this.draft.value = "";
+      this.draft.match = "any";
       this.draft.sort = defaultSortFor(this.draft.type);
       this.searchSeq.author += 1;
       this.searchSeq.tag += 1;
@@ -435,12 +467,16 @@ export default {
         sort: this.draft.sort,
         limit: this.draft.limit,
       };
+      if (card.type === "keyword") {
+        card.match = this.draft.match === "all" ? "all" : "any";
+      }
       this.local.custom = this.local.custom.concat([card]);
       this.local.order = this.local.order.concat([cardSectionKey(card)]);
       // 加完清空内容，保留类型/排序/数量方便连续添加同类卡片
       this.draft = {
         type: card.type,
         value: "",
+        match: card.match || "any",
         sort: card.sort,
         limit: card.limit,
       };

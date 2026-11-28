@@ -3,14 +3,96 @@
 import logging
 import math
 import random
+import re
 import sys
 from webserver.i18n import _
 
 from webserver.handlers.base import ListHandler, js
 from webserver.models import StickyItem
-from webserver import loader, constants
+from webserver.base.homepage import MAX_VALUE_LEN
+from webserver import loader, constants, utils
 
 CONF = loader.get_settings()
+
+KEYWORD_SPLIT_RE = re.compile(r'"([^"]+)"|([^\s,，、;；]+)', re.UNICODE)
+MAX_KEYWORDS = 8
+
+
+# Calibre 的 _matchkind 会把查询词首字符 = ~ ^ \ 当成精确/正则/忽略重音等特殊语义
+# （~ 甚至会把用户输入当正则执行）。关键词必须按字面"包含"匹配，补一个反斜杠让
+# Calibre 退回普通包含匹配；反斜杠本身也会由 _quote_search_value 正常转义。
+LITERAL_QUERY_PREFIXES = ("\\", "=", "~", "^")
+
+
+def _quote_search_value(value):
+    """Calibre 搜索词转义，规则与 SearchBook._quote 保持一致。"""
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _has_searchable_char(word):
+    """至少含一个字母/数字（含 CJK）：纯标点词在 Calibre 标题匹配里会被忽略成空串。"""
+    return any(ch.isalnum() for ch in word)
+
+
+def split_keywords(value):
+    """按空白/中英文逗号/顿号/分号切分关键词，英文双引号内保留空格。
+
+    空词、纯标点词直接丢弃：Calibre 的标题"包含"匹配会忽略标点，这类词会退化成
+    空查询命中整库（实测 title:"-" 返回全部书籍），与"书名包含关键词"的语义相悖。
+    """
+    words = []
+    for match in KEYWORD_SPLIT_RE.finditer(value or ""):
+        word = (match.group(1) or match.group(2) or "").strip()
+        if word and word not in words and _has_searchable_char(word):
+            words.append(word)
+    return words[:MAX_KEYWORDS]
+
+
+def _title_clause(word):
+    """单个关键词 -> "title 包含" 子句；简繁变体在关键词内部取 OR。"""
+    variants = [word]
+    for profile in ("s2t", "t2s"):
+        converted = utils.get_opencc(profile).convert(word)
+        if converted not in variants:
+            variants.append(converted)
+    terms = []
+    for variant in variants:
+        if variant[:1] in LITERAL_QUERY_PREFIXES:
+            variant = "\\" + variant
+        terms.append("title:" + _quote_search_value(variant))
+    return "(" + " OR ".join(terms) + ")"
+
+
+def build_keyword_query(value, match="any"):
+    """构造只匹配书名的 Calibre 搜索表达式，简繁变体在关键词内部取 OR。"""
+    words = split_keywords(value)
+    if not words:
+        return ""
+    groups = [_title_clause(word) for word in words]
+    return (" AND " if match == "all" else " OR ").join(groups)
+
+
+def sort_book_ids(cache, ids, meta, sort=None):
+    ids = list(ids)
+    if not sort:
+        if meta == "keyword":
+            sort = "new"
+        else:
+            sort = "series" if meta == "series" else "rating"
+    if sort == "random":
+        random.shuffle(ids)
+        return ids
+    if sort == "new":
+        return sorted(ids, reverse=True)
+    if sort == "title":
+        title_sort = cache.all_field_for("sort", ids, "")
+        return sorted(ids, key=lambda i: title_sort.get(i) or "")
+    if sort == "series":
+        index = cache.all_field_for("series_index", ids, 0)
+        title_sort = cache.all_field_for("sort", ids, "")
+        return sorted(ids, key=lambda i: (index.get(i) or 0, title_sort.get(i) or ""))
+    rating = cache.all_field_for("rating", ids, 0)
+    return sorted(ids, key=lambda i: (rating.get(i) or 0, i), reverse=True)
 
 
 class LanguageNameUtil:
@@ -245,23 +327,7 @@ class MetaBooks(ListHandler):
         return ids
 
     def _sorted_ids(self, ids, meta, sort=None):
-        ids = list(ids)
-        cache = self.calibre_db_cache
-        sort = sort or ("series" if meta == "series" else "rating")
-        if sort == "random":
-            random.shuffle(ids)
-            return ids
-        if sort == "new":
-            return sorted(ids, reverse=True)
-        if sort == "title":
-            title_sort = cache.all_field_for("sort", ids, "")
-            return sorted(ids, key=lambda i: title_sort.get(i) or "")
-        if sort == "series":
-            index = cache.all_field_for("series_index", ids, 0)
-            title_sort = cache.all_field_for("sort", ids, "")
-            return sorted(ids, key=lambda i: (index.get(i) or 0, title_sort.get(i) or ""))
-        rating = cache.all_field_for("rating", ids, 0)
-        return sorted(ids, key=lambda i: (rating.get(i) or 0, i), reverse=True)
+        return sort_book_ids(self.calibre_db_cache, ids, meta, sort)
 
     @js
     async def get(self, meta, name):
@@ -281,10 +347,42 @@ class MetaBooks(ListHandler):
         return await self.get_book_list([], ids=ids, title=title, include_comments=not cover)
 
 
+class KeywordBooks(ListHandler):
+    def _sorted_keyword_ids(self, ids, sort):
+        return sort_book_ids(self.calibre_db_cache, ids, "keyword", sort)
+
+    @js
+    async def get(self, value):
+        value = (value or "").strip()[:MAX_VALUE_LEN]
+        match = (self.get_argument("match", "any") or "").strip().lower()
+        if match not in ("any", "all"):
+            match = "any"
+        sort = (self.get_argument("sort", "") or "").strip().lower()
+        if sort not in ("new", "title", "rating", "random"):
+            sort = "new"
+        cover = self.get_argument("cover", "0") == "1"
+
+        title = _('书名含有"%(name)s"的书籍') % {"name": value}
+        ids = []
+        try:
+            # 公开接口：查询构造失败（如 opencc 不可用）与查询执行失败一样
+            # 只降级为空列表，不把 traceback 回显给游客
+            query = build_keyword_query(value, match)
+            if query:
+                ids = await self.cached_search_async(query)
+        except Exception:
+            logging.exception("Keyword title search failed: %r", value)
+        ids = await self.run_calibre_read_async(self._sorted_keyword_ids, ids, sort)
+        return await self.get_book_list(
+            [], ids=ids, title=title, include_comments=not cover
+        )
+
+
 def routes():
     return [
         (r"/api/(author|publisher|tag|rating|series|language)", MetaList),
         (r"/api/(author|publisher|tag|rating|series|language)/(.*)", MetaBooks),
+        (r"/api/keyword/(.*)", KeywordBooks),
         (r"/api/author/(.*)/update", AuthorBooksUpdate),
         (r"/api/publisher/(.*)/update", PubBooksUpdate),
     ]

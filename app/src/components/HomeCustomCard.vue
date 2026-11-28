@@ -51,6 +51,7 @@ const ICONS = {
   author: "mdi-account-outline",
   tag: "mdi-tag-outline",
   series: "mdi-bookshelf",
+  keyword: "mdi-magnify",
   language: "mdi-translate",
   rating: "mdi-star-outline",
 };
@@ -114,7 +115,10 @@ export default {
       }
       const sort = this.card.sort || defaultSortFor(this.card.type);
       const value = encodeURIComponent(this.card.value);
-      const url = `/${this.card.type}/${value}?size=${this.card.limit}&sort=${sort}&cover=1`;
+      let url = `/${this.card.type}/${value}?size=${this.card.limit}&sort=${sort}&cover=1`;
+      if (this.card.type === "keyword") {
+        url += `&match=${this.card.match === "all" ? "all" : "any"}`;
+      }
       this.loading = true;
       this.error = false;
       this.$emit("state", { hasBooks: this.books.length > 0, loading: true });
