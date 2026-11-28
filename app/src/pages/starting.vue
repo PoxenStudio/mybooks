@@ -2,7 +2,7 @@
     <AppDialog
         :value="true"
         type="progress"
-        :title="titleText"
+        title="  "
         :max-width="640"
         hide-footer-button
     >
@@ -127,7 +127,7 @@ export default {
     transition: background-color 0.1s linear;
 }
 .startup-task {
-    font-size: 28px;
+    font-size: 24px;
     line-height: 1.4;
     text-align: center;
 }

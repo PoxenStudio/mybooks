@@ -198,18 +198,6 @@
                         color="primary"
                         class="mx-2 d-flex d-sm-flex"
                         :style="tiny ? { padding: '0px', margin: '0px 1px !important' } : {}"
-                        @click="handleReadingStateChange"
-                        :loading="readingStateLoading"
-                    >
-                        <v-icon>mdi-rotate-orbit</v-icon>
-                        <span v-if="!tiny">{{ readingStateButtonText }}</span>
-                    </v-btn>
-                    <v-btn
-                        :small="tiny"
-                        dark
-                        color="primary"
-                        class="mx-2 d-flex d-sm-flex"
-                        :style="tiny ? { padding: '0px', margin: '0px 1px !important' } : {}"
                         @click="switchToAudioPlayer"
                         v-if="hasEBooks && audioModuleOn"
                     >
@@ -411,6 +399,90 @@
                                 </span>
                             </div>
                         </div>
+                        <v-row dense class="mt-2 mx-2 mb-3 book-action-grid">
+                            <v-col cols="12" md="6" class="d-flex py-1">
+                                <v-card outlined class="flex-grow-1">
+                                    <v-list dense class="py-0">
+                                        <v-list-item :href="readHref" target="_blank" :disabled="!hasEBooks || readBlocked" @click="onReadClick($event, defaultReadFormat)">
+                                            <v-list-item-avatar size="24" :color="!hasEBooks || readBlocked ? 'grey' : 'primary'">
+                                                <v-icon dark small>mdi-book-open-page-variant</v-icon>
+                                            </v-list-item-avatar>
+                                            <v-list-item-content class="py-1">
+                                                <v-list-item-title :class="{ 'grey--text': !hasEBooks || readBlocked }">{{ $t('book.read') }}</v-list-item-title>
+                                            </v-list-item-content>
+                                            <v-list-item-action v-if="needsReadFormatChoice">
+                                                <v-menu offset-y left>
+                                                    <template v-slot:activator="{ on, attrs }">
+                                                        <v-btn icon small v-bind="attrs" v-on="on" :aria-label="$t('book.read')" @click.stop.prevent>
+                                                            <v-icon small>mdi-menu-down</v-icon>
+                                                        </v-btn>
+                                                    </template>
+                                                    <v-list dense>
+                                                        <v-list-item v-for="fmt in extraReadFormats" :key="fmt.key" :href="fmt.href" target="_blank" @click="onReadClick($event, fmt)">
+                                                            <v-list-item-title>{{ fmt.label }}</v-list-item-title>
+                                                        </v-list-item>
+                                                    </v-list>
+                                                </v-menu>
+                                            </v-list-item-action>
+                                        </v-list-item>
+                                    </v-list>
+                                </v-card>
+                            </v-col>
+                            <v-col cols="12" md="6" class="d-flex py-1">
+                                <v-card outlined class="flex-grow-1">
+                                    <v-list dense class="py-0">
+                                        <v-list-item @click="downloadBook" :disabled="!hasDownloadableFiles">
+                                            <v-list-item-avatar size="24" :color="hasDownloadableFiles ? 'primary' : 'grey'">
+                                                <v-icon dark small>mdi-download</v-icon>
+                                            </v-list-item-avatar>
+                                            <v-list-item-content class="py-1">
+                                                <v-list-item-title :class="{ 'grey--text': !hasDownloadableFiles }">{{ $t('book.download') }}</v-list-item-title>
+                                            </v-list-item-content>
+                                        </v-list-item>
+                                    </v-list>
+                                </v-card>
+                            </v-col>
+                            <v-col cols="12" md="6" class="d-flex py-1">
+                                <v-card outlined class="flex-grow-1">
+                                    <v-list dense class="py-0">
+                                        <v-list-item @click="switchAudioDialog" :disabled="!hasEBooks" v-if="audioModuleOn">
+                                            <v-list-item-avatar size="24" :color="!hasEBooks ? 'grey' : (audios.status === AUDIO_STATUS.FAILED ? 'red' : 'primary')">
+                                                <v-icon dark small>{{ audios.status === AUDIO_STATUS.FAILED ? 'mdi-alert-circle' : 'mdi-playlist-music' }}</v-icon>
+                                            </v-list-item-avatar>
+                                            <v-list-item-content class="py-1">
+                                                <v-list-item-title :class="{ 'grey--text': !hasEBooks }">
+                                                    {{ $t('book.convertToAudio') }}
+                                                    <span v-if="audios.status === AUDIO_STATUS.PROCESSING && audios.progress && audios.progress.converted_chapters !== undefined"
+                                                          class="ml-1 text-caption">
+                                                        ({{ audios.progress.converted_chapters }}/{{ audios.progress.total_chapters }})
+                                                    </span>
+                                                    <span v-if="audios.status === AUDIO_STATUS.CONVERTED && audios.count > 0"
+                                                        class="ml-1 text-caption">
+                                                        ({{ audios.count }})
+                                                    </span>
+                                                </v-list-item-title>
+                                            </v-list-item-content>
+                                        </v-list-item>
+                                    </v-list>
+                                </v-card>
+                            </v-col>
+                            <v-col cols="12" md="6" class="d-flex py-1">
+                                <v-card outlined class="flex-grow-1">
+                                    <v-list dense class="py-0">
+                                        <v-list-item @click="dialog_send_to_device = true" :disabled="!hasCompatibleFormats">
+                                            <v-list-item-avatar size="24" :color="!hasCompatibleFormats ? 'grey' : 'primary'">
+                                                <v-icon dark small>mdi-devices</v-icon>
+                                            </v-list-item-avatar>
+                                            <v-list-item-content class="py-1">
+                                                <v-list-item-title :class="{ 'grey--text': !hasCompatibleFormats }">
+                                                    {{ $t('book.sendToDevice') }}
+                                                </v-list-item-title>
+                                            </v-list-item-content>
+                                        </v-list-item>
+                                    </v-list>
+                                </v-card>
+                            </v-col>
+                        </v-row>
                     </v-col>
                     <v-col cols="12" sm="8">
                         <v-card-text>
@@ -483,7 +555,7 @@
                                         <template v-slot:activator="{ on, attrs }">
                                             <v-tooltip bottom>
                                                 <template v-slot:activator="{ on: onTooltip, attrs: attrsTooltip }">
-                                                    <v-btn icon small class="ml-1" color="grey"
+                                                    <v-btn icon small class="ml-1" color="grey darken-2"
                                                         :aria-label="$t('booklist.addToBooklist')"
                                                         v-bind="{ ...attrs, ...attrsTooltip }"
                                                         v-on="{ ...on, ...onTooltip }"
@@ -506,7 +578,6 @@
                                         <span>{{ $t('book.soledBooks') }}</span>
                                     </v-tooltip>
                                 </p>
-                                <br />
                                 <div class="authors-container">
                                     <template v-for="(author, index) in book.authors.slice(0, 5)">
                                         <div class="author-item" :key="'author-' + index">
@@ -542,7 +613,7 @@
                                         </div>
                                     </template>
                                 </div>
-                                <br/>
+                                <v-rating v-if="book.rating"  :value="toStars(book.rating)" color="yellow accent-4" length="5" readonly dense small></v-rating>
                                 <span v-if="physicalModuleOn && book.book_type==this.BOOK_TYPE.PHYSICAL">
                                     <v-chip rounded small dark color="indigo">
                                         <v-icon>mdi-bookshelf</v-icon>{{ $t('book.bookPhysical') }}
@@ -576,7 +647,7 @@
                                     >{{ '&nbsp;&nbsp;' }}[{{ file.format }} - {{ file.size >= 1048576 ? parseInt(file.size / 1048576) + 'MB' : parseInt(file.size / 1024) + 'KB' }}]</span>
                                 </template>
                             </div>
-                            <v-rating :value="toStars(book.rating)" color="yellow accent-4" length="5" readonly dense small></v-rating>
+                            <span class="grey--text"> {{ book.collector }} @ {{ book.timestamp }}</span>
                             <!-- 阅读信息：在读/收藏/推荐人数，三项都为 0 时组件本身不渲染 -->
                             <book-social-info :book-id="book.id" ref="socialInfo"></book-social-info>
                             <!-- Reading state display -->
@@ -593,7 +664,7 @@
                             <div v-else-if="book.state && book.state.read_state === this.READING_STATE.FINISHED" class="mt-2">
                                 <v-chip
                                     small
-                                    color="grey"
+                                    color="grey darken-2"
                                     text-color="white"
                                 >
                                     <v-icon small left>mdi-check</v-icon>
@@ -601,12 +672,18 @@
                                 </v-chip>
                             </div>
                             <div class="tag-chips" style="margin-top: 5px;">
-                                <v-chip v-if="aiModuleOn" rounded smallF color="indigo" class="white--text"
+                                <v-chip rounded color="primary" class="white--text"
+                                        @click="handleReadingStateChange" :disabled="readingStateLoading">
+                                    <v-progress-circular v-if="readingStateLoading" indeterminate size="14" width="2" class="mr-1"></v-progress-circular>
+                                    <v-icon v-else left>mdi-rotate-orbit</v-icon>
+                                    {{ readingStateButtonText }}
+                                </v-chip>
+                                <v-chip v-if="aiModuleOn" rounded color="indigo" class="white--text"
                                         @click="aiFillBook" :loading="ai_filling">
                                     <v-icon left>mdi-robot</v-icon>
                                     {{ $t('book.aiUpdate') }}
                                 </v-chip>
-                                <v-chip v-if="isAdmin && shareLinkEnabled && book.shared" rounded smallF color="#006400" class="white--text"
+                                <v-chip v-if="isAdmin && shareLinkEnabled && book.shared" rounded color="#006400" class="white--text"
                                         @click="dialog_book_share = true">
                                     <v-icon left>mdi-cloud-outline</v-icon>
                                     {{ $t('share.manageShare') }}
@@ -638,7 +715,7 @@
                                 </v-chip>
                                 <v-menu offset-y :close-on-content-click="false" v-model="categoryMenu" content-class="mt-category-menu">
                                     <template v-slot:activator="{ on, attrs }">
-                                        <v-chip rounded smallF color="green" class="white--text" v-bind="attrs" v-on="on" :disabled="categories.length === 0">
+                                        <v-chip rounded color="green" class="white--text" v-bind="attrs" v-on="on" :disabled="categories.length === 0">
                                             <v-icon>mdi-shape</v-icon>
                                             {{ $t('book.category') }} : {{ book.category || $t('message.unclassified') }}
                                             <v-icon color="white" class="ml-1">mdi-pencil</v-icon>
@@ -664,7 +741,7 @@
                                 </v-menu>
                                 <v-menu v-if="folderEnabled" offset-y :close-on-content-click="false" v-model="folderMenu" @input="onFolderMenuToggle">
                                     <template v-slot:activator="{ on, attrs }">
-                                        <v-chip rounded smallF color="amber darken-3" class="black--text" v-bind="attrs" v-on="on">
+                                        <v-chip rounded color="amber darken-3" class="black--text" v-bind="attrs" v-on="on">
                                             <v-icon>mdi-folder-outline</v-icon>
                                             {{ $t('folder.label') }} : {{ book.folder || $t('folder.unset') }}
                                             <v-icon color="white" class="ml-1">mdi-pencil</v-icon>
@@ -678,7 +755,7 @@
                                     </v-card>
                                 </v-menu><v-menu offset-y>
                                     <template v-slot:activator="{ on, attrs }">
-                                        <v-chip rounded smallF color="#006400" class="white--text" v-bind="attrs" v-on="on" :disabled="categories.length === 0">
+                                        <v-chip rounded color="#006400" class="white--text" v-bind="attrs" v-on="on" :disabled="categories.length === 0">
                                             <v-icon>mdi-web</v-icon>
                                             {{ $t('book.languages') }} : {{ languageName(book.languages)}}
                                             <v-icon color="white" class="ml-1">mdi-pencil</v-icon>
@@ -694,7 +771,7 @@
                                     <v-icon left>mdi-link-variant</v-icon>
                                     {{ $t('book.ext_link')}}
                                 </v-chip>
-                                <v-chip rounded dark color="indigo"
+                                <v-chip rounded dark small color="indigo"
                                         :to="'/publisher/' + encodeURIComponent(book.publisher)">
                                     <v-icon>mdi-account-group</v-icon>
                                     {{ $t('book.publisher') }}：{{ book.publisher }}({{ pub_year }})
@@ -702,6 +779,7 @@
                                 <v-chip
                                     rounded
                                     dark
+                                    small
                                     color="indigo"
                                     v-if="book.series"
                                     :to="{ path: '/series', query: { name: encodeURIComponent(book.series) } }"
@@ -709,11 +787,11 @@
                                     <v-icon>mdi-compass</v-icon>
                                     {{ $t('book.series') }}: {{ book.series }} {{ book.series_index ? '(#' + book.series_index + ')' : '' }}
                                 </v-chip>
-                                <v-chip rounded dark color="grey" v-if="book.isbn">
+                                <v-chip rounded dark small color="grey darken-2" v-if="book.isbn">
                                     <v-icon>mdi-compass</v-icon>
                                     ISBN：{{ book.isbn }}
                                 </v-chip>
-                                <v-chip rounded dark color="blue-grey darken-3" v-if="book.word_count > 0">
+                                <v-chip rounded dark small color="blue-grey darken-3" v-if="book.word_count > 0">
                                     <word-count-icon />
                                     {{ $t('book.wordCount') }}：{{ formatWordCount(book.word_count) }}
                                 </v-chip>
@@ -723,7 +801,7 @@
                                         rounded
                                         small
                                         dark
-                                        color="grey"
+                                        color="grey darken-2"
                                         v-if="tag"
                                         :to="{ path: '/tag', query: { name: encodeURIComponent(tag) } }"
                                     >
@@ -794,101 +872,6 @@
                         </v-card-text>
                     </v-col>
                 </v-row>
-                <v-card-text class="align-right book-footer">
-                    <span class="grey--text"> {{ book.collector }} @ {{ book.timestamp }} </span>
-                </v-card-text>
-            </v-card>
-        </v-col>
-        <v-col cols="12" sm="6" class="book-action-col">
-            <v-card outlined>
-                <v-list>
-                    <v-list-item :href="readHref" target="_blank" :disabled="!hasEBooks || readBlocked" @click="onReadClick($event, defaultReadFormat)">
-                        <v-list-item-avatar large :color="!hasEBooks || readBlocked ? 'grey' : 'primary'">
-                            <v-icon dark>mdi-book-open-page-variant</v-icon>
-                        </v-list-item-avatar>
-                        <v-list-item-content>
-                            <v-list-item-title :class="{ 'grey--text': !hasEBooks || readBlocked }">{{ $t('book.read') }}</v-list-item-title>
-                        </v-list-item-content>
-                        <v-list-item-action>
-                            <v-menu v-if="needsReadFormatChoice" offset-y left>
-                                <template v-slot:activator="{ on, attrs }">
-                                    <v-btn icon v-bind="attrs" v-on="on" :aria-label="$t('book.read')" @click.stop.prevent>
-                                        <v-icon>mdi-menu-down</v-icon>
-                                    </v-btn>
-                                </template>
-                                <v-list dense>
-                                    <v-list-item v-for="fmt in extraReadFormats" :key="fmt.key" :href="fmt.href" target="_blank" @click="onReadClick($event, fmt)">
-                                        <v-list-item-title>{{ fmt.label }}</v-list-item-title>
-                                    </v-list-item>
-                                </v-list>
-                            </v-menu>
-                            <v-icon v-else>mdi-arrow-right</v-icon>
-                        </v-list-item-action>
-                    </v-list-item>
-                </v-list>
-            </v-card>
-        </v-col>
-        <v-col cols="12" sm="6" class="book-action-col">
-            <v-card outlined>
-                <v-list>
-                    <v-list-item @click="downloadBook" :disabled="!hasDownloadableFiles">
-                        <v-list-item-avatar large :color="hasDownloadableFiles ? 'primary' : 'grey'">
-                            <v-icon dark>mdi-download</v-icon>
-                        </v-list-item-avatar>
-                        <v-list-item-content>
-                            <v-list-item-title :class="{ 'grey--text': !hasDownloadableFiles }">{{ $t('book.download') }}</v-list-item-title>
-                        </v-list-item-content>
-                        <v-list-item-action>
-                            <v-icon>mdi-arrow-right</v-icon>
-                        </v-list-item-action>
-                    </v-list-item>
-                </v-list>
-            </v-card>
-        </v-col>
-        <v-col cols="12" sm="6" class="book-action-col">
-            <v-card outlined>
-                <v-list>
-                    <v-list-item @click="switchAudioDialog" :disabled="!hasEBooks" v-if="audioModuleOn">
-                        <v-list-item-avatar large :color="!hasEBooks ? 'grey' : (audios.status === AUDIO_STATUS.FAILED ? 'red' : 'primary')">
-                            <v-icon dark>{{ audios.status === AUDIO_STATUS.FAILED ? 'mdi-alert-circle' : 'mdi-playlist-music' }}</v-icon>
-                        </v-list-item-avatar>
-                        <v-list-item-content>
-                            <v-list-item-title :class="{ 'grey--text': !hasEBooks }">
-                                {{ $t('book.convertToAudio') }}
-                                <span v-if="audios.status === AUDIO_STATUS.PROCESSING && audios.progress && audios.progress.converted_chapters !== undefined"
-                                      class="ml-1 text-caption">
-                                    ({{ audios.progress.converted_chapters }}/{{ audios.progress.total_chapters }})
-                                </span>
-                                <span v-if="audios.status === AUDIO_STATUS.CONVERTED && audios.count > 0"
-                                    class="ml-1 text-caption">
-                                    ({{ audios.count }})
-                                </span>
-                            </v-list-item-title>
-                        </v-list-item-content>
-                        <v-list-item-action>
-                            <v-icon>mdi-arrow-right</v-icon>
-                        </v-list-item-action>
-                    </v-list-item>
-                </v-list>
-            </v-card>
-        </v-col>
-        <v-col cols="12" sm="6" class="book-action-col">
-            <v-card outlined>
-                <v-list>
-                    <v-list-item @click="dialog_send_to_device = true" :disabled="!hasCompatibleFormats">
-                        <v-list-item-avatar large :color="!hasCompatibleFormats ? 'grey' : 'primary'">
-                            <v-icon dark>mdi-devices</v-icon>
-                        </v-list-item-avatar>
-                        <v-list-item-content>
-                            <v-list-item-title :class="{ 'grey--text': !hasCompatibleFormats }">
-                                {{ $t('book.sendToDevice') }}
-                            </v-list-item-title>
-                        </v-list-item-content>
-                        <v-list-item-action>
-                            <v-icon>mdi-arrow-right</v-icon>
-                        </v-list-item-action>
-                    </v-list-item>
-                </v-list>
             </v-card>
         </v-col>
     </v-row>
@@ -915,7 +898,7 @@
     <v-row v-if="suggestionBooks.length > 0" class="mt-6">
         <v-col cols="12">
             <v-card>
-                <v-card-title class="headline">
+                <v-card-title class="subtitle-1">
                     <v-icon left>mdi-book-multiple</v-icon>
                     {{ $t('book.recommendedBooks') }}
                 </v-card-title>
@@ -956,7 +939,7 @@
     <v-row v-if="sameNameBooks.length > 0" class="mt-6">
         <v-col cols="12">
             <v-card>
-                <v-card-title class="headline">
+                <v-card-title class="subtitle-1">
                     <v-icon left>mdi-book-multiple</v-icon>
                     {{ $t('book.sameNameBooks') }}
                 </v-card-title>
@@ -3533,6 +3516,28 @@ export default {
     white-space: nowrap;
 }
 
+.book-action-grid .v-col > .v-card {
+    width: 100%;
+    max-width: 150px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.book-action-grid .v-list-item {
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
+.book-action-grid .v-list-item__avatar {
+    margin-right: 6px;
+}
+
+.book-action-grid .v-list-item__title {
+    font-size: 0.75rem;
+    line-height: 1.2;
+    white-space: normal;
+}
+
 .book-action-btns {
     display: flex;
     gap: 8px;
@@ -3645,14 +3650,6 @@ h1.book-detail-title {
     overflow: hidden;
 }
 
-.book-action-col {
-    display: flex;
-}
-
-.book-action-col > .v-card {
-    width: 100%;
-}
-
 .chip-ellipsis {
     max-width: 150px;
     overflow: hidden;
@@ -3688,13 +3685,6 @@ h1.book-detail-title {
 }
 .author-avatar .v-image__image {
     background-size: cover !important;
-}
-
-@media (min-width: 960px) {
-    .book-action-col {
-        flex: 0 0 25%;
-        max-width: 25%;
-    }
 }
 
 .catalog-toggle {

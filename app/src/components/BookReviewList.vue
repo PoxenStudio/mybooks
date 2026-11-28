@@ -2,7 +2,7 @@
     <v-row class="mt-6">
         <v-col cols="12">
             <v-card>
-                <v-card-title class="headline d-flex align-center flex-wrap">
+                <v-card-title class="subtitle-1 d-flex align-center flex-wrap">
                     <v-icon left>mdi-comment-text-multiple-outline</v-icon>
                     {{ $t('book.reviewsTitle') }}
                     <v-spacer></v-spacer>
