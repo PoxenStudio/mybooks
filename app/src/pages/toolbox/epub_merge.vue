@@ -19,7 +19,7 @@
       <v-col cols="12" md="10" lg="8">
         <v-card rounded="xl" outlined class="pa-6" style="border: 2px solid #90CAF9;">
           <v-alert type="info" dense text rounded="lg" class="mb-5">
-            {{ $t('epubMerge.hint', { max: maxBooks }) }}
+            {{ $t('epubMerge.hint', { max: maxBooks, maxExpanded: maxBooks }) }}
           </v-alert>
 
           <!-- Search -->
@@ -163,6 +163,42 @@
                 class="mb-4"
               >
                 <div v-for="(w, i) in allWarnings" :key="i">{{ w }}</div>
+              </v-alert>
+              <v-alert
+                v-if="preview.expanded_overflow"
+                type="error"
+                dense
+                text
+                rounded="lg"
+                class="mb-4"
+              >
+                {{ $t('epubMerge.mergedExpandOverflow', {
+                  total: preview.expanded_count,
+                  max: preview.max_expanded_books }) }}
+              </v-alert>
+              <v-alert
+                v-if="preview.merged_sources && preview.merged_sources.length > 0"
+                type="info"
+                dense
+                text
+                rounded="lg"
+                class="mb-4"
+              >
+                <div>
+                  {{ $t('epubMerge.mergedExpandNotice', {
+                    sources: preview.merged_sources.length,
+                    total: preview.expanded_count }) }}
+                </div>
+                <div
+                  v-for="m in preview.merged_sources"
+                  :key="m.book_id"
+                  class="text-caption mt-1"
+                >
+                  {{ m.title }} → {{ mergedBooksText(m) }}
+                </div>
+                <div class="text-caption mt-1 grey--text">
+                  {{ $t('epubMerge.mergedExpandMetaNote') }}
+                </div>
               </v-alert>
 
               <v-text-field
@@ -525,6 +561,7 @@ export default {
         && !this.previewPending
         && !this.previewLoading
         && this.errorBooks.length === 0
+        && !this.preview.expanded_overflow
         && this.form.title.trim() !== '';
     },
   },
@@ -544,6 +581,9 @@ export default {
         this.resultBook = null;
         this.errorMsg = '';
         this.limitHint = '';
+        // 选书一变立刻作废在途 preview：否则旧响应可能在 250ms 防抖窗口内
+        // 返回并清掉 pending，让按钮用旧选择的数据重新可点
+        this.previewSeq += 1;
         if (this.previewTimer) { clearTimeout(this.previewTimer); this.previewTimer = null; }
         if (this.selected.length >= 2 && this.selected.length <= this.maxBooks) {
           // 拖动排序会连续触发 deep watch，防抖到拖完再请求；
@@ -556,6 +596,7 @@ export default {
         } else {
           this.preview = null;
           this.previewPending = false;
+          this.previewLoading = false;
         }
       },
     },
@@ -751,6 +792,12 @@ export default {
         saving: this.$t('epubMerge.stageSaving'),
       };
       return map[stage] || this.$t('epubMerge.merging');
+    },
+    mergedBooksText(source) {
+      // 合集可能展开几百本：只展示前 3 个书名，避免提示条无限拉长
+      const books = (source && source.books) || [];
+      const shown = books.slice(0, 3).join(' / ');
+      return books.length > 3 ? `${shown} …` : shown;
     },
     restoreDescription() {
       if (this.preview) {

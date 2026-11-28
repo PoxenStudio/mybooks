@@ -24,6 +24,7 @@
 import codecs
 import html
 import io
+import json
 import logging
 import os
 import posixpath
@@ -611,9 +612,32 @@ def _count_ncx_entries(entries: dict) -> tuple:
     return best, found
 
 
+def _find_ncx_text(entries, opf_path: str) -> tuple:
+    """定位 NCX 文本（合集识别 / 合并共用）。返回 (条目名, 文本) 或 (None, None)。
+
+    多个 NCX 并存时取 navPoint 最多的一本：合集输出只会带一个合并 NCX，
+    源书残留 NCX 在合并时已被排除，取最大即正解。
+    """
+    items = _manifest_items(_decode(entries[opf_path]), opf_path)
+    lower_map = {k.lower(): k for k in entries}
+    best = (None, None, -1)
+    for _iid, (name, mt) in items.items():
+        if mt != _NCX_MEDIA_TYPE:
+            continue
+        real = lower_map.get(name.lower())
+        if not real:
+            continue
+        text = _decode(entries[real])
+        count = len(_NAVPOINT_RE.findall(text))
+        if count > best[2]:
+            best = (real, text, count)
+    return best[0], best[1]
+
+
 def _analyze_from(opf_path: str, entries: dict, size: int) -> dict:
     """共享分析主体：entries 需含 container/OPF/NCX 真实内容，其余条目可 b"" 占位。"""
-    meta = _parse_opf_meta(_decode(entries[opf_path]))
+    opf_text = _decode(entries[opf_path])
+    meta = _parse_opf_meta(opf_text)
     spine = _find_spine_entries(entries)
     toc_count, found_ncx = _count_ncx_entries(entries)
 
@@ -621,6 +645,24 @@ def _analyze_from(opf_path: str, entries: dict, size: int) -> dict:
     enc = _encryption_status(entries, spine)
     if enc and (enc["rights"] or enc["text"]):
         raise ValueError("书籍含加密正文（DRM/内容加密），无法合并")
+
+    # 合集识别：marker（新产物）优先，旧产物按 contributor + NCX 分组。
+    # 先看 OPF 里的轻量标记，普通书不必为识别额外解码 NCX。
+    merged = None
+    try:
+        marker = parse_merge_marker(opf_text)
+        legacy = _has_merger_contributor(opf_text)
+        if marker or legacy:
+            ncx_path, ncx_text = _find_ncx_text(entries, opf_path)
+            # marker 自带标题/前缀，缺 NCX 也能按 spine 兜底 TOC；旧版必须靠 NCX
+            if marker or (ncx_path and ncx_text):
+                ncx_base = (ncx_path.rsplit("/", 1)[0]
+                            if ncx_path and "/" in ncx_path else "")
+                merged = _detect_merged_books(
+                    opf_text, ncx_text or "", ncx_base, spine,
+                    want_nodes=False, entry_names=entries)
+    except Exception as err:
+        logger.warning("[epub_merge] 合集识别失败：%s", err)
 
     warnings = []
     if enc and enc["other"]:
@@ -642,6 +684,7 @@ def _analyze_from(opf_path: str, entries: dict, size: int) -> dict:
         "toc_count": toc_count,
         "size": size,
         "warnings": warnings,
+        "merged": merged,
     }
 
 
@@ -812,18 +855,105 @@ def compose_description(items: list, isbns=None) -> str:
 
     合集标题不写入简介——书名栏已有，正文重复一遍读起来冗余。
 
-    :param items: [{"title": str, "comments": str}, ...]，顺序即展示顺序；
-        comments 为空/空白时填“暂无简介”。
+    :param items: [{"title": str, "comments": str, "html": bool?}, ...]，
+        顺序即展示顺序；comments 为空/空白时填“暂无简介”。
+        `html=True` 表示 comments 已是 HTML 片段（如从旧合集简介拆出的块），
+        原样嵌入，避免二次转义。
     :param isbns: ISBN 列表；多于 1 个时附末尾 `ISBN：a / b` 行。
     """
     parts = []
     for item in items:
         parts.append("<p>【%s】</p>" % html.escape(item.get("title") or ""))
-        parts.append(_to_html_block(item.get("comments")))
+        if item.get("html"):
+            body = (item.get("comments") or "").strip()
+            parts.append(body or "暂无简介")
+        else:
+            parts.append(_to_html_block(item.get("comments")))
     clean_isbns = [i.strip() for i in (isbns or []) if (i or "").strip()]
     if len(clean_isbns) > 1:
         parts.append("<p>ISBN：%s</p>" % html.escape(" / ".join(clean_isbns)))
     return "".join(parts)
+
+
+def split_composed_description(comments: str, titles: list):
+    """把本工具生成的合集简介按 `<p>【书名】</p>` 拆回逐本块。
+
+    :return: 与 titles 等长的 HTML 块列表；任一标题缺失/顺序不匹配返回 None
+        （调用方整本回退，不猜测简介归属）。
+    """
+    text = (comments or "").strip()
+    titles = [str(t or "").strip() for t in (titles or [])]
+    if not text or not titles or any(not t for t in titles):
+        return None
+    # compose_description 末尾的 ISBN 尾行由调用方按并集重新生成，先剥掉，
+    # 否则会被算进最后一本的简介里。允许编辑器给 <p> 加属性。
+    text = re.sub(r"<p\b[^>]*>\s*ISBN：[^<]*</p>\s*$", "", text,
+                  flags=re.IGNORECASE).rstrip()
+    positions = []
+    cursor = 0
+    for title in titles:
+        found = None
+        for variant in (html.escape(title), title):
+            pattern = re.compile(
+                r"<p\b[^>]*>\s*【\s*%s\s*】\s*</p>" % re.escape(variant),
+                re.IGNORECASE)
+            found = pattern.search(text, cursor)
+            if found:
+                break
+        if not found:
+            return None
+        positions.append((found.start(), found.end()))
+        cursor = found.end()
+    # 首个【书名】之前还有内容（前言/外层 wrapper）：不拆，整本回退，
+    # 避免静默丢掉用户写在简介开头的文字。
+    if positions and text[:positions[0][0]].strip():
+        return None
+    blocks = []
+    for idx, (_start, end) in enumerate(positions):
+        next_start = positions[idx + 1][0] if idx + 1 < len(positions) else len(text)
+        block = text[end:next_start].strip()
+        blocks.append(block or "暂无简介")
+    return blocks
+
+
+def expand_preview_books(books: list) -> tuple:
+    """按合集展开预览默认标题/简介（纯函数，工具层与单测共用）。
+
+    :param books: preview 的 ok_books，含 title/comments/merged。
+    :return: (titles, description_items, merged_sources, expanded_count)
+        合集结构按叶子书展开；简介只在能完整解析【书名】分段时展开，
+        否则整本回退一条，不猜测归属。
+    """
+    titles = []
+    items = []
+    merged_sources = []
+    for book in books:
+        merged = book.get("merged") or {}
+        sub_books = merged.get("books") or []
+        sub_titles = [str(b.get("title") or "").strip() for b in sub_books]
+        if len(sub_titles) < 2:
+            titles.append(book.get("title") or "")
+            items.append({"title": book.get("title") or "",
+                          "comments": book.get("comments") or ""})
+            continue
+        titles.extend(sub_titles)
+        blocks = split_composed_description(
+            book.get("comments") or "", sub_titles)
+        if blocks:
+            for title, block in zip(sub_titles, blocks):
+                # 块来自旧合集简介 HTML，已转义，原样嵌入防二次转义
+                items.append({"title": title, "comments": block,
+                              "html": True})
+        else:
+            items.append({"title": book.get("title") or "",
+                          "comments": book.get("comments") or ""})
+        merged_sources.append({
+            "book_id": book.get("book_id"),
+            "title": book.get("title") or "",
+            "count": len(sub_titles),
+            "books": sub_titles,
+        })
+    return titles, items, merged_sources, len(titles)
 
 
 # ------------------------------------------------------------ 请求参数纯函数
@@ -909,6 +1039,23 @@ MERGE_MAX_BOOKS = 200
 # 而旧阅读器 / 老 WebView 对 ZIP64 支持参差。留 5000 余量给 mimetype/opf/ncx 等，
 # 超限时提前失败并提示分批，避免产出打不开的合集。
 _MERGE_MAX_TOTAL_ENTRIES = 60000
+
+# 合集标记：输出 OPF 的 <meta property="mybooks:merge">，值为紧凑 JSON。
+# v1: {"v":1,"books":[{"title":"A","prefix":"b0/"}, ...]}
+# 用途：再次合并本工具产物时无需启发式猜测，直接按叶子书展开。
+MERGE_MARKER_PROPERTY = "mybooks:merge"
+MERGE_MARKER_PREFIX = "mybooks: https://mybooks.top/ns/merge#"
+MERGE_MARKER_VERSION = 1
+# 旧版合集（无 marker）递归识别深度上限：正常产物最多两层，5 留足余量。
+MERGE_MAX_EXPAND_DEPTH = 5
+# marker 中书名保留上限（防异常包把 OPF 撑大；正常书名远小于此值）
+_MERGE_MARKER_TITLE_MAX = 500
+_MERGE_MARKER_RE = re.compile(
+    r"""<meta\b[^>]*\bproperty\s*=\s*["']mybooks:merge["'][^>]*>(.*?)</meta>""",
+    re.IGNORECASE | re.DOTALL)
+# 工具产物每本源书的路径前缀 / 分卷页：b0/、b0/b1/、b0_divider.xhtml…
+_B_PREFIX_SEG_RE = re.compile(r"^b\d+$", re.IGNORECASE)
+_B_DIVIDER_RE = re.compile(r"^(b\d+)_divider\.xhtml$", re.IGNORECASE)
 
 _EXTERNAL_SCHEMES = ("http:", "https:", "mailto:", "data:", "ftp:", "ftps:")
 
@@ -1289,6 +1436,379 @@ def _map_toc_src(src_ref: str, base_dir: str, lower_o2n: dict):
     return new_src, frag
 
 
+# ---------------------------------------------------------------- 合集识别
+# 目的：再次合并本工具产出的合集时，识别其内部叶子书并按叶子展开，
+# 而不是把整个合集当成 1 本。新产物优先读 OPF marker；旧产物按
+# dc:contributor + NCX 顶层分组 + bN/ 路径前缀做启发式识别。
+
+def _xml_safe_text(value, max_len: int = 0) -> str:
+    """去掉 XML 1.0 非法控制字符与孤立代理项；可选截断。
+
+    marker/NCX 来自 EPUB 文件本身，可能被手工编辑或伪造。控制字符
+    （如 U+0001）与孤立代理项会让写出的 XML 非法或在 UTF-8 编码时抛错，
+    必须在进入分卷页/NCX/nav 之前清洗。
+    """
+    text = str(value or "").strip()
+    out = []
+    for char in text:
+        code = ord(char)
+        if code in (0x09, 0x0A, 0x0D):
+            out.append(char)
+        elif 0x20 <= code <= 0xD7FF:
+            out.append(char)
+        elif 0xE000 <= code <= 0xFFFD:
+            out.append(char)
+        elif 0x10000 <= code <= 0x10FFFF:
+            out.append(char)
+    text = "".join(out).strip()
+    return text[:max_len] if max_len else text
+
+
+def _normalize_merge_prefix(value) -> str:
+    """校验并归一化 marker 中的子书路径前缀（必须安全、以 `/` 结尾）。"""
+    prefix = str(value or "").strip().replace("\\", "/")
+    if not prefix or not prefix.endswith("/") or prefix.startswith("/"):
+        return ""
+    if _is_traversal(prefix):
+        return ""
+    parts = prefix[:-1].split("/")
+    if not parts or any(p in ("", ".", "..") for p in parts):
+        return ""
+    return prefix
+
+
+def parse_merge_marker(opf_text: str):
+    """解析 OPF 里的 mybooks:merge 标记；缺失/损坏/版本不符返回 None。"""
+    match = _MERGE_MARKER_RE.search(opf_text or "")
+    if not match:
+        return None
+    try:
+        data = json.loads(html.unescape(match.group(1)).strip())
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(data, dict) or data.get("v") != MERGE_MARKER_VERSION:
+        return None
+    raw_books = data.get("books")
+    if not isinstance(raw_books, list) or not (
+            _MERGE_MIN_BOOKS <= len(raw_books) <= MERGE_MAX_BOOKS):
+        return None
+    books = []
+    for item in raw_books:
+        if not isinstance(item, dict):
+            return None
+        title = _xml_safe_text(item.get("title"), _MERGE_MARKER_TITLE_MAX)
+        prefix = _normalize_merge_prefix(item.get("prefix"))
+        if not prefix:
+            return None
+        books.append({"title": title, "prefix": prefix})
+    return {"version": MERGE_MARKER_VERSION, "books": books}
+
+
+def _build_merge_marker(books: list) -> str:
+    """生成 marker JSON（紧凑、非 ASCII 原样保留）。"""
+    payload = {"v": MERGE_MARKER_VERSION, "books": [
+        {"title": _xml_safe_text(b.get("title"), _MERGE_MARKER_TITLE_MAX),
+         "prefix": str(b.get("prefix") or "")}
+        for b in (books or [])]}
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+
+def _has_merger_contributor(opf_text: str) -> bool:
+    """旧版产物识别：OPF 是否带 `MyBooks epub_merge` contributor。"""
+    for match in re.finditer(
+            r"<dc:contributor[^>]*>(.*?)</dc:contributor>",
+            opf_text or "", re.IGNORECASE | re.DOTALL):
+        if "mybooks epub_merge" in html.unescape(match.group(1)).strip().lower():
+            return True
+    return False
+
+
+def _entry_b_prefix(name: str) -> str:
+    """从 zip 条目名推断工具产物的书前缀。
+
+    例：`b0/OEBPS/ch1.xhtml` → `b0/`；`b0/b0_divider.xhtml` → `b0/b0/`；
+    `ch1.xhtml`（无前缀）→ ""。
+    """
+    parts = [p for p in (name or "").replace("\\", "/").split("/") if p]
+    if not parts:
+        return ""
+    if _is_divider_name(name):
+        divider = _B_DIVIDER_RE.match(parts[-1])
+        return "/".join(parts[:-1] + [divider.group(1)]) + "/"
+    segs = []
+    for part in parts[:-1]:
+        if not _B_PREFIX_SEG_RE.match(part):
+            break
+        segs.append(part)
+    return ("/".join(segs) + "/") if segs else ""
+
+
+def _common_b_prefix(prefixes: list) -> str:
+    """多个 `bN/` 前缀的公共前缀（按路径段，大小写不敏感）。"""
+    segs = [[s for s in (p or "").strip("/").split("/") if s]
+            for p in prefixes if p]
+    if not segs:
+        return ""
+    common = list(segs[0])
+    for item in segs[1:]:
+        idx = 0
+        while idx < len(common) and idx < len(item):
+            if common[idx].lower() != item[idx].lower():
+                break
+            idx += 1
+        common = common[:idx]
+        if not common:
+            return ""
+    return "/".join(common) + "/"
+
+
+def _ncx_src_entry(node: dict, base_dir: str) -> str:
+    """NCX 节点 src → 包内条目名（外链返回空）。"""
+    src = (node.get("src") or "").strip()
+    if not src or "://" in src or src.lower().startswith(_EXTERNAL_SCHEMES):
+        return ""
+    return _normalize_zip_path(src, base_dir)
+
+
+def _node_b_prefix(node: dict, base_dir: str) -> str:
+    """推断 NCX 节点对应的书前缀。
+
+    优先取直接子节点 src 的公共 `bN/` 前缀（顶层合集节点因此得到 `b0/`，
+    其子书节点得到 `b0/b0/`）；无子节点/子节点无前缀时退回自身 src。
+    """
+    kids = node.get("children") or []
+    child_prefixes = []
+    for kid in kids:
+        entry = _ncx_src_entry(kid, base_dir)
+        if entry:
+            child_prefixes.append(_entry_b_prefix(entry))
+    common = _common_b_prefix(child_prefixes)
+    if common:
+        return common
+    entry = _ncx_src_entry(node, base_dir)
+    return _entry_b_prefix(entry) if entry else ""
+
+
+def _leaves_from_ncx_node(node: dict, base_dir: str, depth: int = 0,
+                          entry_names=None) -> list:
+    """把 NCX 节点递归拆成叶子书；识别依据是子节点前缀比父前缀更深。
+
+    递归额外要求每个子前缀下存在 `bN_divider.xhtml`：正常书内部恰好有
+    `b0/`、`b1/` 子目录时不会仅凭目录名被误拆成多本。
+    """
+    entry_names = entry_names or set()
+    kids = node.get("children") or []
+    own = _node_b_prefix(node, base_dir)
+    if depth < MERGE_MAX_EXPAND_DEPTH and len(kids) >= 2 and own:
+        kid_prefixes = [_node_b_prefix(kid, base_dir) for kid in kids]
+        own_low = own.lower()
+        deeper = all(
+            p and p.lower().startswith(own_low) and len(p) > len(own)
+            for p in kid_prefixes)
+        unique = len({p.lower() for p in kid_prefixes}) == len(kid_prefixes)
+        dividers = all(
+            _is_tool_divider_path(p.rstrip("/") + "_divider.xhtml",
+                                  entry_names)
+            for p in kid_prefixes if p)
+        if deeper and unique and dividers:
+            leaves = []
+            for kid in kids:
+                leaves.extend(_leaves_from_ncx_node(
+                    kid, base_dir, depth + 1, entry_names))
+            return leaves
+    return [{
+        "title": _xml_safe_text(node.get("label"), _MERGE_MARKER_TITLE_MAX),
+        "prefix": own,
+        "toc_nodes": kids,
+    }]
+
+
+def _leaves_from_ncx(ncx_text: str, base_dir: str,
+                     entry_names=None) -> list:
+    leaves = []
+    for root in _parse_ncx_tree(ncx_text):
+        leaves.extend(_leaves_from_ncx_node(root, base_dir, 0, entry_names))
+    return leaves
+
+
+def _leaf_owns(prefix: str, name: str) -> bool:
+    """条目是否归属该书前缀（含该书的旧分卷页）。"""
+    p = (prefix or "").lower()
+    n = (name or "").lower()
+    if not p or not n:
+        return False
+    return n.startswith(p) or n == (p[:-1] + "_divider.xhtml")
+
+
+def _divider_group_prefix(name: str) -> str:
+    """`b0_divider.xhtml` → `b0/`；`b0/b1_divider.xhtml` → `b0/b1/`。
+
+    只在“父目录全是 bN/ 段”时成立；`OEBPS/b1_divider.xhtml` 这类正文文件名
+    不按分卷页处理。
+    """
+    if not _is_divider_name(name):
+        return ""
+    parts = [p for p in (name or "").replace("\\", "/").split("/") if p]
+    divider = _B_DIVIDER_RE.match(parts[-1])
+    return "/".join(parts[:-1] + [divider.group(1)]) + "/"
+
+
+def _is_ancestor_divider(name: str, prefixes: list) -> bool:
+    """祖先合集的分卷页不属于任何叶子，覆盖校验时忽略。"""
+    group = _divider_group_prefix(name)
+    if not group:
+        return False
+    low_group = group.lower()
+    return any(p.lower().startswith(low_group) and p.lower() != low_group
+               for p in prefixes)
+
+
+def _is_divider_name(name: str) -> bool:
+    """是否为工具产物的分卷页路径（父目录必须是 bN/ 段）。
+
+    只看 basename 会把 `OEBPS/b1_divider.xhtml` 这类正常正文文件误判成
+    分卷页；工具分卷页只会出现在包根或 `bN/` 目录下。
+    """
+    parts = [p for p in (name or "").replace("\\", "/").split("/") if p]
+    if not parts or not _B_DIVIDER_RE.match(parts[-1]):
+        return False
+    return all(_B_PREFIX_SEG_RE.match(p) for p in parts[:-1])
+
+
+def _is_tool_divider_path(name: str, entry_names) -> bool:
+    low = (name or "").lower()
+    return low in (entry_names or ()) and _is_divider_name(low)
+
+
+def _validate_merge_leaves(leaves: list, spine_files: list) -> bool:
+    """校验叶子前缀：数量/唯一性/每个 spine 条目归属恰好一本。"""
+    if not (_MERGE_MIN_BOOKS <= len(leaves) <= MERGE_MAX_BOOKS):
+        return False
+    prefixes = [leaf.get("prefix") or "" for leaf in leaves]
+    low = [p.lower() for p in prefixes]
+    if any(not p for p in low) or len(set(low)) != len(low):
+        return False
+    for name in spine_files:
+        owners = [p for p in low if _leaf_owns(p, name)]
+        if len(owners) == 1:
+            continue
+        if _is_ancestor_divider(name, low):
+            continue
+        return False
+    for prefix in low:
+        own_divider = prefix[:-1] + "_divider.xhtml"
+        owned = [name for name in spine_files if _leaf_owns(prefix, name)]
+        # 只拥有本卷分卷页的叶子是坏结构：展开后无正文可写，会打断整次合并。
+        # 同名前缀的其它正文文件（如 b0/b1_divider.xhtml）不算分卷页。
+        if not any(name.lower() != own_divider for name in owned):
+            return False
+    return True
+
+
+def _marker_books(marker: dict, ncx_text: str, ncx_base: str,
+                  spine_files: list, entry_names=None) -> list:
+    """marker 叶子 → 补全 spine_files 与 NCX 子树（按前缀匹配顶层节点）。
+
+    marker 正常记录的是叶子；若该叶子节点下仍有更深的 ``bN/`` 子书证据
+    （例如用 ``expand_merged=False`` 生成的嵌套产物），继续递归展开。
+    """
+    books = []
+    roots = _parse_ncx_tree(ncx_text) if ncx_text else []
+    root_map = {}
+    for root in roots:
+        prefix = _node_b_prefix(root, ncx_base)
+        if prefix and prefix.lower() not in root_map:
+            root_map[prefix.lower()] = root
+    for marker_book in marker["books"]:
+        prefix = marker_book["prefix"]
+        node = root_map.get(prefix.lower())
+        exact = node is not None
+        if node is None:
+            # 兼容 calibre 改写路径后前缀不完全一致：取包含关系最深者。
+            # 但此时节点已未必是“整卷根”，只用于兜底、不拿它的 children 当 TOC。
+            low = prefix.lower()
+            candidates = [
+                (p, root) for p, root in root_map.items()
+                if p.startswith(low) or low.startswith(p)]
+            if candidates:
+                candidates.sort(key=lambda item: len(item[0]), reverse=True)
+                node = candidates[0][1]
+        sub = _leaves_from_ncx_node(
+            node, ncx_base, 0, entry_names) if exact else []
+
+        def _under_marker(leaf):
+            p = leaf.get("prefix") or ""
+            return bool(p) and p.lower().startswith(prefix.lower())
+
+        if len(sub) >= 2 and all(_under_marker(leaf) for leaf in sub):
+            for leaf in sub:
+                leaf["spine_files"] = [
+                    n for n in spine_files
+                    if _leaf_owns(leaf.get("prefix") or "", n)]
+            books.extend(sub)
+            continue
+        book = dict(marker_book)
+        book["spine_files"] = [n for n in spine_files if _leaf_owns(prefix, n)]
+        book["toc_nodes"] = (node.get("children") or []) if exact else []
+        books.append(book)
+    return books
+
+
+def _legacy_books(ncx_text: str, ncx_base: str, spine_files: list,
+                  entry_names=None) -> list:
+    leaves = _leaves_from_ncx(ncx_text, ncx_base, entry_names)
+    for idx, leaf in enumerate(leaves):
+        if not leaf.get("title"):
+            leaf["title"] = "分册%d" % (idx + 1)
+        leaf["spine_files"] = [
+            n for n in spine_files if _leaf_owns(leaf.get("prefix") or "", n)]
+    return leaves
+
+
+def _detect_merged_books(opf_text: str, ncx_text: str, ncx_base: str,
+                         spine_files: list, want_nodes: bool = False,
+                         entry_names=None):
+    """识别 EPUB 是否为合集。返回 {"version", "books"} 或 None。
+
+    marker 有效时以 marker 为准；否则在 contributor 命中时按 NCX 递归识别。
+    任一校验失败都返回 None（调用方按普通单本处理，不冒险展开）。
+    """
+    spine_files = list(spine_files or [])
+    entry_names = {str(n).lower() for n in (entry_names or ())}
+    books = None
+    version = MERGE_MARKER_VERSION
+    marker = parse_merge_marker(opf_text)
+    if marker:
+        books = _marker_books(marker, ncx_text, ncx_base, spine_files,
+                              entry_names)
+        if not _validate_merge_leaves(books, spine_files):
+            books = None
+    if books is None:
+        version = 0
+        if _has_merger_contributor(opf_text) and ncx_text:
+            books = _legacy_books(ncx_text, ncx_base, spine_files,
+                                  entry_names)
+    if books:
+        for idx, book in enumerate(books):
+            if not book.get("title"):
+                book["title"] = "分册%d" % (idx + 1)
+    if not books or not _validate_merge_leaves(books, spine_files):
+        return None
+    result = []
+    for book in books:
+        item = {"title": book.get("title") or "",
+                "prefix": book.get("prefix") or ""}
+        if want_nodes:
+            item["toc_nodes"] = book.get("toc_nodes") or []
+            item["spine_files"] = book.get("spine_files") or []
+        result.append(item)
+    detected = {"version": version, "books": result}
+    if want_nodes:
+        # 合并侧必须用与识别相同的 NCX 基址映射 toc_nodes（多 NCX 源）
+        detected["ncx_base"] = ncx_base or ""
+    return detected
+
+
 def _is_toc_like_name(name: str) -> bool:
     """文件名是否像目录页（合并时用于挑选链接列表目录页复核候选）。"""
     stem = (name or "").rsplit("/", 1)[-1].rsplit(".", 1)[0]
@@ -1391,7 +1911,8 @@ def _build_divider(book_title: str, index: int, total: int) -> bytes:
 
 
 def _build_opf(meta: dict, manifest: list, spine: list, uid: str,
-               cover_name: str | None, cover_mt: str | None) -> bytes:
+               cover_name: str | None, cover_mt: str | None,
+               merge_books: list | None = None) -> bytes:
     """组装新书 OPF（EPUB 3.0；href 统一 URI 转义）。
 
     3.0 而非 2.0：输出带 EPUB3 导航文档（`properties="nav"`），EPUB2 包
@@ -1399,6 +1920,9 @@ def _build_opf(meta: dict, manifest: list, spine: list, uid: str,
     由 `spine toc="ncx"` 引用，兼容 EPUB2 阅读器。EPUB3 必需项：
     `dcterms:modified`；封面改用 `cover-image` 属性（EPUB2 的
     `<meta name="cover">`/`<guide>` 在 3.0 里不合法/已废弃，不再输出）。
+
+    `merge_books` 非空时写入 mybooks:merge 标记：后续再次合并本产物时
+    直接按叶子书展开，不再依赖 NCX 启发式。
     """
     creators = "".join(
         "<dc:creator>%s</dc:creator>" % html.escape(a)
@@ -1420,10 +1944,13 @@ def _build_opf(meta: dict, manifest: list, spine: list, uid: str,
                   % (_xml_attr(_quote_href(cover_name)), cover_mt))
     refs = "".join('<itemref idref="%s"/>' % iid for iid in spine)
     modified = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    package_attrs = ('version="3.0" xmlns="http://www.idpf.org/2007/opf" '
+                     'unique-identifier="merge-id"')
+    if merge_books:
+        package_attrs += ' prefix="%s"' % _xml_attr(MERGE_MARKER_PREFIX)
     head = [
         '<?xml version="1.0" encoding="utf-8"?>',
-        '<package version="3.0" xmlns="http://www.idpf.org/2007/opf" '
-        'unique-identifier="merge-id">',
+        "<package %s>" % package_attrs,
         '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">',
         '<dc:identifier id="merge-id">%s</dc:identifier>' % uid,
         "<dc:title>%s</dc:title>" % html.escape(meta.get("title") or ""),
@@ -1435,6 +1962,11 @@ def _build_opf(meta: dict, manifest: list, spine: list, uid: str,
         subjects,
         '<meta property="dcterms:modified">%s</meta>' % modified,
     ]
+    if merge_books:
+        head.append(
+            '<meta property="%s">%s</meta>' % (
+                MERGE_MARKER_PROPERTY,
+                html.escape(_build_merge_marker(merge_books), quote=False)))
     if meta.get("publisher"):
         head.append("<dc:publisher>%s</dc:publisher>"
                     % html.escape(meta["publisher"]))
@@ -1551,8 +2083,89 @@ def _input_source(item: dict) -> tuple:
     raise ValueError("EPUB 输入为空")
 
 
+def _inspect_merged_source(source):
+    """读取源 EPUB 的 OPF/NCX/spine 并识别合集结构（含 NCX 子树）。
+
+    识别失败/普通书返回 None；只读 container/OPF/NCX，不解压正文与图片。
+    """
+    try:
+        with _ZipSource(source) as src:
+            opf_path = _locate_opf(src)
+            opf_text = _decode(src.read(opf_path))
+            marker = parse_merge_marker(opf_text)
+            if not marker and not _has_merger_contributor(opf_text):
+                return None
+            spine = _find_spine_entries(src)
+            if not spine:
+                return None
+            ncx_path, ncx_text = _find_ncx_text(src, opf_path)
+            # marker 自带标题/前缀，缺 NCX 时 TOC 走 spine 兜底；旧版必须靠 NCX
+            if not ncx_path and not marker:
+                return None
+            ncx_base = (ncx_path.rsplit("/", 1)[0]
+                        if ncx_path and "/" in ncx_path else "")
+            return _detect_merged_books(
+                opf_text, ncx_text or "", ncx_base, spine, want_nodes=True,
+                entry_names=src)
+    except Exception as err:
+        logger.warning("[epub_merge] 合集源解析失败：%s", err)
+        return None
+
+
+def _build_merge_job(item: dict, expand_merged: bool = True) -> dict:
+    """把一个选中输入变成 job：source + 一个或多个输出卷（segment）。"""
+    source, size = _input_source(item)
+    title = _xml_safe_text(item.get("title"), _MERGE_MARKER_TITLE_MAX)
+    # 不相信调用方的缓存识别结果：加载期分析后源文件可能被替换（甚至同
+    # 尺寸/同 mtime），必须以合并时实际文件重新识别，否则会被当单本漏展开。
+    merged = _inspect_merged_source(source) if expand_merged else None
+    segments = []
+    if merged:
+        for book in merged["books"]:
+            prefix = book["prefix"]
+            segments.append({
+                "title": book.get("title") or "",
+                "selector": {
+                    "prefix": prefix,
+                    "divider": prefix[:-1] + "_divider.xhtml",
+                    # 用识别时实际读取的 NCX 基址，避免多 NCX 源映射分叉
+                    "ncx_base": merged.get("ncx_base") or "",
+                    "toc_nodes": book.get("toc_nodes") or [],
+                },
+            })
+    if not segments:
+        segments.append({"title": title, "selector": None})
+    return {"source": source, "size": size, "title": title,
+            "segments": segments}
+
+
+def expand_merge_inputs(inputs: list, expand_merged: bool = True,
+                        cancel_event=None) -> list:
+    """归一化输入为 jobs；合集按叶子书拆成多个输出卷。
+
+    :return: [{"source", "size", "title", "segments": [...]}, ...]。
+        同一源只保留一份 source（展开不复制字节），segment 共享该 source。
+    :raises ValueError: 展开后总卷数越界。
+    :raises MergeCancelled: cancel_event 在预检阶段置位。
+    """
+    jobs = []
+    for item in inputs:
+        if cancel_event is not None and cancel_event.is_set():
+            raise MergeCancelled("任务已取消")
+        jobs.append(_build_merge_job(item, expand_merged))
+    total = sum(len(job["segments"]) for job in jobs)
+    if total < _MERGE_MIN_BOOKS:
+        raise ValueError(
+            "合集展开后不足 %d 本，请选择更多书籍" % _MERGE_MIN_BOOKS)
+    if total > MERGE_MAX_BOOKS:
+        raise ValueError(
+            "合集展开后共 %d 本，超过单次 %d 本上限，请减少选择"
+            % (total, MERGE_MAX_BOOKS))
+    return jobs
+
+
 def merge_epubs(inputs: list, meta: dict, options: dict | None = None):
-    """按 `inputs` 顺序合并多本 EPUB。
+    """按 `inputs` 顺序合并多本 EPUB；合集的叶子书自动展开为多卷。
 
     :param inputs: [{"data": bytes, "title": str} | {"path": str, "title": str},
         ...]，顺序即拼接顺序。`path` 模式逐本按需读取：峰值内存只与
@@ -1561,10 +2174,11 @@ def merge_epubs(inputs: list, meta: dict, options: dict | None = None):
         "publisher"}，缺失键用空值/缺省。
     :param options: {"divider": bool（默认 True）, "cover": {"data": bytes,
         "ext": str} | None, "out_path": str | None, "progress_cb": callable,
-        "cancel_event": threading.Event-like | None}。cover 由工具层决议后传入
-        原始字节；progress_cb(book_index, book_total) 逐本回调；cancel_event
-        每本开始前检查，置位时抛 MergeCancelled；给定 out_path 时输出流式写入
-        该文件并返回 None（避免在内存里再拼一份完整 zip），否则返回合并结果字节。
+        "cancel_event": threading.Event-like | None,
+        "expand_merged": bool（默认 True，内部测试/应急可关）}。cover 由工具层
+        决议后传入原始字节；progress_cb(book_index, book_total) 按展开后的
+        输出卷逐卷回调；cancel_event 每卷开始前检查，置位时抛 MergeCancelled；
+        给定 out_path 时输出流式写入该文件并返回 None，否则返回合并结果字节。
     :raises ValueError: 本数越界 / 单本结构异常 / 输出超限。
     :raises MergeCancelled: cancel_event 置位。
     """
@@ -1574,23 +2188,25 @@ def merge_epubs(inputs: list, meta: dict, options: dict | None = None):
     out_path = options.get("out_path")
     progress_cb = options.get("progress_cb")
     cancel_event = options.get("cancel_event")
+    expand_merged = coerce_bool(options.get("expand_merged"), True)
     if not isinstance(inputs, list) or not (_MERGE_MIN_BOOKS <= len(inputs) <= MERGE_MAX_BOOKS):
         raise ValueError("请选择 %d–%d 本书进行合并" % (_MERGE_MIN_BOOKS, MERGE_MAX_BOOKS))
-    sources = [_input_source(item) for item in inputs]
-    total_input = sum(size for _src, size in sources)
+    jobs = expand_merge_inputs(inputs, expand_merged=expand_merged,
+                               cancel_event=cancel_event)
+    total_input = sum(job["size"] for job in jobs)
     if total_input > MERGE_MAX_INPUT_TOTAL:
         raise ValueError("合集源文件总体积超过上限（2GB），请减少本数或分批合并")
 
     uid = "epubmerge-%s" % uuid.uuid4().hex
     if out_path:
         with open(out_path, "wb") as fh:
-            _merge_into(fh, sources, inputs, meta, divider, cover, uid,
+            _merge_into(fh, jobs, meta, divider, cover, uid,
                         progress_cb, cancel_event)
         result = None
         out_size = os.path.getsize(out_path)
     else:
         buf = io.BytesIO()
-        _merge_into(buf, sources, inputs, meta, divider, cover, uid,
+        _merge_into(buf, jobs, meta, divider, cover, uid,
                     progress_cb, cancel_event)
         result = buf.getvalue()
         out_size = len(result)
@@ -1599,20 +2215,26 @@ def merge_epubs(inputs: list, meta: dict, options: dict | None = None):
     return result
 
 
-def _merge_into(out, sources: list, inputs: list, meta: dict, divider: bool,
+def _merge_into(out, jobs: list, meta: dict, divider: bool,
                 cover, uid: str, progress_cb=None, cancel_event=None) -> None:
-    """流式合并主体：逐本读取源条目并立即写入 `out`（zip 输出流）。
+    """流式合并主体：逐卷读取源条目并立即写入 `out`（zip 输出流）。
 
+    jobs 由 `expand_merge_inputs` 生成：一个 job 对应一个选中源文件，
+    其 segments 是该源要输出的卷（普通书 1 卷；合集按叶子 N 卷）。
     manifest / spine / TOC 只累积小结构（id 与路径字符串），条目字节不驻留。
-    每本开始前检查 cancel_event（置位抛 MergeCancelled）并回调 progress_cb。
+    每卷开始前检查 cancel_event（置位抛 MergeCancelled）并回调 progress_cb。
     """
     manifest = []           # (id, href, media-type)
     spine = []              # manifest id 顺序
     # [(book_title, (parent_path, parent_frag), [TOC 节点, ...]), ...]
     # TOC 节点 = (label, path, frag, [子节点, ...])，保留源 NCX 嵌套层级
     books_toc = []
+    # [{"title", "prefix"}]：写入 OPF mybooks:merge 标记，供下次再合并时展开
+    books_meta = []
     warnings = []
     counter = 0
+    total = sum(len(job["segments"]) for job in jobs)
+    seg_index = 0
 
     def _next_id():
         nonlocal counter
@@ -1628,14 +2250,11 @@ def _merge_into(out, sources: list, inputs: list, meta: dict, divider: bool,
             cover_name = "cover.%s" % ("jpg" if ext == "jpeg" else ext)
             writer.write(cover_name, cover["data"])
 
-        total = len(sources)
-        for idx, ((source, _size), item) in enumerate(zip(sources, inputs)):
+        for job in jobs:
             if cancel_event is not None and cancel_event.is_set():
                 raise MergeCancelled("任务已取消")
-            if progress_cb is not None:
-                progress_cb(idx + 1, total)
-            prefix = "b%d" % idx
-            book_title = (item.get("title") or "").strip() or ("分册%d" % (idx + 1))
+            source = job["source"]
+            source_title = (job.get("title") or "").strip() or "合集"
             with _ZipSource(source) as src:
                 opf_path = _locate_opf(src)
                 opf_text = _decode(src.read(opf_path))
@@ -1653,38 +2272,33 @@ def _merge_into(out, sources: list, inputs: list, meta: dict, divider: bool,
                         i for i, (n, mt) in items.items()
                         if mt in _TEXT_MEDIA_TYPES and n.lower() not in nav_names]
                 if not ordered_ids:
-                    raise ValueError("书籍 [%s] 未定位到正文条目，无法合并" % book_title)
+                    raise ValueError(
+                        "书籍 [%s] 未定位到正文条目，无法合并" % source_title)
 
-                old_to_new = {}
                 lower_entries = src.lower_map()
-                for _iid, (name, _mt) in items.items():
-                    real = lower_entries.get(name.lower())
-                    if real:
-                        old_to_new[real] = "%s/%s" % (prefix, real)
                 # 加密/DRM：正文或 rights.xml 存在 → 拒绝整本；仅字体混淆 → 剔除资源
                 enc = _encryption_status(
                     src, [items[i][0] for i in ordered_ids if i in items])
                 if enc and (enc["rights"] or enc["text"]):
                     raise ValueError(
-                        "书籍 [%s] 含加密正文（DRM/内容加密），无法合并" % book_title)
+                        "书籍 [%s] 含加密正文（DRM/内容加密），无法合并"
+                        % source_title)
                 enc_asset_reals = set()
                 if enc and enc["other"]:
                     for target in enc["other"]:
                         real = lower_entries.get(target.lower())
                         if real:
                             enc_asset_reals.add(real)
-                            warnings.append("[%s] 混淆字体已剔除（无法还原）：%s"
-                                            % (book_title, real))
-                # EPUB3 nav 文档按目录处理：不进 spine / manifest / 散件，从映射移除，
+                            warnings.append(
+                                "[%s] 混淆字体已剔除（无法还原）：%s"
+                                % (source_title, real))
+                # EPUB3 nav 文档按目录处理：不进 spine / manifest / 散件，
                 # 残留引用走「目标缺失」告警而非静默死链
                 nav_reals = {lower_entries[n] for n in nav_names
                              if n in lower_entries}
                 for real in nav_reals:
-                    old_to_new.pop(real, None)
                     warnings.append("[%s] EPUB3 nav 目录页不进正文：%s"
-                                    % (book_title, real))
-                for real in enc_asset_reals:
-                    old_to_new.pop(real, None)
+                                    % (source_title, real))
                 # 无 nav 语义的链接列表目录页（calibre「Table of Contents」等）：
                 # 先按文件名筛候选，再读内容复核，命中同样不计正文
                 link_toc_reals = set()
@@ -1698,177 +2312,291 @@ def _merge_into(out, sources: list, inputs: list, meta: dict, divider: bool,
                     if _looks_like_link_toc(_decode(src.read(real)), real):
                         link_toc_reals.add(real)
                 for real in link_toc_reals:
-                    old_to_new.pop(real, None)
                     warnings.append("[%s] 链接列表目录页不进正文：%s"
-                                    % (book_title, real))
+                                    % (source_title, real))
                 skip_reals = nav_reals | link_toc_reals | enc_asset_reals
 
-                def _emit(real, new_name, mt):
-                    """非 spine 资源：CSS 读入改写，其余直接流式转写（不过内存）。"""
-                    if mt == "text/css" or real.lower().endswith(".css"):
-                        writer.write(new_name, _maybe_rewrite_css(
-                            real, mt, src.read(real),
-                            real.rsplit("/", 1)[0] if "/" in real else "",
-                            new_name.rsplit("/", 1)[0], old_to_new, book_title,
-                            warnings))
-                    else:
-                        writer.write_stream(new_name, src.iter_chunks(real))
+                # 源 NCX 只解析一次：普通书整树映射，合集按叶子子树映射。
+                # 合集 selector 已带识别时的 ncx_base 与 toc_nodes，无需再读 NCX。
+                need_source_toc = any(
+                    seg.get("selector") is None for seg in job["segments"])
+                need_ncx_base = any(
+                    seg.get("selector") and not seg["selector"].get("ncx_base")
+                    for seg in job["segments"])
+                ncx_path, ncx_text = None, None
+                if need_source_toc or need_ncx_base:
+                    # 取 manifest 中第一个 NCX（与旧实现一致）
+                    for _iid, (name, mt) in items.items():
+                        if mt != _NCX_MEDIA_TYPE:
+                            continue
+                        real = lower_entries.get(name.lower())
+                        if real:
+                            ncx_path = real
+                            ncx_text = _decode(src.read(real))
+                        break
+                ncx_base = (ncx_path.rsplit("/", 1)[0]
+                            if ncx_path and "/" in ncx_path else "")
+                ncx_tree = (_parse_ncx_tree(ncx_text)
+                            if need_source_toc and ncx_text else [])
 
                 # 散件：manifest 未列但真实存在的非结构文件同样复制（防劣质书丢图），
                 # media-type 按扩展名推断后注册进新 manifest，保证输出合法。
                 structural = {"META-INF/container.xml", opf_path}
                 structural.update(skip_reals)
+                manifest_reals = set()
                 for _iid, (name, mt) in items.items():
+                    real = lower_entries.get(name.lower())
+                    if not real:
+                        continue
+                    manifest_reals.add(real)
                     if mt == _NCX_MEDIA_TYPE:
-                        real = lower_entries.get(name.lower())
-                        if real:
-                            structural.add(real)
-                loose = []
+                        structural.add(real)
+                loose_names = []
                 for name in src:
-                    if name in old_to_new or name in structural:
+                    if name in manifest_reals or name in structural:
                         continue
                     if name == "mimetype" or name.startswith("META-INF/"):
                         # 容器级文件（mimetype/签名/加密/书签）不入合集
                         continue
-                    new_name = "%s/%s" % (prefix, name)
-                    old_to_new[name] = new_name
-                    loose.append((name, new_name))
-                for name, new_name in loose:
-                    warnings.append("[%s] 散件已收录：%s" % (book_title, name))
-                # TOC 映射必须在散件登记后重建：NCX/nav 可能引用 manifest 未列、
-                # 靠散件兜底才进包的文件，用旧映射会把这类目录项静默丢掉
-                lower_o2n = {k.lower(): v for k, v in old_to_new.items()}
+                    loose_names.append(name)
 
-                new_spine_docs = []
-                emitted = set()
-                relabeled = 0  # text/html 出包改标 application/xhtml+xml 的文档数
-                for iid in ordered_ids:
-                    name, mt = items[iid]
-                    real = lower_entries.get(name.lower())
-                    if not real:
-                        warnings.append("[%s] 正文条目缺失，已跳过：%s"
+                for seg in job["segments"]:
+                    seg_index += 1
+                    if cancel_event is not None and cancel_event.is_set():
+                        raise MergeCancelled("任务已取消")
+                    if progress_cb is not None:
+                        progress_cb(seg_index, total)
+                    prefix = "b%d" % (seg_index - 1)
+                    book_title = _xml_safe_text(
+                        seg.get("title"), _MERGE_MARKER_TITLE_MAX)
+                    if not book_title:
+                        book_title = "分册%d" % seg_index
+                    selector = seg.get("selector")
+                    seg_prefix = selector.get("prefix") if selector else None
+                    if selector is not None and not seg_prefix:
+                        raise ValueError(
+                            "书籍 [%s] 的子书路径前缀缺失，无法展开" % book_title)
+
+                    def _owned(real):
+                        if selector is None:
+                            return True
+                        return _leaf_owns(seg_prefix, real)
+
+                    def _new_name(real):
+                        if selector is None:
+                            return "%s/%s" % (prefix, real)
+                        rel = (real[len(seg_prefix):]
+                               if real.lower().startswith(seg_prefix.lower())
+                               else real)
+                        return ("%s/%s" % (prefix, rel)) if rel else ""
+
+                    seg_divider = ((selector.get("divider") or "").lower()
+                                   if selector else "")
+
+                    def _is_old_divider(real):
+                        # 只跳过本卷自己的旧分卷页；同名前缀的合法正文保留
+                        return bool(seg_divider) and (real or "").lower() == seg_divider
+
+                    # 本卷的旧→新路径映射：只含归属本卷的条目；
+                    # 合集展开时旧分卷页不复制（统一重新生成）。
+                    old_to_new = {}
+                    for real in manifest_reals:
+                        if not _owned(real) or real in skip_reals:
+                            continue
+                        if selector is not None and _is_old_divider(real):
+                            continue
+                        new_name = _new_name(real)
+                        if new_name:
+                            old_to_new[real] = new_name
+                    for name in loose_names:
+                        if not _owned(name):
+                            continue
+                        if selector is not None and _is_old_divider(name):
+                            continue
+                        new_name = _new_name(name)
+                        if new_name:
+                            old_to_new[name] = new_name
+                    # TOC 映射必须在散件登记后重建：NCX/nav 可能引用 manifest
+                    # 未列、靠散件兜底才进包的文件，用旧映射会把这类目录项丢掉
+                    lower_o2n = {k.lower(): v for k, v in old_to_new.items()}
+
+                    def _emit(real, new_name, mt):
+                        """非 spine 资源：CSS 读入改写，其余直接流式转写。"""
+                        if mt == "text/css" or real.lower().endswith(".css"):
+                            writer.write(new_name, _maybe_rewrite_css(
+                                real, mt, src.read(real),
+                                real.rsplit("/", 1)[0] if "/" in real else "",
+                                new_name.rsplit("/", 1)[0], old_to_new,
+                                book_title, warnings))
+                        else:
+                            writer.write_stream(new_name, src.iter_chunks(real))
+
+                    new_spine_docs = []
+                    emitted = set()
+                    relabeled = 0  # text/html 出包改标 application/xhtml+xml 的文档数
+                    for iid in ordered_ids:
+                        name, mt = items[iid]
+                        real = lower_entries.get(name.lower())
+                        if not real:
+                            warnings.append("[%s] 正文条目缺失，已跳过：%s"
+                                            % (book_title, name))
+                            continue
+                        if not _owned(real):
+                            continue
+                        if name.lower() in nav_names or real in skip_reals:
+                            continue
+                        # 合集展开时旧分卷页只是边界标记，不复制、不告警
+                        if selector is not None and _is_old_divider(real):
+                            continue
+                        new_name = old_to_new.get(real)
+                        if not new_name:
+                            warnings.append(
+                                "[%s] 正文条目不在子书范围内，已跳过：%s"
+                                % (book_title, name))
+                            continue
+                        # 同一文件被多条 itemref 别名引用：只登记一次，
+                        # 防重复 manifest/spine
+                        if new_name in emitted:
+                            continue
+                        raw = src.read(real)
+                        if mt in _TEXT_MEDIA_TYPES:
+                            text = _decode(raw)
+                            old_dir = real.rsplit("/", 1)[0] if "/" in real else ""
+                            new_text, warns = _rewrite_doc_refs(
+                                text, old_dir, new_name.rsplit("/", 1)[0],
+                                old_to_new)
+                            for w in warns:
+                                warnings.append("[%s] %s" % (book_title, w))
+                            # 文档所在旧目录：以该文档自身目录为准，而非 OPF 目录
+                            writer.write(new_name,
+                                         _normalize_xml_encoding(new_text)
+                                         .encode("utf-8"))
+                        else:
+                            writer.write(new_name, _maybe_rewrite_css(
+                                real, mt, raw,
+                                real.rsplit("/", 1)[0] if "/" in real else "",
+                                new_name.rsplit("/", 1)[0], old_to_new,
+                                book_title, warnings))
+                        emitted.add(new_name)
+                        mid = _next_id()
+                        mt_out = _out_media_type(mt)
+                        relabeled += mt_out != mt
+                        manifest.append((mid, new_name, mt_out))
+                        spine.append(mid)
+                        new_spine_docs.append(new_name)
+
+                    if not new_spine_docs:
+                        raise ValueError(
+                            "书籍 [%s] 正文条目全部缺失，无法合并" % book_title)
+
+                    # manifest 非 spine 资源（CSS/图/字体）原样收录；源 NCX 与
+                    # 目录页除外（已被合并后的 toc.ncx 取代）
+                    for _iid, (name, mt) in items.items():
+                        if mt == _NCX_MEDIA_TYPE or name.lower() in nav_names:
+                            continue
+                        real = lower_entries.get(name.lower())
+                        if not real or real in skip_reals:
+                            continue
+                        if not _owned(real):
+                            continue
+                        new_name = old_to_new.get(real)
+                        if not new_name or new_name in emitted:
+                            continue
+                        _emit(real, new_name, mt)
+                        mt_out = _out_media_type(mt)
+                        relabeled += mt_out != mt
+                        manifest.append((_next_id(), new_name, mt_out))
+                        emitted.add(new_name)
+
+                    for name in loose_names:
+                        if name == "mimetype":
+                            continue
+                        if not _owned(name):
+                            continue
+                        if selector is not None and _is_old_divider(name):
+                            continue
+                        new_name = old_to_new.get(name)
+                        if not new_name:
+                            continue
+                        warnings.append("[%s] 散件已收录：%s"
                                         % (book_title, name))
-                        continue
-                    if name.lower() in nav_names or real in skip_reals:
-                        continue
-                    new_name = old_to_new[real]
-                    # 同一文件被多条 itemref 别名引用：只登记一次，防重复 manifest/spine
-                    if new_name in emitted:
-                        continue
-                    raw = src.read(real)
-                    if mt in _TEXT_MEDIA_TYPES:
-                        text = _decode(raw)
-                        old_dir = real.rsplit("/", 1)[0] if "/" in real else ""
-                        new_text, warns = _rewrite_doc_refs(
-                            text, old_dir, new_name.rsplit("/", 1)[0], old_to_new)
-                        for w in warns:
-                            warnings.append("[%s] %s" % (book_title, w))
-                        # 文档所在旧目录：以该文档自身目录为准，而非 OPF 目录
-                        writer.write(new_name,
-                                     _normalize_xml_encoding(new_text).encode("utf-8"))
+                        guess_mt = _guess_media_type(name)
+                        loose_mt = _out_media_type(guess_mt)
+                        relabeled += loose_mt != guess_mt
+                        _emit(name, new_name, loose_mt)
+                        manifest.append((_next_id(), new_name, loose_mt))
+                    if relabeled:
+                        warnings.append(
+                            "[%s] %d 个 text/html 文档已按 EPUB3 规范改标 "
+                            "application/xhtml+xml" % (book_title, relabeled))
+
+                    # 分卷页插到本卷首篇之前
+                    div_name = None
+                    if divider:
+                        div_name = "%s_divider.xhtml" % prefix
+                        writer.write(div_name, _build_divider(
+                            book_title, seg_index - 1, total))
+                        div_id = _next_id()
+                        manifest.append((div_id, div_name,
+                                         "application/xhtml+xml"))
+                        first_mid = next(m0 for m0, h, _m in manifest
+                                         if h == new_spine_docs[0])
+                        spine.insert(spine.index(first_mid), div_id)
+
+                    # TOC：合集取该叶子在源 NCX 中的子树；普通书取整树。
+                    # 映射都在本卷 old_to_new 内，跨卷引用自然落空并被滤掉，
+                    # 不会把别的书的目录项带进来。
+                    if selector is not None:
+                        raw_nodes = selector.get("toc_nodes") or []
+                        toc_base = selector.get("ncx_base") or ncx_base
                     else:
-                        writer.write(new_name, _maybe_rewrite_css(
-                            real, mt, raw, real.rsplit("/", 1)[0] if "/" in real else "",
-                            new_name.rsplit("/", 1)[0], old_to_new, book_title,
-                            warnings))
-                    emitted.add(new_name)
-                    mid = _next_id()
-                    mt_out = _out_media_type(mt)
-                    relabeled += mt_out != mt
-                    manifest.append((mid, new_name, mt_out))
-                    spine.append(mid)
-                    new_spine_docs.append(new_name)
-
-                if not new_spine_docs:
-                    raise ValueError("书籍 [%s] 正文条目全部缺失，无法合并" % book_title)
-
-                # manifest 非 spine 资源（CSS/图/字体）原样收录；源 NCX 与
-                # 目录页除外（已被合并后的 toc.ncx 取代，复制只会留下混淆视听的死文件）
-                for _iid, (name, mt) in items.items():
-                    if mt == _NCX_MEDIA_TYPE or name.lower() in nav_names:
-                        continue
-                    real = lower_entries.get(name.lower())
-                    if not real or real in skip_reals:
-                        continue
-                    new_name = old_to_new[real]
-                    if new_name in emitted:
-                        continue
-                    _emit(real, new_name, mt)
-                    mt_out = _out_media_type(mt)
-                    relabeled += mt_out != mt
-                    manifest.append((_next_id(), new_name, mt_out))
-                    emitted.add(new_name)
-
-                for name, new_name in loose:
-                    if name == "mimetype":
-                        continue
-                    guess_mt = _guess_media_type(name)
-                    loose_mt = _out_media_type(guess_mt)
-                    relabeled += loose_mt != guess_mt
-                    _emit(name, new_name, loose_mt)
-                    manifest.append((_next_id(), new_name, loose_mt))
-                if relabeled:
-                    warnings.append(
-                        "[%s] %d 个 text/html 文档已按 EPUB3 规范改标 "
-                        "application/xhtml+xml" % (book_title, relabeled))
-
-                # 分卷页插到该书首篇之前
-                div_name = None
-                if divider:
-                    div_name = "%s_divider.xhtml" % prefix
-                    writer.write(div_name, _build_divider(book_title, idx, total))
-                    div_id = _next_id()
-                    manifest.append((div_id, div_name, "application/xhtml+xml"))
-                    first_mid = next(m0 for m0, h, _m in manifest
-                                     if h == new_spine_docs[0])
-                    spine.insert(spine.index(first_mid), div_id)
-
-                # TOC：NCX 重映射（src 相对 NCX 自身目录解析，保留嵌套层级）→
-                # EPUB3 nav 兜底 → spine 兜底。frag 原样保留：目标 id 未改名。
-                nodes = []
-                for _iid, (name, mt) in items.items():
-                    if mt != _NCX_MEDIA_TYPE:
-                        continue
-                    real = lower_entries.get(name.lower())
-                    if not real:
-                        break
-                    ncx_base = real.rsplit("/", 1)[0] if "/" in real else ""
+                        raw_nodes = ncx_tree
+                        toc_base = ncx_base
                     nodes = _toc_nodes_from_tree(
-                        _parse_ncx_tree(_decode(src.read(real))),
-                        ncx_base, lower_o2n, book_title)
-                    break
-                if not nodes:
-                    nav_real = next((lower_entries[n] for n in nav_names
-                                     if n in lower_entries), None)
-                    if nav_real:
-                        nav_base = nav_real.rsplit("/", 1)[0] if "/" in nav_real else ""
-                        for label, href in _parse_nav_pairs(_decode(src.read(nav_real))):
-                            mapped = _map_toc_src(href, nav_base, lower_o2n)
-                            if mapped:
-                                nodes.append((label or book_title,
-                                              mapped[0], mapped[1], []))
-                        if nodes:
-                            warnings.append("[%s] 无 NCX 目录，已改用 EPUB3 导航"
-                                            % book_title)
-                if not nodes:
-                    # spine 兜底：条目名取文件名主干（排除目录页；nav 页已不在 spine）
-                    nodes = [(posixpath.basename(n).rsplit(".", 1)[0] or book_title,
-                              n, None, []) for n in new_spine_docs]
-                    warnings.append("[%s] 无 NCX / EPUB3 导航，已降级为 spine 顺序"
+                        raw_nodes, toc_base, lower_o2n, book_title)
+                    if not nodes:
+                        nav_real = next((lower_entries[n] for n in nav_names
+                                         if n in lower_entries), None)
+                        if nav_real:
+                            nav_base = (nav_real.rsplit("/", 1)[0]
+                                        if "/" in nav_real else "")
+                            for label, href in _parse_nav_pairs(
+                                    _decode(src.read(nav_real))):
+                                mapped = _map_toc_src(href, nav_base, lower_o2n)
+                                if mapped:
+                                    nodes.append((label or book_title,
+                                                  mapped[0], mapped[1], []))
+                            if nodes:
+                                warnings.append(
+                                    "[%s] 无 NCX 目录，已改用 EPUB3 导航"
                                     % book_title)
-                # 父节点指向分卷页（开 divider 时点父节点先见卷名页），否则指向首篇
-                parent = (div_name, None) if divider else (nodes[0][1], nodes[0][2])
-                books_toc.append((book_title, parent, nodes))
-                # 输出条目闸：逐本检查，超 ZIP 非 ZIP64 上限（65535）前提前失败
-                if writer.count > _MERGE_MAX_TOTAL_ENTRIES:
-                    raise ValueError(
-                        "合集输出条目过多（超过 %d 条），已超出常见阅读器的支持范围，"
-                        "请分批合并" % _MERGE_MAX_TOTAL_ENTRIES)
+                    if not nodes:
+                        # spine 兜底：条目名取文件名主干（排除目录页）
+                        nodes = []
+                        for doc in new_spine_docs:
+                            label = posixpath.basename(doc).rsplit(".", 1)[0]
+                            nodes.append((label or book_title, doc, None, []))
+                        warnings.append(
+                            "[%s] 无 NCX / EPUB3 导航，已降级为 spine 顺序"
+                            % book_title)
+                    # 父节点指向分卷页（开 divider 时点父节点先见卷名页），
+                    # 否则指向首篇
+                    parent = ((div_name, None) if divider
+                              else (nodes[0][1], nodes[0][2]))
+                    books_toc.append((book_title, parent, nodes))
+                    books_meta.append({"title": book_title,
+                                       "prefix": "%s/" % prefix})
+                    # 输出条目闸：逐卷检查，超 ZIP 非 ZIP64 上限前提前失败
+                    if writer.count > _MERGE_MAX_TOTAL_ENTRIES:
+                        raise ValueError(
+                            "合集输出条目过多（超过 %d 条），已超出常见阅读器的"
+                            "支持范围，请分批合并" % _MERGE_MAX_TOTAL_ENTRIES)
 
         manifest.append(("ncx", "toc.ncx", _NCX_MEDIA_TYPE))
         manifest.append(("nav", "nav.xhtml", "application/xhtml+xml"))
         writer.write("content.opf",
-                     _build_opf(meta, manifest, spine, uid, cover_name, cover_mt))
+                     _build_opf(meta, manifest, spine, uid, cover_name, cover_mt,
+                                merge_books=books_meta))
         writer.write("toc.ncx",
                      _build_ncx(meta.get("title") or "", books_toc, uid))
         writer.write("nav.xhtml",

@@ -64,6 +64,10 @@ class EpubMergeTool(BaseTool):
     service_item_name = "EPUB合并"
 
     _run_lock = threading.Lock()
+    # 任务/取消状态锁：request_cancel 的“判断当前任务 + 置位”与 merge 的
+    # “登记新任务 + 清事件”必须原子，否则迟到的取消会误伤下一个任务
+    _state_lock = threading.Lock()
+    _active_task_id: Optional[int] = None
     _last_task_id: Optional[int] = None
     # 取消信号：handler 置位、合并线程每本开始前检查
     _cancel_event = threading.Event()
@@ -75,19 +79,25 @@ class EpubMergeTool(BaseTool):
 
     @classmethod
     def request_cancel(cls) -> bool:
-        """请求取消当前合并任务（无任务时返回 False）。"""
-        if not cls.is_running():
-            return False
-        cls._cancel_event.set()
-        return True
+        """请求取消当前合并任务（无任务时返回 False）。
+
+        用 _state_lock 把“读取当前任务 + 置位”与 merge 的任务切换串行化：
+        旧任务收尾时迟到的取消不会落到下一个任务上。
+        """
+        with cls._state_lock:
+            if cls._active_task_id is None:
+                return False
+            cls._cancel_event.set()
+            return True
 
     @staticmethod
     def info() -> dict:
         return {
             "tool_id": "epub_merge",
             "name": "EPUB合并",
-            "description": "将多本 EPUB 按指定顺序合并为一本新书（目录拼接、资源去重），原书默认保留",
-            "revision": "0.1.0",
+            "description": "将多本 EPUB 按指定顺序合并为一本新书（目录拼接、资源去重；"
+                           "已有合集会按内部子书自动展开），原书默认保留",
+            "revision": "0.2.0",
             "author": "黏菌",
             "publish_date": "2026-09-04",
         }
@@ -166,7 +176,14 @@ class EpubMergeTool(BaseTool):
             "error": None,
             # 告警码在此翻译（lib 不依赖 i18n；未知码原样透出）
             "warnings": [_(_WARN_MESSAGES.get(w, w)) for w in info["warnings"]],
+            # 合集识别结果（新产物 marker / 旧产物 NCX 启发式）；普通书为 None
+            "merged": info.get("merged"),
         }
+
+    @staticmethod
+    def _expand_preview_books(ok_books: list) -> tuple:
+        """按合集展开预览默认标题/简介（逻辑下沉 lib，便于 standalone 单测）。"""
+        return epub_merge_lib.expand_preview_books(ok_books)
 
     @AsyncService.register_function
     def preview(self, book_ids: list) -> dict:
@@ -186,7 +203,8 @@ class EpubMergeTool(BaseTool):
                 books.append({"book_id": bid, "error": str(err)})
 
         ok_books = [b for b in books if not b.get("error")]
-        titles = [b["title"] for b in ok_books]
+        titles, description_items, merged_sources, expanded_count = \
+            self._expand_preview_books(ok_books)
         default_title = _default_title(titles)
         authors_union = _ordered_unique([a for b in ok_books for a in b["authors"]])
         isbns_union = _ordered_unique([i for b in ok_books for i in b["isbns"]])
@@ -196,8 +214,7 @@ class EpubMergeTool(BaseTool):
             (lang for b in ok_books for lang in b["languages"]), "zho")
 
         description = epub_merge_lib.compose_description(
-            [{"title": b["title"], "comments": b["comments"]} for b in ok_books],
-            isbns_union)
+            description_items, isbns_union)
         truncated = False
         if len(description) > _PREVIEW_TEXT_MAX:
             description = description[:_PREVIEW_TEXT_MAX]
@@ -213,8 +230,13 @@ class EpubMergeTool(BaseTool):
             "language_default": language_default,
             "description_default": description,
             "truncated": truncated,
+            # 合集展开后的实际输出卷数；超过上限时前端禁用合并
+            "expanded_count": expanded_count,
+            "expanded_overflow": expanded_count > epub_merge_lib.MERGE_MAX_BOOKS,
+            "merged_sources": merged_sources,
             # 可选书数上限随响应下发，前端不再另写一份数字（改上限只动 lib 常量）
             "max_books": epub_merge_lib.MERGE_MAX_BOOKS,
+            "max_expanded_books": epub_merge_lib.MERGE_MAX_BOOKS,
         }
 
     # ------------------------------------------------------------ 封面上传
@@ -476,7 +498,6 @@ class EpubMergeTool(BaseTool):
             if not EpubMergeTool.is_running():
                 EpubMergeTool._last_task_id = skip_task_id
             return
-        EpubMergeTool._cancel_event.clear()
 
         task_id = None
         error_message = None
@@ -489,6 +510,11 @@ class EpubMergeTool(BaseTool):
             # 不会读到上一个任务的 completed 而误报「合并成功」
             task_id = self.create_task(progress_data={"status": "starting"})
             EpubMergeTool._last_task_id = task_id
+            # 与 request_cancel 串行：登记本任务后才清旧取消信号，
+            # 旧任务收尾时迟到的取消不会带进本任务
+            with EpubMergeTool._state_lock:
+                EpubMergeTool._active_task_id = task_id
+                EpubMergeTool._cancel_event.clear()
 
             ids = self._normalize_ids(book_ids)
             title = utils.super_strip(title or "")[:_TITLE_MAX]
@@ -514,7 +540,10 @@ class EpubMergeTool(BaseTool):
             seg = 70.0 / total
             inputs = []
             loaded_bytes = 0
+            expanded_total = 0
             for idx, bid in enumerate(ids):
+                if EpubMergeTool._cancel_event.is_set():
+                    raise epub_merge_lib.MergeCancelled(_("任务已取消"))
                 base = idx * seg
                 self.update_task_progress(
                     task_id, int(base + seg * 0.1),
@@ -535,11 +564,26 @@ class EpubMergeTool(BaseTool):
                 book_title = utils.super_strip(mi.title or "")
                 if not book_title:
                     raise RuntimeError(_("书籍不存在或标题为空：ID=%d") % bid)
+                # 合集识别：preview 已分析过时直接命中缓存；展开数用于提前
+                # 拦截「选 2 本、展开后 400 本」的情况，并让进度总数准确
+                try:
+                    info = self._analyze_cached(epub_path)
+                except Exception as err:
+                    raise RuntimeError(
+                        _("书籍 [%s] 解析失败：%s") % (book_title, err)) from err
+                merged = info.get("merged")
+                expanded_total += (len(merged["books"])
+                                   if merged and merged.get("books") else 1)
                 inputs.append({"path": epub_path, "title": book_title})
                 self.update_task_progress(
                     task_id, int(base + seg * 0.9),
                     {"status": "running", "stage": "loading",
                      "book_index": idx + 1, "book_total": total, "book_id": bid})
+
+            if expanded_total > epub_merge_lib.MERGE_MAX_BOOKS:
+                raise RuntimeError(
+                    _("合集展开后共 %d 本，超过单次 %d 本上限，请减少选择")
+                    % (expanded_total, epub_merge_lib.MERGE_MAX_BOOKS))
 
             self.update_task_progress(task_id, 72, {"status": "running", "stage": "cover"})
             cover_data, cover_warning = self._resolve_cover(options.get("cover"), ids)
@@ -578,8 +622,9 @@ class EpubMergeTool(BaseTool):
                 description, isbns, cover_data, user_id)
             self._delete_cover_upload(options.get("cover"))
             logging.info(
-                "[EpubMergeTool] Merged %d books -> new book_id=%d [%s] [uid:%d]",
-                total, new_book_id, title, user_id)
+                "[EpubMergeTool] Merged %d books (%d volumes after expand) "
+                "-> new book_id=%d [%s] [uid:%d]",
+                total, expanded_total, new_book_id, title, user_id)
             self.cleanup_work_dir(work_dir)
             work_dir = None
 
@@ -620,12 +665,14 @@ class EpubMergeTool(BaseTool):
         finally:
             if work_dir is not None:
                 self.cleanup_work_dir(work_dir)
-            EpubMergeTool._cancel_event.clear()
             if task_id is not None:
                 if error_message is None:
                     self.update_task_progress(
                         task_id, 100,
                         {"status": "completed", "new_book_id": new_book_id})
                 self.complete_task(task_id, error_message=error_message)
+            with EpubMergeTool._state_lock:
+                EpubMergeTool._cancel_event.clear()
+                EpubMergeTool._active_task_id = None
             if acquired:
                 EpubMergeTool._run_lock.release()

@@ -1897,5 +1897,738 @@ class TestHtmlMediaTypeNormalize(unittest.TestCase):
         self.assertIn("text/html", str(ctx.exception))
 
 
+class TestMergeMarkerAndDetection(unittest.TestCase):
+    """合集 marker / 旧版识别 / analyze.merged 字段。"""
+
+    def _merge_two(self):
+        return lib.merge_epubs(
+            [{"data": _make_min_epub(title="卷一", n_docs=1), "title": "卷一"},
+             {"data": _make_min_epub(title="卷二", n_docs=1), "title": "卷二"}],
+            {"title": "合集", "authors": []})
+
+    def test_marker_roundtrip_and_lite(self):
+        out = self._merge_two()
+        full = lib.analyze_epub(out)
+        lite = lib.analyze_epub(out, lite=True)
+        expected = [{"title": "卷一", "prefix": "b0/"},
+                    {"title": "卷二", "prefix": "b1/"}]
+        self.assertEqual(full["merged"]["version"], lib.MERGE_MARKER_VERSION)
+        self.assertEqual(full["merged"]["books"], expected)
+        self.assertEqual(lite["merged"], full["merged"])
+
+    def test_normal_book_has_no_merged(self):
+        self.assertIsNone(lib.analyze_epub(_make_min_epub())["merged"])
+
+    def test_marker_in_opf_and_validate(self):
+        out = self._merge_two()
+        entries = _zip_entries(out)
+        opf = entries["content.opf"].decode("utf-8")
+        self.assertIn('property="mybooks:merge"', opf)
+        self.assertIn('prefix="%s"' % lib.MERGE_MARKER_PREFIX, opf)
+        self.assertEqual(lib.validate_output(out), [])
+
+    def test_marker_title_escaped(self):
+        out = lib.merge_epubs(
+            [{"data": _make_min_epub(title="安全标题", n_docs=1),
+              "title": 'A & <B> "C"'},
+             {"data": _make_min_epub(title="卷二", n_docs=1), "title": "卷二"}],
+            {"title": "合集", "authors": []})
+        merged = lib.analyze_epub(out)["merged"]
+        self.assertEqual(merged["books"][0]["title"], 'A & <B> "C"')
+        # 写 marker 时若不转义，OPF 会变成非法 XML；这里必须过守门
+        self.assertEqual(lib.validate_output(out), [])
+
+    def test_marker_control_chars_sanitized(self):
+        coll = lib.merge_epubs(
+            [{"data": _make_min_epub(title="A", n_docs=1), "title": "A"},
+             {"data": _make_min_epub(title="B", n_docs=1), "title": "B"}],
+            {"title": "AB合集", "authors": []})
+
+        def _patch_marker(raw):
+            import json as _json
+            payload = {"v": 1, "books": [
+                {"title": "A\u0001X", "prefix": "b0/"},
+                {"title": "B\ud800Y", "prefix": "b1/"},
+            ]}
+            text = raw.decode("utf-8")
+            repl = ('<meta property="mybooks:merge">%s</meta>'
+                    % _json.dumps(payload, ensure_ascii=True))
+            text = re.sub(
+                r'<meta property="mybooks:merge">.*?</meta>',
+                lambda _m: repl, text, flags=re.S)
+            return text.encode("utf-8")
+
+        patched = _patch_zip_entry(coll, "content.opf", _patch_marker)
+        merged = lib.analyze_epub(patched)["merged"]
+        self.assertEqual([b["title"] for b in merged["books"]], ["AX", "BY"])
+        # 展开后再合并一次，确认脏字符没有破坏输出合法性
+        out = lib.merge_epubs(
+            [{"data": patched, "title": "AB合集"},
+             {"data": _make_min_epub(title="C", n_docs=1), "title": "C"}],
+            {"title": "ABC合集", "authors": []})
+        self.assertEqual(lib.validate_output(out), [])
+
+    def test_marker_empty_titles_fallback(self):
+        coll = lib.merge_epubs(
+            [{"data": _make_min_epub(title="A", n_docs=1), "title": "A"},
+             {"data": _make_min_epub(title="B", n_docs=1), "title": "B"}],
+            {"title": "AB合集", "authors": []})
+
+        def _empty_titles(raw):
+            import json as _json
+            payload = {"v": 1, "books": [
+                {"title": "", "prefix": "b0/"},
+                {"title": "", "prefix": "b1/"},
+            ]}
+            text = raw.decode("utf-8")
+            repl = ('<meta property="mybooks:merge">%s</meta>'
+                    % _json.dumps(payload))
+            text = re.sub(
+                r'<meta property="mybooks:merge">.*?</meta>',
+                lambda _m: repl, text, flags=re.S)
+            return text.encode("utf-8")
+
+        patched = _patch_zip_entry(coll, "content.opf", _empty_titles)
+        merged = lib.analyze_epub(patched)["merged"]
+        self.assertEqual([b["title"] for b in merged["books"]],
+                         ["分册1", "分册2"])
+
+    def test_parse_marker_rejects_bad_payloads(self):
+        self.assertIsNone(lib.parse_merge_marker("<package/>"))
+        payloads = (
+            "not-json",
+            '{"v":2,"books":[]}',
+            '{"v":1,"books":[{"title":"A","prefix":"../evil/"}]}',
+            '{"v":1,"books":[{"title":"A","prefix":"b0/"}]}',
+        )
+        for payload in payloads:
+            opf = '<meta property="mybooks:merge">%s</meta>' % payload
+            self.assertIsNone(lib.parse_merge_marker(opf))
+
+
+def _strip_merge_marker(data: bytes) -> bytes:
+    """模拟旧版产物：移除 marker meta 与 package prefix 声明。"""
+    entries = _zip_entries(data)
+    opf = entries["content.opf"].decode("utf-8")
+    opf = re.sub(r'<meta property="mybooks:merge">.*?</meta>', "",
+                 opf, flags=re.S)
+    opf = opf.replace(' prefix="mybooks: https://mybooks.top/ns/merge#"', "")
+    entries["content.opf"] = opf.encode("utf-8")
+    return _make_epub(entries)
+
+
+def _patch_zip_entry(data: bytes, name: str, fn) -> bytes:
+    entries = _zip_entries(data)
+    entries[name] = fn(entries[name])
+    return _make_epub(entries)
+
+
+class TestLegacyMergedDetection(unittest.TestCase):
+    """旧版产物（无 marker）：contributor + NCX + bN/ 前缀识别。"""
+
+    def test_legacy_flat(self):
+        coll = lib.merge_epubs(
+            [{"data": _make_min_epub(title="A", n_docs=1), "title": "A"},
+             {"data": _make_min_epub(title="B", n_docs=1), "title": "B"}],
+            {"title": "AB合集", "authors": []})
+        merged = lib.analyze_epub(_strip_merge_marker(coll))["merged"]
+        self.assertEqual(merged["version"], 0)
+        self.assertEqual([b["title"] for b in merged["books"]], ["A", "B"])
+        self.assertEqual([b["prefix"] for b in merged["books"]],
+                         ["b0/", "b1/"])
+
+    def test_legacy_nested_recursive(self):
+        coll1 = lib.merge_epubs(
+            [{"data": _make_min_epub(title="A", n_docs=1), "title": "A"},
+             {"data": _make_min_epub(title="B", n_docs=1), "title": "B"},
+             {"data": _make_min_epub(title="C", n_docs=1), "title": "C"}],
+            {"title": "ABC合集", "authors": []})
+        nested = lib.merge_epubs(
+            [{"data": coll1, "title": "ABC合集"},
+             {"data": _make_min_epub(title="D", n_docs=1), "title": "D"}],
+            {"title": "ABCD合集", "authors": []},
+            {"expand_merged": False})
+        merged = lib.analyze_epub(_strip_merge_marker(nested))["merged"]
+        self.assertEqual(merged["version"], 0)
+        self.assertEqual([b["title"] for b in merged["books"]],
+                         ["A", "B", "C", "D"])
+        self.assertEqual([b["prefix"] for b in merged["books"]],
+                         ["b0/b0/", "b0/b1/", "b0/b2/", "b1/"])
+
+    def test_marker_nested_recurses(self):
+        coll1 = lib.merge_epubs(
+            [{"data": _make_min_epub(title="A", n_docs=1), "title": "A"},
+             {"data": _make_min_epub(title="B", n_docs=1), "title": "B"}],
+            {"title": "AB合集", "authors": []})
+        nested = lib.merge_epubs(
+            [{"data": coll1, "title": "AB合集"},
+             {"data": _make_min_epub(title="C", n_docs=1), "title": "C"}],
+            {"title": "ABC合集", "authors": []},
+            {"expand_merged": False})
+        merged = lib.analyze_epub(nested)["merged"]
+        self.assertEqual([b["title"] for b in merged["books"]],
+                         ["A", "B", "C"])
+
+    def test_divider_off_legacy(self):
+        coll = lib.merge_epubs(
+            [{"data": _make_min_epub(title="A", n_docs=1), "title": "A"},
+             {"data": _make_min_epub(title="B", n_docs=1), "title": "B"}],
+            {"title": "AB合集", "authors": []},
+            {"divider": False})
+        merged = lib.analyze_epub(_strip_merge_marker(coll))["merged"]
+        self.assertEqual([b["title"] for b in merged["books"]], ["A", "B"])
+
+    def test_internal_b_folders_not_mistaken_for_nested(self):
+        """正常书内部恰有 b0/、b1/ 子目录时，无分卷页证据不得递归拆书。"""
+        coll = lib.merge_epubs(
+            [{"data": _make_min_epub(title="A", n_docs=2), "title": "A"},
+             {"data": _make_min_epub(title="B", n_docs=2), "title": "B"}],
+            {"title": "AB合集", "authors": []})
+
+        def _fake_nested(raw):
+            text = raw.decode("utf-8")
+            text = text.replace("b0/OEBPS/ch1.xhtml", "b0/b0/OEBPS/ch1.xhtml")
+            text = text.replace("b0/OEBPS/ch2.xhtml", "b0/b1/OEBPS/ch2.xhtml")
+            return text.encode("utf-8")
+
+        patched = _patch_zip_entry(coll, "toc.ncx", _fake_nested)
+        merged = lib.analyze_epub(patched)["merged"]
+        self.assertEqual([b["title"] for b in merged["books"]],
+                         ["A", "B"])
+
+    def test_marker_bad_prefix_falls_back_to_legacy(self):
+        coll = lib.merge_epubs(
+            [{"data": _make_min_epub(title="A", n_docs=1), "title": "A"},
+             {"data": _make_min_epub(title="B", n_docs=1), "title": "B"}],
+            {"title": "AB合集", "authors": []})
+
+        def _bad_prefix(raw):
+            text = raw.decode("utf-8")
+            return text.replace('"prefix":"b1/"', '"prefix":"b9/"').encode("utf-8")
+
+        patched = _patch_zip_entry(coll, "content.opf", _bad_prefix)
+        merged = lib.analyze_epub(patched)["merged"]
+        # marker 校验失败 → 回退旧版识别（contributor + NCX），不是坏 marker
+        self.assertEqual(merged["version"], 0)
+        self.assertEqual([b["title"] for b in merged["books"]], ["A", "B"])
+
+    def test_marker_overlapping_prefix_falls_back(self):
+        coll = lib.merge_epubs(
+            [{"data": _make_min_epub(title="A", n_docs=1), "title": "A"},
+             {"data": _make_min_epub(title="B", n_docs=1), "title": "B"}],
+            {"title": "AB合集", "authors": []})
+
+        def _overlap(raw):
+            text = raw.decode("utf-8")
+            return text.replace('"prefix":"b1/"', '"prefix":"b0/b0/"').encode("utf-8")
+
+        patched = _patch_zip_entry(coll, "content.opf", _overlap)
+        merged = lib.analyze_epub(patched)["merged"]
+        self.assertEqual(merged["version"], 0)
+        self.assertEqual([b["title"] for b in merged["books"]], ["A", "B"])
+
+    def test_validate_leaves_requires_content(self):
+        leaves = [{"title": "A", "prefix": "b0/"},
+                  {"title": "B", "prefix": "b1/"}]
+        # A 只拥有分卷页：坏结构，不得展开
+        self.assertFalse(lib._validate_merge_leaves(
+            leaves, ["b0_divider.xhtml", "b1_divider.xhtml",
+                     "b1/OEBPS/ch1.xhtml"]))
+        self.assertTrue(lib._validate_merge_leaves(
+            leaves, ["b0_divider.xhtml", "b0/OEBPS/ch1.xhtml",
+                     "b1_divider.xhtml", "b1/OEBPS/ch1.xhtml"]))
+
+    def test_leaf_with_only_divider_not_expanded(self):
+        coll = lib.merge_epubs(
+            [{"data": _make_min_epub(title="A", n_docs=2), "title": "A"},
+             {"data": _make_min_epub(title="B", n_docs=2), "title": "B"}],
+            {"title": "AB合集", "authors": []})
+        entries = _zip_entries(coll)
+        entries.pop("b0/OEBPS/ch1.xhtml")
+        entries.pop("b0/OEBPS/ch2.xhtml")
+        broken = _make_epub(entries)
+        self.assertIsNone(lib.analyze_epub(broken)["merged"])
+        out = lib.merge_epubs(
+            [{"data": broken, "title": "AB合集"},
+             {"data": _make_min_epub(title="C", n_docs=1), "title": "C"}],
+            {"title": "合集", "authors": []})
+        marker = lib.parse_merge_marker(
+            _zip_entries(out)["content.opf"].decode("utf-8"))
+        self.assertEqual([b["title"] for b in marker["books"]],
+                         ["AB合集", "C"])
+
+    def test_legacy_end_to_end_expand(self):
+        coll = lib.merge_epubs(
+            [{"data": _make_min_epub(title="A", n_docs=1), "title": "A"},
+             {"data": _make_min_epub(title="B", n_docs=1), "title": "B"}],
+            {"title": "AB合集", "authors": []})
+        legacy = _strip_merge_marker(coll)
+        out = lib.merge_epubs(
+            [{"data": legacy, "title": "AB合集"},
+             {"data": _make_min_epub(title="C", n_docs=1), "title": "C"}],
+            {"title": "ABC合集", "authors": []})
+        merged = lib.analyze_epub(out)["merged"]
+        self.assertEqual([b["title"] for b in merged["books"]],
+                         ["A", "B", "C"])
+        # analyze 会递归识别嵌套结构；必须同时校验物理产物已按叶子拆分
+        marker = lib.parse_merge_marker(
+            _zip_entries(out)["content.opf"].decode("utf-8"))
+        self.assertEqual([b["title"] for b in marker["books"]],
+                         ["A", "B", "C"])
+        spine = lib.analyze_epub(out)["spine_files"]
+        for idx in range(3):
+            self.assertIn("b%d_divider.xhtml" % idx, spine)
+        self.assertEqual(lib.validate_output(out), [])
+
+    def test_legacy_nested_divider_off_one_level(self):
+        coll1 = lib.merge_epubs(
+            [{"data": _make_min_epub(title="A", n_docs=1), "title": "A"},
+             {"data": _make_min_epub(title="B", n_docs=1), "title": "B"}],
+            {"title": "AB合集", "authors": []},
+            {"divider": False})
+        nested = lib.merge_epubs(
+            [{"data": coll1, "title": "AB合集"},
+             {"data": _make_min_epub(title="C", n_docs=1), "title": "C"}],
+            {"title": "ABC合集", "authors": []},
+            {"expand_merged": False, "divider": False})
+        legacy = _strip_merge_marker(nested)
+        merged = lib.analyze_epub(legacy)["merged"]
+        # 无分卷页证据：只能确认外层两层，内层 AB 合集保持 1 卷
+        self.assertEqual([b["title"] for b in merged["books"]],
+                         ["AB合集", "C"])
+
+    def test_marker_without_ncx_expands(self):
+        coll = lib.merge_epubs(
+            [{"data": _make_min_epub(title="A", n_docs=1), "title": "A"},
+             {"data": _make_min_epub(title="B", n_docs=1), "title": "B"}],
+            {"title": "AB合集", "authors": []})
+        entries = _zip_entries(coll)
+        entries.pop("toc.ncx")
+        opf = entries["content.opf"].decode("utf-8")
+        opf = re.sub(r'<item id="ncx"[^>]*/>', "", opf)
+        entries["content.opf"] = opf.encode("utf-8")
+        no_ncx = _make_epub(entries)
+        merged = lib.analyze_epub(no_ncx)["merged"]
+        self.assertEqual([b["title"] for b in merged["books"]], ["A", "B"])
+        out = lib.merge_epubs(
+            [{"data": no_ncx, "title": "AB合集"},
+             {"data": _make_min_epub(title="C", n_docs=1), "title": "C"}],
+            {"title": "ABC合集", "authors": []})
+        self.assertEqual(lib.validate_output(out), [])
+
+
+class TestMergeExpand(unittest.TestCase):
+    """合集自动展开为叶子卷。"""
+
+    def _book(self, title, n_docs=2):
+        return _make_min_epub(title=title, n_docs=n_docs, mark=title)
+
+    def _three_plus_one_inputs(self):
+        coll = lib.merge_epubs(
+            [{"data": self._book("A"), "title": "A"},
+             {"data": self._book("B"), "title": "B"},
+             {"data": self._book("C"), "title": "C"}],
+            {"title": "ABC合集", "authors": []})
+        return ([{"data": coll, "title": "ABC合集"},
+                 {"data": self._book("D"), "title": "D"}],
+                {"title": "ABCD合集", "authors": []})
+
+    def _three_plus_one(self, **options):
+        inputs, meta = self._three_plus_one_inputs()
+        return lib.merge_epubs(inputs, meta, options or None)
+
+    def test_expand_ignores_stale_merged_none(self):
+        """调用方缓存的 merged=None 不可信：源文件可能已被替换成合集。"""
+        inputs, _meta = self._three_plus_one_inputs()
+        jobs = lib.expand_merge_inputs([
+            {"data": inputs[0]["data"], "title": "ABC合集", "merged": None},
+            {"data": inputs[1]["data"], "title": "D"},
+        ])
+        self.assertEqual(sum(len(job["segments"]) for job in jobs), 4)
+
+    def test_three_plus_one(self):
+        out = self._three_plus_one()
+        info = lib.analyze_epub(out)
+        self.assertEqual([b["title"] for b in info["merged"]["books"]],
+                         ["A", "B", "C", "D"])
+        self.assertEqual([b["prefix"] for b in info["merged"]["books"]],
+                         ["b0/", "b1/", "b2/", "b3/"])
+        self.assertEqual(len(info["spine_files"]), 4 + 8)
+        entries = _zip_entries(out)
+        for idx, title in enumerate(("A", "B", "C", "D")):
+            divider = entries["b%d_divider.xhtml" % idx].decode("utf-8")
+            self.assertIn("<h1>%s</h1>" % title, divider)
+            self.assertIn("共4卷", divider)
+        ncx = entries["toc.ncx"].decode("utf-8")
+        labels = re.findall(
+            r'<navPoint id="m\d+"[^>]*><navLabel><text>([^<]+)</text>',
+            ncx)
+        self.assertEqual(labels, ["A", "B", "C", "D"])
+        self.assertNotIn("ABC合集", ncx)
+        self.assertEqual(lib.validate_output(out), [])
+
+    def test_toc_children_preserved(self):
+        out = self._three_plus_one()
+        ncx = _zip_entries(out)["toc.ncx"].decode("utf-8")
+        self.assertEqual(ncx.count("第1章"), 4)
+        self.assertEqual(ncx.count("第2章"), 4)
+        # 不只看出现次数：确认章节挂在正确的卷节点下、路径前缀正确
+        ns = {"ncx": "http://www.daisy.org/z3986/2005/ncx/"}
+        root = ET.fromstring(ncx.encode("utf-8"))
+        top = root.findall("./ncx:navMap/ncx:navPoint", ns)
+        labels = [n.find("ncx:navLabel/ncx:text", ns).text for n in top]
+        self.assertEqual(labels, ["A", "B", "C", "D"])
+        for idx, node in enumerate(top):
+            src = node.find("ncx:content", ns).get("src")
+            self.assertEqual(src, "b%d_divider.xhtml" % idx)
+            kids = node.findall("./ncx:navPoint", ns)
+            self.assertEqual(
+                [k.find("ncx:navLabel/ncx:text", ns).text for k in kids],
+                ["第1章", "第2章"])
+            for kid in kids:
+                kid_src = kid.find("ncx:content", ns).get("src")
+                self.assertTrue(kid_src.startswith("b%d/" % idx), kid_src)
+
+    def test_resources_preserved(self):
+        out = self._three_plus_one()
+        entries = _zip_entries(out)
+        for idx, title in enumerate(("A", "B", "C", "D")):
+            self.assertIn("mark-%s" % title,
+                          entries["b%d/OEBPS/style.css" % idx].decode("utf-8"))
+
+    def test_expand_preserves_image_resource(self):
+        docs = [("ch1", "ch1.xhtml", "application/xhtml+xml")]
+        opf = _build_opf("A", ("作者A",), docs,
+                         resources=[("img", "img.png", "image/png")])
+        files = {
+            "META-INF/container.xml": (
+                '<?xml version="1.0"?>'
+                '<container version="1.0" '
+                'xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+                '<rootfiles><rootfile full-path="OEBPS/content.opf" '
+                'media-type="application/oebps-package+xml"/></rootfiles>'
+                '</container>').encode("utf-8"),
+            "OEBPS/content.opf": opf.encode("utf-8"),
+            "OEBPS/ch1.xhtml": (
+                '<html><body><img src="img.png"/></body></html>'
+            ).encode("utf-8"),
+            "OEBPS/img.png": b"PNG-DATA",
+            "OEBPS/toc.ncx": _build_ncx(
+                "A", [("ch1.xhtml", "第1章")]).encode("utf-8"),
+        }
+        source = _make_epub(files)
+        coll = lib.merge_epubs(
+            [{"data": source, "title": "A"},
+             {"data": self._book("B"), "title": "B"}],
+            {"title": "AB合集", "authors": []})
+        out = lib.merge_epubs(
+            [{"data": coll, "title": "AB合集"},
+             {"data": self._book("C"), "title": "C"}],
+            {"title": "ABC合集", "authors": []})
+        entries = _zip_entries(out)
+        self.assertEqual(entries["b0/OEBPS/img.png"], b"PNG-DATA")
+        self.assertIn(b'src="img.png"', entries["b0/OEBPS/ch1.xhtml"])
+        self.assertEqual(lib.validate_output(out), [])
+
+    def test_content_file_named_like_divider_kept(self):
+        """正文文件恰好叫 b1_divider.xhtml 时只能跳过本卷自己的分卷页。"""
+        source = _make_min_epub(title="A", n_docs=1)
+        entries = _zip_entries(source)
+        entries["OEBPS/b1_divider.xhtml"] = entries.pop("OEBPS/ch1.xhtml")
+        for name in ("OEBPS/content.opf", "OEBPS/toc.ncx"):
+            entries[name] = entries[name].replace(
+                b"ch1.xhtml", b"b1_divider.xhtml")
+        source = _make_epub(entries)
+        coll = lib.merge_epubs(
+            [{"data": source, "title": "A"},
+             {"data": self._book("B"), "title": "B"}],
+            {"title": "AB合集", "authors": []})
+        out = lib.merge_epubs(
+            [{"data": coll, "title": "AB合集"},
+             {"data": self._book("C"), "title": "C"}],
+            {"title": "ABC合集", "authors": []})
+        self.assertIn("b0/OEBPS/b1_divider.xhtml", _zip_entries(out))
+        # 不只看 ZIP 里有没有：必须仍在 spine 阅读顺序里（A 卷内，B 卷之前）
+        spine = lib.analyze_epub(out)["spine_files"]
+        chapter = "b0/OEBPS/b1_divider.xhtml"
+        self.assertIn(chapter, spine)
+        self.assertLess(spine.index("b0_divider.xhtml"), spine.index(chapter))
+        self.assertLess(spine.index(chapter), spine.index("b1_divider.xhtml"))
+        self.assertEqual(lib.validate_output(out), [])
+
+    def test_mixed_sources_order(self):
+        coll_bc = lib.merge_epubs(
+            [{"data": self._book("B"), "title": "B"},
+             {"data": self._book("C"), "title": "C"}],
+            {"title": "BC合集", "authors": []})
+        coll_ef = lib.merge_epubs(
+            [{"data": self._book("E"), "title": "E"},
+             {"data": self._book("F"), "title": "F"}],
+            {"title": "EF合集", "authors": []})
+        out = lib.merge_epubs(
+            [{"data": coll_bc, "title": "BC合集"},
+             {"data": self._book("D"), "title": "D"},
+             {"data": coll_ef, "title": "EF合集"}],
+            {"title": "合集", "authors": []})
+        merged = lib.analyze_epub(out)["merged"]
+        self.assertEqual([b["title"] for b in merged["books"]],
+                         ["B", "C", "D", "E", "F"])
+        spine = lib.analyze_epub(out)["spine_files"]
+        for idx in range(5):
+            self.assertIn("b%d_divider.xhtml" % idx, spine)
+        self.assertEqual([b["prefix"] for b in merged["books"]],
+                         ["b0/", "b1/", "b2/", "b3/", "b4/"])
+
+    def test_source_divider_off(self):
+        coll = lib.merge_epubs(
+            [{"data": self._book("A"), "title": "A"},
+             {"data": self._book("B"), "title": "B"}],
+            {"title": "AB合集", "authors": []},
+            {"divider": False})
+        out = lib.merge_epubs(
+            [{"data": coll, "title": "AB合集"},
+             {"data": self._book("C"), "title": "C"}],
+            {"title": "ABC合集", "authors": []},
+            {"divider": False})
+        info = lib.analyze_epub(out)
+        self.assertEqual([b["title"] for b in info["merged"]["books"]],
+                         ["A", "B", "C"])
+        self.assertFalse([n for n in info["spine_files"] if "divider" in n])
+
+    def test_expand_disabled_keeps_nested(self):
+        out = self._three_plus_one(expand_merged=False)
+        # 物理结构仍是 2 卷（合集 + D）；analyze 会递归识别出内部 A/B/C，
+        # 这是预览层的预期行为，不代表本次合并没有遵守 expand_merged=False
+        entries = _zip_entries(out)
+        marker = lib.parse_merge_marker(
+            entries["content.opf"].decode("utf-8"))
+        self.assertEqual([b["title"] for b in marker["books"]],
+                         ["ABC合集", "D"])
+        self.assertIn("b0/b0_divider.xhtml", lib.analyze_epub(out)["spine_files"])
+
+    def test_expand_limit(self):
+        coll = lib.merge_epubs(
+            [{"data": self._book("A"), "title": "A"},
+             {"data": self._book("B"), "title": "B"}],
+            {"title": "AB合集", "authors": []})
+        old_max = lib.MERGE_MAX_BOOKS
+        lib.MERGE_MAX_BOOKS = 3
+        try:
+            with self.assertRaises(ValueError):
+                lib.merge_epubs(
+                    [{"data": coll, "title": "AB合集"},
+                     {"data": self._book("C"), "title": "C"},
+                     {"data": self._book("D"), "title": "D"}],
+                    {"title": "合集", "authors": []})
+        finally:
+            lib.MERGE_MAX_BOOKS = old_max
+
+    def test_progress_per_leaf(self):
+        seen = []
+        self._three_plus_one(
+            progress_cb=lambda idx, total: seen.append((idx, total)))
+        self.assertEqual(seen, [(1, 4), (2, 4), (3, 4), (4, 4)])
+
+    def test_cancel_between_leaves(self):
+        import threading
+        cancel = threading.Event()
+
+        def _progress(idx, _total):
+            if idx == 2:
+                cancel.set()
+
+        with self.assertRaises(lib.MergeCancelled):
+            self._three_plus_one(progress_cb=_progress,
+                                 cancel_event=cancel)
+
+    def test_out_path(self):
+        inputs, meta = self._three_plus_one_inputs()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "out.epub")
+            self.assertIsNone(lib.merge_epubs(
+                inputs, meta, {"out_path": path}))
+            info = lib.analyze_epub(path)
+            self.assertEqual([b["title"] for b in info["merged"]["books"]],
+                             ["A", "B", "C", "D"])
+            lib.validate_output(path)
+
+    def test_invalid_structure_falls_back_to_single(self):
+        coll = lib.merge_epubs(
+            [{"data": self._book("A"), "title": "A"},
+             {"data": self._book("B"), "title": "B"}],
+            {"title": "AB合集", "authors": []})
+        entries = _zip_entries(coll)
+        opf = entries["content.opf"].decode("utf-8")
+        opf = re.sub(r'<meta property="mybooks:merge">.*?</meta>', "",
+                     opf, flags=re.S)
+        opf = re.sub(r"<dc:contributor>.*?</dc:contributor>", "", opf,
+                     flags=re.S)
+        entries["content.opf"] = opf.encode("utf-8")
+        broken = _make_epub(entries)
+        out = lib.merge_epubs(
+            [{"data": broken, "title": "损坏合集"},
+             {"data": self._book("C"), "title": "C"}],
+            {"title": "合集", "authors": []})
+        # 识别失败时按 1 本处理：物理产物 marker 只记 2 卷；
+        # analyze 仍可能递归识别其内部结构（预览语义），这里校验物理结构
+        marker = lib.parse_merge_marker(
+            _zip_entries(out)["content.opf"].decode("utf-8"))
+        self.assertEqual([b["title"] for b in marker["books"]],
+                         ["损坏合集", "C"])
+
+    def test_input_total_counts_unique_source(self):
+        inputs, meta = self._three_plus_one_inputs()
+        coll_size = len(inputs[0]["data"])
+        unique = coll_size + len(inputs[1]["data"])
+        doubled = coll_size * 2 + len(inputs[1]["data"])
+        old = lib.MERGE_MAX_INPUT_TOTAL
+        try:
+            # 阈值设在 unique 与“按展开卷重复计”的 doubled 之间：
+            # 若实现按 segment 重复累加，这个正常合集会被误拒
+            lib.MERGE_MAX_INPUT_TOTAL = (unique + doubled) // 2
+            out = lib.merge_epubs(inputs, meta)
+            self.assertEqual(
+                [b["title"] for b in lib.analyze_epub(out)["merged"]["books"]],
+                ["A", "B", "C", "D"])
+            lib.MERGE_MAX_INPUT_TOTAL = unique - 1
+            with self.assertRaises(ValueError):
+                lib.merge_epubs(inputs, meta)
+        finally:
+            lib.MERGE_MAX_INPUT_TOTAL = old
+
+    def test_cancel_before_inspection(self):
+        import threading
+        cancel = threading.Event()
+        cancel.set()
+        inputs, _meta = self._three_plus_one_inputs()
+        with self.assertRaises(lib.MergeCancelled):
+            lib.expand_merge_inputs(
+                [{"data": inputs[0]["data"], "title": "合集"}],
+                cancel_event=cancel)
+
+
+class TestDescriptionSplit(unittest.TestCase):
+    """合集简介按【书名】拆回逐本块。"""
+
+    def test_basic_split(self):
+        text = lib.compose_description([
+            {"title": "A", "comments": "<p>简介A</p>"},
+            {"title": "B", "comments": "简介B"},
+        ])
+        blocks = lib.split_composed_description(text, ["A", "B"])
+        self.assertEqual(blocks, ["<p>简介A</p>", "简介B"])
+
+    def test_isbn_tail_stripped(self):
+        isbns = ["978-7-123-45678-9", "978-7-123-45679-6"]
+        text = lib.compose_description([
+            {"title": "A", "comments": "简介A"},
+            {"title": "B", "comments": "简介B"},
+        ], isbns)
+        blocks = lib.split_composed_description(text, ["A", "B"])
+        self.assertNotIn("ISBN", blocks[-1])
+        rebuilt = lib.compose_description([
+            {"title": "A", "comments": blocks[0], "html": True},
+            {"title": "B", "comments": blocks[1], "html": True},
+        ], isbns)
+        self.assertEqual(rebuilt.count("ISBN："), 1)
+
+    def test_missing_title_returns_none(self):
+        text = lib.compose_description([
+            {"title": "A", "comments": "简介A"},
+            {"title": "B", "comments": "简介B"},
+        ])
+        self.assertIsNone(lib.split_composed_description(text, ["A", "X"]))
+
+    def test_plain_text_not_double_escaped(self):
+        text = lib.compose_description([
+            {"title": "A", "comments": "3 < 5 & 7 > 2"},
+        ])
+        blocks = lib.split_composed_description(text, ["A"])
+        self.assertIn("&lt;", blocks[0])
+        rebuilt = lib.compose_description([
+            {"title": "A", "comments": blocks[0], "html": True},
+        ])
+        self.assertIn("3 &lt; 5 &amp; 7 &gt; 2", rebuilt)
+        self.assertNotIn("&amp;lt;", rebuilt)
+
+    def test_html_flag_keeps_markup(self):
+        text = lib.compose_description([
+            {"title": "A", "comments": "<p><b>加粗</b></p>"},
+        ])
+        blocks = lib.split_composed_description(text, ["A"])
+        rebuilt = lib.compose_description([
+            {"title": "A", "comments": blocks[0], "html": True},
+        ])
+        self.assertIn("<b>加粗</b>", rebuilt)
+
+    def test_marker_with_paragraph_attributes(self):
+        text = ('<p class="book">【A】</p>简介A'
+                '<p class="book">【B】</p>简介B')
+        self.assertEqual(
+            lib.split_composed_description(text, ["A", "B"]),
+            ["简介A", "简介B"])
+
+    def test_isbn_tail_with_paragraph_attributes(self):
+        text = ('<p>【A】</p>简介A<p>【B】</p>简介B'
+                '<p class="isbn">ISBN：978-7-123-45678-9 / 978-7-123-45679-6</p>')
+        blocks = lib.split_composed_description(text, ["A", "B"])
+        self.assertEqual(blocks, ["简介A", "简介B"])
+
+    def test_preamble_before_first_title_returns_none(self):
+        text = "写在最前面的说明" + lib.compose_description([
+            {"title": "A", "comments": "简介A"},
+            {"title": "B", "comments": "简介B"},
+        ])
+        # 前言无处安放：整本回退，不能静默丢掉
+        self.assertIsNone(lib.split_composed_description(text, ["A", "B"]))
+
+    def test_duplicate_titles_split_in_order(self):
+        text = lib.compose_description([
+            {"title": "A", "comments": "第一段"},
+            {"title": "A", "comments": "第二段"},
+        ])
+        self.assertEqual(
+            lib.split_composed_description(text, ["A", "A"]),
+            ["第一段", "第二段"])
+
+
+class TestExpandPreviewBooks(unittest.TestCase):
+    """preview 默认标题/简介按合集展开（纯函数）。"""
+
+    def test_collection_titles_and_descriptions(self):
+        comments = lib.compose_description([
+            {"title": "A", "comments": "简介A"},
+            {"title": "B", "comments": "简介B"},
+            {"title": "C", "comments": "简介C"},
+        ])
+        books = [
+            {"book_id": 1, "title": "ABC合集", "comments": comments,
+             "merged": {"books": [{"title": "A"}, {"title": "B"},
+                                  {"title": "C"}]}},
+            {"book_id": 2, "title": "D", "comments": "简介D"},
+        ]
+        titles, items, sources, count = lib.expand_preview_books(books)
+        self.assertEqual(titles, ["A", "B", "C", "D"])
+        self.assertEqual(count, 4)
+        self.assertEqual(sources[0]["books"], ["A", "B", "C"])
+        rebuilt = lib.compose_description(items)
+        # 每个展开卷的简介都必须保留，不能只验首尾
+        for title in ("A", "B", "C"):
+            self.assertIn("<p>【%s】</p>简介%s" % (title, title), rebuilt)
+        self.assertIn("<p>【D】</p>简介D", rebuilt)
+        self.assertNotIn("ABC合集", rebuilt)
+
+    def test_unparseable_comments_fallback(self):
+        books = [{
+            "book_id": 1, "title": "ABC合集", "comments": "已改过的简介",
+            "merged": {"books": [{"title": "A"}, {"title": "B"}]},
+        }]
+        titles, items, _sources, count = lib.expand_preview_books(books)
+        self.assertEqual(titles, ["A", "B"])
+        self.assertEqual(count, 2)
+        self.assertEqual(items[0]["title"], "ABC合集")
+        self.assertEqual(items[0]["comments"], "已改过的简介")
+
+
 if __name__ == "__main__":
     unittest.main()
