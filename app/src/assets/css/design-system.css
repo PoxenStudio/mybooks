@@ -168,6 +168,16 @@ html[data-appearance-dark="1"],
     border-radius: var(--app-radius, var(--ds-radius-md)) !important;
 }
 
+/* 默认尺寸 36px → 30px；图标按钮同步收窄宽度以保持正方形 */
+.v-application .v-btn.v-size--default:not(.v-btn--icon):not(.v-btn--fab) {
+    height: 30px;
+}
+
+.v-application .v-btn--icon.v-size--default:not(.v-btn--fab) {
+    height: 30px;
+    width: 30px;
+}
+
 .v-application .v-btn--text,
 .v-application .v-btn--flat {
     box-shadow: none !important;
@@ -270,6 +280,10 @@ html[data-appearance-dark="1"],
 .v-application .v-chip {
     font-weight: 500 !important;
     letter-spacing: 0 !important;
+}
+
+.v-application .v-chip.v-size--default {
+    height: 30px;
 }
 
 .v-application .v-chip--outlined {

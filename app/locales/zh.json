@@ -586,6 +586,7 @@
     "convertingPleaseWait": "正在后台进行转换，请稍候或等转换完成再打开...",
     "parseringPleaseWait": "正在解析目录，请稍候或等转换完成再打开...",
     "convertToAudio": "有声书",
+    "audioBookConversion": "有声书转换",
     "convertToAudioNote": "将使用EPUB文件进行有声书转换，需要花费一段时间，请耐心等待。",
     "audioGenerated": "开始转换，请稍后刷新页面查看",
     "audioList": "有声书音频列表",
