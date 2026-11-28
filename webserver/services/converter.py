@@ -21,7 +21,40 @@ from webserver.services.background_service import BackgroundService, BackgroundT
 EBOOK_CONVERT_CMD = "ebook-convert"
 DEFAULT_CONVERT_TIMEOUT = 3 * 60 * 1000  # 3 minutes, in milliseconds
 
+# 格式转换规则：源格式 -> 可输出的目标格式（顺序即界面展示顺序）
+CONVERT_RULES = {
+    "txt": ["epub", "azw3", "pdf"],
+    "epub": ["azw3", "pdf"],
+    "azw3": ["epub", "pdf"],
+    "mobi": ["epub", "pdf"],
+    "docx": ["azw3", "epub", "pdf"],
+    "fb2": ["azw3", "epub", "pdf"],
+    "pdf": ["epub"],
+}
+
 CONF = loader.get_settings()
+
+
+def normalize_book_format(fmt):
+    return (fmt or "").strip().lower()
+
+
+def validate_conversion(book_formats, source, target):
+    """校验转换请求，返回 ok 或错误码，供 handler 映射提示文案。"""
+    source = normalize_book_format(source)
+    target = normalize_book_format(target)
+    if not source or not target:
+        return "missing_params"
+    if source not in CONVERT_RULES:
+        return "unsupported_source"
+    available = {normalize_book_format(f) for f in book_formats}
+    if source not in available:
+        return "source_missing"
+    if target not in CONVERT_RULES[source]:
+        return "unsupported_target"
+    if target in available:
+        return "target_exists"
+    return "ok"
 
 
 def shell_quote_for_log(value):

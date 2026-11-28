@@ -404,7 +404,7 @@
   "转换完成": "Conversion completed",
   "转换已取消, 可以使用恢复生成功能继续转换": "The conversion has been canceled, you can continue the conversion using the recovery generation function",
   "转换已经在进行中": "Conversion already in progress",
-  "转换成功，请稍后刷新页面查看": "Conversion succeeded. Please refresh the page later",
+  "开始转换，请稍后刷新页面查看": "Conversion started. Please refresh the page later",
   "这是一封测试邮件，验证邮件参数是否配置正确。": "This is a test email to verify the email configuration",
   "邮箱地址不能为空": "Email address cannot be empty",
   "邮箱地址已被使用": "Email address is already used",

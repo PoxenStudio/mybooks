@@ -40,6 +40,7 @@ from webserver.services.ai_fillinfo import AIFillInfoService
 from webserver.services.catalog import CatalogExtractService
 from webserver.services.word_count import WordCountService
 from webserver.services.book_search import BookSearch
+from webserver.services import converter
 from webserver.services.converter import ConverterService
 from webserver.services.extract import ExtractService, load_txt_content_index
 from webserver.services.mail import MailService
@@ -966,40 +967,29 @@ class BookConverter(BaseHandler):
         if not self.is_admin() and not self.is_book_owner(book_id, self.user_id()):
             return {"err": "user.no_permission", "msg": _("无权限")}
 
-        fmts = []
-        paths = []
-        for fmt in constants.SUPPORTED_EBOOK_FORMATS:
-            book_path = book.get("fmt_%s" % fmt, None)
-            if book_path:
-                fmts.append(fmt)
-                paths.append(book_path)
+        source = self.get_argument("source", "")
+        target = self.get_argument("target", "")
+        formats = [fmt for fmt in constants.ACCEPTED_BOOK_FORMATS if book.get("fmt_%s" % fmt)]
+        status = converter.validate_conversion(formats, source, target)
+        if status == "missing_params":
+            return {"err": "params.invalid", "msg": _("请选择源格式和输出格式")}
+        if status == "unsupported_source":
+            return {"err": "params.invalid", "msg": _("该格式不支持转换")}
+        if status == "source_missing":
+            return {"err": "params.book.invalid", "msg": _("本书没有该源格式文件")}
+        if status == "unsupported_target":
+            return {"err": "params.invalid", "msg": _("不支持该格式转换")}
+        if status == "target_exists":
+            return {"err": "params.book.invalid", "msg": _("本书已有目标格式，不需要转换")}
 
-        if not fmts:
-            # 仅含 DJVU/UVZ/CBZ 等扫描版格式的书籍没有可转换的电子书源
-            return {"err": "params.book.invalid", "msg": _("本书没有可转换的格式")}
-
-        if ('epub' in fmts) and ('azw3' in fmts):
-            return {"err": "params.book.invalid", "msg": _("本书已有EPUB及Kindle版本, 不需要转换")}
-
-        if fmts[0] == "epub":
-            fmt = "azw3"
-        elif fmts[0] == "pdf":
-            fmt = "epub"
-        else:
-            fmt = "epub"
-
-        if 'docx' in fmts:
-            # docx is preferred than pdf
-            fpath = paths[fmts.index('docx')]
-        else:
-            fpath = paths[0]
-
+        source = converter.normalize_book_format(source)
+        target = converter.normalize_book_format(target)
         service = ConverterService()
         if service.is_book_converting(book):
             return {"err": "params.book.converting", "msg": _("本书正在转换中，请稍后再试")}
-        logging.info(f"Start converting book {book_id} from {fmts[0]} to {fmt}, title:{book.get('title', '')}")
-        service.convert_and_save(self.user_id(), book, fpath, fmt)
-        return {"err": "ok", "content": "%s" % _("转换成功，请稍后刷新页面查看")}
+        logging.info(f"Start converting book {book_id} from {source} to {target}, title:{book.get('title', '')}")
+        service.convert_and_save(self.user_id(), book, book["fmt_%s" % source], target)
+        return {"err": "ok", "content": "%s" % _("开始转换，请稍后刷新页面查看")}
 
 
 class BookToPDF(BaseHandler):
@@ -1037,7 +1027,7 @@ class BookToPDF(BaseHandler):
         if service.is_book_converting(book):
             return {"err": "params.book.converting", "msg": _("本书正在转换中，请稍后再试")}
         service.convert_and_save(self.user_id(), book, fpath, "pdf")
-        return {"err": "ok", "content": "%s" % _("转换成功，请稍后刷新页面查看")}
+        return {"err": "ok", "content": "%s" % _("开始转换，请稍后刷新页面查看")}
 
 
 class BookSetSole(BaseHandler):

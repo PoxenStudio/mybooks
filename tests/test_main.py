@@ -526,6 +526,31 @@ class TestBook(TestWithUserLogin):
                 self.assertEqual(d["err"], "ok")
                 self.assertEqual(m.call_count, 2)
 
+    def test_convert_requires_params(self):
+        d = self.json("/api/book/1/convert", method="POST", body="")
+        self.assertEqual(d["err"], "params.invalid")
+
+    def test_convert_rejects_invalid_pair(self):
+        d = self.json("/api/book/1/convert", method="POST", body="source=epub&target=epub")
+        self.assertEqual(d["err"], "params.invalid")
+
+        d = self.json("/api/book/1/convert", method="POST", body="source=txt&target=epub")
+        self.assertEqual(d["err"], "params.book.invalid")
+
+    def test_convert_to_azw3(self):
+        with mock.patch("webserver.services.converter.ConverterService.convert_and_save") as convert:
+            d = self.json("/api/book/1/convert", method="POST", body="source=epub&target=azw3")
+            self.assertEqual(d["err"], "ok")
+            convert.assert_called_once()
+            self.assertEqual(convert.call_args[0][-1], "azw3")
+
+    def test_topdf_endpoint_kept(self):
+        with mock.patch("webserver.services.converter.ConverterService.convert_and_save") as convert:
+            d = self.json("/api/book/1/topdf", method="POST")
+            self.assertEqual(d["err"], "ok")
+            convert.assert_called_once()
+            self.assertEqual(convert.call_args[0][-1], "pdf")
+
     def test_read(self):
         with mock.patch("webserver.services.converter.ConverterService.convert_and_save", return_value="Yo"):
             for bid in BIDS:

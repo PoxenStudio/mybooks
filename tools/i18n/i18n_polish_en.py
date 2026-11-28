@@ -166,7 +166,7 @@ KEY_BASED_POLISH = {
     "购买成功": "Purchase succeeded",
     "转换失败": "Conversion failed",
     "转换完成": "Conversion completed",
-    "转换成功，请稍后刷新页面查看": "Conversion succeeded. Please refresh the page later",
+    "开始转换，请稍后刷新页面查看": "Conversion started. Please refresh the page later",
     "邮箱地址不能为空": "Email address cannot be empty",
     "邮箱地址格式不正确": "Invalid email address format",
     "阅读状态参数错误": "Invalid reading status parameter",

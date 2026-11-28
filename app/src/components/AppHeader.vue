@@ -294,7 +294,7 @@
             <template v-if="err == 'ok' && user.is_login">
                 <v-menu offset-y right :close-on-content-click="false" v-if="runningTasks.length > 0">
                     <template v-slot:activator="{ on }">
-                        <v-btn v-on="on" icon class="mr-2" width="48px" height="48px" :aria-label="$t('appHeader.backgroundTasks')">
+                        <v-btn v-on="on" icon class="mx-2" width="48px" height="48px" :aria-label="$t('appHeader.backgroundTasks')">
                             <v-img src="/icons/running.svg" style="margin:8px 8px;" width="32px" height="32px"></v-img>
                         </v-btn>
                     </template>
@@ -332,7 +332,7 @@
 
                 <v-menu offset-y right :close-on-content-click="false" v-if="messages.length > 0">
                     <template v-slot:activator="{ on }">
-                        <v-btn v-on="on" icon color="yellow" :aria-label="$t('appHeader.message_notification')">
+                        <v-btn v-on="on" icon color="yellow" class="mx-1" :aria-label="$t('appHeader.message_notification')">
                             <v-badge color="red" class="blink" :content="unreadCount > 99 ? '...' : String(unreadCount)" overlap>
                                 <v-icon>mdi-bell</v-icon>
                             </v-badge>
@@ -370,7 +370,7 @@
                     </v-card>
                 </v-menu>
 
-                <v-btn icon v-if="user.is_login" :to="'/logout'" :title="$t('appHeader.logout')">
+                <v-btn icon v-if="user.is_login" :to="'/logout'" class="mx-1" :title="$t('appHeader.logout')">
                     <v-icon>mdi-logout</v-icon>
                 </v-btn>
 

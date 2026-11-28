@@ -255,13 +255,9 @@
                                     <v-icon>mdi-picture-in-picture-bottom-right-outline</v-icon>
                                     {{ $t('book.addStampToCover') }}
                                 </v-list-item>
-                                <v-list-item @click="convertBook" :disabled="!hasEBooks">
+                                <v-list-item @click="openConvertDialog" :disabled="!hasEBooks">
                                     <v-icon>mdi-swap-horizontal</v-icon>
                                     {{ $t('book.convert') }}
-                                </v-list-item>
-                                <v-list-item @click="convertToPdf" :disabled="!hasEBooks || hasPDF">
-                                    <v-icon>mdi-swap-horizontal</v-icon>
-                                    {{ $t('book.convertToPdf') }}
                                 </v-list-item>
                                 <v-list-item @click="separateBook" :disabled="book.files.length <= 1">
                                     <v-icon>mdi-content-copy</v-icon>
@@ -1016,6 +1012,46 @@
         </v-alert>
     </AppDialog>
 
+    <!-- 格式转换对话框 -->
+    <AppDialog
+        v-model="dialog_convert"
+        type="action"
+        :title="$t('book.convert')"
+        icon="mdi-swap-horizontal"
+        max-width="500"
+        :confirm-text="$t('book.startConvert')"
+        :confirm-loading="convert_requesting"
+        :confirm-disabled="!convertSource || !convertTarget"
+        @confirm="confirmConvert"
+    >
+        <p class="mb-2 text-center">{{ $t('book.convertSourceFormat') }}</p>
+        <div class="convert-format-row">
+            <v-radio-group v-model="convertSource" class="convert-format-group" row hide-details @change="onConvertSourceChange">
+                <v-radio
+                    v-for="fmt in convertSourceFormats"
+                    :key="'convert-source-' + fmt"
+                    :value="fmt"
+                    :label="fmt.toUpperCase()"
+                ></v-radio>
+            </v-radio-group>
+        </div>
+        <p class="mb-2 mt-4 text-center">{{ $t('book.convertTargetFormat') }}</p>
+        <div class="convert-format-row">
+            <v-radio-group v-model="convertTarget" class="convert-format-group" row hide-details>
+                <v-radio
+                    v-for="fmt in convertTargetFormats"
+                    :key="'convert-target-' + fmt"
+                    :value="fmt"
+                    :disabled="hasBookFormat(fmt)"
+                >
+                    <template v-slot:label>
+                        {{ fmt.toUpperCase() }}<span v-if="hasBookFormat(fmt)" class="grey--text ml-1">{{ $t('book.convertFormatExists') }}</span>
+                    </template>
+                </v-radio>
+            </v-radio-group>
+        </div>
+    </AppDialog>
+
     <!-- MyNexus 解析结果失效，询问是否重新解读 -->
     <AppDialog
         v-if="aiModuleOn"
@@ -1189,6 +1225,19 @@ import { downloadImage, renderBookShareCard, shareCardFileName } from "~/utils/b
 import { languageOptions } from "~/utils/languageCodes";
 import { toStars } from "~/utils/rating";
 import { siteBaseUrl } from "~/utils/siteUrl";
+
+// 转换关系与 webserver/services/converter.py 的 CONVERT_RULES 保持一致
+const CONVERT_RULES = {
+    txt: ['epub', 'azw3', 'pdf'],
+    epub: ['azw3', 'pdf'],
+    azw3: ['epub', 'pdf'],
+    mobi: ['epub', 'pdf'],
+    docx: ['azw3', 'epub', 'pdf'],
+    fb2: ['azw3', 'epub', 'pdf'],
+    pdf: ['epub'],
+};
+const CONVERT_SOURCE_PRIORITY = ['epub', 'azw3', 'mobi', 'docx', 'txt', 'pdf', 'fb2'];
+const CONVERT_OUTPUT_FORMATS = ['azw3', 'epub', 'pdf'];
 
 export default {
     components: {
@@ -1408,6 +1457,18 @@ export default {
                 return false;
             }
             return true;
+        },
+        bookFormats() {
+            if (!this.book || !this.book.files) {
+                return [];
+            }
+            return this.book.files.map(file => file.format.toLowerCase());
+        },
+        convertSourceFormats() {
+            return CONVERT_SOURCE_PRIORITY.filter(fmt => this.bookFormats.includes(fmt));
+        },
+        convertTargetFormats() {
+            return CONVERT_RULES[this.convertSource] || [];
         },
         /** 有声书模块（sys.modules.audio）：关闭时转写/播放/音频列表一起消失 */
         audioModuleOn() {
@@ -1707,6 +1768,11 @@ export default {
         dialog_separate: false,
         selectedSeparateFormat: null,
         separating_book: false,
+        // 格式转换对话框
+        dialog_convert: false,
+        convertSource: '',
+        convertTarget: '',
+        convert_requesting: false,
         // 删除格式对话框
         dialog_delete_book: false,
         dialog_delete_format: false,
@@ -2440,31 +2506,57 @@ export default {
                 return value.toLocaleString();
             }
         },
-        convertBook() {
-            // 转换书籍格式
+        hasBookFormat(format) {
+            return this.bookFormats.includes(format);
+        },
+        convertTargetsFor(source) {
+            return (CONVERT_RULES[source] || []).filter(fmt => !this.hasBookFormat(fmt));
+        },
+        openConvertDialog() {
+            const sources = this.convertSourceFormats;
+            if (sources.length === 0) {
+                this.$alert("error", this.$t('book.noConvertibleFormat'));
+                return;
+            }
+            if (CONVERT_OUTPUT_FORMATS.every(fmt => this.hasBookFormat(fmt))) {
+                this.$alert("info", this.$t('book.convertNotNeeded'));
+                return;
+            }
+            const convertible = sources
+                .map(source => ({ source, targets: this.convertTargetsFor(source) }))
+                .find(item => item.targets.length > 0);
+            if (!convertible) {
+                this.$alert("info", this.$t('book.convertNotNeeded'));
+                return;
+            }
+            this.convertSource = convertible.source;
+            this.convertTarget = convertible.targets[0];
+            this.dialog_convert = true;
+        },
+        onConvertSourceChange() {
+            const targets = this.convertTargetsFor(this.convertSource);
+            this.convertTarget = targets.length > 0 ? targets[0] : '';
+        },
+        confirmConvert() {
+            if (!this.convertSource || !this.convertTarget) {
+                this.$alert("error", this.$t('book.selectConvertFormat'));
+                return;
+            }
+            this.convert_requesting = true;
             this.$backend("/book/" + this.book.id + "/convert", {
                 method: "POST",
-                body: new URLSearchParams({reset: "yes"}),
+                body: new URLSearchParams({source: this.convertSource, target: this.convertTarget}),
             }).then((rsp) => {
                 if (rsp.err === "ok") {
-                    this.$alert("success", this.$t('book.convertSuccessful'));
-                    this.$router.push("/book/" + this.book.id);
+                    this.dialog_convert = false;
+                    this.$alert("success", rsp.content || rsp.msg || this.$t('book.convertSuccessful'));
                 } else {
                     this.$alert("error", rsp.msg);
                 }
-            });
-        },
-        convertToPdf() {
-            // 转换为PDF
-            this.$backend("/book/" + this.book.id + "/topdf", {
-                method: "POST",
-                body: new URLSearchParams({reset: "yes"}),
-            }).then((rsp) => {
-                if (rsp.err === "ok") {
-                    this.$alert("success", this.$t('book.convertSuccessful'));
-                } else {
-                    this.$alert("error", rsp.msg);
-                }
+            }).catch(() => {
+                this.$alert("error", this.$t('book.convertFailed'));
+            }).finally(() => {
+                this.convert_requesting = false;
             });
         },
         setSole() {
@@ -3645,5 +3737,26 @@ h1.book-detail-title {
         min-width: 0;
         padding: 8px 6px;
     }
+}
+/* 格式转换对话框：格式选项整体居中（整体自适应宽度，而不是逐个居中） */
+.convert-format-row {
+    text-align: center;
+}
+.convert-format-group {
+    display: inline-block;
+    width: auto;
+    max-width: 100%;
+    margin-top: 0;
+    text-align: left;
+}
+.convert-format-group .v-radio {
+    margin-right: 18px;
+    margin-bottom: 4px;
+}
+.convert-format-group .v-radio:last-child {
+    margin-right: 0;
+}
+.convert-format-group .v-input--selection-controls__input {
+    margin-right: 4px;
 }
 </style>

@@ -1,7 +1,7 @@
 <template>
     <v-menu v-model="menu" :close-on-content-click="false" offset-y bottom left min-width="336" max-width="336">
         <template v-slot:activator="{ on, attrs }">
-            <v-btn icon v-bind="attrs" v-on="on" :title="$t('appearance.title')">
+            <v-btn icon class="mx-1" v-bind="attrs" v-on="on" :title="$t('appearance.title')">
                 <v-icon>mdi-palette-outline</v-icon>
             </v-btn>
         </template>

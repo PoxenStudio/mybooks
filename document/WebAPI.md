@@ -1404,14 +1404,16 @@ user.appearance为外观设置（顶栏品牌色、侧栏图标配色、深浅�
 - **认证**：需要登录；管理员或书籍所有者
 - **参数**：
   - `id` (path, 必填): 图书ID
-- **说明**：目标格式自动决定：首个格式为 epub 时转 azw3，否则转 epub；有 docx 时以 docx 为源。已同时有 EPUB 与 AZW3 时不转换。后台异步执行。
-- **响应**：`err`: `ok` / `params.book.invalid`（书籍不存在或无需转换）/ `user.no_permission` / `params.book.converting`（正在转换中）
+  - `source` (string, 必填): 源格式，取值 `txt` / `epub` / `azw3` / `mobi` / `docx` / `fb2` / `pdf`
+  - `target` (string, 必填): 目标格式，必须是 `source` 允许的输出格式
+- **说明**：可转换关系：`txt → epub/azw3/pdf`，`epub → azw3/pdf`，`azw3`、`mobi → epub/pdf`，`docx`、`fb2 → azw3/epub/pdf`，`pdf → epub`。源文件不存在、目标格式已存在或格式组合不支持时返回错误。后台异步执行。
+- **响应**：`err`: `ok` / `params.invalid`（缺少参数、源格式不支持转换或格式组合不支持）/ `params.book.invalid`（书籍不存在、源格式不存在或目标格式已存在）/ `user.no_permission` / `params.book.converting`（正在转换中）
 - **响应示例**：
 
 ```json
 {
   "err": "ok",
-  "content": "转换成功，请稍后刷新页面查看"
+  "content": "开始转换，请稍后刷新页面查看"
 }
 ```
 
